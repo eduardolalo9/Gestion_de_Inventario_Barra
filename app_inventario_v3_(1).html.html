@@ -1159,10 +1159,10 @@
             const order = orders.find(o => o.id === orderId);
             if (!order) return;
 
-            let message = '*PEDIDO ' + order.id + '*\n';
+            let message = '*PEDIDO BARRA ' + order.id + '*\n';
             message += '━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
             message += '📋 *Proveedor:* ' + order.supplier + '\n';
-            message += '📅 *Fecha:* ' + order.date + '\n';
+            message += '🗓️ *Fecha:* ' + order.date + '\n';
             if (order.deliveryDate) {
                 message += '🚚 *Entrega:* ' + order.deliveryDate + '\n';
             }
