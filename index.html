@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0d1321">
+    <link rel="manifest" href="manifest.json">
+    <meta name="description" content="Sistema de control de inventario para barra.">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%A6%3C/text%3E%3C/svg%3E">
+    <title>BarInventory — Control de Inventario</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').catch(err => console.warn('[SW] Error:', err));
+            });
+        }
+    </script>
+
+    <script type="module" src="app.js"></script>
+</head>
+<body class="min-h-screen">
+
+    <div id="authLoadingScreen">
+        <div class="auth-loading-spinner"></div>
+        <span class="auth-loading-text">Verificando sesión…</span>
+    </div>
+
+    <div id="loginScreen" class="auth-hidden">
+        <div class="login-card">
+            <div class="login-logo">
+                <div class="login-logo-icon">📦</div>
+                <div>
+                    <div class="login-logo-text">BarInventory</div>
+                    <div class="login-logo-sub">Control de Inventario</div>
+                </div>
+            </div>
+            <p class="login-title">Bienvenido de vuelta</p>
+            <div class="login-field">
+                <label class="login-label">Correo electrónico</label>
+                <input type="email" id="loginEmail" class="login-input" placeholder="tu@correo.com">
+            </div>
+            <div class="login-field">
+                <label class="login-label">Contraseña</label>
+                <input type="password" id="loginPassword" class="login-input" placeholder="••••••••">
+            </div>
+            <div id="loginError" class="login-error"></div>
+            <button type="button" id="loginBtn" class="login-btn" onclick="handleLogin()">Iniciar sesión</button>
+        </div>
+    </div>
+
+    <div id="appWrapper">
+        <div id="sbOverlay" onclick="sbClose()"></div>
+
+        <nav id="sidebar" aria-label="Menú principal">
+            <div id="sbHead">
+                <span class="sb-logo">BarInventory</span>
+                <button type="button" id="sbCloseBtn" onclick="sbClose()"><svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg></button>
+            </div>
+            <div id="sbNav">
+                <p class="sb-sep">Navegación</p>
+                <button type="button" class="sb-item sb-active" data-sb-tab="inicio" onclick="switchTab('inicio'); sbClose()">Inicio</button>
+                <button type="button" class="sb-item" data-sb-tab="productos" onclick="switchTab('productos'); sbClose()">Productos</button>
+                <button type="button" class="sb-item" data-sb-tab="inventario" onclick="switchTab('inventario'); sbClose()">Inventario</button>
+                <p class="sb-sep">Nube</p>
+                <button type="button" class="sb-item" onclick="if(window.syncToCloud){ window.syncToCloud(); sbClose(); }">Sincronizar ahora</button>
+            </div>
+            <div id="sbFoot">
+                <span id="sbUserEmail"></span>
+                <div id="cloudSyncBadge">☁️ Sin Firebase</div>
+                <button type="button" onclick="toggleTheme(); sbClose();" class="sb-item" id="sbThemeBtn">Modo oscuro</button>
+                <button type="button" class="sb-logout-btn" onclick="signOutUser()">Cerrar sesión</button>
+            </div>
+        </nav>
+
+        <div class="sticky top-0 z-50 shadow-sm">
+            <div class="max-w-7xl mx-auto px-3 py-2">
+                <div class="flex items-center gap-3">
+                    <button type="button" id="hamburgerBtn" onclick="sbOpen()">
+                        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                    </button>
+                    <h1 class="flex-1 text-base font-bold text-white truncate">BarInventory</h1>
+                    <button type="button" id="themeToggleBtn" onclick="toggleTheme()">
+                        <svg id="themeIconMoon" width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+                        <svg id="themeIconSun" width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" class="hidden"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M12 8a4 4 0 100 8 4 4 0 000-8z"/></svg>
+                    </button>
+                    <div id="syncDot" data-state="none"></div>
+                </div>
+            </div>
+        </div>
+
+        <main id="mainContent">
+            <div class="max-w-7xl mx-auto px-3 py-4">
+                <div id="tabContent"></div>
+            </div>
+        </main>
+
+        <div id="productModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+            <div class="bg-white shadow-2xl max-w-md w-full p-5 rounded-lg">
+                <h2 class="text-2xl font-bold text-gray-900 mb-4" id="productModalTitle">Producto</h2>
+                <input type="hidden" id="productId">
+                <div class="space-y-4">
+                    <div><label class="block text-sm font-medium">Nombre</label><input type="text" id="productName" class="w-full px-3 py-2 border rounded"></div>
+                    <div><label class="block text-sm font-medium">Unidad</label><input type="text" id="productUnit" class="w-full px-3 py-2 border rounded" value="Botellas"></div>
+                    <div><label class="block text-sm font-medium">Grupo</label><input type="text" id="productGroup" class="w-full px-3 py-2 border rounded"></div>
+                    <div class="flex gap-3 mt-4">
+                        <button type="button" onclick="closeProductModal()" class="flex-1 px-4 py-2 border rounded">Cancelar</button>
+                        <button type="button" onclick="saveProduct()" class="flex-1 px-4 py-2 bg-blue-600 text-white rounded">Guardar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="inventarioModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+            <div class="bg-white shadow-2xl max-w-sm w-full p-4 rounded-lg">
+                <h2 class="text-xl font-bold mb-2" id="inventarioModalTitle">Contar</h2>
+                <div class="mb-4">
+                    <label class="block text-sm font-semibold">🍾 Enteras</label>
+                    <input type="number" id="inv_enteras" min="0" value="0" class="w-full px-4 py-2 border-2 rounded text-center">
+                </div>
+                <div class="mb-4">
+                    <div class="flex justify-between mb-2">
+                        <label class="text-sm font-semibold">🍷 Abiertas</label>
+                        <button type="button" onclick="addAbiertaInModal()" class="text-xs bg-blue-600 text-white px-2 py-1 rounded">Agregar</button>
+                    </div>
+                    <div id="inv_abiertasContainer" class="space-y-2"></div>
+                </div>
+                <div class="flex gap-3">
+                    <button type="button" onclick="closeInventarioModal()" class="flex-1 border py-2 rounded">Cancelar</button>
+                    <button type="button" onclick="saveInventarioModal()" class="flex-1 bg-blue-600 text-white py-2 rounded">Guardar</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="toast" class="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50 hidden">
+            <div class="bg-blue-600 text-white px-6 py-3 rounded-full shadow-xl"><span id="toastMessage"></span></div>
+        </div>
+    </div>
+</body>
+</html>
