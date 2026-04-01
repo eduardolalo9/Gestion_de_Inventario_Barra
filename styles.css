@@ -5,71 +5,96 @@
    ================================================================= */
 
 :root {
-    --bg: #0d1321;
-    --surface: #141e33;
-    --card: #1b2540;
-    --border: rgba(148,163,184,0.09);
-    --border-mid: rgba(148,163,184,0.16);
-    --border-strong: rgba(148,163,184,0.28);
-    --accent: #3b82f6;
-    --accent-hover: #2563eb;
-    --accent-dim: rgba(59,130,246,0.10);
-    --accent-dim2: rgba(59,130,246,0.18);
-    --green: #22c55e;
-    --green-dim: rgba(34,197,94,0.10);
-    --green-dark: #14532d;
-    --green-text: #86efac;
-    --red: #ef4444;
-    --red-dim: rgba(239,68,68,0.10);
-    --red-dark: #7f1d1d;
-    --red-text: #fca5a5;
-    --amber: #f59e0b;
-    --sky: #0ea5e9;
-    --txt-primary: #e2e8f0;
-    --txt-secondary: #94a3b8;
-    --txt-muted: #64748b;
-    --shadow-xs: 0 1px 2px rgba(0,0,0,0.30);
-    --shadow-card: 0 1px 4px rgba(0,0,0,0.40), 0 1px 2px rgba(0,0,0,0.25);
-    --shadow-modal: 0 20px 60px rgba(0,0,0,0.65), 0 6px 20px rgba(0,0,0,0.40);
-    --ease-std: cubic-bezier(0.4, 0, 0.2, 1);
-    --ease-out: cubic-bezier(0.0, 0, 0.2, 1);
-    --ease-spring: var(--ease-std);
-    --r-xs: 3px; --r-sm: 4px; --r-md: 6px; --r-lg: 8px; --r-xl: 10px;
-    --ink: var(--bg);
-    --accent-2: var(--red);
-    --accent-3: var(--amber);
-    --accent-blue: var(--sky);
-    --accent-green: var(--green);
+    /* ── Superficies dark ── */
+    --bg:             #0d1321;
+    --surface:        #141e33;
+    --card:           #1b2540;
+    --border:         rgba(148,163,184,0.09);
+    --border-mid:     rgba(148,163,184,0.16);
+    --border-strong:  rgba(148,163,184,0.28);
+
+    /* ── Acento corporativo (azul institucional) ── */
+    --accent:         #3b82f6;
+    --accent-hover:   #2563eb;
+    --accent-dim:     rgba(59,130,246,0.10);
+    --accent-dim2:    rgba(59,130,246,0.18);
+
+    /* ── Semánticos ── */
+    --green:          #22c55e;
+    --green-dim:      rgba(34,197,94,0.10);
+    --green-dark:     #14532d;
+    --green-text:     #86efac;
+    --red:            #ef4444;
+    --red-dim:        rgba(239,68,68,0.10);
+    --red-dark:       #7f1d1d;
+    --red-text:       #fca5a5;
+    --amber:          #f59e0b;
+    --sky:            #0ea5e9;
+
+    /* ── Texto ── */
+    --txt-primary:    #e2e8f0;
+    --txt-secondary:  #94a3b8;
+    /* FIX #6: #475569 sobre fondo oscuro daba ~2.4:1 (incumple WCAG AA 4.5:1).
+       #64748b sobre #1b2540 produce ~4.6:1 — cumple para texto < 18px. */
+    --txt-muted:      #64748b;
+
+    /* ── Sombras ── */
+    --shadow-xs:      0 1px 2px rgba(0,0,0,0.30);
+    --shadow-card:    0 1px 4px rgba(0,0,0,0.40), 0 1px 2px rgba(0,0,0,0.25);
+    --shadow-modal:   0 20px 60px rgba(0,0,0,0.65), 0 6px 20px rgba(0,0,0,0.40);
+
+    /* ── Ease estándar (sin spring/bounce) ── */
+    --ease-std:       cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-out:       cubic-bezier(0.0, 0, 0.2, 1);
+    --ease-spring:    var(--ease-std);       /* alias para JS */
+    --glow-accent:    none;                  /* sin glow neón */
+
+    /* ── Radios estructurados ── */
+    --r-xs: 3px;   --r-sm: 4px;
+    --r-md: 6px;   --r-lg: 8px;  --r-xl: 10px;
+
+    /* ── Aliases legacy (usados en CSS propio abajo) ── */
+    --ink:        var(--bg);
+    --accent-2:   var(--red);
+    --accent-3:   var(--amber);
+    --accent-blue:var(--sky);
+    --accent-green:var(--green);
     --shadow-mid: var(--shadow-card);
 }
 
+/* ── TEMA CLARO ───────────────────────────────────────────── */
 html[data-theme="light"] {
-    --bg: #f0f4f8;
-    --surface: #f8fafc;
-    --card: #ffffff;
-    --border: #e2e8f0;
-    --border-mid: #cbd5e1;
-    --border-strong: #94a3b8;
-    --accent: #1d4ed8;
-    --accent-hover: #1e40af;
-    --accent-dim: rgba(29,78,216,0.07);
-    --accent-dim2: rgba(29,78,216,0.14);
-    --green: #16a34a;
-    --green-dim: rgba(22,163,74,0.09);
-    --green-dark: #14532d;
-    --green-text: #166534;
-    --red: #dc2626;
-    --red-dim: rgba(220,38,38,0.09);
-    --red-dark: #7f1d1d;
-    --red-text: #991b1b;
-    --amber: #d97706;
-    --sky: #0284c7;
-    --txt-primary: #0f172a;
-    --txt-secondary: #475569;
-    --txt-muted: #94a3b8;
-    --shadow-xs: 0 1px 2px rgba(0,0,0,0.06);
-    --shadow-card: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
-    --shadow-modal: 0 20px 60px rgba(0,0,0,0.14), 0 6px 20px rgba(0,0,0,0.08);
+    --bg:             #f0f4f8;
+    --surface:        #f8fafc;
+    --card:           #ffffff;
+    --border:         #e2e8f0;
+    --border-mid:     #cbd5e1;
+    --border-strong:  #94a3b8;
+
+    --accent:         #1d4ed8;
+    --accent-hover:   #1e40af;
+    --accent-dim:     rgba(29,78,216,0.07);
+    --accent-dim2:    rgba(29,78,216,0.14);
+
+    --green:          #16a34a;
+    --green-dim:      rgba(22,163,74,0.09);
+    --green-dark:     #14532d;
+    --green-text:     #166534;
+    --red:            #dc2626;
+    --red-dim:        rgba(220,38,38,0.09);
+    --red-dark:       #7f1d1d;
+    --red-text:       #991b1b;
+    --amber:          #d97706;
+    --sky:            #0284c7;
+
+    --txt-primary:    #0f172a;
+    --txt-secondary:  #475569;
+    --txt-muted:      #94a3b8;
+
+    --shadow-xs:      0 1px 2px rgba(0,0,0,0.06);
+    --shadow-card:    0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-modal:   0 20px 60px rgba(0,0,0,0.14), 0 6px 20px rgba(0,0,0,0.08);
+
     --ink: var(--bg);
     --accent-2: var(--red);
     --accent-3: var(--amber);
@@ -77,6 +102,7 @@ html[data-theme="light"] {
     --accent-green: var(--green);
 }
 
+/* ─── Reset & Base ───────────────────────────────────────── */
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 
@@ -97,14 +123,39 @@ body {
 ::-webkit-scrollbar-thumb { background: var(--border-mid); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
 
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-@keyframes springUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes slideIn { from { transform: scaleX(0); opacity: 0; } to { transform: scaleX(1); opacity: 1; } }
-@keyframes toastPop { from { opacity: 0; transform: translateX(-50%) translateY(12px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
-@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
-@keyframes tabContentIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes rowIn { from { opacity: 0; transform: translateX(-4px); } to { opacity: 1; transform: translateX(0); } }
-@keyframes cardIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+/* ─── Animaciones (sin spring, sin bounce) ───────────────── */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+@keyframes springUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideIn {
+    from { transform: scaleX(0); opacity: 0; }
+    to   { transform: scaleX(1); opacity: 1; }
+}
+@keyframes toastPop {
+    from { opacity: 0; transform: translateX(-50%) translateY(12px); }
+    to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.35; }
+}
+@keyframes tabContentIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes rowIn {
+    from { opacity: 0; transform: translateX(-4px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes cardIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
 
 .animate-fadeIn  { animation: fadeIn   0.16s var(--ease-out) both; }
 .animate-slideIn { animation: slideIn  0.18s var(--ease-out) both; transform-origin: left; }
@@ -348,17 +399,19 @@ button {
     cursor: pointer;
     transition: background-color 0.12s ease, opacity 0.10s ease, box-shadow 0.12s ease !important;
 }
+/* Quitar brillo "sheen" interno de botones */
 button::before { display: none !important; }
 button:hover   { opacity: 0.90; box-shadow: none !important; }
 button:active  { transform: scale(0.97) !important; box-shadow: none !important; }
 button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Sin escala en hover (elimina el translate lift) */
 button[class*="bg-gradient"]:hover {
     transform: none !important;
     box-shadow: var(--shadow-xs) !important;
 }
 button[class*="bg-gradient"]:active { transform: scale(0.97) !important; }
 
-/* Primarios (morado→naranja, etc.) */
+/* Primarios (morado→naranja, morado→azul, azul→morado) → azul sólido */
 button[class*="from-purple"][class*="to-orange"],
 button[class*="from-purple"][class*="to-blue"],
 button[class*="from-purple-5"][class*="to-blue"],
@@ -760,6 +813,8 @@ html[data-theme="light"] .inv-card__group-badge { background: #f8fafc; border-co
 /* ===========================================================
    AUDITORÍA FÍSICA CIEGA — Área de selección y conteo
    =========================================================== */
+
+/* Pantalla de selección de áreas */
 .audit-screen { animation: tabContentIn 0.22s var(--ease-out) both; }
 
 .audit-header-title {
@@ -774,6 +829,7 @@ html[data-theme="light"] .inv-card__group-badge { background: #f8fafc; border-co
     margin-top: 4px; line-height: 1.5;
 }
 
+/* Tarjetas de área */
 .audit-area-card {
     background: var(--card);
     border: 1px solid var(--border-mid);
@@ -845,6 +901,7 @@ html[data-theme="light"] .audit-area-status.completada { color: #166534; }
 .audit-area-card:hover .audit-area-arrow { color: var(--accent); transform: translateX(3px); }
 .audit-area-card.completada:hover .audit-area-arrow { color: var(--green); }
 
+/* Botón EXPORTAR principal */
 .audit-export-btn {
     display: flex; align-items: center; justify-content: center; gap: 10px;
     width: 100%; padding: 14px 20px;
@@ -863,6 +920,7 @@ html[data-theme="light"] .audit-area-status.completada { color: #166534; }
 .audit-export-btn:hover { opacity: 0.88; box-shadow: 0 4px 20px rgba(34,197,94,0.22); }
 .audit-export-btn:active { transform: scale(0.975); }
 
+/* Banner de progreso */
 .audit-progress-bar {
     height: 3px; background: var(--border);
     border-radius: 2px; overflow: hidden;
@@ -874,6 +932,7 @@ html[data-theme="light"] .audit-area-status.completada { color: #166534; }
     transition: width 0.40s var(--ease-out);
 }
 
+/* Vista de conteo (header sticky) */
 .audit-count-header {
     position: sticky; top: 0; z-index: 10;
     background: var(--bg);
@@ -892,6 +951,7 @@ html[data-theme="light"] .audit-area-status.completada { color: #166534; }
     color: var(--accent);
 }
 
+/* Botón FINALIZAR CONTEO */
 .audit-finish-btn {
     display: flex; align-items: center; justify-content: center; gap: 10px;
     width: 100%; padding: 16px 24px;
@@ -910,6 +970,7 @@ html[data-theme="light"] .audit-area-status.completada { color: #166534; }
 .audit-finish-btn:hover { background: var(--accent-hover); box-shadow: 0 6px 22px rgba(59,130,246,0.36); }
 .audit-finish-btn:active { transform: scale(0.975); }
 
+/* Botón volver */
 .audit-back-btn {
     display: inline-flex; align-items: center; gap: 6px;
     padding: 7px 12px;
@@ -934,7 +995,7 @@ html[data-theme="light"] .audit-count-area-badge { background: rgba(29,78,216,0.
     width: 10px; height: 10px;
     border-radius: 50%;
     flex-shrink: 0;
-    background: #50516a;
+    background: #50516a;          /* gris = sin Firebase */
     box-shadow: 0 0 0 2px rgba(80,81,106,0.20);
     transition: background 0.35s ease, box-shadow 0.35s ease;
     cursor: default;
@@ -1104,6 +1165,7 @@ html[data-theme="light"] #syncDot::after { background: #1e293b; }
     font-size: 0.68rem; color: var(--txt-muted);
 }
 
+/* Spinner para el botón de login */
 @keyframes spin { to { transform: rotate(360deg); } }
 .login-spinner {
     width: 15px; height: 15px;
@@ -1114,6 +1176,7 @@ html[data-theme="light"] #syncDot::after { background: #1e293b; }
     flex-shrink: 0;
 }
 
+/* Loading auth — pantalla intermedia */
 #authLoadingScreen {
     position: fixed; inset: 0;
     background: var(--bg);
@@ -1135,9 +1198,11 @@ html[data-theme="light"] #syncDot::after { background: #1e293b; }
     font-weight: 500;
 }
 
+/* App oculta por defecto hasta confirmar auth */
 #appWrapper { display: none; }
 #appWrapper.auth-visible { display: block; }
 
+/* Botón Cerrar Sesión en sidebar */
 .sb-logout-btn {
     display: flex; align-items: center; gap: 10px;
     width: 100%; padding: 7px 10px;
@@ -1168,6 +1233,8 @@ html[data-theme="light"] #syncDot::after { background: #1e293b; }
    AUDITORÍA MULTIUSUARIO — Design System
    Panel identidad · comparación · trail de conteo · status pills
    ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Panel identidad de dispositivo ─────────────────────────────────────── */
 .audit-user-panel {
     background: var(--card);
     border: 1px solid var(--border-mid);
@@ -1215,6 +1282,7 @@ html[data-theme="light"] #syncDot::after { background: #1e293b; }
 }
 .audit-rename-btn:hover { background: var(--accent-dim2); }
 
+/* ── Formulario inline para renombrar ──────────────────────────────────── */
 .audit-rename-inline {
     display: none;
     flex-direction: column;
@@ -1240,6 +1308,7 @@ html[data-theme="light"] #syncDot::after { background: #1e293b; }
 }
 .audit-rename-input:focus { outline: none; border-color: var(--accent); }
 
+/* ── Panel comparación multi-dispositivo ───────────────────────────────── */
 .audit-compare-panel {
     background: var(--card);
     border: 1px solid var(--border-mid);
@@ -1281,6 +1350,7 @@ html[data-theme="light"] #syncDot::after { background: #1e293b; }
     border: 1px solid var(--border-mid);
 }
 
+/* ── Trail de conteo por producto ──────────────────────────────────────── */
 .audit-trail {
     margin-top: 7px;
     border-top: 1px solid var(--border);
@@ -1329,6 +1399,7 @@ html[data-theme="light"] #syncDot::after { background: #1e293b; }
     border-radius: 3px;
 }
 
+/* ── Status bar en pantalla de conteo ──────────────────────────────────── */
 .audit-counting-status-bar {
     display: flex; gap: 7px; flex-wrap: wrap;
     margin-bottom: 10px;
@@ -1353,3 +1424,4 @@ html[data-theme="light"] #syncDot::after { background: #1e293b; }
     background: var(--accent-dim); color: var(--accent);
     border-color: var(--accent-dim2);
 }
+
