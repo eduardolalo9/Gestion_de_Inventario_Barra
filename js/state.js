@@ -1,126 +1,121 @@
 /**
- * js/state.js — v2 (Fase 1: RBAC)
+ * js/state.js — v2.3 DEFINITIVO
  * ══════════════════════════════════════════════════════════════
- * Fuente única de verdad (Single Source of Truth).
+ * Estado global centralizado de la aplicación.
+ * TODAS las propiedades que cualquier módulo lee/escribe deben
+ * estar declaradas aquí — sin excepción.
  *
- * CAMBIOS RESPECTO A v1:
- *   Añadidas tres propiedades para el sistema de roles:
- *     • currentUser   — Firebase User object (después del login)
- *     • userRole      — 'admin' | 'user' | null
- *     • userProfile   — perfil completo desde /usuarios/{uid}
+ * CORRECCIONES ACUMULADAS (v2.1 → v2.3):
  *
- * PATRÓN: objeto `state` exportado — los módulos importan y mutan
- *   directamente sus propiedades. Funciona porque los objetos JS
- *   se pasan por referencia.
+ * v2.1 (original) — sin ninguna de las propiedades de abajo
  *
- * REGLA: NUNCA reasignar el objeto completo (state = {...}).
- *   Solo mutar propiedades individuales.
+ * v2.2 — añadidas:
+ *   • currentUser        — auth-roles.js: _applyRoleToState()
+ *   • userProfile        — auth-roles.js: _applyRoleToState()
+ *   • adjustmentsPending — app.js: subirAjustesPendientes() al reconectar
+ *   • auditoriaAreaActiva — render.js: pantalla de conteo de auditoría
+ *
+ * v2.3 — añadidas:
+ *   • auditoriaView      — audit.js lo escribe ('counting'|'selection');
+ *                          render.js lo lee para decidir qué sub-vista pintar.
+ *                          Sin declarar → undefined → siempre pintaba selección.
+ *   • notifications      — notificaciones.js usa state.NOTIFICATIONS (en inglés)
+ *                          pero state.js solo tenía state.notificaciones (en español).
+ *                          Mismatch de nombre → state.notifications era undefined →
+ *                          filter/findIndex sobre undefined → TypeError en runtime.
+ *   • notificationsUnread — notificaciones.js escribe este número para el badge.
+ *                          Sin declarar → badge siempre mostraba undefined.
+ *   • ajustesPendientes  — ajustes.js y render.js usan state.ajustesPendientes
+ *                          (con s final) para la lista de ajustes del admin.
+ *                          Sin declarar → optional chaining lo ignoraba silenciosamente.
  * ══════════════════════════════════════════════════════════════
  */
 
 export const state = {
 
-    // ── Autenticación y Roles (Fase 1) ─────────────────────────
-    /**
-     * Objeto Firebase User activo, o null si no hay sesión.
-     * @type {firebase.User|null}
-     */
-    currentUser: null,
+  // ─── Catálogo de productos (fuente: Admin) ──────────────────
+  products: [],
 
-    /**
-     * Rol del usuario autenticado, cargado desde /usuarios/{uid}.
-     * null = sin sesión activa o rol aún no cargado.
-     * @type {'admin'|'user'|null}
-     */
-    userRole: null,
+  // ─── Carrito (pedidos en curso) ─────────────────────────────
+  cart: [],
 
-    /**
-     * Perfil completo del usuario desde /usuarios/{uid}.
-     * {
-     *   uid:         string,
-     *   email:       string,
-     *   displayName: string,
-     *   role:        'admin' | 'user',
-     *   createdAt:   number,
-     *   lastLogin:   number,
-     * }
-     * @type {Object|null}
-     */
-    userProfile: null,
+  // ─── Historial ──────────────────────────────────────────────
+  orders:      [],   // Pedidos completados (solo local, NO se sincronizan)
+  inventories: [],   // Historiales de inventario (se sincronizan chunkeados)
 
-    // ── Datos principales ──────────────────────────────────────
-    /** @type {Array<{id:string, name:string, unit:string, group:string, stockByArea:object, capacidadMl?:number, pesoBotellaLlenaOz?:number}>} */
-    products: [],
+  // ─── Navegación / UI ────────────────────────────────────────
+  activeTab:     'inicio',
+  selectedArea:  'almacen',
+  selectedGroup: 'Todos',
+  searchTerm:    '',
 
-    /** @type {Array<{id:string, name:string, unit:string, group:string, quantity:number}>} */
-    cart: [],
+  // ─── Inventario operativo (conteo diario por área) ──────────
+  // Estructura: { [productId]: { almacen: number, barra1: number, barra2: number } }
+  inventarioConteo: {},
 
-    /** @type {Array} */
-    orders: [],
+  // ─── Auditoría (conteo de verificación) ─────────────────────
+  // Estructura: { [productId]: { [area]: { enteras: n, abiertas: [...] } } }
+  auditoriaConteo: {},
 
-    /** @type {Array} */
-    inventories: [],
+  // Estado de cada zona: 'pendiente' | 'en_progreso' | 'completada'
+  auditoriaStatus: {
+    almacen: 'pendiente',
+    barra1:  'pendiente',
+    barra2:  'pendiente',
+  },
 
-    // ── Navegación / UI ─────────────────────────────────────────
-    activeTab:        'inicio',
-    editingProductId: null,
-    searchTerm:       '',
-    selectedGroup:    'Todos',
-    selectedArea:     'almacen',
+  // FIX v2.2 — área activa en pantalla de conteo
+  // render.js: if (state.auditoriaView === 'counting' && state.auditoriaAreaActiva)
+  auditoriaAreaActiva: null,
 
-    /** @type {Set<string>} */
-    expandedInventories: new Set(),
+  // FIX v2.3 — sub-vista de auditoría: 'selection' | 'counting'
+  // audit.js escribe 'counting' al entrar al conteo y 'selection' al volver.
+  // render.js lo lee para elegir qué sub-pantalla pintar.
+  // Sin esta propiedad declarada → siempre undefined → siempre pintaba selección.
+  auditoriaView: 'selection',
 
-    /** @type {Set<string>} */
-    expandedCards: new Set(),
+  // ─── Multi-usuario (conteo por persona) ─────────────────────
+  // Estructura: { [productId]: { [area]: { [userId]: { enteras, abiertas, ts } } } }
+  auditoriaConteoPorUsuario: {},
 
-    // ── Conteo de inventario operativo ──────────────────────────
-    /**
-     * { productId: { area: { enteras: number, abiertas: number[] } } }
-     * area ∈ ['almacen', 'barra1', 'barra2']
-     */
-    inventarioConteo:        {},
-    inventarioModalProductId: null,
-    isInventarioModalOpen:    false,
+  // ─── Usuario actual de auditoría ────────────────────────────
+  // { userId: string, userName: string, role: 'admin'|'user' }
+  auditCurrentUser: null,
 
-    // ── Auditoría Física Ciega ──────────────────────────────────
-    /** 'selection' | 'counting' */
-    auditoriaView:       'selection',
-    auditoriaAreaActiva: null,
-    auditoriaStatus: {
-        almacen: 'pendiente',
-        barra1:  'pendiente',
-        barra2:  'pendiente',
-    },
-    /** { productId: { area: { enteras, abiertas } } } */
-    auditoriaConteo:  {},
-    isAuditoriaMode:  false,
+  // ─── Sesión de autenticación (FIX v2.2) ───────────────────────
+  currentUser:  null,   // firebase.User | null  — asignado por auth-roles.js
+  userProfile:  null,   // { uid, email, displayName, role, ... } — ídem
 
-    // ── Multiusuario (conteo por dispositivo) ───────────────────
-    /**
-     * { userId: string, userName: string, createdAt: number }
-     * Generado una sola vez por dispositivo, persiste en localStorage.
-     */
-    auditCurrentUser: null,
-    /**
-     * { productId: { area: { userId: { userId, userName, enteras, abiertas, ts } } } }
-     * Estructura aditiva — cada dispositivo escribe SOLO su propio userId.
-     */
-    auditoriaConteoPorUsuario: {},
+  // ─── Rol del usuario autenticado ────────────────────────────
+  // 'admin' | 'user' | null (null = modo dev, se trata como admin)
+  userRole: null,
 
-    // ── Sincronización con la nube ───────────────────────────────
-    /** true cuando hay cambios locales sin subir a Firestore */
-    _cloudSyncPending: false,
-    /** timestamp (ms) de la última sincronización exitosa */
-    _lastCloudSync:    0,
-    /** semáforo para evitar escrituras concurrentes */
-    _syncInProgress:   false,
-    /** hash para detectar cambios reales en los datos */
-    _lastDataHash:     '',
+  // ─── Sincronización ─────────────────────────────────────────
+  syncEnabled:        true,    // Toggle del usuario (pausar/activar sync)
+  _cloudSyncPending:  false,   // Hay cambios locales sin subir
+  _syncInProgress:    false,   // Mutex: evita sync simultáneos
+  _lastCloudSync:     0,       // Timestamp del último sync exitoso
+  _lastDataHash:      '',      // Hash para detectar cambios reales
+
+  // ─── Ajustes pendientes offline (FIX v2.2) ───────────────────
+  // app.js verifica .length > 0 al reconectar para subirAjustesPendientes()
+  adjustmentsPending: [],
+
+  // ─── Notificaciones (FIX v2.3) ───────────────────────────────
+  // IMPORTANTE: notificaciones.js usa `state.notifications` (inglés),
+  // NO `state.notificaciones` (español). El nombre original causaba
+  // TypeError: Cannot read properties of undefined (reading 'findIndex').
+  notifications:       [],   // Array de notificaciones del usuario/admin
+  notificationsUnread: 0,    // Contador de no leídas → badge en UI
+
+  // ─── Ajustes pendientes del admin (FIX v2.3) ─────────────────
+  // ajustes.js y render.js usan `state.ajustesPendientes` (con 's')
+  // para la lista de solicitudes de ajuste pendientes de aprobar.
+  ajustesPendientes: [],
+
+  // ─── Config de ajustes sincronizada ──────────────────────────
+  ajustes: {},
+
+  // ─── Reportes ───────────────────────────────────────────────
+  reportesPublicados: [],   // Reportes publicados por admin para descarga
 };
-
-/**
- * Helpers de selección rápida.
- */
-export function getDb()   { return window._db; }
-export function getAuth() { return window._auth; }

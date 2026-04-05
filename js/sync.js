@@ -253,10 +253,11 @@ async function _applyMainDocData(data) {
     }
 
     if (data._ordersInChunks) {
-        const r = await _readChunkedSubcollection(docRef, 'ordersChunks');
-        if (r.length) state.orders = r;
+        // BUG-FIX: orders de la nube NO se aplican — cada dispositivo
+        // conserva su propio historial local de pedidos WhatsApp.
+        // (bloque intencionalmente vacío)
     } else if (Array.isArray(data.orders)) {
-        state.orders = data.orders;
+        // ídem: ignorar orders del doc principal
     }
 
     if (data._inventoriesInChunks) {
@@ -502,19 +503,33 @@ export function startRealtimeListeners() {
     const isAdmin = (role === 'admin' || role === null);
 
     if (isAdmin) {
-        // ── ADMIN: 10 listeners — acceso completo ─────────────────
-        console.info('[Snapshot] ══ Iniciando 10 listeners (rol: admin) ══');
+        // ── ADMIN: 10+2 listeners — acceso completo ───────────────
+        console.info('[Snapshot] ══ Iniciando listeners (rol: admin) ══');
 
         _subscribeMainDoc();           // [1]    doc principal
         _subscribeStockAreas();        // [2-4]  conteo operativo
         _subscribeConteoAreas();       // [5-7]  auditoría atómica
         _subscribeConteoPorUsuario();  // [8-10] multiusuario
 
+        // Módulos de arquitectura profesional
+        import('./notificaciones.js').then(m => {
+            const unsub = m.suscribirNotificaciones();
+            if (unsub) _activeListeners.set('notificaciones', unsub);
+        }).catch(e => console.warn('[Snapshot] Error al suscribir notificaciones:', e));
+
+        import('./ajustes.js').then(m => {
+            const unsub = m.suscribirAjustesAdmin();
+            if (unsub) _activeListeners.set('ajustes', unsub);
+        }).catch(e => console.warn('[Snapshot] Error al suscribir ajustes:', e));
+
+        import('./reportes.js').then(m => {
+            const unsub = m.suscribirReportesPublicados();
+            if (unsub) _activeListeners.set('reportes', unsub);
+        }).catch(e => console.warn('[Snapshot] Error al suscribir reportes:', e));
+
     } else {
-        // ── USER: 4 listeners — solo catálogo + stock operativo ────
-        // _subscribeConteoAreas y _subscribeConteoPorUsuario
-        // NO se inician para preservar la ceguera de auditoría.
-        console.info('[Snapshot] ══ Iniciando 4 listeners (rol: user, modo ciego) ══');
+        // ── USER: 4+2 listeners — catálogo + stock + feed propio ──
+        console.info('[Snapshot] ══ Iniciando listeners (rol: user, modo ciego) ══');
         console.info('[Snapshot] Listeners de auditoría OMITIDOS (conteoAreas, conteoPorUsuario).');
 
         _subscribeMainDoc();    // [1]   doc principal (productos, cart, auditoriaStatus)
@@ -522,6 +537,17 @@ export function startRealtimeListeners() {
 
         // ✗ _subscribeConteoAreas()       → OMITIDO (totales de auditoría ciega)
         // ✗ _subscribeConteoPorUsuario()  → OMITIDO (conteos individuales de otros)
+
+        // Notificaciones propias + reportes publicados (lectura)
+        import('./notificaciones.js').then(m => {
+            const unsub = m.suscribirNotificaciones();
+            if (unsub) _activeListeners.set('notificaciones', unsub);
+        }).catch(e => console.warn('[Snapshot] Error al suscribir notificaciones (user):', e));
+
+        import('./reportes.js').then(m => {
+            const unsub = m.suscribirReportesPublicados();
+            if (unsub) _activeListeners.set('reportes', unsub);
+        }).catch(e => console.warn('[Snapshot] Error al suscribir reportes (user):', e));
     }
 
     updateCloudSyncBadge('listening');
@@ -552,6 +578,43 @@ export function stopRealtimeListeners() {
 export function isListening() {
     return _activeListeners.size > 0;
 }
+
+// ═════════════════════════════════════════════════════════════
+//  TOGGLE DE SINCRONIZACIÓN (usuario puede pausar)
+// ═════════════════════════════════════════════════════════════
+
+/**
+ * Activa o desactiva la sincronización automática con la nube.
+ * Al activar: sube automáticamente todos los pendientes.
+ * Al desactivar: los cambios se guardan solo en localStorage.
+ * @param {boolean} [forzarValor] — si se pasa, usa ese valor; si no, alterna
+ */
+export async function toggleSync(forzarValor) {
+    const nuevo = forzarValor !== undefined ? forzarValor : !state.syncEnabled;
+    state.syncEnabled = nuevo;
+
+    try { localStorage.setItem('inventarioApp_syncEnabled', nuevo ? '1' : '0'); } catch (_) {}
+
+    if (nuevo) {
+        showNotification('☁️ Sincronización activada');
+        updateCloudSyncBadge('syncing');
+        // Subir cambios pendientes y ajustes locales
+        if (window._db && navigator.onLine) {
+            syncToCloud().catch(e => console.warn('[toggleSync] syncToCloud falló:', e));
+            import('./ajustes.js')
+                .then(m => m.subirAjustesPendientes())
+                .catch(() => {});
+        }
+    } else {
+        showNotification('📴 Sincronización pausada — datos guardados localmente');
+        updateCloudSyncBadge('pending');
+    }
+
+    // Actualizar UI del toggle
+    import('./render.js').then(m => m.renderTab()).catch(() => {});
+}
+
+window.toggleSync = toggleSync;
 
 // ═════════════════════════════════════════════════════════════
 //  [T1] txCloseZone — CIERRE ATÓMICO DE ZONA
@@ -647,6 +710,13 @@ export async function txCloseZone(area) {
 export async function syncToCloud(retryCount = 0) {
     if (!window._db)             return;
     if (state._syncInProgress)   return;
+    // Respetar el toggle de sincronización del usuario
+    if (!state.syncEnabled) {
+        state._cloudSyncPending = true;
+        updateCloudSyncBadge('pending');
+        console.info('[Firebase] syncToCloud omitido — sincronización desactivada por el usuario.');
+        return;
+    }
     if (!navigator.onLine) {
         state._cloudSyncPending = true;
         updateCloudSyncBadge('pending');
@@ -694,6 +764,8 @@ export async function syncToCloud(retryCount = 0) {
 
             // ── Payload del doc principal ─────────────────────────────────
             // NOTA: _lastLocalWriteTs se asigna FUERA del callback (abajo)
+            // BUG-FIX: orders NO se incluyen en el payload — quedan solo en
+            // localStorage del dispositivo (no se sincronizan entre teléfonos).
             const payload = {
                 products:             state.products,
                 cart:                 state.cart,
@@ -703,7 +775,7 @@ export async function syncToCloud(retryCount = 0) {
                 auditoriaConteo:      state.auditoriaConteo,
                 _lastModified:        localTs,
                 _syncedAt:            Date.now(),
-                _ordersInChunks:      true,
+                _ordersInChunks:      false,   // ← orders NO suben a la nube
                 _inventoriesInChunks: true,
                 _conteoInSubcol:      true,
             };
@@ -755,10 +827,8 @@ export async function syncToCloud(retryCount = 0) {
         }
 
         // Historiales chunkeados (append-only, fuera de la transacción es seguro)
-        await Promise.all([
-            _writeChunkedSubcollection(docRef, 'ordersChunks',      state.orders),
-            _writeChunkedSubcollection(docRef, 'inventoriesChunks', state.inventories),
-        ]);
+        // BUG-FIX: orders NO se suben — solo inventories se sincronizan a la nube
+        await _writeChunkedSubcollection(docRef, 'inventoriesChunks', state.inventories);
 
         state._cloudSyncPending = false;
         state._lastCloudSync    = Date.now();

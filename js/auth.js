@@ -1,92 +1,240 @@
 /**
- * js/auth.js — v2 (Fase 1: RBAC)
+ * js/auth.js — v2.2 (CORREGIDO)
  * ══════════════════════════════════════════════════════════════
  * Autenticación Firebase Email/Password con control de roles.
  *
- * CAMBIOS RESPECTO A v1:
- *   • Ya NO llama a startRealtimeListeners() directamente.
- *     Esa responsabilidad se delega a auth-roles.js, que lo invoca
- *     solo después de confirmar el rol del usuario.
- *   • Al hacer login → initRoles(user) [auth-roles.js]
- *     initRoles internamente llama startRealtimeListeners().
- *   • Al hacer logout → cleanupRoles() + stopRealtimeListeners()
+ * CORRECCIONES v2.2:
+ * • _authResolve usa patrón re-creatable (no Promise única)
+ * • Eliminados duplicados: stopRealtimeListeners y limpieza
+ *   de email ya se manejan dentro de cleanupRoles()
+ * • Añadido timeout de seguridad para initRoles
+ * • Guard contra race condition logout-durante-init
  *
- * FLUJO COMPLETO:
+ * FLUJO:
  *   onAuthStateChanged(user)
- *     ├─ user:   showApp(user)
- *     │           └─ initRoles(user) ──→ /usuarios/{uid}
- *     │                                   └─ startRealtimeListeners()
- *     └─ !user:  cleanupRoles()
- *                stopRealtimeListeners()
- *                showLogin()
+ *     ├─ user  → initRoles(user) → showApp(user) → resolve(user)
+ *     └─ !user → cleanupRoles() → showLogin()
  * ══════════════════════════════════════════════════════════════
  */
 
-import { stopRealtimeListeners }          from './sync.js';
-import { initRoles, cleanupRoles }        from './auth-roles.js';
+import { initRoles, cleanupRoles } from './auth-roles.js';
 
 // ── Helper: acceso rápido a elementos del DOM ─────────────────
 const $id = id => document.getElementById(id);
 
+// ── Promise que app.js puede esperar ──────────────────────────
+// Patrón: se re-crea en cada cambio de auth para evitar el
+// problema de "Promise resuelta con null en logout".
+let _authResolve;
+let _authReady = new Promise(resolve => { _authResolve = resolve; });
+
+/** Retorna la Promise actual de auth ready */
+export function getAuthReady() {
+    return _authReady;
+}
+
+// ── Alias legacy (si app.js usa `onAuthReady` directamente) ───
+export { _authReady as onAuthReady };
+
+// ── Timeout de seguridad (ms) ─────────────────────────────────
+const INIT_TIMEOUT = 15000; // 15 segundos máximo para initRoles
+
+// ── Guard: evitar procesar auth si hay un cambio en progreso ──
+let _authChangeInProgress = false;
+let _lastAuthUid = null;
+
 // ─── Pantallas de auth ─────────────────────────────────────────
 
 function showLogin() {
-    $id('authLoadingScreen').classList.add('auth-hidden');
-    $id('loginScreen').classList.remove('auth-hidden');
-    $id('appWrapper').classList.remove('auth-visible');
+    const loadingEl = $id('authLoadingScreen');
+    const loginEl = $id('loginScreen');
+    const appEl = $id('appWrapper');
+
+    if (loadingEl) loadingEl.classList.add('auth-hidden');
+    if (loginEl) loginEl.classList.remove('auth-hidden');
+    if (appEl) appEl.classList.remove('auth-visible');
+
     console.info('[Auth] Mostrando pantalla de login.');
 }
 
 function showApp(user) {
-    $id('authLoadingScreen').classList.add('auth-hidden');
-    $id('loginScreen').classList.add('auth-hidden');
-    $id('appWrapper').classList.add('auth-visible');
+    const loadingEl = $id('authLoadingScreen');
+    const loginEl = $id('loginScreen');
+    const appEl = $id('appWrapper');
+
+    if (loadingEl) loadingEl.classList.add('auth-hidden');
+    if (loginEl) loginEl.classList.add('auth-hidden');
+    if (appEl) appEl.classList.add('auth-visible');
+
     console.info('[Auth] ✓ Usuario autenticado:', user?.email || 'N/A');
 }
 
+function showAuthLoading() {
+    const loadingEl = $id('authLoadingScreen');
+    const loginEl = $id('loginScreen');
+    const appEl = $id('appWrapper');
+
+    if (loadingEl) loadingEl.classList.remove('auth-hidden');
+    if (loginEl) loginEl.classList.add('auth-hidden');
+    if (appEl) appEl.classList.remove('auth-visible');
+}
+
+function showAuthError(message) {
+    const loadingEl = $id('authLoadingScreen');
+    const loginEl = $id('loginScreen');
+    const appEl = $id('appWrapper');
+
+    if (loadingEl) loadingEl.classList.add('auth-hidden');
+    if (loginEl) loginEl.classList.remove('auth-hidden');
+    if (appEl) appEl.classList.remove('auth-visible');
+
+    // Mostrar el error en el campo de error del login
+    const errEl = $id('loginError');
+    if (errEl) {
+        errEl.textContent = message;
+        errEl.classList.add('visible');
+    }
+    console.error('[Auth]', message);
+}
+
 // ═════════════════════════════════════════════════════════════
-//  INICIALIZACIÓN — onAuthStateChanged
+// INICIALIZACIÓN — onAuthStateChanged
 // ═════════════════════════════════════════════════════════════
 
 export function initAuth() {
+    // ── Si Firebase Auth no está disponible → BLOQUEAR ────────
     if (!window._auth) {
-        console.warn('[Auth] Firebase Auth no disponible — modo dev sin autenticación.');
-        $id('authLoadingScreen').classList.add('auth-hidden');
-        $id('appWrapper').classList.add('auth-visible');
-        // Sin Firebase: iniciar roles y listeners directamente
-        if (window._db) {
-            initRoles(null).catch(e => console.warn('[Auth] initRoles sin usuario:', e));
-        }
+        console.error('[Auth] Firebase Auth no disponible — acceso bloqueado.');
+        showAuthError('⚠️ Error de configuración: Firebase Auth no está disponible.');
+        _authResolve(null);
         return;
     }
 
-    window._auth.onAuthStateChanged(async function(user) {
-        if (user) {
-            // 1. Mostrar la app inmediatamente (optimistic update)
-            showApp(user);
+    window._auth.onAuthStateChanged(async function (user) {
+        // ── Guard: evitar procesar si ya hay un cambio en curso ──
+        // (puede pasar si Firebase dispara dos eventos rápido)
+        if (_authChangeInProgress) {
+            console.warn('[Auth] Cambio de auth en progreso — encolando.');
+            // Esperar a que termine el anterior
+            await new Promise(r => {
+                const check = setInterval(() => {
+                    if (!_authChangeInProgress) {
+                        clearInterval(check);
+                        r();
+                    }
+                }, 100);
+                // Safety: máximo 10s de espera
+                setTimeout(() => { clearInterval(check); r(); }, 10000);
+            });
+        }
 
-            try {
-                // 2. Obtener y aplicar el rol (ANTES de renderizar contenido sensible).
-                //    initRoles() también llama startRealtimeListeners() internamente.
-                const role = await initRoles(user);
-                console.info(`[Auth] Rol confirmado: ${role} — listeners activos.`);
-            } catch (err) {
-                // initRoles tiene su propio fallback; esto no debería ocurrir.
-                console.error('[Auth] initRoles lanzó excepción inesperada:', err);
+        _authChangeInProgress = true;
+
+        try {
+            if (user) {
+                await _handleLogin(user);
+            } else {
+                _handleLogout();
             }
-
-        } else {
-            // LOGOUT: limpiar rol PRIMERO, luego detener listeners
-            cleanupRoles();
-            stopRealtimeListeners();
+        } catch (err) {
+            console.error('[Auth] Error en onAuthStateChanged:', err);
+            // Fallback: mostrar login
             showLogin();
-            console.info('[Auth] Sesión cerrada — listeners y rol limpiados.');
+            _authResolve(null);
+        } finally {
+            _authChangeInProgress = false;
         }
     });
 }
 
+// ─── Handler de LOGIN ──────────────────────────────────────────
+
+async function _handleLogin(user) {
+    // Si es el mismo usuario que ya está logueado, ignorar
+    if (_lastAuthUid === user.uid) {
+        console.debug('[Auth] Mismo usuario, ignorando re-trigger.');
+        return;
+    }
+
+    // Si había otro usuario, limpiar primero
+    if (_lastAuthUid && _lastAuthUid !== user.uid) {
+        console.info('[Auth] Cambio de usuario detectado — limpiando sesión anterior.');
+        cleanupRoles();
+    }
+
+    _lastAuthUid = user.uid;
+
+    // Re-crear Promise de auth ready para este nuevo login
+    _authReady = new Promise(resolve => { _authResolve = resolve; });
+
+    // Mostrar pantalla de carga mientras se obtiene el rol
+    showAuthLoading();
+
+    try {
+        // ── initRoles CON timeout de seguridad ───────────────
+        const role = await Promise.race([
+            initRoles(user),
+            new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('TIMEOUT')), INIT_TIMEOUT)
+            )
+        ]);
+
+        // ── Verificar que no se hizo logout mientras esperábamos ──
+        if (_lastAuthUid !== user.uid) {
+            console.warn('[Auth] Usuario cambió durante initRoles — abortando.');
+            return;
+        }
+
+        console.info(`[Auth] Rol confirmado: ${role} — listeners activos.`);
+        showApp(user);
+        _authResolve(user);
+
+    } catch (err) {
+        // ── Verificar que no se hizo logout mientras esperábamos ──
+        if (_lastAuthUid !== user.uid) {
+            console.warn('[Auth] Usuario cambió durante initRoles (error path) — abortando.');
+            return;
+        }
+
+        if (err.message === 'TIMEOUT') {
+            console.error('[Auth] Timeout al obtener rol — mostrando app con rol por defecto.');
+        } else {
+            console.error('[Auth] Error al inicializar roles:', err);
+        }
+
+        // initRoles tiene fallback interno, así que la app debería
+        // funcionar. Mostrar la app de todos modos.
+        showApp(user);
+        _authResolve(user);
+    }
+}
+
+// ─── Handler de LOGOUT ─────────────────────────────────────────
+
+function _handleLogout() {
+    const prevUid = _lastAuthUid;
+    _lastAuthUid = null;
+
+    // cleanupRoles() se encarga de:
+    // - Cancelar listener de /usuarios/{uid}
+    // - Limpiar state (currentUser, userRole, userProfile)
+    // - Detener listeners de datos (stopRealtimeListeners)
+    // - Limpiar UI (data-role, badge, email)
+    cleanupRoles();
+
+    showLogin();
+
+    // Re-crear Promise de auth ready
+    _authReady = new Promise(resolve => { _authResolve = resolve; });
+    _authResolve(null);
+
+    if (prevUid) {
+        console.info('[Auth] Sesión cerrada — todo limpiado.');
+    }
+}
+
 // ═════════════════════════════════════════════════════════════
-//  MANEJO DEL FORMULARIO DE LOGIN
+// MANEJO DEL FORMULARIO DE LOGIN
 // ═════════════════════════════════════════════════════════════
 
 const AUTH_ERROR_MESSAGES = {
@@ -102,55 +250,76 @@ const AUTH_ERROR_MESSAGES = {
 
 export async function handleLogin() {
     if (!window._auth) {
-        window.showNotification?.('⚙️ Firebase no está configurado.');
+        window.showNotification?.('⚠️ Firebase no está configurado.');
         return;
     }
 
-    const email    = ($id('loginEmail')?.value    || '').trim();
-    const password = $id('loginPassword')?.value || '';
-    const errEl    = $id('loginError');
-    const btn      = $id('loginBtn');
-    const btnText  = $id('loginBtnText');
+    const emailInput = $id('loginEmail');
+    const passInput = $id('loginPassword');
+    const errEl = $id('loginError');
+    const btn = $id('loginBtn');
+    const btnText = $id('loginBtnText');
 
-    errEl.classList.remove('visible');
+    const email = (emailInput?.value || '').trim();
+    const password = passInput?.value || '';
 
+    // Limpiar error anterior
+    if (errEl) errEl.classList.remove('visible');
+
+    // Validación
     if (!email || !password) {
-        errEl.textContent = 'Por favor ingresa tu correo y contraseña.';
-        errEl.classList.add('visible');
+        if (errEl) {
+            errEl.textContent = 'Por favor ingresa tu correo y contraseña.';
+            errEl.classList.add('visible');
+        }
         return;
     }
 
-    btn.disabled        = true;
-    btnText.textContent = 'Iniciando sesión…';
-    const spinner       = document.createElement('span');
-    spinner.className   = 'login-spinner';
-    btn.appendChild(spinner);
+    // Deshabilitar botón
+    if (btn) btn.disabled = true;
+    if (btnText) btnText.textContent = 'Iniciando sesión…';
+
+    let spinner = null;
+    if (btn) {
+        spinner = document.createElement('span');
+        spinner.className = 'login-spinner';
+        btn.appendChild(spinner);
+    }
 
     try {
         await window._auth.signInWithEmailAndPassword(email, password);
-        // onAuthStateChanged se encarga del resto (initRoles, listeners, UI)
+        // onAuthStateChanged se encarga del resto
+
+        // Limpiar campos después de login exitoso
+        if (passInput) passInput.value = '';
+
     } catch (err) {
         console.warn('[Auth] Error al iniciar sesión:', err.code);
-        errEl.textContent = AUTH_ERROR_MESSAGES[err.code] || `Error: ${err.message || err.code}`;
-        errEl.classList.add('visible');
+        if (errEl) {
+            errEl.textContent = AUTH_ERROR_MESSAGES[err.code]
+                || `Error: ${err.message || err.code}`;
+            errEl.classList.add('visible');
+        }
     } finally {
-        btn.disabled        = false;
-        btnText.textContent = 'Iniciar sesión';
-        btn.querySelector('.login-spinner')?.remove();
+        if (btn) btn.disabled = false;
+        if (btnText) btnText.textContent = 'Iniciar sesión';
+        if (spinner) spinner.remove();
     }
 }
 
 // ═════════════════════════════════════════════════════════════
-//  CERRAR SESIÓN
+// CERRAR SESIÓN
 // ═════════════════════════════════════════════════════════════
 
 export async function signOutUser() {
     if (!window._auth) return;
     try {
+        // Cerrar sidebar si está abierto
         window.sbClose?.();
-        // cleanupRoles() + stopRealtimeListeners() se llaman
-        // automáticamente en onAuthStateChanged cuando user = null
+
         await window._auth.signOut();
+        // onAuthStateChanged se encarga de cleanupRoles + showLogin
+
         window.showNotification?.('👋 Sesión cerrada correctamente.');
         console.info('[Auth] signOut ejecutado.');
     } catch (err) {

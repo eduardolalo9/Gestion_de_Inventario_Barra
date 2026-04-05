@@ -1,38 +1,35 @@
 /**
- * js/ui.js
+ * js/ui.js — CORREGIDO v2
  * ══════════════════════════════════════════════════════════════
- * Utilidades de interfaz de usuario:
- *   • Tema claro/oscuro
- *   • Sidebar hamburguesa
- *   • Toast de notificaciones
- *   • Modal de confirmación personalizado
- *   • Escape HTML (seguridad XSS)
- *   • updateHeaderActions
+ * Utilidades de interfaz de usuario.
+ *
+ * CORRECCIÓN:
+ *   showConfirm() ahora retorna Promise<boolean> además de aceptar
+ *   el callback onConfirm opcional para compatibilidad con audit.js.
+ *
+ *   CAUSA DEL BUG:
+ *     ui.js definía showConfirm(message, onConfirm) → retornaba undefined.
+ *     actions.js usaba `const ok = await showConfirm(...)` → ok = undefined
+ *     → falsy → las 5 acciones de borrar/resetear NUNCA se ejecutaban.
+ *
+ *   SOLUCIÓN (compatible hacia atrás):
+ *     La función ahora retorna new Promise(resolve => {...}).
+ *     • Cancelar / ESC          → resolve(false)
+ *     • Confirmar               → resolve(true) + llama onConfirm() si existe
+ *     audit.js funciona igual (callback), actions.js funciona con await.
  * ══════════════════════════════════════════════════════════════
  */
 
 import { state } from './state.js';
 
-// ── Throttle interno de notificaciones ────────────────────────
 let _notificationTimeout = null;
 let _toastHideTimer      = null;
-
-// ── Debounce interno de búsqueda ──────────────────────────────
 let _searchDebounceTimer = null;
 
-// ── Advertencia cuota localStorage (solo una vez por sesión) ──
-// FIX BUG-13: eliminadas las exports _lsQuotaWarned / setLsQuotaWarned
-// (nunca se importaban; storage.js usa su propio _quotaWarned local)
-
 // ═════════════════════════════════════════════════════════════
-//  SEGURIDAD — escape HTML
+//  ESCAPE HTML
 // ═════════════════════════════════════════════════════════════
 
-/**
- * Escapa caracteres HTML especiales para prevenir XSS.
- * @param {*} unsafe - valor a escapar (se convierte a string)
- * @returns {string} string HTML-safe
- */
 export function escapeHtml(unsafe) {
     if (unsafe === null || unsafe === undefined) return '';
     return String(unsafe)
@@ -47,9 +44,6 @@ export function escapeHtml(unsafe) {
 //  TEMA CLARO / OSCURO
 // ═════════════════════════════════════════════════════════════
 
-/**
- * Aplica el tema dado ('dark' | 'light') al documento y lo persiste.
- */
 export function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     const moonIcon = document.getElementById('themeIconMoon');
@@ -69,17 +63,11 @@ export function applyTheme(theme) {
     try { localStorage.setItem('inventarioApp_theme', theme); } catch (_) {}
 }
 
-/**
- * Alterna entre tema oscuro y claro.
- */
 export function toggleTheme() {
     const current = document.documentElement.getAttribute('data-theme') || 'dark';
     applyTheme(current === 'dark' ? 'light' : 'dark');
 }
 
-/**
- * Inicializa el tema leyendo localStorage (se llama en DOMContentLoaded).
- */
 export function initTheme() {
     let saved = 'dark';
     try { saved = localStorage.getItem('inventarioApp_theme') || 'dark'; } catch (_) {}
@@ -90,16 +78,13 @@ export function initTheme() {
 //  SIDEBAR
 // ═════════════════════════════════════════════════════════════
 
-/** Abre el sidebar. */
 export function sbOpen() {
     document.getElementById('sidebar').classList.add('sb-open');
     document.getElementById('sbOverlay').classList.add('sb-open');
     document.getElementById('hamburgerBtn').setAttribute('aria-expanded', 'true');
     document.body.style.overflow = 'hidden';
-    console.debug('[UI] Sidebar abierto.');
 }
 
-/** Cierra el sidebar y devuelve el foco al botón hamburguesa. */
 export function sbClose() {
     document.getElementById('sidebar').classList.remove('sb-open');
     document.getElementById('sbOverlay').classList.remove('sb-open');
@@ -109,138 +94,124 @@ export function sbClose() {
 }
 
 // ═════════════════════════════════════════════════════════════
-//  TOAST (notificaciones)
+//  TOAST
 // ═════════════════════════════════════════════════════════════
 
-/**
- * Muestra un toast de notificación.
- * Mensajes críticos (⚠️, ❌) siempre pasan; los demás tienen throttle de 1 s.
- * @param {string} message
- */
 export function showNotification(message) {
     const isCritical = message.startsWith('⚠️') || message.startsWith('❌');
     if (_notificationTimeout && !isCritical) return;
 
     const toast        = document.getElementById('toast');
     const toastMessage = document.getElementById('toastMessage');
-    if (!toast || !toastMessage) {
-        console.warn('[UI] Toast no encontrado en el DOM.');
-        return;
-    }
+    if (!toast || !toastMessage) { console.warn('[UI] Toast no encontrado.'); return; }
 
     toastMessage.textContent = message;
     toast.classList.remove('hidden');
-    // Reiniciar animación CSS
     toast.style.animation = 'none';
-    void toast.offsetWidth; // reflow
+    void toast.offsetWidth;
     toast.style.animation = '';
 
     clearTimeout(_toastHideTimer);
     _toastHideTimer = setTimeout(() => toast.classList.add('hidden'), 3000);
-
     _notificationTimeout = setTimeout(() => { _notificationTimeout = null; }, 1000);
 }
 
 // ═════════════════════════════════════════════════════════════
-//  MODAL DE CONFIRMACIÓN (reemplaza confirm() nativo)
+//  MODAL DE CONFIRMACIÓN — FIX: retorna Promise<boolean>
 // ═════════════════════════════════════════════════════════════
 
 /**
- * Muestra un diálogo de confirmación personalizado (no bloquea el hilo).
- * @param {string}   message   - Texto de confirmación (admite \n)
- * @param {function} onConfirm - Callback al confirmar
+ * Muestra un diálogo de confirmación personalizado.
+ *
+ * @param {string}    message     Texto del diálogo (admite \n para saltos de línea)
+ * @param {function}  [onConfirm] Callback opcional (compatibilidad audit.js)
+ * @returns {Promise<boolean>}    true = confirmó | false = canceló / ESC
+ *
+ * @example
+ * // Con await (actions.js):
+ * const ok = await showConfirm('¿Eliminar este producto?');
+ * if (!ok) return;
+ *
+ * // Con callback (audit.js — sin await, compatible):
+ * showConfirm('¿Finalizar conteo?', () => { guardarConteo(); });
  */
 export function showConfirm(message, onConfirm) {
-    const overlay = document.createElement('div');
-    overlay.id = '_confirmOverlay';
-    overlay.style.cssText =
-        'position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9999;' +
-        'display:flex;align-items:center;justify-content:center;animation:fadeIn 0.15s ease-out;';
+    return new Promise((resolve) => {
 
-    overlay.innerHTML =
-        '<div style="background:var(--card);border:1px solid var(--border-mid);border-radius:10px;' +
-        'padding:24px 24px 20px;max-width:360px;width:90%;box-shadow:var(--shadow-modal);">' +
-        '<p style="color:var(--txt-primary);font-family:\'IBM Plex Sans\',sans-serif;font-size:0.875rem;' +
-        'line-height:1.55;margin:0 0 20px;white-space:pre-wrap;">' + message.replace(/</g, '&lt;') + '</p>' +
-        '<div style="display:flex;gap:10px;justify-content:flex-end;">' +
-        '<button id="_cfmCancel" style="padding:7px 18px;border:1px solid var(--border-mid);border-radius:6px;' +
-        'background:transparent;color:var(--txt-secondary);font-family:\'IBM Plex Sans\',sans-serif;' +
-        'font-size:0.8125rem;cursor:pointer;">Cancelar</button>' +
-        '<button id="_cfmOk" style="padding:7px 18px;background:var(--red);color:#fff;border:none;' +
-        'border-radius:6px;font-family:\'IBM Plex Sans\',sans-serif;font-size:0.8125rem;' +
-        'font-weight:600;cursor:pointer;">Confirmar</button>' +
-        '</div></div>';
+        // ── Construir overlay ──────────────────────────────────
+        const overlay = document.createElement('div');
+        overlay.id = '_confirmOverlay';
+        overlay.style.cssText =
+            'position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9999;' +
+            'display:flex;align-items:center;justify-content:center;' +
+            'animation:fadeIn 0.15s ease-out;';
 
-    document.body.appendChild(overlay);
+        overlay.innerHTML =
+            '<div style="background:var(--card);border:1px solid var(--border-mid);' +
+            'border-radius:10px;padding:24px 24px 20px;max-width:360px;width:90%;' +
+            'box-shadow:var(--shadow-modal);">' +
+            '<p style="color:var(--txt-primary);font-family:\'IBM Plex Sans\',sans-serif;' +
+            'font-size:0.875rem;line-height:1.55;margin:0 0 20px;white-space:pre-wrap;">' +
+            message.replace(/</g, '&lt;') +
+            '</p>' +
+            '<div style="display:flex;gap:10px;justify-content:flex-end;">' +
+            '<button id="_cfmCancel" style="padding:7px 18px;border:1px solid var(--border-mid);' +
+            'border-radius:6px;background:transparent;color:var(--txt-secondary);' +
+            'font-family:\'IBM Plex Sans\',sans-serif;font-size:0.8125rem;cursor:pointer;">' +
+            'Cancelar</button>' +
+            '<button id="_cfmOk" style="padding:7px 18px;background:var(--red);color:#fff;' +
+            'border:none;border-radius:6px;font-family:\'IBM Plex Sans\',sans-serif;' +
+            'font-size:0.8125rem;font-weight:600;cursor:pointer;">Confirmar</button>' +
+            '</div></div>';
 
-    const close = () => { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); };
-    overlay.querySelector('#_cfmCancel').onclick = close;
-    overlay.querySelector('#_cfmOk').onclick = function() { close(); onConfirm(); };
+        document.body.appendChild(overlay);
 
-    // Cerrar con ESC
-    const escHandler = e => {
-        if (e.key === 'Escape') { close(); document.removeEventListener('keydown', escHandler); }
-    };
-    document.addEventListener('keydown', escHandler);
+        // ── Limpiar overlay y listener de ESC ─────────────────
+        const close = () => {
+            if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+            document.removeEventListener('keydown', escHandler);
+        };
 
-    // Foco automático en Cancelar (más seguro por defecto)
-    setTimeout(() => { overlay.querySelector('#_cfmCancel')?.focus(); }, 30);
+        // ── CANCELAR → resolve(false) ──────────────────────────
+        overlay.querySelector('#_cfmCancel').onclick = () => {
+            close();
+            resolve(false);
+        };
+
+        // ── CONFIRMAR → resolve(true) + callback opcional ──────
+        overlay.querySelector('#_cfmOk').onclick = () => {
+            close();
+            resolve(true);
+            if (typeof onConfirm === 'function') onConfirm();
+        };
+
+        // ── ESC → cancelar ────────────────────────────────────
+        const escHandler = e => {
+            if (e.key === 'Escape') {
+                close();
+                resolve(false);
+            }
+        };
+        document.addEventListener('keydown', escHandler);
+
+        // ── Foco en Cancelar por defecto (más seguro) ─────────
+        setTimeout(() => { overlay.querySelector('#_cfmCancel')?.focus(); }, 30);
+    });
 }
 
 // ═════════════════════════════════════════════════════════════
-//  HEADER ACTIONS (carrito + sincronización)
+//  HEADER ACTIONS
 // ═════════════════════════════════════════════════════════════
 
-/**
- * Re-renderiza los botones de acción del header según el tab activo.
- * Se llama cada vez que cambia el estado del carrito o del tab.
- */
-
-/**
- * updateHeaderActions()
- *
- * Re-renderiza los botones de acción del header según:
- *   • El tab activo  (state.activeTab)
- *   • El rol actual  (state.userRole)
- *
- * Matriz de visibilidad:
- * ┌─────────────────────────┬───────┬──────┐
- * │ Botón                   │ admin │ user │
- * ├─────────────────────────┼───────┼──────┤
- * │ 📥 Importar Excel       │  ✓    │  ✗   │  tab: inicio / productos
- * │ 🛒 Carrito              │  ✓    │  ✓   │  tab: pedidos (si hay items)
- * │ ⬇️ Excel (export)       │  ✓    │  ✗   │  tab: inventario
- * └─────────────────────────┴───────┴──────┘
- */
 export function updateHeaderActions() {
     const container = document.getElementById('headerActions');
     if (!container) return;
 
-    const isAdmin    = state.userRole === 'admin';
-    const cartCount  = state.cart.reduce((sum, item) => sum + (item.quantity || 0), 0);
+    const isAdmin   = state.userRole === 'admin';
+    const cartCount = state.cart.reduce((sum, item) => sum + (item.quantity || 0), 0);
     let html = '';
 
-    // ── "📥 Importar Excel" — tab inicio / productos, solo admin ──
-    // Activa el input oculto #fileInput que acepta .xlsx/.xls/.csv
-    // y llama a window.handleFileImport (definido en products.js).
-    if (isAdmin && (state.activeTab === 'inicio' || state.activeTab === 'productos')) {
-        html += `<button
-            onclick="document.getElementById('fileInput').click()"
-            class="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-white rounded-lg text-xs font-semibold shadow-sm"
-            style="background:rgba(255,255,255,0.09);border-color:rgba(255,255,255,0.18);"
-            title="Importar catálogo de productos desde Excel (.xlsx)">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
-            </svg>
-            Excel
-        </button>`;
-    }
-
-    // ── 🛒 Carrito — tab pedidos, visible para ambos roles ────────
-    // El botón de carrito no requiere restricción de rol porque
-    // ver el resumen del pedido no modifica el catálogo de productos.
-    if (state.activeTab === 'pedidos' && cartCount > 0) {
+    if ((state.activeTab === 'inicio' || state.activeTab === 'pedidos') && cartCount > 0) {
         html += `<button
             onclick="window.openOrderModal()"
             class="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-500 to-orange-500 text-white rounded-lg text-sm font-semibold shadow-sm"
@@ -253,9 +224,6 @@ export function updateHeaderActions() {
         </button>`;
     }
 
-    // ── ⬇️ Excel export — tab inventario, solo admin ──────────────
-    // Exportar el estado de inventario es una operación de reporting
-    // que solo el administrador debe poder ejecutar.
     if (isAdmin && state.activeTab === 'inventario') {
         html += `<button
             onclick="window.exportToExcel('INVENTARIO')"
@@ -276,12 +244,6 @@ export function updateHeaderActions() {
 //  BÚSQUEDA CON DEBOUNCE
 // ═════════════════════════════════════════════════════════════
 
-/**
- * Actualiza el término de búsqueda con debounce de 300 ms.
- * Importa saveToLocalStorage y renderTab de forma dinámica para
- * evitar dependencias circulares.
- * @param {string} value
- */
 export function updateSearchTerm(value) {
     state.searchTerm = value;
     clearTimeout(_searchDebounceTimer);
@@ -291,7 +253,6 @@ export function updateSearchTerm(value) {
             const { renderTab }          = await import('./render.js');
             saveToLocalStorage();
             renderTab();
-            // Restaurar foco y cursor al input de búsqueda tras el re-render
             const searchInput = document.querySelector('#tabContent input[type="text"]');
             if (searchInput) {
                 searchInput.focus();
@@ -314,24 +275,23 @@ export function updateSelectedGroup(value) {
 //  ESTIMACIÓN DE ALMACENAMIENTO
 // ═════════════════════════════════════════════════════════════
 
-/** Estima el uso actual de localStorage en bytes. */
 export function estimateStorageUsed() {
     let total = 0;
     try {
         for (const key of Object.keys(localStorage)) {
-            total += (localStorage.getItem(key) || '').length * 2; // UTF-16
+            total += (localStorage.getItem(key) || '').length * 2;
         }
     } catch (_) {}
     return total;
 }
 
 // ═════════════════════════════════════════════════════════════
-//  BINDINGS GLOBALES (requeridos por onclick en el HTML)
+//  BINDINGS GLOBALES
 // ═════════════════════════════════════════════════════════════
-window.sbOpen            = sbOpen;
-window.sbClose           = sbClose;
-window.toggleTheme       = toggleTheme;
-window.showNotification  = showNotification;
-window.showConfirm       = showConfirm;
-window.updateSearchTerm  = updateSearchTerm;
+window.sbOpen              = sbOpen;
+window.sbClose             = sbClose;
+window.toggleTheme         = toggleTheme;
+window.showNotification    = showNotification;
+window.showConfirm         = showConfirm;
+window.updateSearchTerm    = updateSearchTerm;
 window.updateSelectedGroup = updateSelectedGroup;

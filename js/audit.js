@@ -25,7 +25,7 @@
  */
 
 import { state }                    from './state.js';
-import { AREAS_AUDITORIA, AUDIT_TOLERANCE, AREA_KEYS } from './constants.js';
+import { AREAS_AUDITORIA, AUDIT_TOLERANCE } from './constants.js';
 import { showNotification, showConfirm, escapeHtml } from './ui.js';
 import { saveToLocalStorage }       from './storage.js';
 import {
@@ -305,19 +305,26 @@ export function auditoriaFinalizarConteo() {
                 return;
             }
 
+            // Notificar al admin que un área fue completada
+            const usuario = state.currentUser?.email || state.auditCurrentUser?.userName || 'Usuario';
+            import('./notificaciones.js').then(m => m.enviarNotificacion({
+                tipo:        'conteo',
+                mensaje:     `${usuario} completó el conteo de ${nombreArea}`,
+                usuarioId:   state.currentUser?.uid || state.auditCurrentUser?.userId || 'anon',
+                usuarioName: usuario,
+                datos:       { area, status: 'completada' },
+            })).catch(() => {});
+
             // Ejecutar las 3 transacciones en paralelo
             const [zoneResult] = await Promise.allSettled([
-                // [T1] Cierre atómico de zona (dot-notation, no sobreescribe otras)
                 txCloseZone(area).then(result => {
                     if (result.wasAlreadyClosed) {
                         console.info(`[Audit] Zona "${area}" ya estaba cerrada por otro dispositivo.`);
                         showNotification(`ℹ️ ${nombreArea} ya fue cerrada por otro dispositivo`);
                     }
-                    // Sincronizar estado local con el resultado de la transacción
                     if (result.mergedStatus) {
                         const prevStatus = { ...state.auditoriaStatus };
                         state.auditoriaStatus = result.mergedStatus;
-                        // Solo actualizar localStorage si el status cambió
                         const changed = AREA_KEYS.some(a => prevStatus[a] !== result.mergedStatus[a]);
                         if (changed) {
                             saveToLocalStorage();
@@ -328,22 +335,18 @@ export function auditoriaFinalizarConteo() {
                     return result;
                 }),
 
-                // [T3] Conteo atómico sin acumulación (reemplaza entrada del usuario)
                 syncConteoAtomicoPorArea(area).catch(err => {
                     console.warn('[Audit] syncConteoAtomicoPorArea falló (no crítico):', err?.message);
                 }),
 
-                // [T4] Conteo por usuario transaccional
                 syncConteoPorUsuarioToFirestore(area).catch(err => {
                     console.warn('[Audit] syncConteoPorUsuarioToFirestore falló (no crítico):', err?.message);
                 }),
             ]);
 
-            // Registrar si hubo error en txCloseZone (la más crítica)
             if (zoneResult.status === 'rejected') {
                 console.error('[Audit] txCloseZone falló:', zoneResult.reason);
                 showNotification('⚠️ Error al confirmar el cierre en la nube — se reintentará');
-                // El estado local está correcto; syncToCloud periódico lo reintentará
             }
         }
     );
@@ -394,7 +397,6 @@ export function auditoriaResetear() {
                     console.info('[Audit] ✓ Reset completado en Firestore.');
                 } catch (err) {
                     console.warn('[Audit] Reset en Firestore falló — se reintentará:', err?.message);
-                    // El estado local está correcto; syncToCloud lo propagará
                 }
             }
         }
