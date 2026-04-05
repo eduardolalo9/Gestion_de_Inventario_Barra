@@ -2,11 +2,12 @@
   "name": "BarInventory — Control de Inventario",
   "short_name": "BarInventory",
   "description": "Sistema de control de inventario para barra",
-  "start_url": "/index/",
+  "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#0d1321",
   "theme_color": "#0d1321",
   "orientation": "portrait-primary",
+  "lang": "es",
   "icons": [
     {
       "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%A6%3C/text%3E%3C/svg%3E",
@@ -16,5 +17,18 @@
     }
   ],
   "categories": ["business", "productivity"],
-  "lang": "es"
+  "shortcuts": [
+    {
+      "name": "Inventario",
+      "short_name": "Inventario",
+      "description": "Ir al inventario",
+      "url": "./index.html#inventario"
+    },
+    {
+      "name": "Productos",
+      "short_name": "Productos",
+      "description": "Ver productos",
+      "url": "./index.html#productos"
+    }
+  ]
 }

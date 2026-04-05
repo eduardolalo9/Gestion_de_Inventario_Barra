@@ -1424,4 +1424,118 @@ html[data-theme="light"] #syncDot::after { background: #1e293b; }
     background: var(--accent-dim); color: var(--accent);
     border-color: var(--accent-dim2);
 }
+/* ══════════════════════════════════════════════════════════════
+   ESTILOS DE CONTROL DE ROLES — Fase 1 (Corregido)
 
+   Mecanismo: auth-roles.js escribe data-role="admin"|"user"|"anonymous"
+   en <html>. CSS oculta elementos según el rol.
+
+   IMPORTANTE: Por defecto (sin data-role o "anonymous"), los
+   elementos admin están ocultos para evitar flash de contenido.
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── DEFAULT: Ocultar elementos admin hasta que el rol se confirme ──
+   Esto evita el "flash" donde botones admin son visibles por un instante
+   antes de que auth-roles.js aplique el data-role. */
+.admin-only {
+    display: none !important;
+}
+
+/* ── Mostrar elementos admin SOLO cuando el rol es admin ───────────── */
+html[data-role="admin"] .admin-only {
+    display: initial !important;
+}
+
+/* ── Forzar display:flex o display:inline-flex si el elemento lo requiere ─ */
+html[data-role="admin"] .admin-only.admin-flex {
+    display: flex !important;
+}
+html[data-role="admin"] .admin-only.admin-inline-flex {
+    display: inline-flex !important;
+}
+html[data-role="admin"] .admin-only.admin-inline {
+    display: inline !important;
+}
+html[data-role="admin"] .admin-only.admin-block {
+    display: block !important;
+}
+
+/* ── Cursor no-permitido en botones deshabilitados por rol ─────────── */
+html:not([data-role="admin"]) button[data-requires-admin] {
+    opacity: 0.38 !important;
+    cursor: not-allowed !important;
+    pointer-events: none !important;
+}
+
+/* ── Ocultar acciones de tabla de productos para no-admin ──────────── */
+html:not([data-role="admin"]) .products-table-actions {
+    display: none !important;
+}
+
+/* ── Elementos solo visibles para usuarios autenticados (cualquier rol) ─ */
+.auth-only {
+    display: none !important;
+}
+html[data-role="admin"] .auth-only,
+html[data-role="user"] .auth-only {
+    display: initial !important;
+}
+html[data-role="admin"] .auth-only.auth-flex,
+html[data-role="user"] .auth-only.auth-flex {
+    display: flex !important;
+}
+
+/* ── Elementos solo visibles para usuarios NO admin ────────────────── */
+html[data-role="admin"] .user-only {
+    display: none !important;
+}
+
+/* ── Badge de rol en sidebar ───────────────────────────────────────── */
+#sbRoleBadge {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 3px 10px;
+    border-radius: 6px;
+    margin-bottom: 6px;
+    border: 1px solid rgba(148,163,184,0.25);
+    width: 100%;
+    text-align: center;
+    transition: background 0.2s ease, color 0.2s ease;
+    display: none; /* Oculto hasta que auth-roles.js lo muestre */
+}
+
+/* ── Borde visual diferenciado en audit para usuarios regulares ───── */
+html[data-role="user"] .audit-area-card:hover {
+    border-color: var(--green) !important;
+}
+
+/* ── Indicador visual de modo lectura en header para 'user' ────────── */
+html[data-role="user"] .readonly-indicator {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    background: rgba(245,158,11,0.10);
+    border: 1px solid rgba(245,158,11,0.22);
+    border-radius: 4px;
+    font-size: 0.60rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--amber);
+}
+.readonly-indicator {
+    display: none !important;
+}
+
+/* ── Transición suave al cambiar de rol en tiempo real ─────────────── */
+.admin-only,
+.user-only,
+.auth-only,
+.products-table-actions,
+button[data-requires-admin] {
+    transition: opacity 0.18s ease, visibility 0.18s ease;
+}

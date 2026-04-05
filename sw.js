@@ -1,58 +1,116 @@
-const CACHE_NAME = 'bar-inventory-v1';
+// ============================================================
+// SERVICE WORKER — BarInventory
+// Versión: 1.0.0
+// ============================================================
+
+const CACHE_NAME = 'bar-inventory-v2';
+const CACHE_VERSION = 'v1.1.0';
+
+// Archivos que se guardan para funcionar sin internet
 const ASSETS_TO_CACHE = [
-  '/',
-  '/index.html',
-  '/index/',
-  'https://cdn.tailwindcss.com',
-  'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap',
-  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css'
+  './',
+  './index.html',
+  './manifest.json'
 ];
 
+// ── Instalación ──────────────────────────────────────────────
 self.addEventListener('install', event => {
+  console.log('[SW] Instalando versión:', CACHE_VERSION);
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(ASSETS_TO_CACHE))
-      .catch(() => {})
+      .then(cache => {
+        console.log('[SW] Guardando archivos en caché');
+        return cache.addAll(ASSETS_TO_CACHE);
+      })
+      .then(() => self.skipWaiting())
+      .catch(err => console.warn('[SW] Error en caché:', err))
   );
-  self.skipWaiting();
 });
 
+// ── Activación ───────────────────────────────────────────────
 self.addEventListener('activate', event => {
+  console.log('[SW] Activado:', CACHE_VERSION);
   event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(
+    caches.keys().then(keys => {
+      return Promise.all(
         keys
           .filter(key => key !== CACHE_NAME)
-          .map(key => caches.delete(key))
-      )
-    )
+          .map(key => {
+            console.log('[SW] Borrando caché viejo:', key);
+            return caches.delete(key);
+          })
+      );
+    }).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
+// ── Interceptar peticiones ───────────────────────────────────
 self.addEventListener('fetch', event => {
+  // Solo interceptar peticiones GET
   if (event.request.method !== 'GET') return;
+
+  // No interceptar peticiones a Firebase
+  const url = event.request.url;
+  if (
+    url.includes('firebaseio.com') ||
+    url.includes('googleapis.com') ||
+    url.includes('firestore.googleapis.com') ||
+    url.includes('identitytoolkit.googleapis.com') ||
+    url.includes('cdnjs.cloudflare.com') ||
+    url.includes('cdn.tailwindcss.com') ||
+    url.includes('gstatic.com') ||
+    url.includes('kit.fontawesome.com') ||
+    url.includes('use.fontawesome.com') ||
+    url.includes('fonts.googleapis.com') ||
+    url.includes('fonts.gstatic.com')
+  ) {
+    return; // No cachear CDNs externos — siempre pedir versión fresca
+  }
+
   event.respondWith(
     caches.match(event.request)
       .then(cached => {
-        if (cached) return cached;
+        if (cached) {
+          // Devolver caché y actualizar en segundo plano
+          fetch(event.request)
+            .then(response => {
+              if (response && response.status === 200) {
+                caches.open(CACHE_NAME)
+                  .then(cache => cache.put(event.request, response));
+              }
+            })
+            .catch(() => {}); // Sin conexión — ignorar
+          return cached;
+        }
+
+        // No está en caché — pedir a la red
         return fetch(event.request)
           .then(response => {
-            if (response && response.status === 200 && response.type === 'basic') {
-              const clone = response.clone();
-              caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
-            }
+            if (!response || response.status !== 200) return response;
+            const responseClone = response.clone();
+            caches.open(CACHE_NAME)
+              .then(cache => cache.put(event.request, responseClone));
             return response;
           })
           .catch(() => {
-            return caches.match('/index/') || caches.match('/index.html');
+            // Sin conexión y sin caché
+            if (event.request.destination === 'document') {
+              return caches.match('./index.html');
+            }
           });
       })
   );
 });
 
+// ── Mensajes desde la app ────────────────────────────────────
 self.addEventListener('message', event => {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
+  if (!event.data) return;
+
+  if (event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
+  }
+
+  if (event.data.type === 'GET_VERSION') {
+    event.ports[0].postMessage({ version: CACHE_VERSION });
   }
 });
