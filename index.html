@@ -32,7 +32,7 @@
             // Esperar a que la página esté completamente cargada para no
             // competir con los recursos críticos de primer render.
             window.addEventListener('load', function() {
-                navigator.serviceWorker.register('/sw.js', { scope: '/' })
+                navigator.serviceWorker.register('./sw.js')
                     .then(function(registration) {
                         console.info('[SW] Registrado con scope:', registration.scope);
 
@@ -43,7 +43,7 @@
                                 if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
                                     // Nueva versión disponible — notificar al usuario
                                     console.info('[SW] Nueva versión disponible. Recarga para actualizar.');
-                                    if (window.showNotification) {
+                                    if (typeof showNotification === "function") {
                                         showNotification('🔄 Nueva versión disponible — recarga la página');
                                     }
                                 }
@@ -59,7 +59,7 @@
                 navigator.serviceWorker.addEventListener('message', function(event) {
                     if (event.data && event.data.type === 'SYNC_PENDING') {
                         // El SW nos avisa que hay datos pendientes de subir
-                        if (window._db && navigator.onLine && window.syncToCloud) {
+                        if (_db && navigator.onLine && typeof syncToCloud === "function") {
                             syncToCloud();
                         }
                     }
@@ -108,40 +108,94 @@
         // usuario que abra el código fuente. Asegúrate de restringir la API Key
         // en https://console.cloud.google.com → Credenciales → Restricciones de clave.
         // (dominio HTTP Referrer + solo Firestore API)
-        const FIREBASE_CONFIG = {
-            apiKey: "AIzaSyDugu23uEgacqMUTsoBF8i7xfyDIDbiv0M",
-  authDomain: "bar-inventario-1109e.firebaseapp.com",
-  projectId: "bar-inventario-1109e",
-  storageBucket: "bar-inventario-1109e.firebasestorage.app",
-  messagingSenderId: "450765028668",
-  appId: "1:450765028668:web:54fdb19714d374ff02b239"
+        const firebaseConfig = {
+  apiKey: "AIzaSyCMJ-9WlolgOPspANRMmIaleVUnlKEtm70",
+  authDomain: "barinventario-3894f.firebaseapp.com",
+  databaseURL: "https://barinventario-3894f-default-rtdb.firebaseio.com",
+  projectId: "barinventario-3894f",
+  storageBucket: "barinventario-3894f.firebasestorage.app",
+  messagingSenderId: "389047662094",
+  appId: "1:389047662094:web:137db000639582f7382e5f",
+  measurementId: "G-GWZSFS7JRY"
 };
 
         // ID del documento Firestore que almacena el estado de ESTA instalación.
         // Cambia este valor si quieres múltiples instancias (ej. "barra-norte", "barra-sur").
         const FIRESTORE_DOC_ID = "barra-principal";
 
+        /* ══════════════════════════════════════════════════════════════════════
+           REGLAS DE FIRESTORE REQUERIDAS — pegar en Firebase Console → Firestore → Reglas
+           ══════════════════════════════════════════════════════════════════════
+           rules_version = '2';
+           service cloud.firestore {
+             match /databases/{database}/documents {
+               // Usuarios: solo el propio usuario puede leer/editar su perfil
+               match /usuarios/{uid} {
+                 allow read, write: if request.auth != null && request.auth.uid == uid;
+               }
+               // Catálogo: admin escribe, todos los autenticados leen
+               match /catalogo/{docId} {
+                 allow read:  if request.auth != null;
+                 allow write: if request.auth != null &&
+                              get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role == 'admin';
+               }
+               // inventarioApp: todos los autenticados pueden leer/escribir
+               match /inventarioApp/{docId} {
+                 allow read, write: if request.auth != null;
+                 match /{subcoll}/{subId} {
+                   allow read, write: if request.auth != null;
+                   match /{deep}/{deepId} { allow read, write: if request.auth != null; }
+                 }
+               }
+               // Ajustes: cualquier autenticado crea, admin puede actualizar
+               match /ajustes/{ajusteId} {
+                 allow read:   if request.auth != null;
+                 allow create: if request.auth != null;
+                 allow update: if request.auth != null &&
+                              get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role == 'admin';
+               }
+               // Notificaciones: cualquier autenticado crea y lee, solo el destinatario actualiza
+               match /notificaciones/{notifId} {
+                 allow read, create: if request.auth != null;
+                 allow update: if request.auth != null;
+               }
+               // Reportes: admin escribe, todos los autenticados leen
+               match /reportes/{reporteId} {
+                 allow read:  if request.auth != null;
+                 allow write: if request.auth != null &&
+                              get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role == 'admin';
+               }
+             }
+           }
+           ══════════════════════════════════════════════════════════════════════ */
+
         // ─── Inicializar Firebase solo si la config es válida ───
         let _db   = null;
         let _auth = null;
+        
         (function initFirebase() {
-            const configured = Object.values(FIREBASE_CONFIG).every(v => !v.startsWith("REEMPLAZA"));
+            const configured = Object.values(firebaseConfig).every(v => 
+  typeof v === "string" && v.length > 0 && !v.includes("REEMPLAZA")
+);
             if (!configured) {
                 console.warn("[Firebase] Config incompleta — solo se usará localStorage.");
                 return;
             }
             try {
-                firebase.initializeApp(FIREBASE_CONFIG);
-                _db   = firebase.firestore();
-                _auth = firebase.auth();
-                // Persistencia offline nativa de Firestore (caché local automático)
-                _db.enablePersistence({ synchronizeTabs: true }).catch(err => {
-                    if (err.code === 'failed-precondition') {
-                        console.warn("[Firebase] Persistencia offline no disponible (múltiples pestañas).");
-                    } else if (err.code === 'unimplemented') {
-                        console.warn("[Firebase] Persistencia offline no soportada en este navegador.");
-                    }
-                });
+               firebase.initializeApp(firebaseConfig);
+_db   = firebase.firestore();
+_auth = firebase.auth();
+
+// Persistencia offline nativa de Firestore (caché local automático)
+_db.enablePersistence().catch(err => {
+    if (err.code === 'failed-precondition') {
+        console.warn("[Firebase] Persistencia offline no disponible (múltiples pestañas).");
+    } else if (err.code === 'unimplemented') {
+        console.warn("[Firebase] Persistencia offline no soportada en este navegador.");
+    } else {
+        console.warn("Persistencia falló:", err);
+    }
+});
                 console.info("[Firebase] Inicializado correctamente ✓");
             } catch (e) {
                 console.error("[Firebase] Error al inicializar:", e);
@@ -1382,6 +1436,72 @@ html[data-theme="light"] #syncDot::after { background: #1e293b; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   MÓDULOS NUEVOS: ROLES · SYNC TOGGLE · ADMIN · AJUSTES · NOTIFICACIONES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Badges de rol ────────────────────────────────────────── */
+.role-badge {
+    display:inline-flex;align-items:center;gap:3px;padding:2px 7px;
+    border-radius:var(--r-sm);font-size:0.58rem;font-weight:700;
+    letter-spacing:.07em;text-transform:uppercase;flex-shrink:0;
+}
+.role-badge.admin{background:rgba(245,158,11,.15);color:var(--amber);border:1px solid rgba(245,158,11,.30);}
+.role-badge.user {background:var(--accent-dim);color:var(--accent);border:1px solid var(--accent-dim2);}
+
+/* ── Toggle sync ──────────────────────────────────────────── */
+.sync-toggle-row{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-radius:var(--r-md);border:1px solid var(--border-mid);background:var(--surface);margin-bottom:4px;}
+.sync-toggle-label{font-size:.8rem;color:var(--txt-secondary);}
+.sync-pill{position:relative;width:34px;height:18px;border-radius:9px;background:var(--border-strong);border:none;cursor:pointer;transition:background .2s;flex-shrink:0;}
+.sync-pill.on{background:var(--green);}
+.sync-pill::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.25);}
+.sync-pill.on::after{transform:translateX(16px);}
+
+/* ── Panel Admin ──────────────────────────────────────────── */
+.adm-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px 16px;margin-bottom:10px;box-shadow:var(--shadow-card);}
+.adm-card h3{font-size:.82rem;font-weight:600;color:var(--txt-primary);margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+.adm-stat{display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:.78rem;color:var(--txt-secondary);}
+.adm-stat:last-child{border-bottom:none;}
+.adm-stat b{font-family:'IBM Plex Mono',monospace;font-size:.78rem;color:var(--txt-primary);}
+.adm-btn{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;padding:10px;border-radius:var(--r-md);font-family:'IBM Plex Sans',sans-serif;font-weight:600;font-size:.78rem;cursor:pointer;border:none;margin-bottom:6px;transition:opacity .12s;}
+.adm-btn:hover{opacity:.85;}
+.adm-btn.primary{background:var(--accent);color:#fff;}
+.adm-btn.success{background:#065f46;color:#86efac;border:1px solid rgba(34,197,94,.28);}
+.adm-btn.warn   {background:#4a1010;color:#fca5a5;border:1px solid rgba(239,68,68,.18);}
+.adm-device-row{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:.75rem;}
+.adm-device-row:last-child{border-bottom:none;}
+.adm-device-name{color:var(--txt-primary);font-weight:500;}
+.adm-device-ts  {color:var(--txt-muted);font-size:.68rem;}
+
+/* ── Ajustes (solicitudes) ────────────────────────────────── */
+.ajuste-card{background:var(--card);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:var(--r-md);padding:10px 13px;margin-bottom:8px;}
+.ajuste-card.pendiente{border-left-color:var(--amber);}
+.ajuste-card.aprobado {border-left-color:var(--green);}
+.ajuste-card.rechazado{border-left-color:var(--red);}
+.ajuste-meta{font-size:.68rem;color:var(--txt-muted);margin-bottom:3px;}
+.ajuste-desc{font-size:.8rem;color:var(--txt-primary);}
+.ajuste-btns{display:flex;gap:5px;margin-top:7px;}
+.ajuste-btn{padding:3px 10px;border-radius:var(--r-sm);font-size:.72rem;font-weight:600;cursor:pointer;border:none;}
+.ajuste-btn.ok {background:var(--green-dim);color:var(--green-text);border:1px solid rgba(34,197,94,.28);}
+.ajuste-btn.nok{background:var(--red-dim)  ;color:var(--red-text)  ;border:1px solid rgba(239,68,68,.28);}
+
+/* ── Notificaciones ───────────────────────────────────────── */
+.notif-wrap{background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;box-shadow:var(--shadow-card);}
+.notif-item{display:flex;align-items:flex-start;gap:10px;padding:10px 13px;border-bottom:1px solid var(--border);transition:background .1s;}
+.notif-item.unread{background:var(--accent-dim);}
+.notif-item:last-child{border-bottom:none;}
+.notif-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;margin-top:4px;background:var(--accent);}
+.notif-dot.read{background:var(--txt-muted);}
+.notif-body{flex:1;}
+.notif-text{font-size:.79rem;color:var(--txt-secondary);}
+.notif-time{font-size:.66rem;color:var(--txt-muted);margin-top:1px;}
+#sbNotifBadge{margin-left:auto;background:var(--red);color:#fff;font-size:.58rem;font-weight:700;padding:1px 5px;border-radius:7px;display:none;}
+
+/* ── Reportes publicados ──────────────────────────────────── */
+.rep-card{background:var(--card);border:1px solid rgba(34,197,94,.28);border-radius:var(--r-lg);padding:13px 16px;margin-bottom:10px;}
+.rep-card-title{font-weight:600;font-size:.86rem;color:var(--txt-primary);margin-bottom:3px;}
+.rep-card-meta {font-size:.72rem;color:var(--txt-muted);margin-bottom:9px;}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    AUDITORÍA MULTIUSUARIO — Design System
    Panel identidad · comparación · trail de conteo · status pills
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -1648,62 +1768,65 @@ html[data-theme="light"] #syncDot::after { background: #1e293b; }
         <div id="sbNav">
             <p class="sb-sep">Navegación</p>
             <button type="button" class="sb-item sb-active" data-sb-tab="inicio" onclick="switchTab('inicio'); sbClose()">
-                <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
-                </svg>
+                <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
                 Inicio
             </button>
             <button type="button" class="sb-item" data-sb-tab="productos" onclick="switchTab('productos'); sbClose()">
-                <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
-                </svg>
+                <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
                 Productos
             </button>
             <button type="button" class="sb-item" data-sb-tab="pedidos" onclick="switchTab('pedidos'); sbClose()">
-                <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                </svg>
+                <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                 Pedidos
             </button>
             <button type="button" class="sb-item" data-sb-tab="inventario" onclick="switchTab('inventario'); sbClose()">
-                <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
-                </svg>
+                <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
                 Inventario
             </button>
             <button type="button" class="sb-item" data-sb-tab="historia" onclick="switchTab('historia'); sbClose()">
-                <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
+                <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                 Historia
             </button>
+            <button type="button" class="sb-item" data-sb-tab="ajustes" onclick="switchTab('ajustes'); sbClose()">
+                <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                Ajustes
+            </button>
+            <button type="button" class="sb-item" data-sb-tab="notificaciones" onclick="switchTab('notificaciones'); sbClose()">
+                <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                Notificaciones
+                <span id="sbNotifBadge"></span>
+            </button>
+            <!-- Solo visible para admin -->
+            <span id="sbAdminSep" class="sb-sep" style="display:none">Administración</span>
+            <button type="button" id="sbAdminBtn" class="sb-item" data-sb-tab="admin" onclick="switchTab('admin'); sbClose()" style="display:none">
+                <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                Panel Admin
+            </button>
 
-            <!-- Nuevo: Sección de respaldo -->
             <p class="sb-sep">Respaldo</p>
             <button type="button" class="sb-item" onclick="exportFullData(); sbClose()">
-                <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
-                </svg>
+                <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
                 Exportar datos
             </button>
             <button type="button" class="sb-item" onclick="document.getElementById('importDataInput').click(); sbClose()">
-                <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
-                </svg>
+                <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
                 Importar datos
             </button>
-            <!-- Nube: sincronización manual -->
             <p class="sb-sep">Nube</p>
+            <div class="sync-toggle-row">
+                <span class="sync-toggle-label">Sync automático</span>
+                <button type="button" id="syncPill" class="sync-pill on" onclick="toggleSyncEnabled()" title="Activar/desactivar sync automático"></button>
+            </div>
             <button type="button" class="sb-item" onclick="if(_db && navigator.onLine){ syncToCloud(); sbClose(); showNotification('☁️ Sincronizando…'); } else if(!_db){ showNotification('⚙️ Configura Firebase primero'); } else { showNotification('📴 Sin conexión'); }">
-                <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/>
-                </svg>
+                <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/></svg>
                 Sincronizar ahora
             </button>
         </div>
         <div id="sbFoot">
-            <!-- Email del usuario autenticado -->
-            <span id="sbUserEmail"></span>
+            <div style="display:flex;align-items:center;gap:5px;padding:0 10px 5px;overflow:hidden;">
+                <span id="sbUserEmail" style="font-size:.66rem;color:var(--txt-muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+                <span id="sbRoleBadge" class="role-badge"></span>
+            </div>
             <!-- Badge de estado de sincronización con la nube -->
             <div id="cloudSyncBadge"
                  style="display:flex;align-items:center;justify-content:center;
@@ -1979,7 +2102,11 @@ html[data-theme="light"] #syncDot::after { background: #1e293b; }
 
         function initTheme() {
             let saved = 'dark';
-            try { saved = localStorage.getItem('inventarioApp_theme') || 'dark'; } catch(_) {}
+            try { 
+    let t = localStorage.getItem('inventarioApp_theme');
+    if (t !== 'dark' && t !== 'light') t = 'dark'; 
+    saved = t;
+} catch(_) {}
             applyTheme(saved);
         }
 
@@ -2008,6 +2135,17 @@ html[data-theme="light"] #syncDot::after { background: #1e293b; }
         let selectedArea = 'almacen';
         let expandedInventories = new Set();
         let expandedCards = new Set(); // IDs de tarjetas de inventario expandidas
+const _deviceId = (function () {
+    let id = localStorage.getItem('inventarioApp_deviceId');
+    if (!id) {
+        id = 'dev-'
+            + Math.random().toString(36).substring(2, 10)
+            + '-'
+            + Date.now().toString(36);
+        localStorage.setItem('inventarioApp_deviceId', id);
+    }
+    return id;
+})();
         let inventarioConteo = {}; // { productId: { area: { enteras: 0, abiertas: [] } } }
         let inventarioModalProductId = null;
         let isInventarioModalOpen = false; // Para controlar botones de área
@@ -2782,6 +2920,7 @@ html[data-theme="light"] #syncDot::after { background: #1e293b; }
          */
         async function syncToCloud(retryCount = 0) {
             if (!_db) return; // Firebase no configurado
+            if (!_syncEnabled) { _cloudSyncPending = true; updateCloudSyncBadge('pending'); return; } // sync desactivado
             if (_syncInProgress) return; // Ya hay una sincronización en curso
             if (!navigator.onLine) {
                 _cloudSyncPending = true;
@@ -2910,141 +3049,137 @@ html[data-theme="light"] #syncDot::after { background: #1e293b; }
          *
          * @param {string} area - clave del área ('almacen' | 'barra1' | 'barra2')
          */
-        async function syncConteoAtomicoPorArea(area) {
-            if (!_db) {
-                console.info('[Atomico] Firebase no disponible — conteo guardado solo en local.');
-                return;
-            }
-            if (!navigator.onLine) {
-                showNotification('📴 Sin conexión — conteo guardado localmente');
-                updateCloudSyncBadge('offline');
-                return;
-            }
+       async function syncConteoAtomicoPorArea(area) {
+    if (!_db) {
+        console.info('[MultiDisp] Firebase no disponible — conteo guardado solo en local.');
+        return;
+    }
+    if (!navigator.onLine) {
+        showNotification('📴 Sin conexión — conteo guardado localmente');
+        updateCloudSyncBadge('offline');
+        return;
+    }
+ 
+    updateCloudSyncBadge('syncing');
+ 
+    // Sub-documento exclusivo de este dispositivo.
+    // Nunca compite con el documento de otro bartender.
+    const dispositivoRef = _db
+        .collection('inventarioApp')
+        .doc(FIRESTORE_DOC_ID)
+        .collection('conteoAreas')
+        .doc(area)
+        .collection('dispositivos')
+        .doc(_deviceId);
+ 
+    try {
+        const productosConDatos = products.filter(p =>
+            auditoriaConteo[p.id] && auditoriaConteo[p.id][area]
+        );
+ 
+        if (productosConDatos.length === 0) {
+            updateCloudSyncBadge('ok');
+            return;
+        }
+ 
+        const txTimestamp = Date.now();
+ 
+        // Payload de ESTE dispositivo: valores locales absolutos.
+        const payload = {
+            _deviceId:  _deviceId,
+            _lastWrite: txTimestamp,
+            _area:      area,
+        };
+ 
+        productosConDatos.forEach(p => {
+            const localArea = auditoriaConteo[p.id][area];
+            payload[p.id] = {
+                enteras:  typeof localArea.enteras  === 'number'  ? localArea.enteras  : 0,
+                abiertas: Array.isArray(localArea.abiertas)       ? localArea.abiertas : [],
+            };
+        });
+ 
+        // set() SIN merge: reemplaza SOLO el documento de este dispositivo.
+        // Si otro dispositivo ya escribió el suyo, permanece intacto.
+        // Si hay un reintento de red, simplemente sobreescribe el propio doc → seguro.
+        await dispositivoRef.set(payload);
+ 
+        // Leer TODOS los dispositivos y calcular los totales agregados en memoria.
+        await _cargarYAgeregarConteos(area);
+ 
+        updateCloudSyncBadge('ok');
+        showNotification('☁️ Conteo de ' + areasAuditoria[area] + ' guardado en la nube.');
+        console.info('[MultiDisp] Área', area, 'sincronizada. deviceId:', _deviceId);
+ 
+    } catch (err) {
+        updateCloudSyncBadge('error');
+        console.error('[MultiDisp] Error al guardar conteo:', err);
+        showNotification('⚠️ Error al subir conteo a la nube — guardado localmente');
+    }
+}
 
-            updateCloudSyncBadge('syncing');
-            const areaRef = _db
-                .collection('inventarioApp')
-                .doc(FIRESTORE_DOC_ID)
-                .collection('conteoAreas')
-                .doc(area);
-
+        /**
+         * _cargarYAgeregarConteos(area)
+         * ──────────────────────────────
+         * Descarga los documentos de TODOS los dispositivos desde
+         * conteoAreas/{area}/dispositivos y los fusiona en auditoriaConteo.
+         * Estrategia: los valores del dispositivo más reciente (_lastWrite) ganan.
+         * Se llama después de subir el propio conteo y al arranque de la app.
+         *
+         * @param {string} area - 'almacen' | 'barra1' | 'barra2'
+         */
+        async function _cargarYAgeregarConteos(area) {
+            if (!_db || !navigator.onLine) return;
             try {
-                // Recopilar los productos que tienen datos en esta área
-                const productosConDatos = products.filter(p =>
-                    auditoriaConteo[p.id] && auditoriaConteo[p.id][area]
-                );
+                const dispositivosSnap = await _db
+                    .collection('inventarioApp')
+                    .doc(FIRESTORE_DOC_ID)
+                    .collection('conteoAreas')
+                    .doc(area)
+                    .collection('dispositivos')
+                    .get();
 
-                if (productosConDatos.length === 0) {
-                    updateCloudSyncBadge('ok');
-                    return;
-                }
+                if (dispositivosSnap.empty) return;
 
-                // ══════════════════════════════════════════════════════════════
-                // FIX 2 — CONDICIÓN DE CARRERA: TRANSACCIÓN ATÓMICA
-                // ──────────────────────────────────────────────────────────────
-                // El enfoque anterior (leer + batch.set) tenía una ventana de
-                // carrera: entre el get() y el batch.commit() otro usuario podía
-                // haber escrito, y nuestra escritura sobrescribía silenciosamente
-                // sus datos.
-                //
-                // Solución: _db.runTransaction() garantiza que la LECTURA y la
-                // ESCRITURA son atómicas. Si otro cliente modifica el documento
-                // entre el get y el set dentro de la transacción, Firestore la
-                // reintenta automáticamente (hasta 5 veces por defecto).
-                //
-                // Estrategia por campo dentro de la transacción:
-                //   • enteras: se ACUMULAN (cloudEnteras + localEnteras) para
-                //     que dos dispositivos contando en paralelo sumen, no
-                //     se sobreescriban.
-                //   • abiertas: se detecta divergencia; si hay conflicto se
-                //     guarda el valor alternativo y se marca alerta_conflicto.
-                //   • _lastWrite / _lastWriterArea: metadatos de trazabilidad.
-                // ══════════════════════════════════════════════════════════════
-                let conflictoDetectado = false;
+                // Para cada documento de dispositivo, mezclar sus productos
+                // en auditoriaConteo sin borrar lo que ya hay de otros dispositivos.
+                dispositivosSnap.docs.forEach(function(doc) {
+                    const data = doc.data();
+                    // Ignorar campos de metadatos (_deviceId, _lastWrite, _area)
+                    Object.keys(data).forEach(function(key) {
+                        if (key.startsWith('_')) return;
+                        const devEntry = data[key];
+                        if (!devEntry || typeof devEntry !== 'object') return;
 
-                // FIX #13: capturar el timestamp UNA SOLA VEZ antes de la transacción.
-                // Si Firestore reintenta el callback por contención, Date.now() devolvería
-                // un valor diferente en cada intento, dejando _lastWrite con el timestamp
-                // del último reintento (no del intento original). txTimestamp es inmutable.
-                const txTimestamp = Date.now();
+                        if (!auditoriaConteo[key]) auditoriaConteo[key] = {};
+                        if (!auditoriaConteo[key][area]) {
+                            auditoriaConteo[key][area] = { enteras: 0, abiertas: [] };
+                        }
 
-                await _db.runTransaction(async (transaction) => {
-                    // PASO 1 (dentro de la transacción): lectura consistente
-                    const snap = await transaction.get(areaRef);
-                    const cloudData = snap.exists ? (snap.data() || {}) : {};
-
-                    // PASO 2: construir el objeto de escritura para TODOS los productos
-                    const updatePayload = {
-                        _areaTs: txTimestamp,   // FIX #13: timestamp fijo
-                        _area:   area
-                    };
-
-                    // Reiniciamos conflictoDetectado en cada reintento de la transacción
-                    conflictoDetectado = false;
-
-                    productosConDatos.forEach(p => {
-                        const localArea = auditoriaConteo[p.id][area];
-                        const localEnteras = typeof localArea.enteras === 'number' ? localArea.enteras : 0;
-                        const localAbiertas = Array.isArray(localArea.abiertas) ? localArea.abiertas : [];
-
-                        // ── Enteras: SET (no acumular) — Bug #4 fix ──────────────────
-                        // Cada dispositivo hace su conteo completo e independiente.
-                        // Acumular (cloudEnteras + localEnteras) duplicaba el valor en reintentos
-                        // de red o si el usuario finalizaba el área más de una vez.
-                        updatePayload[p.id + '.enteras']         = localEnteras;
-                        updatePayload[p.id + '._lastWrite']      = txTimestamp; // FIX #13
-                        updatePayload[p.id + '._lastWriterArea'] = area;
-
-                        // ── Abiertas: detectar conflicto con los datos de la nube ──
-                        const cloudAbiertas = (cloudData[p.id] && Array.isArray(cloudData[p.id].abiertas))
-                            ? cloudData[p.id].abiertas
-                            : [];
-
-                        const hayConflicto =
-                            cloudAbiertas.length > 0 &&
-                            JSON.stringify(cloudAbiertas) !== JSON.stringify(localAbiertas);
-
-                        if (hayConflicto) {
-                            conflictoDetectado = true;
-                            // Mantener el valor que ya estaba en la nube como valor oficial
-                            // y guardar el valor local como alternativo para revisión humana.
-                            updatePayload[p.id + '.abiertas']                    = cloudAbiertas;
-                            updatePayload[p.id + '.stock_abierto_alternativo']   = localAbiertas;
-                            updatePayload[p.id + '.alerta_conflicto']            = true;
-                            // Reflejar el conflicto localmente para que la UI lo muestre
-                            auditoriaConteo[p.id][area].alerta_conflicto          = true;
-                            auditoriaConteo[p.id][area].stock_abierto_alternativo = localAbiertas;
-                            console.warn('[Atomico][TX] Conflicto detectado en', p.id, 'área', area,
-                                         '— cloud:', JSON.stringify(cloudAbiertas),
-                                         '— local:', JSON.stringify(localAbiertas));
-                        } else {
-                            // Sin conflicto: escribir el valor local como definitivo
-                            updatePayload[p.id + '.abiertas']         = localAbiertas;
-                            updatePayload[p.id + '.alerta_conflicto'] = false;
-                            // Limpiar posibles conflictos anteriores
-                            if (auditoriaConteo[p.id][area].alerta_conflicto) {
-                                auditoriaConteo[p.id][area].alerta_conflicto = false;
+                        // Actualizar solo si el dato del dispositivo es más reciente
+                        const cloudTs  = devEntry._lastWrite || data._lastWrite || 0;
+                        const localTs  = auditoriaConteo[key][area]._lastWrite || 0;
+                        if (cloudTs >= localTs) {
+                            if (typeof devEntry.enteras === 'number') {
+                                auditoriaConteo[key][area].enteras = devEntry.enteras;
                             }
+                            if (Array.isArray(devEntry.abiertas)) {
+                                auditoriaConteo[key][area].abiertas = devEntry.abiertas;
+                            }
+                            if (devEntry.alerta_conflicto !== undefined) {
+                                auditoriaConteo[key][area].alerta_conflicto = devEntry.alerta_conflicto;
+                            }
+                            if (devEntry.stock_abierto_alternativo !== undefined) {
+                                auditoriaConteo[key][area].stock_abierto_alternativo = devEntry.stock_abierto_alternativo;
+                            }
+                            auditoriaConteo[key][area]._lastWrite = cloudTs;
                         }
                     });
+                });
 
-                    // PASO 3 (dentro de la transacción): escritura atómica con merge
-                    // set(..., {merge:true}) preserva campos de otros productos que
-                    // no están en este payload (conteos de otras sesiones).
-                    transaction.set(areaRef, updatePayload, { merge: true });
-                }); // ← Firestore reintenta automáticamente si hay contención
-
-                updateCloudSyncBadge('ok');
-                const msgConflicto = conflictoDetectado
-                    ? ' ⚠️ Hay conflictos en botellas abiertas — revisa las tarjetas marcadas.'
-                    : '';
-                showNotification('☁️ Conteo de ' + areasAuditoria[area] + ' guardado en la nube.' + msgConflicto);
-                console.info('[Atomico][TX] Área', area, 'sincronizada con transacción atómica ✓');
-
+                console.info('[MultiDisp] Conteos del área ' + area + ' agregados desde ' + dispositivosSnap.size + ' dispositivo(s) ✓');
             } catch (err) {
-                updateCloudSyncBadge('error');
-                console.error('[Atomico][TX] Error al guardar conteo atómico:', err);
-                showNotification('⚠️ Error al subir conteo a la nube — guardado localmente');
+                console.warn('[MultiDisp] Error al cargar conteos de área ' + area + ':', err);
             }
         }
 
@@ -3054,37 +3189,51 @@ html[data-theme="light"] #syncDot::after { background: #1e293b; }
          * Elimina los documentos de conteoAreas en Firestore al iniciar nueva auditoría.
          * Así los increment() del siguiente ciclo parten de cero.
          */
-        async function resetConteoAtomicoEnFirestore() {
-            if (!_db || !navigator.onLine) return;
-            try {
-                const batch = _db.batch();
-                const areas = ['almacen', 'barra1', 'barra2'];
-
-                areas.forEach(area => {
-                    // Borrar conteoAreas (escritura atómica legacy)
-                    batch.delete(
-                        _db.collection('inventarioApp')
-                           .doc(FIRESTORE_DOC_ID)
-                           .collection('conteoAreas')
-                           .doc(area)
-                    );
-                    // FIX-03: Borrar también conteoMultiUsuario para evitar que
-                    // loadConteoPorUsuarioFromFirestore repuele datos de la auditoría
-                    // anterior cuando el dispositivo vuelva a conectarse.
-                    batch.delete(
-                        _db.collection('inventarioApp')
-                           .doc(FIRESTORE_DOC_ID)
-                           .collection('conteoMultiUsuario')
-                           .doc(area)
-                    );
-                });
-
-                await batch.commit();
-                console.info('[Atomico] conteoAreas + conteoMultiUsuario eliminados (nueva auditoría) ✓');
-            } catch (err) {
-                console.warn('[Atomico] No se pudo limpiar Firestore en reset:', err);
-            }
+async function resetConteoAtomicoEnFirestore() {
+    if (!_db || !navigator.onLine) return;
+    try {
+        const AREAS = ['almacen', 'barra1', 'barra2'];
+        const batch = _db.batch();
+ 
+        for (const area of AREAS) {
+            const dispositivosRef = _db
+                .collection('inventarioApp')
+                .doc(FIRESTORE_DOC_ID)
+                .collection('conteoAreas')
+                .doc(area)
+                .collection('dispositivos');
+ 
+            // Listar y borrar todos los documentos de dispositivos para esta área
+            const snap = await dispositivosRef.get();
+            snap.docs.forEach(doc => batch.delete(doc.ref));
+ 
+            // También borrar el documento padre del área por compatibilidad
+            // con datos escritos por versiones anteriores del código
+            batch.delete(_db
+                .collection('inventarioApp')
+                .doc(FIRESTORE_DOC_ID)
+                .collection('conteoAreas')
+                .doc(area)
+            );
         }
+ 
+        // FIX-03 (preservado): borrar también conteoMultiUsuario
+        for (const area of AREAS) {
+            batch.delete(_db
+                .collection('inventarioApp')
+                .doc(FIRESTORE_DOC_ID)
+                .collection('conteoMultiUsuario')
+                .doc(area)
+            );
+        }
+ 
+        await batch.commit();
+        console.info('[MultiDisp] conteoAreas/dispositivos + conteoMultiUsuario eliminados ✓');
+ 
+    } catch (err) {
+        console.warn('[MultiDisp] Error al resetear conteos en Firestore:', err);
+    }
+}
 
         /**
          * loadConflictosDesdeFirestore()
@@ -3092,32 +3241,19 @@ html[data-theme="light"] #syncDot::after { background: #1e293b; }
          * Al iniciar la app, descarga el estado de conflictos de abiertas
          * para mostrarlo en las tarjetas de auditoría.
          */
-        async function loadConflictosDesdeFirestore() {
-            if (!_db || !navigator.onLine) return;
-            try {
-                for (const area of ['almacen', 'barra1', 'barra2']) {
-                    const snap = await _db
-                        .collection('inventarioApp')
-                        .doc(FIRESTORE_DOC_ID)
-                        .collection('conteoAreas')
-                        .doc(area)
-                        .get();
-                    if (!snap.exists) continue;
-                    const data = snap.data();
-                    Object.keys(data).forEach(pid => {
-                        if (!pid.startsWith('_') && data[pid].alerta_conflicto) {
-                            if (!auditoriaConteo[pid]) auditoriaConteo[pid] = {};
-                            if (!auditoriaConteo[pid][area]) auditoriaConteo[pid][area] = {};
-                            auditoriaConteo[pid][area].alerta_conflicto = true;
-                            auditoriaConteo[pid][area].stock_abierto_alternativo =
-                                data[pid].stock_abierto_alternativo || [];
-                        }
-                    });
-                }
-            } catch (err) {
-                console.warn('[Atomico] No se pudieron cargar conflictos:', err);
-            }
-        }
+       async function loadConflictosDesdeFirestore() {
+    if (!_db || !navigator.onLine) return;
+    try {
+        await Promise.all([
+            _cargarYAgeregarConteos('almacen'),
+            _cargarYAgeregarConteos('barra1'),
+            _cargarYAgeregarConteos('barra2'),
+        ]);
+        console.info('[MultiDisp] Conteos de todos los dispositivos cargados ✓');
+    } catch (err) {
+        console.warn('[MultiDisp] No se pudieron cargar conteos desde Firestore:', err);
+    }
+}
 
         /**
          * loadFromCloud()
@@ -3349,6 +3485,451 @@ html[data-theme="light"] #syncDot::after { background: #1e293b; }
                 }
             }
         }
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  MÓDULO: ROLES Y PERMISOS
+        // ══════════════════════════════════════════════════════════════════════
+        let currentUserRole = null;  // 'admin' | 'user'
+        let currentUserUid  = null;
+        let _syncEnabled    = true;
+        let _unsubAjustes   = null;
+        let _unsubCatalogo  = null;
+        let _unsubNotifs    = null;
+        let _notificaciones = [];
+        let _ajustes        = [];
+
+        function isAdmin() { return currentUserRole === 'admin'; }
+
+        async function loadUserRole(uid) {
+            if (!_db || !uid) { currentUserRole = 'user'; applyRoleUI(); return; }
+            currentUserUid = uid;
+            try {
+                const ref  = _db.collection('usuarios').doc(uid);
+                const snap = await ref.get();
+                if (snap.exists) {
+                    currentUserRole = snap.data().role || 'user';
+                } else {
+                    await ref.set({ uid, role: 'user', creadoEn: Date.now() });
+                    currentUserRole = 'user';
+                }
+                console.info('[Roles] Rol:', currentUserRole);
+            } catch (e) {
+                console.warn('[Roles] Error leyendo rol:', e);
+                currentUserRole = 'user';
+            }
+            applyRoleUI();
+            if (isAdmin()) {
+                subscribeAjustesPendientes();
+                subscribeCatalogoAdmin();
+            } else {
+                subscribeCatalogoUsuario();
+                subscribeNotificacionesUsuario();
+            }
+        }
+
+        function applyRoleUI() {
+            const badge = document.getElementById('sbRoleBadge');
+            if (badge) {
+                badge.textContent = isAdmin() ? '👑 Admin' : '👤 Usuario';
+                badge.className   = 'role-badge ' + (isAdmin() ? 'admin' : 'user');
+            }
+            const sep = document.getElementById('sbAdminSep');
+            const btn = document.getElementById('sbAdminBtn');
+            if (sep) sep.style.display = isAdmin() ? '' : 'none';
+            if (btn) btn.style.display  = isAdmin() ? '' : 'none';
+            renderTab();
+        }
+
+        // ── Toggle sincronización ──────────────────────────────────────────
+        function toggleSyncEnabled() {
+            _syncEnabled = !_syncEnabled;
+            const pill = document.getElementById('syncPill');
+            if (pill) pill.classList.toggle('on', _syncEnabled);
+            if (_syncEnabled) {
+                showNotification('☁️ Sync activado — subiendo pendientes…');
+                if (_db && navigator.onLine && _cloudSyncPending) syncToCloud();
+            } else {
+                showNotification('📴 Sync desactivado — datos se guardarán localmente');
+            }
+        }
+
+        // ── MÓDULO: CATÁLOGO (admin publica, usuarios reciben) ────────────
+        async function publicarCatalogoFirestore() {
+            if (!_db || !isAdmin()) return;
+            try {
+                await _db.collection('catalogo').doc('productos').set({
+                    productos:        products,
+                    publicadoPor:     currentUserUid,
+                    publicadoEn:      Date.now(),
+                    version:          Date.now()
+                });
+                await crearNotificacion('catalogo', 'Admin publicó catálogo actualizado (' + products.length + ' productos)', null, true);
+                showNotification('✅ Catálogo publicado a todos los usuarios');
+            } catch (e) {
+                console.error('[Catalogo] Error publicando:', e);
+                showNotification('❌ Error al publicar catálogo');
+            }
+        }
+
+        function subscribeCatalogoUsuario() {
+            if (!_db || _unsubCatalogo) return;
+            _unsubCatalogo = _db.collection('catalogo').doc('productos')
+                .onSnapshot(function(snap) {
+                    if (!snap.exists) return;
+                    const data = snap.data();
+                    if (!Array.isArray(data.productos) || data.productos.length === 0) return;
+                    // Solo actualizar si la versión del servidor es más nueva
+                    const serverVersion = data.version || 0;
+                    const localVersion  = parseInt(localStorage.getItem('inventarioApp_catalogVersion') || '0', 10);
+                    if (serverVersion <= localVersion) return;
+                    products = data.productos;
+                    localStorage.setItem('inventarioApp_catalogVersion', String(serverVersion));
+                    saveToLocalStorage();
+                    renderTab();
+                    showNotification('📦 Catálogo actualizado por el administrador');
+                    console.info('[Catalogo] Catálogo recibido:', products.length, 'productos');
+                }, function(err) { console.warn('[Catalogo] Error en listener:', err); });
+        }
+
+        function subscribeCatalogoAdmin() {
+            // Admin solo escucha cambios del catálogo para métricas, no aplica
+        }
+
+        // ── MÓDULO: NOTIFICACIONES ─────────────────────────────────────────
+        async function crearNotificacion(tipo, texto, destinatarioUid, broadcast) {
+            if (!_db) return;
+            try {
+                const notif = {
+                    tipo,
+                    texto,
+                    broadcast:        !!broadcast,
+                    destinatarioUid:  destinatarioUid || null,
+                    remitenteUid:     currentUserUid || null,
+                    creadoEn:         Date.now(),
+                    leido:            false
+                };
+                await _db.collection('notificaciones').add(notif);
+            } catch (e) { console.warn('[Notif] Error creando notificación:', e); }
+        }
+
+        function subscribeNotificacionesUsuario() {
+            if (!_db || !currentUserUid || _unsubNotifs) return;
+            const uid = currentUserUid;
+            _unsubNotifs = _db.collection('notificaciones')
+                .where('leido', '==', false)
+                .orderBy('creadoEn', 'desc')
+                .limit(30)
+                .onSnapshot(function(snap) {
+                    _notificaciones = snap.docs
+                        .map(function(d) { return Object.assign({ id: d.id }, d.data()); })
+                        .filter(function(n) { return n.broadcast || n.destinatarioUid === uid; });
+                    actualizarBadgeNotif();
+                    if (activeTab === 'notificaciones') renderTab();
+                }, function(err) { console.warn('[Notif] Error listener:', err); });
+        }
+
+        function actualizarBadgeNotif() {
+            const badge = document.getElementById('sbNotifBadge');
+            if (!badge) return;
+            const unread = _notificaciones.filter(function(n) { return !n.leido; }).length;
+            if (unread > 0) {
+                badge.textContent = unread > 9 ? '9+' : String(unread);
+                badge.style.display = '';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+
+        async function marcarNotifLeida(id) {
+            if (!_db || !id) return;
+            try {
+                await _db.collection('notificaciones').doc(id).update({ leido: true });
+                _notificaciones = _notificaciones.map(function(n) { return n.id === id ? Object.assign({}, n, { leido: true }) : n; });
+                actualizarBadgeNotif();
+                renderTab();
+            } catch (e) { console.warn('[Notif] Error marcando:', e); }
+        }
+
+        async function marcarTodasLeidas() {
+            if (!_db) return;
+            const batch = _db.batch();
+            _notificaciones.filter(function(n) { return !n.leido; }).forEach(function(n) {
+                batch.update(_db.collection('notificaciones').doc(n.id), { leido: true });
+            });
+            try {
+                await batch.commit();
+                _notificaciones = _notificaciones.map(function(n) { return Object.assign({}, n, { leido: true }); });
+                actualizarBadgeNotif();
+                renderTab();
+            } catch (e) { console.warn('[Notif] Error marcando todas:', e); }
+        }
+
+        // ── MÓDULO: AJUSTES ────────────────────────────────────────────────
+        function subscribeAjustesPendientes() {
+            if (!_db || _unsubAjustes) return;
+            _unsubAjustes = _db.collection('ajustes')
+                .orderBy('creadoEn', 'desc')
+                .limit(50)
+                .onSnapshot(function(snap) {
+                    _ajustes = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
+                    const pending = _ajustes.filter(function(a) { return a.estado === 'pendiente'; }).length;
+                    if (pending > 0) showNotification('🔔 ' + pending + ' ajuste(s) pendiente(s) de aprobar');
+                    if (activeTab === 'ajustes') renderTab();
+                }, function(err) { console.warn('[Ajustes] Error listener:', err); });
+        }
+
+        async function solicitarAjuste(productoId, productoNombre, motivo, cantidadSugerida) {
+            if (!_db || !currentUserUid) { showNotification('⚙️ Firebase requerido'); return; }
+            if (!motivo || !motivo.trim()) { showNotification('⚠️ Escribe el motivo del ajuste'); return; }
+            try {
+                await _db.collection('ajustes').add({
+                    productoId,
+                    productoNombre,
+                    motivo:           motivo.trim(),
+                    cantidadSugerida: cantidadSugerida || null,
+                    solicitanteUid:   currentUserUid,
+                    estado:           'pendiente',
+                    creadoEn:         Date.now()
+                });
+                await crearNotificacion('ajuste', '📝 Ajuste solicitado: ' + productoNombre + ' — ' + motivo, null, false);
+                showNotification('✅ Ajuste enviado al administrador');
+            } catch (e) {
+                console.error('[Ajustes] Error:', e);
+                showNotification('❌ Error al enviar ajuste');
+            }
+        }
+
+        async function resolverAjuste(ajusteId, accion) {
+            if (!_db || !isAdmin()) return;
+            try {
+                await _db.collection('ajustes').doc(ajusteId).update({ estado: accion, resolvidoEn: Date.now(), resolvidoPor: currentUserUid });
+                const aj = _ajustes.find(function(a) { return a.id === ajusteId; });
+                if (aj) {
+                    const txt = accion === 'aprobado' ? '✅ Ajuste aprobado: ' : '❌ Ajuste rechazado: ';
+                    await crearNotificacion('ajuste', txt + aj.productoNombre, aj.solicitanteUid, false);
+                }
+                showNotification(accion === 'aprobado' ? '✅ Ajuste aprobado' : '❌ Ajuste rechazado');
+            } catch (e) {
+                console.error('[Ajustes] Error resolviendo:', e);
+                showNotification('❌ Error al resolver ajuste');
+            }
+        }
+
+        // ── MÓDULO: REPORTES ──────────────────────────────────────────────
+        async function generarYPublicarReporte() {
+            if (!isAdmin()) return;
+            showNotification('⏳ Generando reporte global…');
+            try {
+                // Leer conteos de todos los dispositivos desde conteoAreas
+                const AREAS = ['almacen', 'barra1', 'barra2'];
+                const conteoGlobal = {};
+
+                for (const area of AREAS) {
+                    const snapDisp = await _db
+                        .collection('inventarioApp').doc(FIRESTORE_DOC_ID)
+                        .collection('conteoAreas').doc(area)
+                        .collection('dispositivos').get();
+
+                    snapDisp.docs.forEach(function(doc) {
+                        const data = doc.data();
+                        Object.keys(data).forEach(function(key) {
+                            if (key.startsWith('_')) return;
+                            if (!conteoGlobal[key]) conteoGlobal[key] = {};
+                            if (!conteoGlobal[key][area]) conteoGlobal[key][area] = { enteras: 0, abiertas: [] };
+                            conteoGlobal[key][area].enteras += (typeof data[key].enteras === 'number' ? data[key].enteras : 0);
+                            if (Array.isArray(data[key].abiertas) && data[key].abiertas.length > 0) {
+                                conteoGlobal[key][area].abiertas = conteoGlobal[key][area].abiertas.concat(data[key].abiertas);
+                            }
+                        });
+                    });
+                }
+
+                const productosReporte = products.map(function(p) {
+                    const porArea = {};
+                    let totalEnteras = 0;
+                    let totalAbiertas = 0;
+                    AREAS.forEach(function(area) {
+                        const d = (conteoGlobal[p.id] && conteoGlobal[p.id][area]) || { enteras: 0, abiertas: [] };
+                        porArea[area] = d;
+                        totalEnteras  += d.enteras || 0;
+                        (d.abiertas || []).forEach(function(oz) { totalAbiertas += (oz || 0); });
+                    });
+                    return { id: p.id, nombre: p.name, unidad: p.unit || '', grupo: p.group || 'General', porArea, totalEnteras, totalAbiertas };
+                });
+
+                const reporte = {
+                    id:           'REP-' + Date.now(),
+                    fecha:        new Date().toLocaleString('es-MX'),
+                    fechaTs:      Date.now(),
+                    generadoPor:  currentUserUid,
+                    productos:    productosReporte,
+                    totalProductos: products.length
+                };
+
+                await _db.collection('reportes').doc(reporte.id).set(reporte);
+                await crearNotificacion('reporte', '📊 Reporte global publicado — disponible para descarga', null, true);
+                showNotification('✅ Reporte publicado. Los usuarios pueden descargarlo.');
+                renderTab();
+            } catch (e) {
+                console.error('[Reporte] Error:', e);
+                showNotification('❌ Error al generar reporte');
+            }
+        }
+
+        async function descargarReporte(reporteId) {
+            if (!_db) return;
+            try {
+                const snap = await _db.collection('reportes').doc(reporteId).get();
+                if (!snap.exists) { showNotification('⚠️ Reporte no encontrado'); return; }
+                const rep = snap.data();
+                if (typeof XLSX === 'undefined') { showNotification('⏳ Cargando exportador…'); return; }
+                const AREAS = ['almacen', 'barra1', 'barra2'];
+                const nombresArea = { almacen: 'Almacén', barra1: 'Barra Restaurante', barra2: 'Barra Bar' };
+                const headers = ['ID', 'Nombre', 'Unidad', 'Grupo', 'Total Enteras', 'Total Abiertas (oz)'].concat(
+                    AREAS.map(function(a) { return nombresArea[a] + ' Enteras'; }).concat(
+                    AREAS.map(function(a) { return nombresArea[a] + ' Abiertas'; }))
+                );
+                const rows = (rep.productos || []).map(function(p) {
+                    const base = [p.id, p.nombre, p.unidad, p.grupo, p.totalEnteras, p.totalAbiertas];
+                    const entAreas = AREAS.map(function(a) { return p.porArea && p.porArea[a] ? p.porArea[a].enteras : 0; });
+                    const abAreas  = AREAS.map(function(a) { return p.porArea && p.porArea[a] ? (p.porArea[a].abiertas || []).reduce(function(s, v) { return s + v; }, 0).toFixed(2) : 0; });
+                    return base.concat(entAreas).concat(abAreas);
+                });
+                const ws = XLSX.utils.aoa_to_sheet([headers].concat(rows));
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, 'Reporte');
+                XLSX.writeFile(wb, 'reporte_' + rep.fechaTs + '.xlsx');
+                showNotification('✅ Reporte descargado');
+            } catch (e) {
+                console.error('[Reporte] Error descargando:', e);
+                showNotification('❌ Error al descargar reporte');
+            }
+        }
+
+        // ── RENDER: NOTIFICACIONES ─────────────────────────────────────────
+        function renderNotificacionesTab() {
+            let html = '<div class="max-w-2xl mx-auto">';
+            html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">';
+            html += '<h2 style="font-size:1rem;font-weight:600;color:var(--txt-primary)">🔔 Notificaciones</h2>';
+            if (_notificaciones.some(function(n) { return !n.leido; })) {
+                html += '<button onclick="marcarTodasLeidas()" style="font-size:.75rem;color:var(--accent);background:none;border:none;cursor:pointer;min-height:auto;font-family:inherit;">Marcar todas leídas</button>';
+            }
+            html += '</div>';
+            if (_notificaciones.length === 0) {
+                html += '<div class="adm-card" style="text-align:center;padding:32px;color:var(--txt-muted);">Sin notificaciones nuevas</div>';
+            } else {
+                html += '<div class="notif-wrap">';
+                _notificaciones.forEach(function(n) {
+                    const ts = n.creadoEn ? new Date(n.creadoEn).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : '';
+                    html += '<div class="notif-item' + (n.leido ? '' : ' unread') + '">';
+                    html += '<span class="notif-dot' + (n.leido ? ' read' : '') + '"></span>';
+                    html += '<div class="notif-body"><div class="notif-text">' + escapeHtml(n.texto) + '</div><div class="notif-time">' + ts + '</div></div>';
+                    if (!n.leido) html += '<button onclick="marcarNotifLeida(\'' + n.id + '\')" style="font-size:.7rem;color:var(--accent);background:none;border:none;cursor:pointer;min-height:auto;white-space:nowrap;font-family:inherit;">Leído</button>';
+                    html += '</div>';
+                });
+                html += '</div>';
+            }
+            html += '</div>';
+            return html;
+        }
+
+        // ── RENDER: AJUSTES ────────────────────────────────────────────────
+        function renderAjustesTab() {
+            let html = '<div class="max-w-2xl mx-auto">';
+
+            // Formulario para solicitar ajuste (solo usuarios)
+            if (!isAdmin()) {
+                html += '<div class="adm-card" style="margin-bottom:16px;">';
+                html += '<h3>📝 Solicitar ajuste de producto</h3>';
+                html += '<select id="ajusteProductoSel" style="width:100%;margin-bottom:8px;padding:8px;border-radius:6px;border:1px solid var(--border-mid);background:var(--surface);color:var(--txt-primary);font-family:inherit;font-size:.82rem;">';
+                html += '<option value="">— Selecciona un producto —</option>';
+                products.forEach(function(p) { html += '<option value="' + escapeHtml(p.id) + '">' + escapeHtml(p.name) + '</option>'; });
+                html += '</select>';
+                html += '<textarea id="ajusteMotivoTxt" placeholder="Motivo del ajuste (ej. conteo real vs sistema)" rows="3" style="width:100%;margin-bottom:8px;padding:8px;border-radius:6px;border:1px solid var(--border-mid);background:var(--surface);color:var(--txt-primary);font-family:inherit;font-size:.82rem;resize:vertical;"></textarea>';
+                html += '<input type="number" id="ajusteCantidadIn" placeholder="Cantidad sugerida (opcional)" min="0" step="0.01" style="width:100%;margin-bottom:10px;padding:8px;border-radius:6px;border:1px solid var(--border-mid);background:var(--surface);color:var(--txt-primary);font-family:inherit;font-size:.82rem;">';
+                html += '<button class="adm-btn primary" onclick="(function(){var s=document.getElementById(\'ajusteProductoSel\');var m=document.getElementById(\'ajusteMotivoTxt\');var c=document.getElementById(\'ajusteCantidadIn\');if(!s.value){showNotification(\'⚠️ Selecciona un producto\');return;}var p=products.find(function(x){return x.id===s.value;});solicitarAjuste(s.value,p?p.name:s.value,m.value,parseFloat(c.value)||null);m.value=\'\';c.value=\'\';s.value=\'\';})()">';
+                html += '<i class="fa-solid fa-paper-plane"></i> Enviar solicitud</button>';
+                html += '</div>';
+            }
+
+            // Lista de ajustes
+            html += '<h3 style="font-size:.85rem;font-weight:600;color:var(--txt-primary);margin-bottom:10px;">';
+            html += isAdmin() ? '📋 Ajustes pendientes de revisión' : '📋 Mis solicitudes de ajuste';
+            html += '</h3>';
+
+            const lista = isAdmin() ? _ajustes : _ajustes.filter(function(a) { return a.solicitanteUid === currentUserUid; });
+
+            if (lista.length === 0) {
+                html += '<div class="adm-card" style="text-align:center;padding:24px;color:var(--txt-muted);">Sin ajustes registrados</div>';
+            } else {
+                lista.forEach(function(a) {
+                    const ts = a.creadoEn ? new Date(a.creadoEn).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : '';
+                    html += '<div class="ajuste-card ' + (a.estado || 'pendiente') + '">';
+                    html += '<div class="ajuste-meta">' + escapeHtml(a.productoNombre || a.productoId) + ' · ' + ts + ' · <b>' + (a.estado || 'pendiente') + '</b></div>';
+                    html += '<div class="ajuste-desc">' + escapeHtml(a.motivo || '') + (a.cantidadSugerida != null ? ' (Sugerido: ' + a.cantidadSugerida + ')' : '') + '</div>';
+                    if (isAdmin() && a.estado === 'pendiente') {
+                        html += '<div class="ajuste-btns"><button class="ajuste-btn ok" onclick="resolverAjuste(\'' + a.id + '\',\'aprobado\')">✅ Aprobar</button><button class="ajuste-btn nok" onclick="resolverAjuste(\'' + a.id + '\',\'rechazado\')">❌ Rechazar</button></div>';
+                    }
+                    html += '</div>';
+                });
+            }
+            html += '</div>';
+            return html;
+        }
+
+        // ── RENDER: PANEL ADMIN ────────────────────────────────────────────
+        function renderAdminTab() {
+            if (!isAdmin()) return '<p style="color:var(--txt-muted)">Acceso restringido</p>';
+            const pendAjustes = _ajustes.filter(function(a) { return a.estado === 'pendiente'; }).length;
+            let html = '<div class="max-w-2xl mx-auto">';
+            html += '<div class="adm-card">';
+            html += '<h3>👑 Panel de Administración</h3>';
+            html += '<div class="adm-stat"><span>Productos en catálogo</span><b>' + products.length + '</b></div>';
+            html += '<div class="adm-stat"><span>Ajustes pendientes</span><b style="color:var(--amber)">' + pendAjustes + '</b></div>';
+            html += '<div class="adm-stat"><span>Conteos multi-dispositivo</span><b>' + (Object.keys(auditoriaConteo).length) + ' productos</b></div>';
+            html += '</div>';
+
+            // Acciones admin
+            html += '<div class="adm-card">';
+            html += '<h3>⚡ Acciones</h3>';
+            html += '<button class="adm-btn success" onclick="publicarCatalogoFirestore()"><i class="fa-solid fa-cloud-arrow-up"></i> Publicar catálogo a usuarios</button>';
+            html += '<button class="adm-btn primary" onclick="generarYPublicarReporte()"><i class="fa-solid fa-file-chart-column"></i> Generar y publicar reporte global</button>';
+            html += '<button class="adm-btn warn" onclick="switchTab(\'ajustes\')"><i class="fa-solid fa-list-check"></i> Revisar ajustes (' + pendAjustes + ' pendientes)</button>';
+            html += '</div>';
+
+            // Reportes publicados
+            html += '<div class="adm-card">';
+            html += '<h3>📊 Reportes publicados</h3>';
+            html += '<div id="adminReportesList"><p style="color:var(--txt-muted);font-size:.8rem;">Cargando reportes…</p></div>';
+            html += '</div>';
+            html += '</div>';
+
+            // Cargar reportes de Firestore
+            setTimeout(function() {
+                if (!_db) return;
+                _db.collection('reportes').orderBy('fechaTs', 'desc').limit(10).get()
+                    .then(function(snap) {
+                        const el = document.getElementById('adminReportesList');
+                        if (!el) return;
+                        if (snap.empty) { el.innerHTML = '<p style="color:var(--txt-muted);font-size:.8rem;">Sin reportes aún</p>'; return; }
+                        let rhtml = '';
+                        snap.docs.forEach(function(d) {
+                            const r = d.data();
+                            rhtml += '<div class="rep-card">';
+                            rhtml += '<div class="rep-card-title">📊 ' + escapeHtml(r.fecha || d.id) + '</div>';
+                            rhtml += '<div class="rep-card-meta">' + (r.totalProductos || 0) + ' productos</div>';
+                            rhtml += '<button class="adm-btn primary" style="margin:0" onclick="descargarReporte(\'' + d.id + '\')"><i class="fa-solid fa-download"></i> Descargar Excel</button>';
+                            rhtml += '</div>';
+                        });
+                        el.innerHTML = rhtml;
+                    }).catch(function(e) { console.warn('[Admin] Error cargando reportes:', e); });
+            }, 100);
+
+            return html;
+        }
+
+        // ── RENDER: HISTORIA — agregar reportes publicados ─────────────────
+        // (se inyecta en renderHistoriaTab vía función wrapper)
 
         function initializeApp() {
             // ── Inicializar identidad del dispositivo (multiusuario) ──────────
@@ -3655,11 +4236,14 @@ html[data-theme="light"] #syncDot::after { background: #1e293b; }
             content.style.animation = '';
 
             switch(activeTab) {
-                case 'inicio':      content.innerHTML = renderInicioTab(); break;
-                case 'productos':   content.innerHTML = renderProductosTab(); break;
-                case 'pedidos':     content.innerHTML = renderPedidosTab(); break;
-                case 'inventario':  content.innerHTML = renderInventarioTab(); break;
-                case 'historia':    content.innerHTML = renderHistoriaTab(); break;
+                case 'inicio':          content.innerHTML = renderInicioTab(); break;
+                case 'productos':       content.innerHTML = renderProductosTab(); break;
+                case 'pedidos':         content.innerHTML = renderPedidosTab(); break;
+                case 'inventario':      content.innerHTML = renderInventarioTab(); break;
+                case 'historia':        content.innerHTML = renderHistoriaTab(); break;
+                case 'ajustes':         content.innerHTML = renderAjustesTab(); break;
+                case 'notificaciones':  content.innerHTML = renderNotificacionesTab(); break;
+                case 'admin':           content.innerHTML = isAdmin() ? renderAdminTab() : renderInicioTab(); break;
             }
 
             // FIX 4: restaurar scroll (en siguiente frame para no luchar con el layout)
@@ -3690,7 +4274,11 @@ html[data-theme="light"] #syncDot::after { background: #1e293b; }
             if (activeTab === 'inicio') {
                 headerActions.innerHTML = '<div class="flex gap-2 sm:gap-3"><div class="bg-white bg-opacity-20 backdrop-blur-sm rounded-full px-2 sm:px-4 py-1 sm:py-2 flex items-center gap-1 sm:gap-2 text-xs sm:text-base"><svg class="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path></svg><span class="text-white font-bold">' + cart.length + '</span></div><button onclick="openOrderModal()" class="bg-gradient-to-r from-purple-500 to-orange-500 text-white px-3 sm:px-6 py-2 sm:py-3 rounded-full flex items-center gap-1 sm:gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs sm:text-base whitespace-nowrap"><svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg><span class="hidden sm:inline">Gen. Pedido</span><span class="sm:hidden">Pedido</span></button></div>';
             } else if (activeTab === 'productos') {
-                headerActions.innerHTML = '<div class="flex gap-2 sm:gap-3 flex-wrap"><button onclick="openProductModal()" class="bg-gradient-to-r from-purple-500 to-orange-500 text-white px-3 sm:px-6 py-2 sm:py-3 rounded-full flex items-center gap-1 sm:gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs sm:text-base whitespace-nowrap"><svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg><span class="hidden sm:inline">Agregar Producto</span><span class="sm:hidden">Agregar</span></button><button onclick="document.getElementById(\'fileInput\').click()" title="Importar productos desde un archivo Excel (.xlsx)" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:shadow-lg hover:scale-105 active:scale-95" style="background:#1a4731;border:1px solid rgba(34,197,94,0.28);color:#86efac;"><i class="fa-solid fa-file-arrow-up w-4 h-4 sm:w-5 sm:h-5"></i><span class="hidden sm:inline">Importar Excel</span><span class="sm:hidden">Importar</span></button><button onclick="deleteAllProducts()" class="bg-gradient-to-r from-red-500 to-orange-600 text-white px-3 sm:px-6 py-2 sm:py-3 rounded-full flex items-center gap-1 sm:gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs sm:text-base whitespace-nowrap" title="Eliminar todos"><svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg><span class="hidden sm:inline">Eliminar Todos</span><span class="sm:hidden">Eliminar</span></button></div>';
+                if (isAdmin()) {
+                    headerActions.innerHTML = '<div class="flex gap-2 sm:gap-3 flex-wrap"><button onclick="openProductModal()" class="bg-gradient-to-r from-purple-500 to-orange-500 text-white px-3 sm:px-6 py-2 sm:py-3 rounded-full flex items-center gap-1 sm:gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs sm:text-base whitespace-nowrap"><svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg><span class="hidden sm:inline">Agregar</span><span class="sm:hidden">+</span></button><button onclick="document.getElementById(\'fileInput\').click()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:#1a4731;border:1px solid rgba(34,197,94,0.28);color:#86efac;"><i class="fa-solid fa-file-arrow-up"></i><span class="hidden sm:inline">Importar Excel</span><span class="sm:hidden">Importar</span></button><button onclick="publicarCatalogoFirestore()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:#1a3a5f;border:1px solid rgba(59,130,246,0.28);color:#93c5fd;"><i class="fa-solid fa-cloud-arrow-up"></i><span class="hidden sm:inline">Publicar catálogo</span><span class="sm:hidden">Publicar</span></button><button onclick="deleteAllProducts()" class="bg-gradient-to-r from-red-500 to-orange-600 text-white px-3 sm:px-6 py-2 sm:py-3 rounded-full flex items-center gap-1 sm:gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs sm:text-base whitespace-nowrap" title="Eliminar todos"><svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg><span class="hidden sm:inline">Eliminar Todos</span><span class="sm:hidden">Del</span></button></div>';
+                } else {
+                    headerActions.innerHTML = '<span style="font-size:.72rem;color:rgba(255,255,255,.55);padding:6px 10px;background:rgba(255,255,255,.08);border-radius:6px;">📋 Solo lectura</span>';
+                }
             } else {
                 headerActions.innerHTML = '';
             }
@@ -3720,10 +4308,25 @@ html[data-theme="light"] #syncDot::after { background: #1e293b; }
                 html += '<option value="' + group + '"' + (selectedGroup === group ? ' selected' : '') + '>' + escapeHtml(group) + '</option>';
             });
             html += '</select></div>';
-            html += '<div class="bg-white rounded-xl sm:rounded-2xl shadow-md overflow-hidden"><div class="overflow-x-auto"><table class="w-full text-sm sm:text-base"><thead class="bg-gradient-to-r from-purple-600 to-blue-600"><tr><th class="px-2 sm:px-4 lg:px-6 py-2 sm:py-3 lg:py-4 text-left text-xs sm:text-sm font-semibold text-white">Nombre del Producto</th><th class="px-2 sm:px-4 lg:px-6 py-2 sm:py-3 lg:py-4 text-left text-xs sm:text-sm font-semibold text-white hidden md:table-cell">Grupo</th><th class="px-2 sm:px-4 lg:px-6 py-2 sm:py-3 lg:py-4 text-left text-xs sm:text-sm font-semibold text-white">Unidad</th><th class="px-2 sm:px-4 lg:px-6 py-2 sm:py-3 lg:py-4 text-center text-xs sm:text-sm font-semibold text-white">Acc</th></tr></thead><tbody class="divide-y divide-gray-200">';
+            if (!isAdmin()) {
+                html += '<div style="background:var(--accent-dim);border:1px solid var(--accent-dim2);border-radius:var(--r-md);padding:8px 12px;margin-bottom:12px;font-size:.78rem;color:var(--accent);">📋 Catálogo de solo lectura — solo el administrador puede modificar productos</div>';
+            }
+            html += '<div class="bg-white rounded-xl sm:rounded-2xl shadow-md overflow-hidden"><div class="overflow-x-auto"><table class="w-full text-sm sm:text-base"><thead class="bg-gradient-to-r from-purple-600 to-blue-600"><tr><th class="px-2 sm:px-4 lg:px-6 py-2 sm:py-3 lg:py-4 text-left text-xs sm:text-sm font-semibold text-white">Nombre del Producto</th><th class="px-2 sm:px-4 lg:px-6 py-2 sm:py-3 lg:py-4 text-left text-xs sm:text-sm font-semibold text-white hidden md:table-cell">Grupo</th><th class="px-2 sm:px-4 lg:px-6 py-2 sm:py-3 lg:py-4 text-left text-xs sm:text-sm font-semibold text-white">Unidad</th>';
+            if (isAdmin()) html += '<th class="px-2 sm:px-4 lg:px-6 py-2 sm:py-3 lg:py-4 text-center text-xs sm:text-sm font-semibold text-white">Acc</th>';
+            html += '</tr></thead><tbody class="divide-y divide-gray-200">';
             filteredProducts.forEach((product, idx) => {
                 const delay = Math.min(idx * 35, 350);
-                html += '<tr class="hover:bg-purple-50 transition-colors" style="animation: rowIn 0.25s ease-out both; animation-delay:' + delay + 'ms"><td class="px-2 sm:px-4 lg:px-6 py-2 sm:py-3 lg:py-4 font-medium text-gray-900 text-xs sm:text-sm">' + escapeHtml(product.name) + '</td><td class="px-2 sm:px-4 lg:px-6 py-2 sm:py-3 lg:py-4 text-gray-600 hidden md:table-cell text-xs sm:text-sm">' + escapeHtml(product.group || 'General') + '</td><td class="px-2 sm:px-4 lg:px-6 py-2 sm:py-3 lg:py-4 text-gray-600 text-xs sm:text-sm">' + escapeHtml((product.unit || '').substring(0, 3)) + '</td><td class="px-2 sm:px-4 lg:px-6 py-2 sm:py-3 lg:py-4"><div class="flex items-center justify-center gap-1"><button onclick="editProduct(\'' + escapeHtml(product.id) + '\')" class="p-1.5 sm:p-2.5 bg-gradient-to-br from-blue-500 to-purple-500 text-white rounded-lg sm:rounded-xl hover:shadow-lg transition-all transform active:scale-95 min-w-[36px] sm:min-w-[48px] min-h-[36px] sm:min-h-[48px] flex items-center justify-center"><svg class="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg></button><button onclick="deleteProduct(\'' + escapeHtml(product.id) + '\')" class="p-1.5 sm:p-2.5 bg-gradient-to-br from-red-500 to-orange-500 text-white rounded-lg sm:rounded-xl hover:shadow-lg transition-all transform active:scale-95 min-w-[36px] sm:min-w-[48px] min-h-[36px] sm:min-h-[48px] flex items-center justify-center"><svg class="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button></div></td></tr>';
+                html += '<tr class="hover:bg-purple-50 transition-colors" style="animation: rowIn 0.25s ease-out both; animation-delay:' + delay + 'ms">';
+                html += '<td class="px-2 sm:px-4 lg:px-6 py-2 sm:py-3 lg:py-4 font-medium text-gray-900 text-xs sm:text-sm">' + escapeHtml(product.name) + '</td>';
+                html += '<td class="px-2 sm:px-4 lg:px-6 py-2 sm:py-3 lg:py-4 text-gray-600 hidden md:table-cell text-xs sm:text-sm">' + escapeHtml(product.group || 'General') + '</td>';
+                html += '<td class="px-2 sm:px-4 lg:px-6 py-2 sm:py-3 lg:py-4 text-gray-600 text-xs sm:text-sm">' + escapeHtml((product.unit || '').substring(0, 8)) + '</td>';
+                if (isAdmin()) {
+                    html += '<td class="px-2 sm:px-4 lg:px-6 py-2 sm:py-3 lg:py-4"><div class="flex items-center justify-center gap-1">';
+                    html += '<button onclick="editProduct(\'' + escapeHtml(product.id) + '\')" class="p-1.5 sm:p-2.5 bg-gradient-to-br from-blue-500 to-purple-500 text-white rounded-lg sm:rounded-xl hover:shadow-lg transition-all transform active:scale-95 min-w-[36px] sm:min-w-[48px] min-h-[36px] sm:min-h-[48px] flex items-center justify-center"><svg class="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg></button>';
+                    html += '<button onclick="deleteProduct(\'' + escapeHtml(product.id) + '\')" class="p-1.5 sm:p-2.5 bg-gradient-to-br from-red-500 to-orange-500 text-white rounded-lg sm:rounded-xl hover:shadow-lg transition-all transform active:scale-95 min-w-[36px] sm:min-w-[48px] min-h-[36px] sm:min-h-[48px] flex items-center justify-center"><svg class="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>';
+                    html += '</div></td>';
+                }
+                html += '</tr>';
             });
             html += '</tbody></table></div></div>';
             return html;
@@ -4370,45 +4973,79 @@ html[data-theme="light"] #syncDot::after { background: #1e293b; }
         }
 
         function renderHistoriaTab() {
+            let html = '';
+
+            // ── Sección: Reportes publicados por admin (visible para todos) ──
+            html += '<div id="historiaReportesWrap" style="margin-bottom:20px;">';
+            html += '<h3 style="font-size:.85rem;font-weight:600;color:var(--txt-primary);margin-bottom:10px;">📊 Reportes globales publicados</h3>';
+            html += '<div id="historiaReportesList" style="color:var(--txt-muted);font-size:.8rem;">Cargando…</div>';
+            html += '</div>';
+
+            // ── Sección: Historial de inventarios locales ────────────────────
             if (inventories.length === 0) {
-                return '<div class="bg-white rounded-2xl p-12 text-center shadow-md"><svg class="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg><p class="text-gray-600">No hay inventarios guardados</p></div>';
+                html += '<div class="bg-white rounded-2xl p-12 text-center shadow-md"><svg class="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg><p class="text-gray-600">No hay inventarios guardados</p></div>';
+            } else {
+                html += '<div class="flex justify-between items-center mb-4">';
+                html += '<h3 style="font-size:.85rem;font-weight:600;color:var(--txt-primary);">📋 Historial de conteos</h3>';
+                html += '<button onclick="deleteAllInventories()" class="bg-gradient-to-r from-red-500 to-orange-600 text-white px-4 py-2 rounded-xl flex items-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs" title="Eliminar todo el historial"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg><span class="font-medium">Eliminar historial</span></button>';
+                html += '</div>';
+                html += '<div class="space-y-4">';
+                inventories.forEach((inv, idx) => {
+                    const isExpanded = expandedInventories.has(inv.id);
+                    const delay = Math.min(idx * 50, 400);
+                    html += '<div class="bg-white rounded-2xl shadow-md overflow-hidden" style="animation: tabContentIn 0.3s ease-out both; animation-delay:' + delay + 'ms">';
+                    html += '<div class="p-4 sm:p-6 cursor-pointer hover:bg-gray-50 transition-colors" onclick="toggleInventory(\'' + escapeHtml(inv.id) + '\')">';
+                    html += '<div class="flex items-center justify-between gap-4">';
+                    html += '<div class="flex-1">';
+                    html += '<div class="flex items-center gap-3 mb-1">';
+                    html += '<h3 class="text-lg font-bold text-gray-900">' + escapeHtml(inv.id) + '</h3>';
+                    html += '<span class="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded-full font-medium">' + escapeHtml(areas[inv.area] || inv.area || 'General') + '</span>';
+                    html += '</div>';
+                    html += '<p class="text-sm text-gray-600">' + escapeHtml(inv.date) + ' • ' + inv.products.length + ' productos • Total: ' + (inv.totalProducts || 0).toFixed(2) + '</p>';
+                    html += '</div>';
+                    html += '<div class="flex items-center gap-2">';
+                    html += '<button onclick="event.stopPropagation(); downloadInventory(\'' + escapeHtml(inv.id) + '\')" class="p-2.5 bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl hover:shadow-lg transition-all transform active:scale-95" title="Descargar"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg></button>';
+                    html += '<button onclick="event.stopPropagation(); shareInventoryWhatsApp(\'' + escapeHtml(inv.id) + '\')" class="p-2.5 bg-gradient-to-br from-green-500 to-emerald-500 text-white rounded-xl hover:shadow-lg transition-all transform active:scale-95" title="Compartir"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg></button>';
+                    html += '<svg class="w-5 h-5 text-gray-600 transition-transform ' + (isExpanded ? 'rotate-180' : '') + '" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>';
+                    html += '</div></div></div>';
+                    if (isExpanded) {
+                        html += '<div class="border-t border-gray-200 p-4 sm:p-6 bg-gray-50 animate-fadeIn"><div class="overflow-x-auto">';
+                        html += '<table class="w-full"><thead class="bg-gradient-to-r from-purple-600 to-blue-600"><tr><th class="px-4 py-3 text-left text-sm font-semibold text-white">Producto</th><th class="px-4 py-3 text-center text-sm font-semibold text-white">Stock (Enteras)</th><th class="px-4 py-3 text-center text-sm font-semibold text-white">Abiertas</th><th class="px-4 py-3 text-center text-sm font-semibold text-white">Grupo</th></tr></thead><tbody class="divide-y divide-gray-200 bg-white">';
+                        inv.products.forEach(p => {
+                            const abiertasStr = p.abiertas ? p.abiertas.map(a => (a || 0).toFixed(2)).join(' + ') : '';
+                            html += '<tr><td class="px-4 py-3 text-gray-900">' + escapeHtml(p.name) + '</td><td class="px-4 py-3 text-center text-gray-600">' + p.stock + ' ' + escapeHtml(p.unit) + '</td><td class="px-4 py-3 text-center text-orange-600">' + escapeHtml(abiertasStr) + '</td><td class="px-4 py-3 text-center font-semibold text-gray-900">' + escapeHtml(p.group || 'General') + '</td></tr>';
+                        });
+                        html += '</tbody></table></div></div>';
+                    }
+                    html += '</div>';
+                });
+                html += '</div>';
             }
-            let html = '<div class="flex justify-end mb-4">';
-            html += '<button onclick="deleteAllInventories()" class="bg-gradient-to-r from-red-500 to-orange-600 text-white px-6 py-3 rounded-xl flex items-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200" title="Eliminar todo el historial de inventarios"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg><span class="font-medium">Eliminar historial</span></button>';
-            html += '</div>';
-            html += '<div class="space-y-4">';
-            inventories.forEach((inv, idx) => {
-                const isExpanded = expandedInventories.has(inv.id);
-                const delay = Math.min(idx * 50, 400);
-                html += '<div class="bg-white rounded-2xl shadow-md overflow-hidden" style="animation: tabContentIn 0.3s ease-out both; animation-delay:' + delay + 'ms">';
-                html += '<div class="p-4 sm:p-6 cursor-pointer hover:bg-gray-50 transition-colors" onclick="toggleInventory(\'' + escapeHtml(inv.id) + '\')">';
-                html += '<div class="flex items-center justify-between gap-4">';
-                html += '<div class="flex-1">';
-                html += '<div class="flex items-center gap-3 mb-1">';
-                html += '<h3 class="text-lg font-bold text-gray-900">' + escapeHtml(inv.id) + '</h3>';
-                html += '<span class="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded-full font-medium">' + escapeHtml(areas[inv.area] || inv.area || 'General') + '</span>';
-                html += '</div>';
-                html += '<p class="text-sm text-gray-600">' + escapeHtml(inv.date) + ' • ' + inv.products.length + ' productos • Total: ' + (inv.totalProducts || 0).toFixed(2) + '</p>';
-                html += '</div>';
-                html += '<div class="flex items-center gap-2">';
-                html += '<button onclick="event.stopPropagation(); downloadInventory(\'' + escapeHtml(inv.id) + '\')" class="p-2.5 bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl hover:shadow-lg transition-all transform active:scale-95" title="Descargar"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg></button>';
-                html += '<button onclick="event.stopPropagation(); shareInventoryWhatsApp(\'' + escapeHtml(inv.id) + '\')" class="p-2.5 bg-gradient-to-br from-green-500 to-emerald-500 text-white rounded-xl hover:shadow-lg transition-all transform active:scale-95" title="Compartir"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg></button>';
-                html += '<svg class="w-5 h-5 text-gray-600 transition-transform ' + (isExpanded ? 'rotate-180' : '') + '" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>';
-                html += '</div></div></div>';
-                if (isExpanded) {
-                    html += '<div class="border-t border-gray-200 p-4 sm:p-6 bg-gray-50 animate-fadeIn">';
-                    html += '<div class="overflow-x-auto">';
-                    html += '<table class="w-full"><thead class="bg-gradient-to-r from-purple-600 to-blue-600"><tr><th class="px-4 py-3 text-left text-sm font-semibold text-white">Producto</th><th class="px-4 py-3 text-center text-sm font-semibold text-white">Stock (Enteras)</th><th class="px-4 py-3 text-center text-sm font-semibold text-white">Abiertas</th><th class="px-4 py-3 text-center text-sm font-semibold text-white">Grupo</th></tr></thead><tbody class="divide-y divide-gray-200 bg-white">';
-                    inv.products.forEach(p => {
-                        const abiertasStr = p.abiertas ? p.abiertas.map(a => (a || 0).toFixed(2)).join(' + ') : '';
-                        html += '<tr><td class="px-4 py-3 text-gray-900">' + escapeHtml(p.name) + '</td><td class="px-4 py-3 text-center text-gray-600">' + p.stock + ' ' + escapeHtml(p.unit) + '</td><td class="px-4 py-3 text-center text-orange-600">' + escapeHtml(abiertasStr) + '</td><td class="px-4 py-3 text-center font-semibold text-gray-900">' + escapeHtml(p.group || 'General') + '</td></tr>';
+
+            // Cargar reportes async después de render
+            setTimeout(function() {
+                const el = document.getElementById('historiaReportesList');
+                if (!el) return;
+                if (!_db) { el.innerHTML = '<p style="color:var(--txt-muted);font-size:.79rem;">Firebase no configurado</p>'; return; }
+                _db.collection('reportes').orderBy('fechaTs', 'desc').limit(10).get()
+                    .then(function(snap) {
+                        if (!el) return;
+                        if (snap.empty) { el.innerHTML = '<p style="color:var(--txt-muted);font-size:.79rem;">Sin reportes publicados aún</p>'; return; }
+                        let rhtml = '';
+                        snap.docs.forEach(function(d) {
+                            const r = d.data();
+                            rhtml += '<div class="rep-card">';
+                            rhtml += '<div class="rep-card-title">📊 ' + escapeHtml(r.fecha || d.id) + '</div>';
+                            rhtml += '<div class="rep-card-meta">' + (r.totalProductos || 0) + ' productos · publicado por admin</div>';
+                            rhtml += '<button class="adm-btn primary" style="margin:0;padding:7px 14px;" onclick="descargarReporte(\'' + d.id + '\')"><i class="fa-solid fa-download"></i> Descargar Excel</button>';
+                            rhtml += '</div>';
+                        });
+                        el.innerHTML = rhtml;
+                    }).catch(function(e) {
+                        if (el) el.innerHTML = '<p style="color:var(--txt-muted);font-size:.79rem;">Error cargando reportes</p>';
                     });
-                    html += '</tbody></table>';
-                    html += '</div></div>';
-                }
-                html += '</div>';
-            });
-            html += '</div>';
+            }, 80);
+
             return html;
         }
 
@@ -4534,6 +5171,7 @@ html[data-theme="light"] #syncDot::after { background: #1e293b; }
         }
 
         function saveProduct() {
+            if (!isAdmin()) { showNotification('⚠️ Solo el administrador puede modificar productos'); return; }
             const name = document.getElementById('productName').value.trim();
             if (!name) { showNotification('La descripción es requerida'); return; }
             let productId = document.getElementById('productId').value.trim();
@@ -4609,9 +5247,10 @@ html[data-theme="light"] #syncDot::after { background: #1e293b; }
             renderTab();
         }
 
-        function editProduct(id) { openProductModal(id); }
+        function editProduct(id) { if (!isAdmin()) { showNotification('⚠️ Solo el administrador puede editar productos'); return; } openProductModal(id); }
 
         function deleteProduct(id) {
+            if (!isAdmin()) { showNotification('⚠️ Solo el administrador puede eliminar productos'); return; }
             showConfirm('¿Está seguro de eliminar este producto?', function() {
                 products = products.filter(p => p.id !== id);
                 cart = cart.filter(item => item.id !== id);
@@ -4624,6 +5263,7 @@ html[data-theme="light"] #syncDot::after { background: #1e293b; }
         }
 
         function deleteAllProducts() {
+            if (!isAdmin()) { showNotification('⚠️ Solo el administrador puede eliminar productos'); return; }
             if (products.length === 0) { showNotification('No hay productos para eliminar'); return; }
             showConfirm('¿Está seguro de que desea eliminar TODOS los productos? Esta acción no se puede deshacer.', function() {
                 products = []; cart = []; inventarioConteo = {};
@@ -5482,8 +6122,18 @@ html[data-theme="light"] #syncDot::after { background: #1e293b; }
                 if (user) {
                     console.info('[Auth] Usuario autenticado:', user.email);
                     showApp(user);
+                    // Cargar rol del usuario desde Firestore
+                    loadUserRole(user.uid).catch(function(e) {
+                        console.warn('[Auth] Error cargando rol:', e);
+                    });
                 } else {
                     console.info('[Auth] Sin sesión — mostrando login.');
+                    // Limpiar subscripciones activas
+                    if (typeof _unsubAjustes === 'function')  { _unsubAjustes();  _unsubAjustes  = null; }
+                    if (typeof _unsubCatalogo === 'function') { _unsubCatalogo(); _unsubCatalogo = null; }
+                    if (typeof _unsubNotifs === 'function')   { _unsubNotifs();   _unsubNotifs   = null; }
+                    currentUserRole = null;
+                    currentUserUid  = null;
                     showLogin();
                 }
             });
