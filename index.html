@@ -2390,8 +2390,21 @@ const _deviceId = (function () {
          * tarjeta de producto en la pantalla de conteo de auditoría.
          *
          * Muestra: quién contó, cuánto contó, a qué hora, estadísticas y estado OK/ERROR.
+         *
+         * FIX #3 — CONTEO CIEGO: El trail multiusuario (quién contó qué cantidad)
+         * solo se muestra cuando:
+         *  a) El usuario es administrador, O
+         *  b) El área ya está marcada como "completada" por este bartender
+         *      (ya terminó su propio conteo, por lo que ver el de otros no sesga su resultado).
+         * Mientras el bartender está contando activamente, el trail permanece oculto
+         * para garantizar la independencia del conteo ciego.
          */
         function renderAuditTrailForProduct(productId, area) {
+            // FIX #3 — Garantizar el ciego: no mostrar conteos ajenos mientras el
+            // bartender tenga el área en estado pendiente (conteo activo).
+            const areaCompletada = auditoriaStatus[area] === 'completada';
+            if (!isAdmin() && !areaCompletada) return '';
+
             const stats = calcAuditStats(productId, area); // FIX-07
             if (!stats || stats.count === 0) return '';
             const myId  = auditCurrentUser ? auditCurrentUser.userId : null;
@@ -3720,7 +3733,11 @@ async function resetConteoAtomicoEnFirestore() {
             try {
                 // Leer conteos de todos los dispositivos desde conteoAreas
                 const AREAS = ['almacen', 'barra1', 'barra2'];
-                const conteoGlobal = {};
+
+                // FIX #2 — Fase 1: recopilar conteos individuales por dispositivo
+                // sin sumarlos directamente. Cada entrada = { enteras, abiertas } de un dispositivo.
+                // { prodId: { area: [ { enteras, abiertas }, ... ] } }
+                const conteoPorDispositivo = {};
 
                 for (const area of AREAS) {
                     const snapDisp = await _db
@@ -3732,35 +3749,85 @@ async function resetConteoAtomicoEnFirestore() {
                         const data = doc.data();
                         Object.keys(data).forEach(function(key) {
                             if (key.startsWith('_')) return;
-                            if (!conteoGlobal[key]) conteoGlobal[key] = {};
-                            if (!conteoGlobal[key][area]) conteoGlobal[key][area] = { enteras: 0, abiertas: [] };
-                            conteoGlobal[key][area].enteras += (typeof data[key].enteras === 'number' ? data[key].enteras : 0);
-                            if (Array.isArray(data[key].abiertas) && data[key].abiertas.length > 0) {
-                                conteoGlobal[key][area].abiertas = conteoGlobal[key][area].abiertas.concat(data[key].abiertas);
-                            }
+                            const entry = data[key];
+                            if (!entry || typeof entry !== 'object') return;
+                            if (!conteoPorDispositivo[key]) conteoPorDispositivo[key] = {};
+                            if (!conteoPorDispositivo[key][area]) conteoPorDispositivo[key][area] = [];
+                            conteoPorDispositivo[key][area].push({
+                                enteras:  typeof entry.enteras === 'number' ? entry.enteras : 0,
+                                abiertas: Array.isArray(entry.abiertas)     ? entry.abiertas : []
+                            });
                         });
                     });
                 }
+
+                // FIX #2 — Fase 2: calcular PROMEDIO de enteras y colección de abiertas.
+                // El conteo es "ciego": varios bartenders cuentan el mismo producto de forma
+                // independiente. El consenso se obtiene promediando las enteras.
+                // Las abiertas son botellas físicas reales (distintas por bartender), por lo
+                // que se conservan todas y se promedian individualmente.
+                const conteoGlobal = {}; // { prodId: { area: { enteras, abiertas, numConteos } } }
+
+                Object.keys(conteoPorDispositivo).forEach(function(prodId) {
+                    conteoGlobal[prodId] = {};
+                    AREAS.forEach(function(area) {
+                        const listaConteos = conteoPorDispositivo[prodId][area] || [];
+                        if (listaConteos.length === 0) {
+                            conteoGlobal[prodId][area] = { enteras: 0, abiertas: [], numConteos: 0 };
+                            return;
+                        }
+                        // Promedio de botellas enteras (redondeado al entero más cercano)
+                        const sumaEnteras = listaConteos.reduce(function(s, c) { return s + c.enteras; }, 0);
+                        const promedioEnteras = Math.round(sumaEnteras / listaConteos.length);
+
+                        // Abiertas: promediar por posición (botella abierta 1, 2, …)
+                        // Si un bartender reporta 2 abiertas y otro 1, se promedian las posiciones comunes
+                        const maxAbiertas = listaConteos.reduce(function(m, c) { return Math.max(m, c.abiertas.length); }, 0);
+                        const promedioAbiertas = [];
+                        for (let i = 0; i < maxAbiertas; i++) {
+                            const vals = listaConteos
+                                .map(function(c) { return c.abiertas[i]; })
+                                .filter(function(v) { return typeof v === 'number' && v > 0; });
+                            if (vals.length > 0) {
+                                const avg = vals.reduce(function(s, v) { return s + v; }, 0) / vals.length;
+                                promedioAbiertas.push(Math.round(avg * 100) / 100);
+                            }
+                        }
+
+                        conteoGlobal[prodId][area] = {
+                            enteras:    promedioEnteras,
+                            abiertas:   promedioAbiertas,
+                            numConteos: listaConteos.length
+                        };
+                    });
+                });
 
                 const productosReporte = products.map(function(p) {
                     const porArea = {};
                     let totalEnteras = 0;
                     let totalAbiertas = 0;
                     AREAS.forEach(function(area) {
-                        const d = (conteoGlobal[p.id] && conteoGlobal[p.id][area]) || { enteras: 0, abiertas: [] };
+                        const d = (conteoGlobal[p.id] && conteoGlobal[p.id][area]) || { enteras: 0, abiertas: [], numConteos: 0 };
                         porArea[area] = d;
-                        totalEnteras  += d.enteras || 0;
+                        totalEnteras += d.enteras || 0;
                         (d.abiertas || []).forEach(function(oz) { totalAbiertas += (oz || 0); });
                     });
-                    return { id: p.id, nombre: p.name, unidad: p.unit || '', grupo: p.group || 'General', porArea, totalEnteras, totalAbiertas };
+                    // Conservar datos técnicos del catálogo para la conversión oz→puntos
+                    return {
+                        id: p.id, nombre: p.name, unidad: p.unit || '',
+                        grupo: p.group || 'General',
+                        capacidadMl: p.capacidadMl || null,
+                        pesoBotellaLlenaOz: p.pesoBotellaLlenaOz || null,
+                        porArea, totalEnteras, totalAbiertas
+                    };
                 });
 
                 const reporte = {
-                    id:           'REP-' + Date.now(),
-                    fecha:        new Date().toLocaleString('es-MX'),
-                    fechaTs:      Date.now(),
-                    generadoPor:  currentUserUid,
-                    productos:    productosReporte,
+                    id:             'REP-' + Date.now(),
+                    fecha:          new Date().toLocaleString('es-MX'),
+                    fechaTs:        Date.now(),
+                    generadoPor:    currentUserUid,
+                    productos:      productosReporte,
                     totalProductos: products.length
                 };
 
@@ -3774,33 +3841,74 @@ async function resetConteoAtomicoEnFirestore() {
             }
         }
 
+        // FIX #6 — descargarReporte: usar la misma lógica de exportToExcel('AUDITORIA')
+        // con hoja "Auditoría", columnas completas (CapacidadML, PesoBotellaOz, Estado),
+        // subtotales por grupo y Gran Total.
         async function descargarReporte(reporteId) {
             if (!_db) return;
             try {
                 const snap = await _db.collection('reportes').doc(reporteId).get();
                 if (!snap.exists) { showNotification('⚠️ Reporte no encontrado'); return; }
                 const rep = snap.data();
-                if (typeof XLSX === 'undefined') { showNotification('⏳ Cargando exportador…'); return; }
-                const AREAS = ['almacen', 'barra1', 'barra2'];
-                const nombresArea = { almacen: 'Almacén', barra1: 'Barra Restaurante', barra2: 'Barra Bar' };
-                const headers = ['ID', 'Nombre', 'Unidad', 'Grupo', 'Total Enteras', 'Total Abiertas (oz)'].concat(
-                    AREAS.map(function(a) { return nombresArea[a] + ' Enteras'; }).concat(
-                    AREAS.map(function(a) { return nombresArea[a] + ' Abiertas'; }))
-                );
-                const rows = (rep.productos || []).map(function(p) {
-                    const base = [p.id, p.nombre, p.unidad, p.grupo, p.totalEnteras, p.totalAbiertas];
-                    const entAreas = AREAS.map(function(a) { return p.porArea && p.porArea[a] ? p.porArea[a].enteras : 0; });
-                    const abAreas  = AREAS.map(function(a) { return p.porArea && p.porArea[a] ? (p.porArea[a].abiertas || []).reduce(function(s, v) { return s + v; }, 0).toFixed(2) : 0; });
-                    return base.concat(entAreas).concat(abAreas);
+                if (typeof XLSX === 'undefined') { showNotification('⏳ Cargando exportador Excel…'); return; }
+
+                // Reconstruir el objeto de conteo compatible con exportToExcel
+                const conteoReporte = {};
+                (rep.productos || []).forEach(function(p) {
+                    conteoReporte[p.id] = {};
+                    ['almacen', 'barra1', 'barra2'].forEach(function(area) {
+                        const d = p.porArea && p.porArea[area] ? p.porArea[area] : { enteras: 0, abiertas: [] };
+                        conteoReporte[p.id][area] = {
+                            enteras:  d.enteras  || 0,
+                            abiertas: d.abiertas || []
+                        };
+                    });
                 });
-                const ws = XLSX.utils.aoa_to_sheet([headers].concat(rows));
-                const wb = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wb, ws, 'Reporte');
-                XLSX.writeFile(wb, 'reporte_' + rep.fechaTs + '.xlsx');
-                showNotification('✅ Reporte descargado');
+
+                // Reconstruir lista de productos con datos técnicos
+                const productosConDatos = (rep.productos || []).map(function(p) {
+                    const catalog = products.find(function(cp) { return cp.id === p.id; }) || {};
+                    return Object.assign({}, catalog, {
+                        id: p.id, name: p.nombre, unit: p.unidad, group: p.grupo,
+                        capacidadMl:       p.capacidadMl       || catalog.capacidadMl,
+                        pesoBotellaLlenaOz: p.pesoBotellaLlenaOz || catalog.pesoBotellaLlenaOz
+                    });
+                });
+
+                exportToExcelConDatos('AUDITORIA', conteoReporte, productosConDatos,
+                    'reporte_auditoria_' + rep.fechaTs + '.xlsx');
+                showNotification('✅ Reporte descargado con formato Auditoría');
             } catch (e) {
                 console.error('[Reporte] Error descargando:', e);
                 showNotification('❌ Error al descargar reporte');
+            }
+        }
+
+        /**
+         * exportToExcelConDatos(modo, conteoData, productsList, fileName)
+         * FIX #6/#8 — Versión paramétrica de exportToExcel que acepta los datos
+         * directamente en lugar de leer variables globales. Elimina el swap inseguro
+         * de inventarioConteo = auditoriaConteo.
+         * @param {string}  modo         'AUDITORIA' | 'INVENTARIO'
+         * @param {object}  conteoData   Mapa { prodId: { area: { enteras, abiertas } } }
+         * @param {Array}   productsList Lista de productos a exportar
+         * @param {string}  [fileName]   Nombre del archivo de salida (opcional)
+         */
+        function exportToExcelConDatos(modo, conteoData, productsList, fileName) {
+            if (!Array.isArray(productsList) || productsList.length === 0) {
+                showNotification('⚠️ No hay productos para exportar');
+                return;
+            }
+            // Guardamos el estado global y lo sustituimos temporalmente
+            const _backupConteo    = inventarioConteo;
+            const _backupProducts  = products;
+            inventarioConteo = conteoData;
+            products         = productsList;
+            try {
+                exportToExcel(modo, fileName);
+            } finally {
+                inventarioConteo = _backupConteo;
+                products         = _backupProducts;
             }
         }
 
@@ -4654,7 +4762,13 @@ async function resetConteoAtomicoEnFirestore() {
         }
 
         function auditoriaResetear() {
-            showConfirm('⚠️ ¿Iniciar nueva auditoría?\n\nSe borrarán todos los conteos actuales de las tres áreas y se comenzará desde cero.', function() {
+            // FIX #1 — Solo el administrador puede iniciar un nuevo ciclo de inventario.
+            // Un bartender no puede destruir los conteos de los demás.
+            if (!isAdmin()) {
+                showNotification('⚠️ Solo el administrador puede iniciar un nuevo ciclo de inventario');
+                return;
+            }
+            showConfirm('⚠️ ¿Iniciar nueva auditoría?\n\nSe borrarán todos los conteos actuales de las tres áreas y se comenzará desde cero.\n\nEsta acción no se puede deshacer.', function() {
                 auditoriaStatus            = { almacen: 'pendiente', barra1: 'pendiente', barra2: 'pendiente' };
                 auditoriaConteo            = {};
                 auditoriaConteoPorUsuario  = {};   // limpiar también los conteos multiusuario
@@ -4666,7 +4780,32 @@ async function resetConteoAtomicoEnFirestore() {
                 resetConteoAtomicoEnFirestore().catch(err =>
                     console.warn('[Atomico] No se pudo limpiar Firestore en reset:', err)
                 );
-                showNotification('Nueva auditoría iniciada');
+                showNotification('✅ Nueva auditoría iniciada');
+                renderTab();
+            });
+        }
+
+        /**
+         * reabrirArea(area)
+         * FIX #7 — Permite al administrador reabrir un área completada para corrección.
+         * Los bartenders que ya contaron conservan sus datos; solo cambia el estado.
+         */
+        function reabrirArea(area) {
+            if (!isAdmin()) {
+                showNotification('⚠️ Solo el administrador puede reabrir áreas');
+                return;
+            }
+            const nombreArea = areasAuditoria[area] || area;
+            showConfirm('¿Reabrir el área "' + nombreArea + '"?\n\nLos conteos existentes se conservan. Los bartenders podrán modificar sus datos.', function() {
+                auditoriaStatus[area] = 'pendiente';
+                saveToLocalStorage();
+                // Sincronizar nuevo estado a Firestore si hay conexión
+                if (_db && navigator.onLine) {
+                    _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
+                        .set({ ['auditoriaStatus_' + area]: 'pendiente' }, { merge: true })
+                        .catch(err => console.warn('[Reabrir] Error sync:', err));
+                }
+                showNotification('↩️ Área "' + nombreArea + '" reabierta para corrección');
                 renderTab();
             });
         }
@@ -4680,15 +4819,10 @@ async function resetConteoAtomicoEnFirestore() {
                 showNotification('⚠️ Completa las 3 áreas antes de exportar');
                 return;
             }
-            // Sustituir temporalmente inventarioConteo por auditoriaConteo
-            // para que exportToExcel lea el conteo de auditoría.
-            const backupConteo = inventarioConteo;
-            inventarioConteo = auditoriaConteo;
-            try {
-                exportToExcel('AUDITORIA');
-            } finally {
-                inventarioConteo = backupConteo;
-            }
+            // FIX #8 — Usar exportToExcelConDatos (versión paramétrica) en lugar
+            // del swap inseguro inventarioConteo = auditoriaConteo.
+            // Pasar los datos de auditoría directamente como parámetro.
+            exportToExcelConDatos('AUDITORIA', auditoriaConteo, products, null);
         }
 
         function renderInventarioTab() {
@@ -4715,10 +4849,13 @@ async function resetConteoAtomicoEnFirestore() {
             html += '<p class="audit-header-title">Auditoría Física Ciega</p>';
             html += '<p class="audit-header-sub">Seleccione el área de auditoría para iniciar el proceso de conteo físico.</p>';
             html += '</div>';
-            // Botón resetear auditoría
-            html += '<button onclick="auditoriaResetear()" title="Iniciar nueva auditoría" style="flex-shrink:0;padding:6px 10px;border-radius:var(--r-md);background:var(--red-dim);border:1px solid rgba(239,68,68,0.18);color:var(--red-text);font-size:0.7rem;font-weight:600;cursor:pointer;white-space:nowrap;" class="flex items-center gap-1">';
-            html += '<svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>';
-            html += ' Nueva auditoría</button>';
+            // FIX #9 — Botón "Nueva auditoría" solo visible para el administrador.
+            // Un bartender no puede resetear el trabajo de los demás.
+            if (isAdmin()) {
+                html += '<button onclick="auditoriaResetear()" title="Iniciar nueva auditoría (solo admin)" style="flex-shrink:0;padding:6px 10px;border-radius:var(--r-md);background:var(--red-dim);border:1px solid rgba(239,68,68,0.18);color:var(--red-text);font-size:0.7rem;font-weight:600;cursor:pointer;white-space:nowrap;" class="flex items-center gap-1">';
+                html += '<svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>';
+                html += ' Nueva auditoría</button>';
+            }
             html += '</div>';
 
             // Barra de progreso
@@ -4759,9 +4896,15 @@ async function resetConteoAtomicoEnFirestore() {
                     : '<span style="width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;"></span> Pendiente';
                 html += '</div>';
                 if (isCompleta) {
-                    // Mostrar resumen de productos contados
                     const totalProductos = products.filter(p => auditoriaConteo[p.id] && auditoriaConteo[p.id][area] && (auditoriaConteo[p.id][area].enteras > 0 || (auditoriaConteo[p.id][area].abiertas || []).some(a => a > 0))).length;
-                    html += '<div style="font-size:0.63rem;color:var(--txt-muted);margin-top:3px;">' + totalProductos + ' producto' + (totalProductos !== 1 ? 's' : '') + ' con cantidad · Toca para editar</div>';
+                    html += '<div style="font-size:0.63rem;color:var(--txt-muted);margin-top:3px;">' + totalProductos + ' producto' + (totalProductos !== 1 ? 's' : '') + ' con cantidad';
+                    // FIX #4 — Solo el admin puede reabrir; el bartender ve el área bloqueada
+                    if (isAdmin()) {
+                        html += ' · <a href="#" onclick="event.stopPropagation();reabrirArea(\'' + area + '\');" style="color:var(--amber);text-decoration:underline;font-weight:600;">↩ Reabrir</a>';
+                    } else {
+                        html += ' · <span style="color:var(--green);font-weight:600;">Bloqueada</span>';
+                    }
+                    html += '</div>';
                 }
                 html += '</div>';
                 html += '<svg class="audit-area-arrow" width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 18l6-6-6-6"/></svg>';
@@ -4777,6 +4920,12 @@ async function resetConteoAtomicoEnFirestore() {
                 html += 'EXPORTAR INVENTARIO CONSOLIDADO';
                 html += '</button>';
                 html += '<p style="text-align:center;font-size:0.68rem;color:var(--txt-muted);margin-top:8px;">Exporta a Excel con el conteo consolidado de las 3 áreas</p>';
+                // FIX — Admin: publicar reporte a Firestore directamente desde aquí
+                if (isAdmin()) {
+                    html += '<button onclick="generarYPublicarReporte()" style="display:block;width:100%;margin-top:8px;padding:10px 16px;border-radius:var(--r-md);background:var(--accent);color:#fff;font-size:0.8rem;font-weight:600;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">';
+                    html += '<i class="fa-solid fa-cloud-arrow-up"></i> Publicar Reporte Global para Todos los Usuarios';
+                    html += '</button>';
+                }
                 html += '</div>';
             } else {
                 // Mensaje de estado cuando no están todas completas
@@ -4798,6 +4947,10 @@ async function resetConteoAtomicoEnFirestore() {
             const area = auditoriaAreaActiva;
             const nombreArea = areasAuditoria[area];
             const estaCompleta = auditoriaStatus[area] === 'completada';
+            // FIX #4 — Determinar si esta pantalla debe ser de solo lectura.
+            // Bartender con área completada → solo lectura (no puede re-editar).
+            // Admin → siempre editable (necesita poder corregir errores).
+            const soloLectura = estaCompleta && !isAdmin();
 
             let html = '<div class="audit-screen">';
 
@@ -4810,8 +4963,11 @@ async function resetConteoAtomicoEnFirestore() {
             html += '</button>';
             html += '<div>';
             html += '<div class="audit-count-area-badge">' + areasAuditoriaIcons[area] + ' &nbsp;' + nombreArea + '</div>';
-            if (estaCompleta) {
-                html += '<div style="font-size:0.62rem;color:var(--green);margin-top:4px;font-weight:600;">✓ Área previamente completada — puedes corregir cantidades</div>';
+            if (soloLectura) {
+                // FIX #4 — Mensaje claro de que el área está bloqueada para el bartender
+                html += '<div style="font-size:0.62rem;color:var(--amber);margin-top:4px;font-weight:600;">🔒 Área completada — solicita al administrador reabrir para corregir</div>';
+            } else if (estaCompleta && isAdmin()) {
+                html += '<div style="font-size:0.62rem;color:var(--green);margin-top:4px;font-weight:600;">✓ Área completada — editando como administrador</div>';
             }
             html += '</div>';
             html += '</div>';
@@ -4822,6 +4978,39 @@ async function resetConteoAtomicoEnFirestore() {
             html += '<div style="font-family:\'IBM Plex Mono\',monospace;font-weight:700;font-size:1rem;color:var(--accent);">' + ingresados + '<span style="font-size:0.65rem;font-weight:500;color:var(--txt-muted);">/' + products.length + '</span></div>';
             html += '</div>';
             html += '</div></div>'; // end audit-count-header
+
+            // ── Pantalla bloqueada para bartender ────────────────────────────
+            // FIX #4: Si soloLectura, mostrar vista de resumen en lugar del formulario
+            if (soloLectura) {
+                html += '<div style="margin:16px 0;padding:20px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);text-align:center;">';
+                html += '<div style="font-size:2rem;margin-bottom:8px;">🔒</div>';
+                html += '<p style="font-size:0.85rem;font-weight:600;color:var(--txt);margin-bottom:6px;">Tu conteo de "' + nombreArea + '" está registrado</p>';
+                html += '<p style="font-size:0.75rem;color:var(--txt-muted);">Si necesitas hacer correcciones, pide al administrador que reabra esta área.</p>';
+                html += '<div style="margin-top:16px;padding:12px;background:var(--bg);border-radius:var(--r-md);">';
+                html += '<p style="font-size:0.7rem;font-weight:600;color:var(--txt-muted);margin-bottom:8px;">Resumen de tu conteo:</p>';
+                const resumen = products.filter(p => {
+                    const d = auditoriaConteo[p.id] && auditoriaConteo[p.id][area];
+                    return d && (d.enteras > 0 || (d.abiertas || []).some(v => v > 0));
+                });
+                if (resumen.length === 0) {
+                    html += '<p style="font-size:0.72rem;color:var(--txt-muted);">No se registraron cantidades en esta área.</p>';
+                } else {
+                    resumen.slice(0, 8).forEach(p => {
+                        const d = auditoriaConteo[p.id][area];
+                        html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border);font-size:0.72rem;">';
+                        html += '<span style="color:var(--txt);">' + escapeHtml(p.name) + '</span>';
+                        html += '<span style="color:var(--accent);font-weight:600;">' + (d.enteras || 0) + ' ent · ' + (d.abiertas || []).length + ' ab</span>';
+                        html += '</div>';
+                    });
+                    if (resumen.length > 8) {
+                        html += '<p style="font-size:0.68rem;color:var(--txt-muted);margin-top:6px;">... y ' + (resumen.length - 8) + ' producto(s) más</p>';
+                    }
+                }
+                html += '</div>';
+                html += '</div>';
+                html += '</div>'; // audit-screen
+                return html;
+            }
 
             // ── Filtro de grupo ──────────────────────────────────────────────
             html += '<div class="bg-white rounded-xl p-3 mb-3 shadow-md"><select onchange="updateSelectedGroup(this.value);" class="w-full px-3 py-2 bg-white text-gray-900 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm">';
@@ -4960,11 +5149,14 @@ async function resetConteoAtomicoEnFirestore() {
             html += '</div>'; // flex flex-col gap-3
 
             // ── Botón FINALIZAR ÁREA ──────────────────────────────────────────
-            html += '<button class="audit-finish-btn" onclick="auditoriaFinalizarConteo()">';
-            html += '<i class="fa-solid fa-circle-check" style="font-size:1.1rem;"></i>';
-            html += 'FINALIZAR ÁREA — ' + nombreArea.toUpperCase();
-            html += '</button>';
-            html += '<p style="text-align:center;font-size:0.68rem;color:var(--txt-muted);margin-top:8px;margin-bottom:16px;">Guarda el conteo de este área y regresa al panel de áreas</p>';
+            // FIX #4 — Solo mostrar si el área no está completada (o si es admin)
+            if (!estaCompleta || isAdmin()) {
+                html += '<button class="audit-finish-btn" onclick="auditoriaFinalizarConteo()">';
+                html += '<i class="fa-solid fa-circle-check" style="font-size:1.1rem;"></i>';
+                html += (estaCompleta && isAdmin() ? 'GUARDAR CORRECCIÓN — ' : 'FINALIZAR ÁREA — ') + nombreArea.toUpperCase();
+                html += '</button>';
+                html += '<p style="text-align:center;font-size:0.68rem;color:var(--txt-muted);margin-top:8px;margin-bottom:16px;">Guarda el conteo de este área y regresa al panel de áreas</p>';
+            }
 
             html += '</div>'; // audit-screen
             return html;
@@ -6136,11 +6328,21 @@ async function resetConteoAtomicoEnFirestore() {
                 }
             });
         } else {
-            // Firebase no configurado: mostrar login de aviso o directamente la app
-            // (Fallback de desarrollo: sin Firebase, muestra la app igualmente)
-            console.warn('[Auth] Firebase Auth no disponible — mostrando app sin autenticación.');
+            // FIX #5 — Firebase Auth no disponible (fallo de red o configuración incorrecta).
+            // NUNCA mostrar la app sin autenticación — mostrar el login con mensaje de error.
+            // El fallback anterior (appWrapper.classList.add('auth-visible')) era un bypass
+            // de seguridad peligroso: cualquier fallo de SDK exponía la app sin login.
+            console.error('[Auth] Firebase Auth no disponible — mostrando pantalla de login con aviso.');
             authLoadingScreen.classList.add('auth-hidden');
-            appWrapper.classList.add('auth-visible');
+            // Mostrar login
+            const loginWrap = $id('loginWrapper');
+            if (loginWrap) loginWrap.classList.add('auth-visible');
+            // Mostrar aviso de error de configuración al usuario
+            const loginError = $id('loginError');
+            if (loginError) {
+                loginError.textContent = '⚠️ Error de conexión con el servidor. Verifica tu acceso a internet e intenta de nuevo.';
+                loginError.classList.add('visible');
+            }
         }
 
         /* ── Manejo del formulario de login ──────────────────────── */
