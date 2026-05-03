@@ -78,8 +78,6 @@
   ═══════════════════════════════════════════════════════════════════════ -->
 <html lang="es">
 <head>
-     <link rel="manifest" href="./manifest.json">
-<meta name="theme-color" content="#000000">
     <meta charset="UTF-8">
     <!-- FIX #15: viewport como primer meta, antes de cualquier script, para que el
          navegador calcule el viewport correcto antes de ejecutar ningún código. -->
@@ -6369,18 +6367,5 @@ async function resetConteoAtomicoEnFirestore() {
         });
     })();
     </script>
-     <script>
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js')
-        .then(registration => {
-          console.log('Service Worker registrado con éxito:', registration.scope);
-        })
-        .catch(error => {
-          console.log('Error al registrar el Service Worker:', error);
-        });
-    });
-  }
-</script>
 </body>
 </html>
