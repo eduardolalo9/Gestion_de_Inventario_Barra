@@ -1700,163 +1700,164 @@ html[data-theme="light"] #syncDot::after { background: #1e293b; }
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   iPHONE 16 PRO FRAME — Solo visual, sin romper funcionalidad
+   iPHONE 16 PRO FRAME — Solo visual, sin tocar funcionalidad
    ─────────────────────────────────────────────────────────────
-   Técnica clave: transform:translateZ(0) en .iphone-screen
-   convierte ese elemento en el "containing block" de position:fixed.
-   Todos los elementos fixed de la app (sidebar, modales, toast,
-   overlay, auth-screens) quedan confinados dentro de la pantalla
-   del iPhone automáticamente, sin tocar una línea de JavaScript.
+   Técnica clave: transform:translateZ(0) en .iphone-screen crea
+   un nuevo "containing block" para position:fixed — todos los
+   elementos fixed (sidebar, modales, toast, overlay) quedan
+   contenidos dentro de la pantalla del iPhone automáticamente.
    ═══════════════════════════════════════════════════════════════ */
 
-/* ── 1. BODY — escena exterior ──────────────────────────────── */
-/*
- * FIX: overflow-y:auto (no hidden) para que viewports < 900px
- * puedan desplazarse y ver el iPhone completo sin recortes.
- * align-items:flex-start + padding-top centra visualmente en
- * pantallas grandes y permite scroll en pantallas cortas.
- */
+/* ── Escena: fondo detrás del iPhone ───────────────────────── */
 body {
-    overflow-x: hidden !important;
-    overflow-y: auto   !important;
-    min-height: 100vh  !important;
-    height: auto       !important;
-    display: flex      !important;
-    align-items: center          !important;
-    justify-content: center      !important;
-    padding: 0         !important;
+    overflow: hidden !important;
+    height: 100vh !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0 !important;
     background: #04040a !important;
     background-image: none !important;
+    min-height: 100vh !important;
 }
 
-/* ── 2. ESCENA: fondo detrás del iPhone ────────────────────── */
 .iphone-scene {
     width: 100%;
     min-height: 100vh;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 32px 24px;
-    position: relative;
+    padding: 28px 16px;
     background:
-        radial-gradient(ellipse 80% 50% at 28% 5%,
-            rgba(59,130,246,0.13) 0%, transparent 58%),
-        radial-gradient(ellipse 55% 40% at 78% 95%,
-            rgba(99,102,241,0.11) 0%, transparent 52%),
-        radial-gradient(ellipse 100% 100% at 50% 50%,
-            #0d0d1a 0%, #04040a 100%);
+        radial-gradient(ellipse 90% 55% at 30% 0%,  rgba(59,130,246,0.12) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 40% at 80% 100%, rgba(99,102,241,0.10) 0%, transparent 55%),
+        radial-gradient(ellipse 100% 100% at 50% 50%, #0d0d1a 0%, #04040a 100%);
+    /* Grain sutíl de pantalla de cine */
+    position: relative;
 }
 
-/* Puntos de luz ambiental */
+/* Puntos de luz ambiente en la escena */
 .iphone-scene::before {
     content: '';
     position: absolute;
-    top: 10%; left: 15%;
-    width: 300px; height: 300px;
-    background: radial-gradient(circle,
-        rgba(59,130,246,0.07) 0%, transparent 70%);
+    top: 12%; left: 18%;
+    width: 280px; height: 280px;
+    background: radial-gradient(circle, rgba(59,130,246,0.08) 0%, transparent 70%);
     border-radius: 50%;
     pointer-events: none;
 }
 .iphone-scene::after {
     content: '';
     position: absolute;
-    bottom: 12%; right: 12%;
-    width: 240px; height: 240px;
-    background: radial-gradient(circle,
-        rgba(139,92,246,0.07) 0%, transparent 70%);
+    bottom: 15%; right: 15%;
+    width: 220px; height: 220px;
+    background: radial-gradient(circle, rgba(139,92,246,0.07) 0%, transparent 70%);
     border-radius: 50%;
     pointer-events: none;
 }
 
-/* ── 3. MARCO FÍSICO iPhone 16 Pro ─────────────────────────── */
-/*
- * FIX tablet/short-viewport: el frame NO escala — el scale() en
- * .iphone-frame afectaría al containing block de .iphone-screen,
- * desplazando position:fixed internos. En su lugar usamos zoom en
- * la escena completa vía transform-origin + escala solo en desktop
- * pequeño, y en tablet aplicamos la escala al .iphone-scene
- * (no al frame), preservando el containing block intacto.
- */
+/* ── Marco físico del iPhone 16 Pro ────────────────────────── */
 .iphone-frame {
     position: relative;
-    /* Dimensiones exactas iPhone 16 Pro (393 × 852 lógicos) */
-    width:  393px;
+    width: 393px;
     height: 852px;
     flex-shrink: 0;
-    /* Acabado titanio natural */
+    /* Titanio natural: degradado sutil de gris oscuro azulado */
     background: linear-gradient(
-        158deg,
-        #3c3c40 0%,
-        #2e2e32 12%,
-        #27272b 30%,
-        #222226 52%,
-        #1f1f23 70%,
-        #29292d 88%,
-        #353539 100%
+        160deg,
+        #3a3a3e 0%,
+        #2c2c30 15%,
+        #26262a 35%,
+        #222226 55%,
+        #1e1e22 75%,
+        #28282c 90%,
+        #343438 100%
     );
     border-radius: 56px;
+    /* Capas de sombra para profundidad realista */
     box-shadow:
-        /* Borde interior luminoso (titanio) */
-        inset 0 0 0 1px rgba(255,255,255,0.14),
-        /* Borde exterior negro */
-        0 0 0 1px   rgba(0,0,0,0.92),
-        /* Anillo metálico */
-        0 0 0 2.5px rgba(78,78,86,0.72),
-        0 0 0 3.5px rgba(0,0,0,0.87),
+        /* Borde interior brillante (titanio) */
+        inset 0 0 0 1px rgba(255,255,255,0.13),
+        /* Borde exterior oscuro */
+        0 0 0 1px rgba(0,0,0,0.90),
+        /* Anillo metálico externo */
+        0 0 0 2.5px rgba(80,80,88,0.70),
+        0 0 0 3.5px rgba(0,0,0,0.85),
         /* Sombra de profundidad */
-        0 48px 96px  rgba(0,0,0,0.86),
-        0 24px 48px  rgba(0,0,0,0.64),
-        0  8px 18px  rgba(0,0,0,0.42),
-        /* Halo azulado ambiental */
-        0 0 70px rgba(59,130,246,0.09);
-    /* Perspectiva 3D suave */
-    transform: perspective(1400px) rotateY(-2.5deg) rotateX(1.2deg);
-    transition: transform 0.65s cubic-bezier(0.25,0.46,0.45,0.94),
-                box-shadow 0.65s ease;
-}
-.iphone-frame:hover {
-    transform: perspective(1400px) rotateY(0deg) rotateX(0deg);
-    box-shadow:
-        inset 0 0 0 1px rgba(255,255,255,0.17),
-        0 0 0 1px   rgba(0,0,0,0.92),
-        0 0 0 2.5px rgba(90,90,98,0.76),
-        0 0 0 3.5px rgba(0,0,0,0.87),
-        0 60px 120px rgba(0,0,0,0.90),
-        0 30px  60px rgba(0,0,0,0.68),
-        0 10px  22px rgba(0,0,0,0.46),
-        0 0 90px rgba(59,130,246,0.13);
+        0 50px 100px rgba(0,0,0,0.85),
+        0 25px 50px  rgba(0,0,0,0.65),
+        0 10px 20px  rgba(0,0,0,0.45),
+        /* Resplandor azulado ambiente */
+        0 0 60px rgba(59,130,246,0.08);
+    /* Ligera perspectiva 3D */
+    transform: perspective(1200px) rotateY(-2deg) rotateX(1.5deg);
+    transition: transform 0.6s cubic-bezier(0.25,0.46,0.45,0.94),
+                box-shadow 0.6s ease;
 }
 
-/* ── 4. BOTONES FÍSICOS LATERALES ───────────────────────────── */
+.iphone-frame:hover {
+    transform: perspective(1200px) rotateY(0deg) rotateX(0deg);
+    box-shadow:
+        inset 0 0 0 1px rgba(255,255,255,0.16),
+        0 0 0 1px rgba(0,0,0,0.90),
+        0 0 0 2.5px rgba(90,90,98,0.75),
+        0 0 0 3.5px rgba(0,0,0,0.85),
+        0 60px 120px rgba(0,0,0,0.90),
+        0 30px 60px  rgba(0,0,0,0.70),
+        0 12px 24px  rgba(0,0,0,0.50),
+        0 0 80px rgba(59,130,246,0.12);
+}
+
+/* ── Botones físicos laterales ─────────────────────────────── */
 .iphone-btn {
     position: absolute;
     background: linear-gradient(to right,
-        #1e1e22 0%, #3a3a3e 28%, #343438 68%, #1e1e22 100%);
+        #222224 0%, #3a3a3e 30%, #343438 70%, #1e1e22 100%);
     border-radius: 3px;
     box-shadow:
-        inset 0  1px 0 rgba(255,255,255,0.11),
-        inset 0 -1px 0 rgba(0,0,0,0.32),
-        -1px 0 5px rgba(0,0,0,0.52);
-}
-.iphone-btn--action  { left:-3.5px; top: 90px; width:3.5px; height:34px; border-radius:2px 0 0 2px; }
-.iphone-btn--vol-up  { left:-3.5px; top:144px; width:3.5px; height:58px; border-radius:2px 0 0 2px; }
-.iphone-btn--vol-down{ left:-3.5px; top:214px; width:3.5px; height:58px; border-radius:2px 0 0 2px; }
-.iphone-btn--power   {
-    right:-3.5px; top:166px; width:3.5px; height:82px; border-radius:0 2px 2px 0;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.11),
-                inset 0 -1px 0 rgba(0,0,0,0.32),
-                1px 0 5px rgba(0,0,0,0.52);
+        inset 0 1px 0 rgba(255,255,255,0.10),
+        inset 0 -1px 0 rgba(0,0,0,0.30),
+        -1px 0 4px rgba(0,0,0,0.50);
 }
 
-/* ── 5. DYNAMIC ISLAND ──────────────────────────────────────── */
-/*
- * FIX stacking: el Dynamic Island vive en .iphone-frame.
- * .iphone-screen tiene z-index:1 (sin z-index explícito se pinta
- * en orden DOM). El Dynamic Island necesita z-index > 1 para
- * aparecer encima de .iphone-screen. Usamos z-index:3 (suficiente)
- * en lugar de 10000 (innecesario).
- */
+/* Botón de Acción (izquierda, arriba) */
+.iphone-btn--action {
+    left: -3.5px;
+    top: 92px;
+    width: 3.5px;
+    height: 34px;
+    border-radius: 2px 0 0 2px;
+}
+/* Volume Up */
+.iphone-btn--vol-up {
+    left: -3.5px;
+    top: 146px;
+    width: 3.5px;
+    height: 58px;
+    border-radius: 2px 0 0 2px;
+}
+/* Volume Down */
+.iphone-btn--vol-down {
+    left: -3.5px;
+    top: 216px;
+    width: 3.5px;
+    height: 58px;
+    border-radius: 2px 0 0 2px;
+}
+/* Power / Sleep-Wake (derecha) */
+.iphone-btn--power {
+    right: -3.5px;
+    top: 168px;
+    width: 3.5px;
+    height: 82px;
+    border-radius: 0 2px 2px 0;
+    box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.10),
+        inset 0 -1px 0 rgba(0,0,0,0.30),
+        1px 0 4px rgba(0,0,0,0.50);
+}
+
+/* ── Dynamic Island ─────────────────────────────────────────── */
 .iphone-dynamic-island {
     position: absolute;
     top: 13px;
@@ -1866,104 +1867,78 @@ body {
     height: 38px;
     background: #000;
     border-radius: 20px;
-    z-index: 3;              /* FIX: encima de .iphone-screen (z-index auto) */
+    z-index: 10000;
     box-shadow:
-        0 0 0 2px rgba(0,0,0,0.96),
-        inset 0 0 14px rgba(0,0,0,0.96),
-        inset 0  1px 0  rgba(255,255,255,0.04);
+        0 0 0 2px rgba(0,0,0,0.95),
+        inset 0 0 12px rgba(0,0,0,0.95),
+        inset 0 1px 0 rgba(255,255,255,0.04);
+    /* Sutil resplandor interior de la cámara */
     overflow: hidden;
 }
-/* Sensor cámara TrueDepth */
+/* Sensor de cámara TrueDepth */
 .iphone-dynamic-island::before {
     content: '';
     position: absolute;
     right: 14px; top: 50%;
     transform: translateY(-50%);
     width: 13px; height: 13px;
-    background: radial-gradient(circle at 40% 35%, #1a1a2a 30%, #090910 100%);
+    background: radial-gradient(circle at 40% 35%, #1a1a2a 30%, #0a0a12 100%);
     border-radius: 50%;
-    box-shadow: inset 0 0 4px rgba(30,60,180,0.25),
-                0 0 0 1.5px rgba(38,38,58,0.8);
+    box-shadow:
+        inset 0 0 4px rgba(30,60,180,0.25),
+        0 0 0 1.5px rgba(40,40,60,0.8);
 }
-/* Punto proyector Face ID */
+/* Punto de Face ID */
 .iphone-dynamic-island::after {
     content: '';
     position: absolute;
-    right: 33px; top: 50%;
+    right: 32px; top: 50%;
     transform: translateY(-50%);
     width: 7px; height: 7px;
-    background: #101018;
+    background: #111118;
     border-radius: 50%;
     box-shadow: 0 0 0 1px rgba(255,255,255,0.04);
 }
 
-/* ── 6. PANTALLA — containing block de position:fixed ──────── */
-/*
- * PRINCIPIO CLAVE (CSS Transforms Level 1, §3.3):
- *   "An element with a transform value other than 'none' creates
- *    a containing block for 'position:fixed' descendants."
- *
- * Resultado: sidebar, modales, toast, auth-screens, overlay —
- * todos los elementos position:fixed de la app quedan contenidos
- * dentro de este div sin modificar ni una línea de JavaScript.
- *
- * FIX z-index: sin z-index explícito, .iphone-screen participa
- * en el stacking context de .iphone-frame como z-index:auto (0).
- * Los elementos decorativos del frame (Dynamic Island z:3,
- * glass-shine z:4, home-indicator z:2) quedan por encima.
- */
+/* ── Pantalla — contenedor principal de la app ─────────────── */
 .iphone-screen {
     position: absolute;
     top: 6px; left: 6px; right: 6px; bottom: 6px;
     border-radius: 50px;
     overflow: hidden;
     background: var(--bg, #0d1321);
-    /* CLAVE: crea el containing block para position:fixed */
+    /*
+     * CLAVE: transform crea un nuevo "containing block" para
+     * position:fixed. Todos los modales, sidebar, toast y overlays
+     * quedan confinados dentro de la pantalla sin modificar el JS.
+     */
     transform: translateZ(0);
-    /* Layout interno en columna: status-bar + contenido */
+    /* Scroll vertical interno — el cuerpo no hace scroll */
     display: flex;
     flex-direction: column;
-    /* z-index implícito = auto (0) en el stacking context del frame */
 }
 
-/* Inner glow del cristal de pantalla */
-.iphone-screen::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: 50px;
-    box-shadow:
-        inset 0 0 0 1px rgba(255,255,255,0.065),
-        inset 0 1px 0   rgba(255,255,255,0.11);
-    pointer-events: none;
-    /* FIX: z-index alto dentro del stacking context de iphone-screen */
-    z-index: 9010;
-}
-
-/* Scrollbars estilo iOS (ultra finos) */
-.iphone-screen ::-webkit-scrollbar        { width: 2px; height: 2px; }
-.iphone-screen ::-webkit-scrollbar-track  { background: transparent; }
-.iphone-screen ::-webkit-scrollbar-thumb  {
-    background: rgba(148,163,184,0.16);
+/* Scrollbar estilo iOS (ultra fino, casi invisible) */
+.iphone-screen ::-webkit-scrollbar { width: 2px; height: 2px; }
+.iphone-screen ::-webkit-scrollbar-track { background: transparent; }
+.iphone-screen ::-webkit-scrollbar-thumb {
+    background: rgba(148,163,184,0.18);
     border-radius: 1px;
 }
 .iphone-screen ::-webkit-scrollbar-thumb:hover {
-    background: rgba(148,163,184,0.32);
+    background: rgba(148,163,184,0.35);
 }
 
-/* ── 7. STATUS BAR (decorativa) ─────────────────────────────── */
+/* ── Barra de estado (status bar) con hora ficticia ────────── */
 .iphone-status-bar {
     position: relative;
-    /* FIX: z-index dentro del stacking context de .iphone-screen.
-     * Los auth-screens fijos (z:9998/9999) la cubrirán durante
-     * el login — correcto, así funciona en iOS real. */
-    z-index: 50;
-    height: 59px;          /* Espacio para el Dynamic Island */
+    z-index: 9001;
+    height: 59px; /* Espacio para el Dynamic Island */
     flex-shrink: 0;
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
-    padding: 0 24px 8px;
+    padding: 0 24px 6px;
     background: #0b1325;
     pointer-events: none;
     user-select: none;
@@ -1973,177 +1948,128 @@ html[data-theme="light"] .iphone-status-bar { background: #0f2040; }
     font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif;
     font-size: 15px;
     font-weight: 600;
-    color: rgba(255,255,255,0.93);
+    color: rgba(255,255,255,0.92);
     letter-spacing: -0.3px;
 }
 .iphone-status-bar__icons {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 7px;
 }
-.iphone-status-bar__icons svg { fill: rgba(255,255,255,0.88); }
+.iphone-status-bar__icons svg {
+    fill: rgba(255,255,255,0.88);
+}
 
-/* ── 8. CONTENIDO SCROLLABLE ────────────────────────────────── */
-/*
- * FIX: padding-bottom: 28px para que el contenido no quede
- * oculto detrás del home indicator (visual en la parte inferior).
- * La app hace scroll aquí — el body ya no scrollea.
- */
+/* ── Contenido scrollable dentro de la pantalla ────────────── */
 .iphone-content {
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
     position: relative;
-    /* Espacio inferior para el home indicator */
-    padding-bottom: 28px;
-    /* Altura mínima para que el scroll funcione */
-    min-height: 0;
 }
 
-/* FIX toast: dentro de .iphone-screen, position:fixed bottom:6px
-   queda tapado por el home indicator. Lo subimos a 28px. */
-.iphone-screen #toast {
-    bottom: 28px !important;
-}
-
-/* ── 9. REFLEJO DE CRISTAL (glass shine) ───────────────────── */
-/*
- * FIX stacking: colocamos el glass-shine DENTRO de .iphone-screen
- * como position:absolute para que quede sobre el contenido de la
- * app pero dentro del clipping de border-radius de la pantalla.
- * z-index:9008 — por debajo del inner-glow (9010) y auth (9998/9999).
- * pointer-events:none → no bloquea ninguna interacción.
- */
-.iphone-glass-shine {
-    position: absolute;   /* relativo a .iphone-screen (position:absolute) */
-    top: 0; left: 0; right: 0;
-    height: 44%;
-    border-radius: 50px 50px 110px 110px / 50px 50px 75px 75px;
-    background: linear-gradient(
-        152deg,
-        rgba(255,255,255,0.052) 0%,
-        rgba(255,255,255,0.018) 32%,
-        rgba(255,255,255,0.004) 52%,
-        transparent 68%
-    );
-    pointer-events: none;
-    /* z:9008 dentro del stacking context de .iphone-screen:
-       por encima del contenido de la app pero por debajo de
-       los modales/auth (z:9998/9999) y del inner glow (z:9010) */
-    z-index: 9008;
-}
-
-/* ── 10. HOME INDICATOR ─────────────────────────────────────── */
-/*
- * FIX stacking: colocamos el home indicator DENTRO de .iphone-screen
- * como position:fixed (relativo a .iphone-screen gracias al transform)
- * para que aparezca siempre en la parte inferior, sobre el contenido.
- * z-index:9005 — visible sobre el contenido de la app pero por debajo
- * del toast (z:9999), modales (z:9999) y auth-screens (z:9998/9999).
- */
+/* ── Indicador Home (línea inferior) ───────────────────────── */
 .iphone-home-indicator {
-    /* FIX: fixed relativo a .iphone-screen (por el transform) */
-    position: fixed;
-    bottom: 8px;
+    position: absolute;
+    bottom: 10px;
     left: 50%;
     transform: translateX(-50%);
     width: 134px;
     height: 5px;
-    background: rgba(255,255,255,0.25);
+    background: rgba(255,255,255,0.28);
     border-radius: 3px;
     pointer-events: none;
-    z-index: 9005;
-    animation: homeIndicatorPulse 5s ease-in-out infinite;
+    z-index: 9999;
+    /* Animación de pulso muy sutil */
+    animation: homeIndicatorPulse 4s ease-in-out infinite;
 }
 @keyframes homeIndicatorPulse {
-    0%, 100% { opacity: 0.25; }
-    50%       { opacity: 0.13; }
+    0%, 100% { opacity: 0.28; }
+    50%       { opacity: 0.18; }
 }
 
-/* ── 11. RESPONSIVE ─────────────────────────────────────────── */
+/* ── Reflejo de pantalla (cristal) ─────────────────────────── */
+.iphone-glass-shine {
+    position: absolute;
+    top: 6px; left: 6px; right: 6px;
+    height: 45%;
+    border-radius: 50px 50px 120px 120px / 50px 50px 80px 80px;
+    background: linear-gradient(
+        155deg,
+        rgba(255,255,255,0.055) 0%,
+        rgba(255,255,255,0.020) 35%,
+        rgba(255,255,255,0.005) 55%,
+        transparent 70%
+    );
+    pointer-events: none;
+    z-index: 10001;
+}
 
-/*
- * MÓVIL REAL (≤ 500px): quitar el frame, app a pantalla completa.
- * Cuando se elimina el transform de .iphone-screen, los position:fixed
- * vuelven a ser relativos al viewport — comportamiento nativo correcto.
- */
+/* ── Sombra de borde de pantalla (inner glow) ──────────────── */
+.iphone-screen::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50px;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06),
+                inset 0 1px 0 rgba(255,255,255,0.10);
+    pointer-events: none;
+    z-index: 10002;
+}
+
+/* ── auth/loading screens: ya son position:fixed — con transform
+       quedan confinados en .iphone-screen automáticamente ────── */
+
+/* ── Responsive: en móvil real quitar el frame ─────────────── */
 @media (max-width: 500px) {
     body {
-        overflow-x: hidden !important;
-        overflow-y: auto   !important;
-        height: auto       !important;
-        display: block     !important;
+        overflow: auto !important;
+        height: auto !important;
+        display: block !important;
         background: var(--bg) !important;
-        align-items: unset !important;
     }
     .iphone-scene {
-        min-height: 100dvh;
+        min-height: 100vh;
         padding: 0;
         background: var(--bg);
     }
     .iphone-frame {
-        width: 100%; height: 100dvh;
+        width: 100%;
+        height: auto;
+        min-height: 100vh;
         border-radius: 0;
         background: none;
         box-shadow: none;
         transform: none !important;
-        transition: none;
     }
-    .iphone-frame:hover { transform: none !important; box-shadow: none; }
+    .iphone-frame:hover { transform: none !important; }
     .iphone-screen {
         position: static;
         border-radius: 0;
-        height: 100dvh;
-        transform: none;   /* FIX: fixed vuelve al viewport */
+        height: 100vh;
+        overflow-y: auto;
+        transform: none;
     }
     .iphone-btn,
     .iphone-dynamic-island,
     .iphone-glass-shine,
     .iphone-home-indicator,
     .iphone-status-bar { display: none !important; }
-    .iphone-content {
-        overflow-y: auto;
-        height: 100dvh;
-        padding-bottom: 0;
-    }
-    .iphone-screen #toast { bottom: 6px !important; }
-    .iphone-scene::before, .iphone-scene::after { display: none; }
+    .iphone-content { overflow: visible; height: auto; }
+    .iphone-scene::before,
+    .iphone-scene::after { display: none; }
 }
 
-/*
- * TABLET (501–900px): reducir tamaño mediante zoom en la ESCENA,
- * NO en .iphone-frame (scale en el frame rompería el containing block).
- * La escena completa (frame + decoraciones) se escala uniformemente.
- */
-@media (min-width: 501px) and (max-width: 900px) {
-    .iphone-scene {
-        padding: 20px 16px;
-        align-items: center;
-    }
+/* ── Tablet: frame centrado con escala reducida ─────────────── */
+@media (min-width: 501px) and (max-width: 860px) {
     .iphone-frame {
-        /* FIX: escalar el frame (no la escena) está bien porque el
-         * containing block de position:fixed es .iphone-screen,
-         * no .iphone-frame. El scale en .iphone-frame solo afecta
-         * al aspecto visual, no a la lógica de contención de fixed. */
-        transform: perspective(1400px) rotateY(0deg) scale(0.80);
-        transform-origin: center top;
+        transform: perspective(1200px) rotateY(0deg) scale(0.82);
+        transform-origin: center center;
     }
     .iphone-frame:hover {
-        transform: perspective(1400px) rotateY(0deg) scale(0.82);
-        transform-origin: center top;
+        transform: perspective(1200px) rotateY(0deg) scale(0.84);
     }
-}
-
-/* Viewports altos en desktop: centrar verticalmente sin scroll */
-@media (min-height: 950px) and (min-width: 901px) {
-    body { align-items: center !important; }
-    .iphone-scene { min-height: 100vh; align-items: center; }
-}
-/* Viewports cortos en desktop: alinear al top con padding */
-@media (max-height: 949px) and (min-width: 901px) {
-    body { align-items: flex-start !important; }
-    .iphone-scene { align-items: flex-start; padding-top: 24px; padding-bottom: 24px; }
 }
 </style>
 </head>
@@ -2162,49 +2088,45 @@ html[data-theme="light"] .iphone-status-bar { background: #0f2040; }
     <div class="iphone-btn iphone-btn--vol-down"  aria-hidden="true"></div>
     <div class="iphone-btn iphone-btn--power"     aria-hidden="true"></div>
 
-    <!-- ── Dynamic Island (z:3 en el stacking context del frame) ─── -->
+    <!-- ── Dynamic Island ────────────────────────────────────────── -->
     <div class="iphone-dynamic-island" aria-hidden="true"></div>
 
+    <!-- ── Reflejo de cristal (encima de todo, pointer-events:none) ── -->
+    <div class="iphone-glass-shine" aria-hidden="true"></div>
+
+    <!-- ── Indicador Home ────────────────────────────────────────── -->
+    <div class="iphone-home-indicator" aria-hidden="true"></div>
+
     <!-- ════════════════════════════════════════════════════════════
-         PANTALLA — toda la app original sin cambios.
-         transform:translateZ(0) convierte este div en el containing
-         block de todos los position:fixed de la app, confinándolos
-         dentro del iPhone sin tocar JavaScript.
+         PANTALLA — aquí vive toda la app original sin cambios.
+         El transform:translateZ(0) en .iphone-screen hace que todos
+         los elementos position:fixed (sidebar, modales, toast, etc.)
+         queden confinados dentro del iPhone automáticamente.
          ════════════════════════════════════════════════════════════ -->
     <div class="iphone-screen">
 
-      <!-- Reflejo de cristal: dentro del screen para clipping correcto
-           z:9008 dentro del stacking context de .iphone-screen.
-           pointer-events:none → no bloquea ningún toque/click. -->
-      <div class="iphone-glass-shine" aria-hidden="true"></div>
-
-      <!-- Home indicator: position:fixed relativo a .iphone-screen
-           (por el transform). z:9005 — visible sobre el contenido
-           pero bajo los modales (z:9999) y auth-screens (z:9998/9999). -->
-      <div class="iphone-home-indicator" aria-hidden="true"></div>
-
-      <!-- Status bar iOS (decorativa — no cubre el contenido real) -->
+      <!-- Status bar iOS (decorativa — no oculta contenido) -->
       <div class="iphone-status-bar" aria-hidden="true">
         <span class="iphone-status-bar__time" id="iphoneTime">9:41</span>
         <div class="iphone-status-bar__icons">
           <!-- Señal celular -->
           <svg width="17" height="12" viewBox="0 0 17 12">
-            <rect x="0"  y="6"  width="3" height="6"  rx="1" opacity="0.30"/>
-            <rect x="4"  y="4"  width="3" height="8"  rx="1" opacity="0.55"/>
-            <rect x="8"  y="2"  width="3" height="10" rx="1" opacity="0.78"/>
+            <rect x="0"  y="5"  width="3" height="7" rx="1" opacity="0.3"/>
+            <rect x="4"  y="3"  width="3" height="9" rx="1" opacity="0.5"/>
+            <rect x="8"  y="1"  width="3" height="11" rx="1" opacity="0.7"/>
             <rect x="12" y="0"  width="3" height="12" rx="1"/>
           </svg>
           <!-- WiFi -->
-          <svg width="16" height="12" viewBox="0 0 16 12" fill="none">
-            <circle cx="8" cy="10.5" r="1.5" fill="currentColor"/>
-            <path d="M4.2 7C5.5 5.7 6.7 5 8 5s2.5.7 3.8 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.72"/>
-            <path d="M1.5 4.2C3.4 2.3 5.6 1.2 8 1.2s4.6 1.1 6.5 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.40"/>
+          <svg width="15" height="12" viewBox="0 0 15 12">
+            <path d="M7.5 9.5a1.5 1.5 0 110 3 1.5 1.5 0 010-3z"/>
+            <path d="M3.5 6.5C4.9 5.1 6.1 4.4 7.5 4.4s2.6.7 4 2.1" stroke-width="1.5" stroke-linecap="round" fill="none" stroke="currentColor" opacity="0.7"/>
+            <path d="M1 3.5C3 1.5 5.1.4 7.5.4s4.5 1.1 6.5 3.1" stroke-width="1.5" stroke-linecap="round" fill="none" stroke="currentColor" opacity="0.4"/>
           </svg>
           <!-- Batería -->
-          <svg width="26" height="12" viewBox="0 0 26 12">
-            <rect x="0.5" y="1.5" width="21" height="9" rx="2.2" stroke="currentColor" stroke-width="1" fill="none" opacity="0.52"/>
-            <rect x="2" y="3"   width="15" height="6"  rx="1.4" fill="currentColor" opacity="0.92"/>
-            <path d="M23 4.5v3a1.8 1.8 0 000-3z" fill="currentColor" opacity="0.42"/>
+          <svg width="25" height="12" viewBox="0 0 25 12">
+            <rect x="0" y="1" width="21" height="10" rx="2.5" stroke="currentColor" stroke-width="1" fill="none" opacity="0.5"/>
+            <rect x="1.5" y="2.5" width="15" height="7" rx="1.5" fill="currentColor" opacity="0.9"/>
+            <path d="M22 4v4a2 2 0 000-4z" fill="currentColor" opacity="0.4"/>
           </svg>
         </div>
       </div>
