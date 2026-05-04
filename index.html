@@ -5,95 +5,21 @@
     <meta charset="UTF-8">
     <!-- FIX #15: viewport como primer meta, antes de cualquier script, para que el
          navegador calcule el viewport correcto antes de ejecutar ningún código. -->
-   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="BarInventory">
-
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="application-name" content="BarInventory">
-    <meta name="theme-color" content="#0d1321">
-    <!-- manifest.json solo en http/https (file:// bloquea por CORS) -->
-    <script>if(location.protocol!=='file:'){var l=document.createElement('link');l.rel='manifest';l.href='manifest.json';document.head.appendChild(l);}</script>
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0a0a0a">
+    <link rel="manifest" href="manifest.json">
 
     <script>
-        // Evitar FOUC (Flash Of Unstyled Content): aplicar tema antes de renderizar
         (function() {
-            try {
-                var t = localStorage.getItem('inventarioApp_theme') || 'dark';
-                document.documentElement.setAttribute('data-theme', t);
-            } catch(_) {
-                document.documentElement.setAttribute('data-theme', 'dark');
-            }
+            try { document.documentElement.setAttribute('data-theme', localStorage.getItem('inventarioApp_theme') || 'dark'); }
+            catch(_) { document.documentElement.setAttribute('data-theme', 'dark'); }
         })();
     </script>
-
-    <!-- ══════════════════════════════════════════════════════════
-         FIX 4 — RESILIENCIA OFFLINE: Registro del Service Worker
-         ══════════════════════════════════════════════════════════ -->
-    <script>
-        (function registerServiceWorker() {
-            // SW no soportado en file:// (solo http/https)
-            if (location.protocol === 'file:') {
-                console.info('[SW] Omitido: protocolo file:// no soporta Service Workers.');
-                return;
-            }
-            if (!('serviceWorker' in navigator)) {
-                console.info('[SW] Service Workers no soportados en este navegador.');
-                return;
-            }
-            // Esperar a que la página esté completamente cargada para no
-            // competir con los recursos críticos de primer render.
-            window.addEventListener('load', function() {
-                navigator.serviceWorker.register('./sw.js')
-                    .then(function(registration) {
-                        console.info('[SW] Registrado con scope:', registration.scope);
-
-                        // Detectar actualizaciones del SW (nueva versión deployada)
-                        registration.addEventListener('updatefound', function() {
-                            var newWorker = registration.installing;
-                            newWorker.addEventListener('statechange', function() {
-                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                    // Nueva versión disponible — notificar al usuario
-                                    console.info('[SW] Nueva versión disponible. Recarga para actualizar.');
-                                    if (typeof showNotification === "function") {
-                                        showNotification('🔄 Nueva versión disponible — recarga la página');
-                                    }
-                                }
-                            });
-                        });
-                    })
-                    .catch(function(err) {
-                        // El SW es una mejora progresiva; su fallo no bloquea la app.
-                        console.warn('[SW] Error al registrar Service Worker:', err);
-                    });
-
-                // Escuchar mensajes del SW (ej. "CACHE_UPDATED")
-                navigator.serviceWorker.addEventListener('message', function(event) {
-                    if (event.data && event.data.type === 'SYNC_PENDING') {
-                        // El SW nos avisa que hay datos pendientes de subir
-                        if (_db && navigator.onLine && typeof syncToCloud === "function") {
-                            syncToCloud();
-                        }
-                    }
-                });
-            });
-        })();
-    </script>
-    <meta name="description" content="Sistema de control de inventario para barra — gestión de productos, pedidos y conteo físico.">
-    <!-- FIX #2: CSP con worker-src 'self' añadido para permitir el Service Worker.
-         Sin esta directiva Chrome/Firefox pueden rechazar sw.js en modo estricto. -->
-    <!-- CSP solo en http/https — en file:// el origen es 'null' y bloquea Firebase/fonts -->
-    <script>
-    if (location.protocol !== 'file:') {
-        var csp = document.createElement('meta');
-        csp.httpEquiv = 'Content-Security-Policy';
-        csp.content = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://www.gstatic.com https://kit.fontawesome.com https://use.fontawesome.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://use.fontawesome.com https://kit.fontawesome.com; font-src https://fonts.gstatic.com https://cdnjs.cloudflare.com https://use.fontawesome.com https://kit.fontawesome.com data:; img-src 'self' data: https:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://firestore.googleapis.com https://securetoken.googleapis.com https://identitytoolkit.googleapis.com https://firebase.googleapis.com; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self';";
-        document.head.appendChild(csp);
-    }
-    </script>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%A6%3C/text%3E%3C/svg%3E"><!-- BUG-FIX m2: favicon URL-encoded -->
+     <meta name="description" content="Sistema de control de inventario para barra — gestión de productos, pedidos y conteo físico.">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://www.gstatic.com https://kit.fontawesome.com https://use.fontawesome.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://use.fontawesome.com https://kit.fontawesome.com; font-src https://fonts.gstatic.com https://cdnjs.cloudflare.com https://use.fontawesome.com https://kit.fontawesome.com data:; img-src 'self' data: https:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://firestore.googleapis.com https://securetoken.googleapis.com https://identitytoolkit.googleapis.com https://firebase.googleapis.com; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self';">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%A6%3C/text%3E%3C/svg%3E">
     <title>BarInventory — Control de Inventario</title>
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
