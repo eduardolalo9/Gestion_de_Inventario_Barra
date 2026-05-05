@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -186,7 +185,8 @@ _db   = firebase.firestore();
 _auth = firebase.auth();
 
 // Persistencia offline nativa de Firestore (caché local automático)
-_db.enablePersistence().catch(err => {
+// synchronizeTabs:true → compartir caché entre pestañas del mismo origen
+_db.enablePersistence({ synchronizeTabs: true }).catch(err => {
     if (err.code === 'failed-precondition') {
         console.warn("[Firebase] Persistencia offline no disponible (múltiples pestañas).");
     } else if (err.code === 'unimplemented') {
@@ -1363,6 +1363,64 @@ html[data-theme="dark"] #inventarioModal .hover\:bg-gray-50:hover { background: 
 
 /* Bloqueo de scroll del fondo cuando un modal está abierto */
 body.modal-open { overflow: hidden; position: fixed; width: 100%; }
+
+/* ── BUSCADOR EN CONTEO DE INVENTARIO ─────────────────────── */
+.conteo-search-wrap {
+    position: relative;
+    margin-bottom: 10px;
+}
+.conteo-search-wrap svg.search-icon {
+    position: absolute; left: 11px; top: 50%;
+    transform: translateY(-50%);
+    width: 16px; height: 16px;
+    stroke: var(--txt-muted);
+    pointer-events: none;
+}
+.conteo-search-input {
+    width: 100%;
+    padding: 9px 36px 9px 34px;
+    background: var(--card);
+    border: 1px solid var(--border-mid);
+    border-radius: var(--r-md);
+    color: var(--txt-primary);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.82rem;
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.conteo-search-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-dim);
+}
+.conteo-search-input::placeholder { color: var(--txt-muted); }
+.conteo-search-clear {
+    position: absolute; right: 8px; top: 50%;
+    transform: translateY(-50%);
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--border-mid);
+    border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--txt-muted);
+    font-size: 0.78rem; line-height: 1; padding: 0;
+    transition: background 0.12s ease;
+    min-height: unset !important;
+}
+.conteo-search-clear:hover { background: var(--border-strong); color: var(--txt-primary); }
+.conteo-search-results {
+    font-size: 0.68rem; font-weight: 600;
+    color: var(--txt-muted); letter-spacing: 0.04em;
+    margin-bottom: 8px; padding: 0 2px;
+}
+.conteo-search-results em { color: var(--accent); font-style: normal; font-weight: 700; }
+.conteo-match-highlight {
+    background: rgba(59,130,246,0.22);
+    border-radius: 2px;
+    color: var(--accent);
+    font-weight: 700;
+}
+html[data-theme="light"] .conteo-search-input { background: #fff; border-color: #cbd5e1; }
+html[data-theme="light"] .conteo-match-highlight { background: rgba(29,78,216,0.12); color: #1d4ed8; }
 
 
 /* Ajuste de padding inferior para no solapar con la tab bar */
@@ -3101,10 +3159,14 @@ const _deviceId = (function () {
                 _cloudSyncPending = true;
                 updateCloudSyncBadge('pending');
                 if (navigator.onLine && _db) {
-                    syncToCloud();
+                    // DEBOUNCE — esperar 900ms antes de subir, para agrupar
+                    // cambios rápidos (ej. escritura en campo) en una sola subida.
+                    clearTimeout(saveToLocalStorage._syncTimer);
+                    saveToLocalStorage._syncTimer = setTimeout(() => syncToCloud(), 900);
                 }
             }
         }
+        saveToLocalStorage._syncTimer = null;
 
         function loadFromLocalStorage() {
             const safeGet = (key, fallback) => {
@@ -3821,7 +3883,7 @@ async function resetConteoAtomicoEnFirestore() {
             if (!navigator.onLine) {
                 const bar = document.createElement('div');
                 bar.id = 'networkStatus';
-                bar.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#f59e0b;color:#fff;text-align:center;padding:6px;font-size:13px;font-weight:600;z-index:9999;';
+                bar.style.cssText = 'position:fixed;bottom:56px;left:0;right:0;background:#f59e0b;color:#fff;text-align:center;padding:6px;font-size:13px;font-weight:600;z-index:9999;';
                 bar.textContent = '⚠️ Sin conexión — los datos están guardados localmente';
                 document.body.appendChild(bar);
                 updateCloudSyncBadge('offline');
@@ -3847,6 +3909,7 @@ async function resetConteoAtomicoEnFirestore() {
         let _unsubNotifs    = null;
         let _notificaciones = [];
         let _ajustes        = [];
+        let _conteoSearchTerm = '';   // búsqueda dentro del conteo de inventario
 
         function isAdmin() { return currentUserRole === 'admin'; }
 
@@ -3892,6 +3955,11 @@ async function resetConteoAtomicoEnFirestore() {
 
         // ── Toggle sincronización ──────────────────────────────────────────
         function toggleSyncEnabled() {
+            // Solo el admin puede pausar/reanudar la sincronización
+            if (!isAdmin()) {
+                showNotification('⚠️ Solo el administrador puede pausar la sincronización');
+                return;
+            }
             _syncEnabled = !_syncEnabled;
             const pill = document.getElementById('syncPill');
             if (pill) pill.classList.toggle('on', _syncEnabled);
@@ -5184,7 +5252,8 @@ async function resetConteoAtomicoEnFirestore() {
             auditoriaAreaActiva = area;
             auditoriaView = 'counting';
             isAuditoriaMode = true;
-            selectedArea = area; // sincronizar selector de área para el modal
+            selectedArea = area;
+            _conteoSearchTerm = '';   // limpiar búsqueda al entrar a nueva área
             saveToLocalStorage();
             renderTab();
         }
@@ -5223,6 +5292,7 @@ async function resetConteoAtomicoEnFirestore() {
             auditoriaView = 'selection';
             auditoriaAreaActiva = null;
             isAuditoriaMode = false;
+            _conteoSearchTerm = '';   // limpiar búsqueda al salir del conteo
             saveToLocalStorage();
             renderTab();
         }
@@ -5237,9 +5307,14 @@ async function resetConteoAtomicoEnFirestore() {
 
         function auditoriaResetear() {
             // FIX #1 — Solo el administrador puede iniciar un nuevo ciclo de inventario.
-            // Un bartender no puede destruir los conteos de los demás.
             if (!isAdmin()) {
                 showNotification('⚠️ Solo el administrador puede iniciar un nuevo ciclo de inventario');
+                return;
+            }
+            // GUARD OFFLINE — si no hay conexión, el reset local quedaría desfasado
+            // de Firestore. Requerir conexión para garantizar coherencia entre dispositivos.
+            if (!navigator.onLine) {
+                showNotification('📴 Sin conexión — conecta a internet antes de iniciar nueva auditoría');
                 return;
             }
             showConfirm('⚠️ ¿Iniciar nueva auditoría?\n\nSe borrarán todos los conteos actuales de las tres áreas y se comenzará desde cero.\n\nEsta acción no se puede deshacer.', function() {
@@ -5297,6 +5372,26 @@ async function resetConteoAtomicoEnFirestore() {
             // del swap inseguro inventarioConteo = auditoriaConteo.
             // Pasar los datos de auditoría directamente como parámetro.
             exportToExcelConDatos('AUDITORIA', auditoriaConteo, products, null);
+        }
+
+        // ── BÚSQUEDA EN CONTEO ────────────────────────────────────────────────
+        function updateConteoSearch(val) {
+            _conteoSearchTerm = (val || '').trim();
+            renderTab();
+        }
+        function clearConteoSearch() {
+            _conteoSearchTerm = '';
+            const inp = document.getElementById('conteoSearchInput');
+            if (inp) inp.value = '';
+            renderTab();
+        }
+        // Resalta las coincidencias del término buscado dentro de un nombre
+        function highlightConteoMatch(name, term) {
+            if (!term) return escapeHtml(name);
+            const escaped   = escapeHtml(name);
+            const escapedTm = escapeHtml(term).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const re = new RegExp('(' + escapedTm + ')', 'gi');
+            return escaped.replace(re, '<mark class="conteo-match-highlight">$1</mark>');
         }
 
         function renderInventarioTab() {
@@ -5396,7 +5491,7 @@ async function resetConteoAtomicoEnFirestore() {
                 html += '<p style="text-align:center;font-size:0.68rem;color:var(--txt-muted);margin-top:8px;">Exporta a Excel con el conteo consolidado de las 3 áreas</p>';
                 // FIX — Admin: publicar reporte a Firestore directamente desde aquí
                 if (isAdmin()) {
-                    html += '<button onclick="generarYPublicarReporte()" style="display:block;width:100%;margin-top:8px;padding:10px 16px;border-radius:var(--r-md);background:var(--accent);color:#fff;font-size:0.8rem;font-weight:600;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">';
+                    html += '<button onclick="generarYPublicarReporte()" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:8px;padding:10px 16px;border-radius:var(--r-md);background:var(--accent);color:#fff;font-size:0.8rem;font-weight:600;border:none;cursor:pointer;">';
                     html += '<i class="fa-solid fa-cloud-arrow-up"></i> Publicar Reporte Global para Todos los Usuarios';
                     html += '</button>';
                 }
@@ -5458,7 +5553,7 @@ async function resetConteoAtomicoEnFirestore() {
             if (soloLectura) {
                 html += '<div style="margin:16px 0;padding:20px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);text-align:center;">';
                 html += '<div style="font-size:2rem;margin-bottom:8px;">🔒</div>';
-                html += '<p style="font-size:0.85rem;font-weight:600;color:var(--txt);margin-bottom:6px;">Tu conteo de "' + nombreArea + '" está registrado</p>';
+                html += '<p style="font-size:0.85rem;font-weight:600;color:var(--txt-primary);margin-bottom:6px;">Tu conteo de "' + nombreArea + '" está registrado</p>';
                 html += '<p style="font-size:0.75rem;color:var(--txt-muted);">Si necesitas hacer correcciones, pide al administrador que reabra esta área.</p>';
                 html += '<div style="margin-top:16px;padding:12px;background:var(--bg);border-radius:var(--r-md);">';
                 html += '<p style="font-size:0.7rem;font-weight:600;color:var(--txt-muted);margin-bottom:8px;">Resumen de tu conteo:</p>';
@@ -5472,7 +5567,7 @@ async function resetConteoAtomicoEnFirestore() {
                     resumen.slice(0, 8).forEach(p => {
                         const d = auditoriaConteo[p.id][area];
                         html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border);font-size:0.72rem;">';
-                        html += '<span style="color:var(--txt);">' + escapeHtml(p.name) + '</span>';
+                        html += '<span style="color:var(--txt-primary);">' + escapeHtml(p.name) + '</span>';
                         html += '<span style="color:var(--accent);font-weight:600;">' + (d.enteras || 0) + ' ent · ' + (d.abiertas || []).length + ' ab</span>';
                         html += '</div>';
                     });
@@ -5492,6 +5587,20 @@ async function resetConteoAtomicoEnFirestore() {
                 html += '<option value="' + group + '"' + (selectedGroup === group ? ' selected' : '') + '>' + escapeHtml(group) + '</option>';
             });
             html += '</select></div>';
+
+            // ── Buscador de producto ─────────────────────────────────────────
+            html += '<div class="conteo-search-wrap">';
+            html += '<svg class="search-icon" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">'
+                  + '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>';
+            html += '<input id="conteoSearchInput" type="search" class="conteo-search-input"'
+                  + ' placeholder="Buscar producto en este conteo…"'
+                  + ' value="' + escapeHtml(_conteoSearchTerm) + '"'
+                  + ' oninput="updateConteoSearch(this.value)"'
+                  + ' autocomplete="off" autocorrect="off" spellcheck="false">';
+            if (_conteoSearchTerm) {
+                html += '<button class="conteo-search-clear" onclick="clearConteoSearch()" title="Limpiar búsqueda" aria-label="Limpiar búsqueda">✕</button>';
+            }
+            html += '</div>';
 
             html += '<p class="text-xs text-gray-400 mb-3 px-1">Conteo ciego — toca cada producto para ingresar la cantidad física</p>';
 
@@ -5530,7 +5639,26 @@ async function resetConteoAtomicoEnFirestore() {
             }
 
             // ── Lista de tarjetas ─────────────────────────────────────────────
-            const filteredProducts = filterByGroup();
+            let filteredProducts = filterByGroup();
+            // Aplicar búsqueda de texto libre sobre nombre, ID y grupo
+            if (_conteoSearchTerm) {
+                const term = _conteoSearchTerm.toLowerCase();
+                filteredProducts = filteredProducts.filter(p =>
+                    (p.name  || '').toLowerCase().includes(term) ||
+                    (p.id    || '').toLowerCase().includes(term) ||
+                    (p.group || '').toLowerCase().includes(term)
+                );
+            }
+            // Contador de resultados
+            if (_conteoSearchTerm) {
+                html += '<div class="conteo-search-results">';
+                if (filteredProducts.length === 0) {
+                    html += 'Sin resultados para "<em>' + escapeHtml(_conteoSearchTerm) + '</em>"';
+                } else {
+                    html += '<em>' + filteredProducts.length + '</em> producto' + (filteredProducts.length !== 1 ? 's' : '') + ' encontrado' + (filteredProducts.length !== 1 ? 's' : '');
+                }
+                html += '</div>';
+            }
             html += '<div class="flex flex-col gap-3">';
 
             if (filteredProducts.length === 0) {
@@ -5572,7 +5700,7 @@ async function resetConteoAtomicoEnFirestore() {
 
                     html += '<div class="inv-card__header">';
                     html += '<div style="min-width:0;flex:1">';
-                    html += '<div class="inv-card__name">' + escapeHtml(product.name) + '</div>';
+                    html += '<div class="inv-card__name">' + highlightConteoMatch(product.name, _conteoSearchTerm) + '</div>';
                     html += '<span class="inv-card__group-badge">' + escapeHtml(product.group || 'General') + '</span>';
                     if (areaData.alerta_conflicto) {
                         html += '<div class="inv-card__conflict-badge"><i class="fa-solid fa-triangle-exclamation"></i> Conflicto abierta</div>';
