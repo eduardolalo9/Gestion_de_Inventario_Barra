@@ -185,8 +185,7 @@ _db   = firebase.firestore();
 _auth = firebase.auth();
 
 // Persistencia offline nativa de Firestore (caché local automático)
-// synchronizeTabs:true → compartir caché entre pestañas del mismo origen
-_db.enablePersistence({ synchronizeTabs: true }).catch(err => {
+_db.enablePersistence().catch(err => {
     if (err.code === 'failed-precondition') {
         console.warn("[Firebase] Persistencia offline no disponible (múltiples pestañas).");
     } else if (err.code === 'unimplemented') {
@@ -265,7 +264,6 @@ _db.enablePersistence({ synchronizeTabs: true }).catch(err => {
     --accent-blue:var(--sky);
     --accent-green:var(--green);
     --shadow-mid: var(--shadow-card);
-    --modal-bg:   #1b2540;   /* fondo caja modal en modo oscuro */
 }
 
 /* ── TEMA CLARO ───────────────────────────────────────────── */
@@ -306,7 +304,6 @@ html[data-theme="light"] {
     --accent-3: var(--amber);
     --accent-blue: var(--sky);
     --accent-green: var(--green);
-    --modal-bg: #ffffff;   /* fondo caja modal en modo claro */
 }
 
 /* ─── Reset & Base ───────────────────────────────────────── */
@@ -861,6 +858,219 @@ span.text-xs.px-2.py-1.bg-purple-100 {
 ::selection { background: rgba(59,130,246,0.28); color: #fff; }
 .area-btn.disabled { opacity: 0.38; pointer-events: none; }
 
+/* ═══════════════════════════════════════════════════
+   BOTTOM NAVIGATION BAR
+   ═══════════════════════════════════════════════════ */
+#bottomNav {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+    display: flex; align-items: stretch;
+    background: var(--surface); border-top: 1px solid var(--border-mid);
+    box-shadow: 0 -2px 16px rgba(0,0,0,0.30);
+    height: 60px; padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.bnav-btn {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 3px;
+    background: transparent; border: none;
+    color: var(--txt-muted);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.58rem; font-weight: 500; letter-spacing: 0.02em;
+    cursor: pointer; padding: 6px 4px 4px;
+    min-height: unset !important;
+    transition: color 0.14s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+.bnav-btn:active { transform: scale(0.93) !important; }
+.bnav-btn.bnav-active { color: var(--accent); }
+.bnav-btn svg { width: 22px; height: 22px; flex-shrink: 0; }
+#mainContent { padding-bottom: 72px !important; }
+
+/* ─── Stat cards ──────────────────────────────────────────────── */
+.stat-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--r-lg); padding: 14px 14px 12px;
+    flex: 1; min-width: 0; box-shadow: var(--shadow-card);
+}
+.stat-card__icon { font-size: 1.3rem; margin-bottom: 6px; display: block; }
+.stat-card__val  {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 1.55rem; font-weight: 700; line-height: 1; display: block; margin-bottom: 4px;
+}
+.stat-card__label {
+    font-size: 0.575rem; font-weight: 700; letter-spacing: 0.09em;
+    text-transform: uppercase; color: var(--txt-muted);
+}
+.stat-card__val.blue   { color: var(--accent); }
+.stat-card__val.green  { color: var(--green);  }
+.stat-card__val.orange { color: var(--amber);  }
+
+/* ─── Inicio action buttons ───────────────────────────────────── */
+.inicio-action-btn {
+    display: flex; align-items: center; justify-content: center; gap: 6px; flex: 1;
+    padding: 9px 12px; border-radius: var(--r-md);
+    font-family: 'IBM Plex Sans', sans-serif; font-size: 0.78rem; font-weight: 600;
+    cursor: pointer; border: none; min-height: unset !important;
+}
+.inicio-action-btn.primary { background: var(--accent); color: #fff; }
+.inicio-action-btn.success { background: #1a4731; color: #86efac; border: 1px solid rgba(34,197,94,0.25); }
+
+/* ─── Inicio product card ─────────────────────────────────────── */
+.inicio-prod-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--r-lg); box-shadow: var(--shadow-card); overflow: hidden;
+}
+.inicio-prod-card__header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    padding: 10px 12px 6px; gap: 8px;
+}
+.inicio-prod-card__info { flex: 1; min-width: 0; }
+.inicio-prod-card__name {
+    font-family: 'IBM Plex Sans', sans-serif; font-weight: 700; font-size: 0.8rem;
+    color: var(--txt-primary); text-transform: uppercase; line-height: 1.3; word-break: break-word;
+}
+.inicio-prod-card__badge {
+    display: inline-flex; align-items: center;
+    background: var(--accent); color: #fff;
+    font-size: 0.575rem; font-weight: 700; padding: 2px 8px; border-radius: 20px;
+    margin-top: 4px; margin-bottom: 2px; letter-spacing: 0.04em;
+}
+.inicio-prod-card__meta { font-size: 0.68rem; color: var(--txt-muted); margin-top: 2px; }
+.inicio-prod-card__actions { display: flex; gap: 6px; flex-shrink: 0; align-items: flex-start; }
+.inicio-prod-card__btn {
+    width: 34px; height: 34px; border-radius: var(--r-md);
+    display: flex; align-items: center; justify-content: center;
+    border: none; cursor: pointer; flex-shrink: 0; min-height: unset !important;
+}
+.inicio-prod-card__btn:active { transform: scale(0.92) !important; }
+.inicio-prod-card__btn.cart { background: var(--accent); color: #fff; }
+.inicio-prod-card__btn.edit { background: #1e3a5f; color: #93c5fd; }
+.inicio-prod-card__btn.del  { background: #4a1010; color: #fca5a5; border: 1px solid rgba(239,68,68,.18); }
+.inicio-prod-card__chips {
+    display: flex; gap: 5px; padding: 0 12px 10px;
+    flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
+}
+.inicio-prod-card__chips::-webkit-scrollbar { display: none; }
+.inicio-chip {
+    display: flex; flex-direction: column; align-items: center;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--r-md); padding: 4px 10px 3px;
+    flex-shrink: 0; min-width: 64px; gap: 1px;
+}
+.inicio-chip__label {
+    font-size: 0.53rem; font-weight: 700; letter-spacing: 0.07em;
+    text-transform: uppercase; color: var(--txt-muted);
+}
+.inicio-chip__val {
+    font-family: 'IBM Plex Mono', monospace; font-weight: 600;
+    font-size: 1rem; color: var(--txt-primary); line-height: 1.2;
+}
+
+/* ─── Sync section ────────────────────────────────────────────── */
+.sync-section {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--r-lg); padding: 13px 16px; box-shadow: var(--shadow-card);
+}
+.sync-section__title {
+    font-size: 0.72rem; font-weight: 700; letter-spacing: 0.07em;
+    text-transform: uppercase; color: var(--txt-primary);
+    display: flex; align-items: center; gap: 7px; margin-bottom: 10px;
+}
+.sync-section__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.sync-section__status {
+    font-size: 0.82rem; font-weight: 600; color: var(--green);
+    display: flex; align-items: center; gap: 6px;
+}
+.sync-section__sub { font-size: 0.69rem; color: var(--txt-muted); margin-top: 2px; }
+.sync-pause-btn {
+    padding: 7px 14px; border-radius: 20px; background: #4a1f08; color: #fbbf24;
+    border: 1px solid rgba(251,191,36,.25); font-size: 0.72rem; font-weight: 700;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    gap: 6px; min-height: unset !important; white-space: nowrap;
+}
+
+/* ─── Historia save section ───────────────────────────────────── */
+.historia-save-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--r-lg); padding: 14px 16px;
+    margin-bottom: 12px; box-shadow: var(--shadow-card);
+}
+.historia-save-title {
+    font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--txt-primary); margin-bottom: 10px;
+}
+.historia-area-tabs { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+.historia-area-tab {
+    padding: 6px 14px; border-radius: 20px; font-size: 0.74rem; font-weight: 600;
+    cursor: pointer; border: 1px solid var(--border-mid);
+    background: transparent; color: var(--txt-secondary);
+    min-height: unset !important; transition: all 0.12s;
+}
+.historia-area-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.historia-save-btn {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    width: 100%; padding: 12px; border-radius: var(--r-md);
+    background: #1a4731; color: #86efac; border: 1px solid rgba(34,197,94,.28);
+    font-size: 0.82rem; font-weight: 700; cursor: pointer; min-height: unset !important;
+}
+.historia-btns-row { display: flex; gap: 8px; margin-bottom: 12px; }
+.historia-excel-btn, .historia-reset-btn {
+    flex: 1; padding: 11px; border-radius: var(--r-md);
+    font-size: 0.78rem; font-weight: 600; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    gap: 6px; min-height: unset !important;
+}
+.historia-excel-btn { background: #1a4731; color: #86efac; border: 1px solid rgba(34,197,94,.28); }
+.historia-reset-btn { background: #4a1010; color: #fca5a5; border: 1px solid rgba(239,68,68,.18); }
+
+/* ─── Notificaciones ──────────────────────────────────────────── */
+.notif-section-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--r-lg); overflow: hidden; box-shadow: var(--shadow-card);
+    margin-bottom: 8px;
+}
+.notif-section-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 14px; font-size: 0.78rem; font-weight: 700;
+    color: var(--txt-primary);
+}
+.notif-row {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 10px 14px; border-top: 1px solid var(--border);
+}
+.notif-row__icon {
+    width: 28px; height: 28px; border-radius: var(--r-sm);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.85rem; flex-shrink: 0; margin-top: 1px;
+}
+.notif-row__icon.info  { background: rgba(59,130,246,.15); }
+.notif-row__icon.check { background: rgba(34,197,94,.15); }
+.notif-row__body { flex: 1; }
+.notif-row__text { font-size: 0.78rem; color: var(--txt-secondary); line-height: 1.4; }
+.notif-row__meta { font-size: 0.65rem; color: var(--txt-muted); margin-top: 3px; }
+
+/* ─── Ajustes pendientes ──────────────────────────────────────── */
+.ajustes-section-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--r-lg); padding: 14px 16px; box-shadow: var(--shadow-card);
+}
+.ajustes-section-title {
+    font-size: 0.78rem; font-weight: 700; color: var(--txt-primary);
+    display: flex; align-items: center; gap: 7px; margin-bottom: 12px;
+}
+.ajustes-empty { font-size: 0.78rem; color: var(--txt-muted); text-align: center; padding: 16px 0; }
+
+/* ─── Pedidos WhatsApp tab ────────────────────────────────────── */
+.pedidos-empty-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--r-lg); padding: 48px 20px;
+    text-align: center; box-shadow: var(--shadow-card);
+}
+.pedidos-empty-card__icon { font-size: 2.8rem; margin-bottom: 10px; display: block; }
+.pedidos-empty-card__text { font-size: 0.8rem; color: var(--txt-muted); margin-bottom: 4px; }
+.pedidos-empty-card__sub  { font-size: 0.72rem; color: var(--txt-muted); }
+.pedidos-title { font-size: 1rem; font-weight: 700; color: var(--txt-primary); margin-bottom: 4px; }
+.pedidos-sub   { font-size: 0.72rem; color: var(--txt-muted); margin-bottom: 14px; }
+
 /* ─── Modo claro misc ────────────────────────────────────── */
 html[data-theme="light"] body { background-image: none; }
 html[data-theme="light"] .bg-gray-100 { background-color: #f1f5f9 !important; }
@@ -1252,364 +1462,6 @@ html[data-theme="light"] .audit-count-area-badge { background: rgba(29,78,216,0.
     margin-top: 3px;
 }
 html[data-theme="light"] #syncDot::after { background: #1e293b; }
-
-/* ══════════════════════════════════════════════════════════
-   BOTTOM TAB BAR — navegación móvil inferior
-   ══════════════════════════════════════════════════════════ */
-#bottomTabBar {
-    position: fixed; bottom: 0; left: 0; right: 0;
-    background: var(--surface);
-    border-top: 1px solid var(--border-mid);
-    display: flex; align-items: stretch; justify-content: space-around;
-    height: 56px;
-    z-index: 200;
-    padding-bottom: env(safe-area-inset-bottom, 0);
-    box-shadow: 0 -2px 12px rgba(0,0,0,0.35);
-}
-.btab-item {
-    flex: 1; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 3px;
-    background: transparent; border: none;
-    color: var(--txt-muted);
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 0.62rem; font-weight: 500;
-    cursor: pointer;
-    transition: color 0.15s ease, background 0.15s ease;
-    padding: 6px 4px 4px;
-    -webkit-tap-highlight-color: transparent;
-    min-height: unset !important;
-}
-.btab-item svg { width: 22px; height: 22px; flex-shrink: 0; }
-.btab-item:active { background: var(--accent-dim); }
-.btab-item.btab-active {
-    color: var(--accent);
-}
-.btab-item.btab-active svg { stroke: var(--accent); }
-html[data-theme="light"] #bottomTabBar {
-    background: #ffffff;
-    border-top-color: #e2e8f0;
-    box-shadow: 0 -1px 8px rgba(0,0,0,0.10);
-}
-
-/* ══════════════════════════════════════════════════════════
-   MODALES — Centrado universal + botones siempre visibles
-   ══════════════════════════════════════════════════════════ */
-
-/* En modo oscuro, la caja del modal usa colores del tema */
-html[data-theme="dark"] #productModal  > div,
-html[data-theme="dark"] #orderModal    > div,
-html[data-theme="dark"] #inventarioModal > div {
-    background: var(--card) !important;
-    color: var(--txt-primary) !important;
-}
-html[data-theme="dark"] #productModal  label,
-html[data-theme="dark"] #orderModal    label,
-html[data-theme="dark"] #inventarioModal label {
-    color: var(--txt-secondary) !important;
-}
-html[data-theme="dark"] #productModal  input,
-html[data-theme="dark"] #productModal  select,
-html[data-theme="dark"] #productModal  textarea,
-html[data-theme="dark"] #orderModal    input,
-html[data-theme="dark"] #orderModal    select,
-html[data-theme="dark"] #orderModal    textarea,
-html[data-theme="dark"] #inventarioModal input {
-    background: var(--surface) !important;
-    color: var(--txt-primary) !important;
-    border-color: var(--border-mid) !important;
-}
-html[data-theme="dark"] #productModal  h2,
-html[data-theme="dark"] #orderModal    h2,
-html[data-theme="dark"] #orderModal    h3,
-html[data-theme="dark"] #inventarioModal h2 {
-    color: var(--txt-primary) !important;
-}
-html[data-theme="dark"] #productModal  .text-gray-900,
-html[data-theme="dark"] #orderModal    .text-gray-900,
-html[data-theme="dark"] #inventarioModal .text-gray-900 { color: var(--txt-primary)   !important; }
-html[data-theme="dark"] #productModal  .text-gray-600,
-html[data-theme="dark"] #orderModal    .text-gray-600,
-html[data-theme="dark"] #inventarioModal .text-gray-600 { color: var(--txt-secondary) !important; }
-html[data-theme="dark"] #productModal  .text-gray-500,
-html[data-theme="dark"] #orderModal    .text-gray-500,
-html[data-theme="dark"] #inventarioModal .text-gray-500 { color: var(--txt-muted)     !important; }
-html[data-theme="dark"] #productModal  .text-gray-400,
-html[data-theme="dark"] #inventarioModal .text-gray-500 { color: var(--txt-muted)     !important; }
-html[data-theme="dark"] #productModal  .border-gray-200,
-html[data-theme="dark"] #orderModal    .border-gray-200,
-html[data-theme="dark"] #inventarioModal .border-gray-200 { border-color: var(--border-mid) !important; }
-html[data-theme="dark"] #orderModal    .bg-gray-50 { background: var(--surface) !important; }
-html[data-theme="dark"] #orderModal    .border-gray-200 { border-color: var(--border-mid) !important; }
-html[data-theme="dark"] #orderModal    .divide-gray-200 > tr { border-color: var(--border) !important; }
-html[data-theme="dark"] #orderModal    thead { background: linear-gradient(135deg, #1d4ed8, #2563eb) !important; }
-html[data-theme="dark"] #productModal  .hover\:bg-gray-50:hover { background: var(--surface) !important; }
-html[data-theme="dark"] #orderModal    .hover\:bg-gray-50:hover { background: var(--surface) !important; }
-html[data-theme="dark"] #inventarioModal .hover\:bg-gray-50:hover { background: var(--surface) !important; }
-
-/* Caja interior del modal */
-.modal-box {
-    max-height: calc(100dvh - 56px - 24px);
-    overflow-y: auto;
-    border-radius: 18px;
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-}
-
-/* Toast: siempre por encima de la tab bar */
-#toast {
-    bottom: calc(56px + 14px) !important;
-}
-
-/* Bloqueo de scroll del fondo cuando un modal está abierto */
-body.modal-open { overflow: hidden; position: fixed; width: 100%; }
-
-/* ── BUSCADOR EN CONTEO DE INVENTARIO ─────────────────────── */
-.conteo-search-wrap {
-    position: relative;
-    margin-bottom: 10px;
-}
-.conteo-search-wrap svg.search-icon {
-    position: absolute; left: 11px; top: 50%;
-    transform: translateY(-50%);
-    width: 16px; height: 16px;
-    stroke: var(--txt-muted);
-    pointer-events: none;
-}
-.conteo-search-input {
-    width: 100%;
-    padding: 9px 36px 9px 34px;
-    background: var(--card);
-    border: 1px solid var(--border-mid);
-    border-radius: var(--r-md);
-    color: var(--txt-primary);
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 0.82rem;
-    outline: none;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-.conteo-search-input:focus {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 2px var(--accent-dim);
-}
-.conteo-search-input::placeholder { color: var(--txt-muted); }
-.conteo-search-clear {
-    position: absolute; right: 8px; top: 50%;
-    transform: translateY(-50%);
-    width: 22px; height: 22px;
-    border-radius: 50%;
-    background: var(--border-mid);
-    border: none; cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    color: var(--txt-muted);
-    font-size: 0.78rem; line-height: 1; padding: 0;
-    transition: background 0.12s ease;
-    min-height: unset !important;
-}
-.conteo-search-clear:hover { background: var(--border-strong); color: var(--txt-primary); }
-.conteo-search-results {
-    font-size: 0.68rem; font-weight: 600;
-    color: var(--txt-muted); letter-spacing: 0.04em;
-    margin-bottom: 8px; padding: 0 2px;
-}
-.conteo-search-results em { color: var(--accent); font-style: normal; font-weight: 700; }
-.conteo-match-highlight {
-    background: rgba(59,130,246,0.22);
-    border-radius: 2px;
-    color: var(--accent);
-    font-weight: 700;
-}
-html[data-theme="light"] .conteo-search-input { background: #fff; border-color: #cbd5e1; }
-html[data-theme="light"] .conteo-match-highlight { background: rgba(29,78,216,0.12); color: #1d4ed8; }
-
-
-/* Ajuste de padding inferior para no solapar con la tab bar */
-#mainContent { padding-bottom: 68px !important; }
-
-/* ══════════════════════════════════════════════════════════
-   INICIO TAB — Tarjetas de stats y product cards rediseñadas
-   ══════════════════════════════════════════════════════════ */
-.stat-grid {
-    display: grid; grid-template-columns: 1fr 1fr;
-    gap: 10px; margin-bottom: 14px;
-}
-.stat-card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: var(--r-lg);
-    padding: 13px 14px;
-    box-shadow: var(--shadow-card);
-    display: flex; align-items: center; gap: 10px;
-    cursor: default;
-    transition: border-color 0.13s ease;
-}
-.stat-card:hover { border-color: var(--border-mid); }
-.stat-card__icon {
-    width: 40px; height: 40px; border-radius: var(--r-md);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 1.25rem; flex-shrink: 0;
-}
-.stat-card__val {
-    font-family: 'IBM Plex Mono', monospace;
-    font-weight: 700; font-size: 1.35rem;
-    line-height: 1.1;
-}
-.stat-card__label {
-    font-size: 0.58rem; font-weight: 600;
-    letter-spacing: 0.08em; text-transform: uppercase;
-    color: var(--txt-muted);
-    margin-top: 2px;
-}
-
-/* Product card estilo screenshot */
-.prd-card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: var(--r-lg);
-    padding: 12px 14px;
-    box-shadow: var(--shadow-card);
-    margin-bottom: 10px;
-    transition: border-color 0.13s ease;
-    animation: cardIn 0.20s var(--ease-out) both;
-}
-.prd-card:hover { border-color: var(--border-mid); }
-.prd-card__top {
-    display: flex; align-items: flex-start;
-    justify-content: space-between; gap: 8px;
-    margin-bottom: 5px;
-}
-.prd-card__name {
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-weight: 700; font-size: 0.82rem;
-    color: var(--txt-primary);
-    text-transform: uppercase;
-    line-height: 1.3; flex: 1; min-width: 0;
-}
-.prd-card__actions { display: flex; gap: 5px; flex-shrink: 0; }
-.prd-action-btn {
-    width: 34px; height: 34px; border-radius: var(--r-md);
-    display: flex; align-items: center; justify-content: center;
-    border: none; cursor: pointer; flex-shrink: 0;
-    transition: opacity 0.12s ease;
-    min-height: unset !important;
-}
-.prd-action-btn:hover { opacity: 0.82; }
-.prd-action-btn:active { transform: scale(0.92); }
-.prd-action-btn svg { width: 16px; height: 16px; }
-.prd-action-btn.cart  { background: var(--accent); color: #fff; }
-.prd-action-btn.edit  { background: #1e40af; color: #93c5fd; }
-.prd-action-btn.del   { background: #7f1d1d; color: #fca5a5; }
-
-.prd-card__group-badge {
-    display: inline-flex; align-items: center;
-    background: rgba(59,130,246,0.12);
-    border: 1px solid rgba(59,130,246,0.22);
-    border-radius: 20px;
-    padding: 2px 9px;
-    font-size: 0.62rem; font-weight: 700;
-    letter-spacing: 0.04em; text-transform: uppercase;
-    color: #93c5fd;
-    margin-bottom: 5px;
-}
-html[data-theme="light"] .prd-card__group-badge {
-    background: rgba(29,78,216,0.08);
-    border-color: rgba(29,78,216,0.18);
-    color: #1d4ed8;
-}
-
-.prd-card__meta {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.72rem; color: var(--txt-secondary);
-    margin-bottom: 8px;
-}
-.prd-card__areas {
-    display: flex; gap: 8px;
-}
-.prd-area-chip {
-    flex: 1; background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--r-md);
-    padding: 4px 6px;
-    text-align: center;
-}
-.prd-area-chip__label {
-    font-size: 0.52rem; font-weight: 600;
-    letter-spacing: 0.07em; text-transform: uppercase;
-    color: var(--txt-muted); display: block;
-}
-.prd-area-chip__val {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.92rem; font-weight: 700;
-    color: var(--txt-primary); display: block;
-}
-
-/* Barra de búsqueda e inputs en inicio */
-.inicio-search-row {
-    display: flex; gap: 8px; margin-bottom: 10px; align-items: stretch;
-}
-.inicio-search-row input {
-    flex: 1; background: var(--card);
-    border: 1px solid var(--border-mid);
-    border-radius: var(--r-md); padding: 8px 12px;
-    color: var(--txt-primary);
-    font-family: 'IBM Plex Sans', sans-serif; font-size: 0.8125rem;
-    outline: none; min-height: unset !important;
-}
-.inicio-search-row input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim); }
-.inicio-search-row input::placeholder { color: var(--txt-muted); }
-.inicio-search-row select {
-    background: var(--card); border: 1px solid var(--border-mid);
-    border-radius: var(--r-md); padding: 8px 10px;
-    color: var(--txt-primary); font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 0.8125rem; outline: none; min-height: unset !important;
-    flex-shrink: 0;
-}
-.inicio-btn-row { display: flex; gap: 8px; margin-bottom: 14px; }
-.inicio-btn {
-    display: flex; align-items: center; gap: 6px;
-    padding: 8px 14px; border-radius: var(--r-md);
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 0.78rem; font-weight: 600;
-    cursor: pointer; border: none;
-    transition: opacity 0.12s ease;
-    min-height: unset !important;
-}
-.inicio-btn:hover { opacity: 0.85; }
-.inicio-btn:active { transform: scale(0.97); }
-.inicio-btn svg { width: 15px; height: 15px; }
-.inicio-btn.primary { background: var(--accent); color: #fff; }
-.inicio-btn.success { background: #065f46; color: #86efac; border: 1px solid rgba(34,197,94,.28); }
-.inicio-btn.danger  { background: #7f1d1d; color: #fca5a5; border: 1px solid rgba(239,68,68,.22); width: 100%; justify-content: center; }
-
-.sync-card {
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: var(--r-lg); padding: 13px 16px; margin-bottom: 10px;
-    box-shadow: var(--shadow-card);
-}
-.sync-card h3 {
-    font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em;
-    text-transform: uppercase; color: var(--txt-secondary);
-    display: flex; align-items: center; gap: 6px; margin-bottom: 9px;
-}
-.sync-card__row {
-    display: flex; align-items: center; justify-content: space-between; gap: 10px;
-}
-.sync-status-text {
-    font-size: 0.82rem; font-weight: 600; color: var(--txt-primary);
-    display: flex; align-items: center; gap: 6px;
-}
-.sync-status-sub {
-    font-size: 0.68rem; color: var(--txt-muted); margin-top: 2px;
-}
-.sync-pause-btn {
-    display: flex; align-items: center; gap: 5px;
-    padding: 7px 13px; border-radius: 20px;
-    background: #7c2d12; border: 1px solid rgba(239,68,68,0.22);
-    color: #fca5a5; font-size: 0.73rem; font-weight: 600;
-    cursor: pointer; white-space: nowrap; min-height: unset !important;
-    transition: opacity 0.12s;
-}
-.sync-pause-btn:hover { opacity: 0.82; }
 
 /* ══════════════════════════════════════════════════════════
    AUTH — Pantalla de inicio de sesión
@@ -2261,44 +2113,34 @@ html[data-theme="light"] .prd-card__group-badge {
     </main>
 
     <!-- ══════════════════════════════════════════════════════
-         BOTTOM TAB BAR — navegación inferior móvil
+         BOTTOM NAVIGATION BAR — Mobile app nav
          ══════════════════════════════════════════════════════ -->
-    <nav id="bottomTabBar" aria-label="Navegación inferior">
-        <button type="button" class="btab-item btab-active" data-btab="inicio" onclick="switchTab('inicio')" aria-label="Inicio">
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
-            </svg>
+    <nav id="bottomNav" aria-label="Navegación inferior">
+        <button type="button" class="bnav-btn bnav-active" id="bnav-inicio" onclick="switchTab('inicio')" aria-label="Inicio">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
             <span>Inicio</span>
         </button>
-        <button type="button" class="btab-item" data-btab="inventario" onclick="switchTab('inventario')" aria-label="Conteo">
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
-            </svg>
+        <button type="button" class="bnav-btn" id="bnav-conteo" onclick="switchTab('inventario')" aria-label="Conteo">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
             <span>Conteo</span>
         </button>
-        <button type="button" class="btab-item" data-btab="pedidos" onclick="switchTab('pedidos')" aria-label="Pedidos">
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
-            </svg>
+        <button type="button" class="bnav-btn" id="bnav-pedidos" onclick="switchTab('pedidos')" aria-label="Pedidos">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
             <span>Pedidos</span>
         </button>
-        <button type="button" class="btab-item" data-btab="historia" onclick="switchTab('historia')" aria-label="Historia">
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
+        <button type="button" class="bnav-btn" id="bnav-historia" onclick="switchTab('historia')" aria-label="Historia">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
             <span>Historia</span>
         </button>
-        <button type="button" class="btab-item" onclick="sbOpen()" aria-label="Más opciones">
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
-            </svg>
+        <button type="button" class="bnav-btn" id="bnav-mas" onclick="sbOpen()" aria-label="Más">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"/></svg>
             <span>Más</span>
         </button>
     </nav>
 
     <!-- Modal Producto (sin stock) -->
-    <div id="productModal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[300] animate-fadeIn hidden" style="padding:12px;" role="dialog" aria-modal="true" aria-labelledby="productModalTitle">
-        <div class="modal-box bg-white shadow-2xl max-w-md w-full p-5 animate-slideUp" style="border-radius:18px;max-height:calc(100dvh - 56px - 24px);overflow-y:auto;">
+    <div id="productModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-end md:items-center justify-center z-50 animate-fadeIn hidden" role="dialog" aria-modal="true" aria-labelledby="productModalTitle">
+        <div class="bg-white shadow-2xl max-w-md w-full p-5 animate-slideUp max-h-[90vh] overflow-y-auto">
             <div class="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-6"></div>
             <h2 class="text-2xl font-bold text-gray-900 mb-6" id="productModalTitle">Agregar Producto</h2>
             <div class="space-y-4">
@@ -2349,7 +2191,7 @@ html[data-theme="light"] .prd-card__group-badge {
                     </div>
                     <p class="text-xs text-gray-400 mt-2">Cuando se llenen, las botellas abiertas se ingresan en oz y se convierten automáticamente a fracciones de botella.</p>
                 </div>
-                <div class="flex gap-3 mt-6 pt-4" style="position:sticky;bottom:0;background:var(--modal-bg,#fff);padding-bottom:4px;z-index:1;">
+                <div class="flex gap-3 mt-6 pt-4">
                     <button type="button" onclick="closeProductModal()" class="flex-1 px-5 py-2 border border-gray-200 text-gray-900 rounded hover:bg-gray-50 transition-all font-medium">Cancelar</button>
                     <button type="button" onclick="saveProduct()" class="flex-1 px-5 py-2 bg-gradient-to-r from-purple-500 to-orange-500 text-white rounded transition-all font-medium">Guardar</button>
                 </div>
@@ -2358,8 +2200,8 @@ html[data-theme="light"] .prd-card__group-badge {
     </div>
 
     <!-- Modal Pedido -->
-    <div id="orderModal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[300] animate-fadeIn hidden" style="padding:12px;" role="dialog" aria-modal="true" aria-labelledby="orderModalTitle">
-        <div class="modal-box bg-white shadow-2xl max-w-4xl w-full p-5 animate-slideUp" style="border-radius:18px;max-height:calc(100dvh - 56px - 24px);overflow-y:auto;">
+    <div id="orderModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-end md:items-center justify-center z-50 animate-fadeIn hidden" role="dialog" aria-modal="true" aria-labelledby="orderModalTitle">
+        <div class="bg-white shadow-2xl max-w-4xl w-full p-5 animate-slideUp max-h-[95vh] overflow-y-auto">
             <div class="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-6"></div>
             <h2 class="text-2xl font-bold text-gray-900 mb-6" id="orderModalTitle">Generar Pedido</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
@@ -2405,7 +2247,7 @@ html[data-theme="light"] .prd-card__group-badge {
                 </div>
             </div>
 
-            <div class="flex gap-3" style="position:sticky;bottom:0;background:var(--modal-bg,#fff);padding-top:12px;padding-bottom:4px;z-index:1;">
+            <div class="flex gap-3">
                 <button type="button" onclick="closeOrderModal()" class="flex-1 px-5 py-2 border border-gray-200 text-gray-900 rounded hover:bg-gray-50 transition-all font-medium">Cancelar</button>
                 <button type="button" onclick="createOrder()" class="flex-1 px-5 py-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded transition-all font-medium flex items-center justify-center gap-2">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2418,7 +2260,7 @@ html[data-theme="light"] .prd-card__group-badge {
     </div>
 
     <!-- Toast -->
-    <div id="toast" class="fixed left-1/2 transform -translate-x-1/2 z-[400] hidden" style="bottom:calc(56px + 14px);" role="status" aria-live="polite" aria-atomic="true">
+    <div id="toast" class="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50 hidden" role="status" aria-live="polite" aria-atomic="true">
         <div class="bg-purple-600 text-white px-6 py-3 rounded-full shadow-xl flex items-center gap-2">
             <div class="w-2 h-2 bg-white rounded-full animate-pulse"></div>
             <span class="font-medium" id="toastMessage"></span>
@@ -2426,8 +2268,8 @@ html[data-theme="light"] .prd-card__group-badge {
     </div>
 
     <!-- Modal Inventario -->
-    <div id="inventarioModal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[300] animate-fadeIn hidden" style="padding:12px;" role="dialog" aria-modal="true" aria-labelledby="inventarioModalTitle">
-        <div class="modal-box bg-white shadow-2xl max-w-sm w-full p-4 animate-slideUp" style="border-radius:18px;max-height:calc(100dvh - 56px - 24px);overflow-y:auto;">
+    <div id="inventarioModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-end md:items-center justify-center z-50 animate-fadeIn hidden" role="dialog" aria-modal="true" aria-labelledby="inventarioModalTitle">
+        <div class="bg-white shadow-2xl max-w-sm w-full p-4 animate-slideUp max-h-[90vh] overflow-y-auto">
             <div class="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-4"></div>
             <h2 class="text-xl font-bold text-gray-900 mb-1" id="inventarioModalTitle">Contar botellas</h2>
             <p class="text-sm text-gray-500 mb-2" id="inventarioModalSubtitle"></p>
@@ -2448,7 +2290,7 @@ html[data-theme="light"] .prd-card__group-badge {
                 </div>
                 <div id="inv_abiertasContainer" class="space-y-2"></div>
             </div>
-            <div class="flex gap-3 pt-2" style="position:sticky;bottom:0;background:var(--modal-bg,#fff);padding-bottom:4px;z-index:1;">
+            <div class="flex gap-3 pt-2">
                 <button type="button" onclick="closeInventarioModal()" class="flex-1 px-4 py-2 border border-gray-200 text-gray-700 rounded hover:bg-gray-50 transition-all font-medium">Cancelar</button>
                 <button type="button" onclick="saveInventarioModal()" class="flex-1 px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded transition-all font-medium">Guardar</button>
             </div>
@@ -3159,14 +3001,10 @@ const _deviceId = (function () {
                 _cloudSyncPending = true;
                 updateCloudSyncBadge('pending');
                 if (navigator.onLine && _db) {
-                    // DEBOUNCE — esperar 900ms antes de subir, para agrupar
-                    // cambios rápidos (ej. escritura en campo) en una sola subida.
-                    clearTimeout(saveToLocalStorage._syncTimer);
-                    saveToLocalStorage._syncTimer = setTimeout(() => syncToCloud(), 900);
+                    syncToCloud();
                 }
             }
         }
-        saveToLocalStorage._syncTimer = null;
 
         function loadFromLocalStorage() {
             const safeGet = (key, fallback) => {
@@ -3883,7 +3721,7 @@ async function resetConteoAtomicoEnFirestore() {
             if (!navigator.onLine) {
                 const bar = document.createElement('div');
                 bar.id = 'networkStatus';
-                bar.style.cssText = 'position:fixed;bottom:56px;left:0;right:0;background:#f59e0b;color:#fff;text-align:center;padding:6px;font-size:13px;font-weight:600;z-index:9999;';
+                bar.style.cssText = 'position:fixed;bottom:60px;left:0;right:0;background:#f59e0b;color:#fff;text-align:center;padding:6px;font-size:13px;font-weight:600;z-index:9999;';
                 bar.textContent = '⚠️ Sin conexión — los datos están guardados localmente';
                 document.body.appendChild(bar);
                 updateCloudSyncBadge('offline');
@@ -3909,7 +3747,6 @@ async function resetConteoAtomicoEnFirestore() {
         let _unsubNotifs    = null;
         let _notificaciones = [];
         let _ajustes        = [];
-        let _conteoSearchTerm = '';   // búsqueda dentro del conteo de inventario
 
         function isAdmin() { return currentUserRole === 'admin'; }
 
@@ -3955,11 +3792,6 @@ async function resetConteoAtomicoEnFirestore() {
 
         // ── Toggle sincronización ──────────────────────────────────────────
         function toggleSyncEnabled() {
-            // Solo el admin puede pausar/reanudar la sincronización
-            if (!isAdmin()) {
-                showNotification('⚠️ Solo el administrador puede pausar la sincronización');
-                return;
-            }
             _syncEnabled = !_syncEnabled;
             const pill = document.getElementById('syncPill');
             if (pill) pill.classList.toggle('on', _syncEnabled);
@@ -4321,26 +4153,32 @@ async function resetConteoAtomicoEnFirestore() {
 
         // ── RENDER: NOTIFICACIONES ─────────────────────────────────────────
         function renderNotificacionesTab() {
-            let html = '<div class="max-w-2xl mx-auto">';
-            html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">';
-            html += '<h2 style="font-size:1rem;font-weight:600;color:var(--txt-primary)">🔔 Notificaciones</h2>';
+            let html = '';
+            html += '<div class="notif-section-card">';
+            html += '<div class="notif-section-header">🔔 Notificaciones';
             if (_notificaciones.some(function(n) { return !n.leido; })) {
-                html += '<button onclick="marcarTodasLeidas()" style="font-size:.75rem;color:var(--accent);background:none;border:none;cursor:pointer;min-height:auto;font-family:inherit;">Marcar todas leídas</button>';
+                html += '<button onclick="marcarTodasLeidas()" style="margin-left:auto;font-size:.7rem;color:var(--accent);background:none;border:none;cursor:pointer;min-height:auto;font-family:inherit;">Marcar todas leídas</button>';
             }
             html += '</div>';
             if (_notificaciones.length === 0) {
-                html += '<div class="adm-card" style="text-align:center;padding:32px;color:var(--txt-muted);">Sin notificaciones nuevas</div>';
+                html += '<div style="padding:28px 14px;text-align:center;color:var(--txt-muted);font-size:.79rem;">Sin notificaciones nuevas</div>';
             } else {
-                html += '<div class="notif-wrap">';
                 _notificaciones.forEach(function(n) {
                     const ts = n.creadoEn ? new Date(n.creadoEn).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : '';
-                    html += '<div class="notif-item' + (n.leido ? '' : ' unread') + '">';
-                    html += '<span class="notif-dot' + (n.leido ? ' read' : '') + '"></span>';
-                    html += '<div class="notif-body"><div class="notif-text">' + escapeHtml(n.texto) + '</div><div class="notif-time">' + ts + '</div></div>';
-                    if (!n.leido) html += '<button onclick="marcarNotifLeida(\'' + n.id + '\')" style="font-size:.7rem;color:var(--accent);background:none;border:none;cursor:pointer;min-height:auto;white-space:nowrap;font-family:inherit;">Leído</button>';
+                    const isSys = (n.texto || '').toLowerCase().includes('administrador') || (n.texto || '').toLowerCase().includes('sistema');
+                    const isCheck = (n.texto || '').toLowerCase().includes('finaliz');
+                    html += '<div class="notif-row">';
+                    html += '<div class="notif-row__icon ' + (isCheck ? 'check' : 'info') + '">' + (isCheck ? '✅' : 'ℹ️') + '</div>';
+                    html += '<div class="notif-row__body">';
+                    html += '<div class="notif-row__text">';
+                    if (isSys || isCheck) html += '<svg width="12" height="12" style="margin-right:4px;vertical-align:middle;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>';
+                    html += escapeHtml(n.texto) + '</div>';
+                    const src = isSys ? 'Sistema' : (n.solicitante || 'admin');
+                    html += '<div class="notif-row__meta">' + escapeHtml(src) + ' · ' + ts + '</div>';
+                    html += '</div>';
+                    if (!n.leido) html += '<button onclick="marcarNotifLeida(\'' + n.id + '\')" style="font-size:.65rem;color:var(--accent);background:none;border:none;cursor:pointer;min-height:auto;white-space:nowrap;font-family:inherit;flex-shrink:0;margin-top:2px;">Leído</button>';
                     html += '</div>';
                 });
-                html += '</div>';
             }
             html += '</div>';
             return html;
@@ -4348,12 +4186,12 @@ async function resetConteoAtomicoEnFirestore() {
 
         // ── RENDER: AJUSTES ────────────────────────────────────────────────
         function renderAjustesTab() {
-            let html = '<div class="max-w-2xl mx-auto">';
+            let html = '';
 
             // Formulario para solicitar ajuste (solo usuarios)
             if (!isAdmin()) {
-                html += '<div class="adm-card" style="margin-bottom:16px;">';
-                html += '<h3>📝 Solicitar ajuste de producto</h3>';
+                html += '<div class="ajustes-section-card" style="margin-bottom:12px;">';
+                html += '<div class="ajustes-section-title">📝 Solicitar ajuste de producto</div>';
                 html += '<select id="ajusteProductoSel" style="width:100%;margin-bottom:8px;padding:8px;border-radius:6px;border:1px solid var(--border-mid);background:var(--surface);color:var(--txt-primary);font-family:inherit;font-size:.82rem;">';
                 html += '<option value="">— Selecciona un producto —</option>';
                 products.forEach(function(p) { html += '<option value="' + escapeHtml(p.id) + '">' + escapeHtml(p.name) + '</option>'; });
@@ -4365,16 +4203,12 @@ async function resetConteoAtomicoEnFirestore() {
                 html += '</div>';
             }
 
-            html += '<div class="adm-card" style="padding:14px 16px;">';
-            html += '<h3 style="font-size:.82rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--txt-secondary);margin-bottom:12px;display:flex;align-items:center;gap:6px;">';
-            html += isAdmin() ? '🔧 Ajustes pendientes' : '🔧 Mis solicitudes';
-            html += '</h3>';
-
             const lista = isAdmin() ? _ajustes : _ajustes.filter(function(a) { return a.solicitanteUid === currentUserUid; });
 
+            html += '<div class="ajustes-section-card">';
+            html += '<div class="ajustes-section-title">🔧 ' + (isAdmin() ? 'AJUSTES PENDIENTES' : 'MIS SOLICITUDES DE AJUSTE') + '</div>';
             if (lista.length === 0) {
-                html += '<div class="adm-card" style="text-align:center;padding:32px 24px;">'
-                      + '<p style="font-size:.82rem;color:var(--txt-muted);">Sin ajustes pendientes</p></div>';
+                html += '<div class="ajustes-empty">Sin ajustes pendientes</div>';
             } else {
                 lista.forEach(function(a) {
                     const ts = a.creadoEn ? new Date(a.creadoEn).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : '';
@@ -4387,7 +4221,7 @@ async function resetConteoAtomicoEnFirestore() {
                     html += '</div>';
                 });
             }
-            html += '</div></div>';
+            html += '</div>';
             return html;
         }
 
@@ -4656,11 +4490,11 @@ async function resetConteoAtomicoEnFirestore() {
                 if (btn.dataset.sbTab === tab) btn.classList.add('sb-active');
                 else btn.classList.remove('sb-active');
             });
-            // Sincronizar bottom tab bar
-            document.querySelectorAll('#bottomTabBar .btab-item').forEach(btn => {
-                if (btn.dataset.btab === tab) btn.classList.add('btab-active');
-                else btn.classList.remove('btab-active');
-            });
+            // Update bottom nav active state
+            const bnavMap = { inicio: 'bnav-inicio', inventario: 'bnav-conteo', pedidos: 'bnav-pedidos', historia: 'bnav-historia' };
+            document.querySelectorAll('.bnav-btn').forEach(btn => btn.classList.remove('bnav-active'));
+            const bnavId = bnavMap[tab];
+            if (bnavId) { const el = document.getElementById(bnavId); if (el) el.classList.add('bnav-active'); }
             saveToLocalStorage();
             renderTab();
         }
@@ -4791,11 +4625,7 @@ async function resetConteoAtomicoEnFirestore() {
         function updateHeaderActions() {
             const headerActions = document.getElementById('headerActions');
             if (activeTab === 'inicio') {
-                // En inicio: header limpio — acciones en las tarjetas y stats
-                headerActions.innerHTML = '';
-            } else if (activeTab === 'inventario') {
-                // Conteo — botón Excel para exportar
-                headerActions.innerHTML = '<button onclick="exportarAuditoriaExcel()" style="display:flex;align-items:center;gap:6px;padding:7px 13px;border-radius:var(--r-md);background:#065f46;border:1px solid rgba(34,197,94,.28);color:#86efac;font-size:.75rem;font-weight:600;cursor:pointer;"><svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>Excel</button>';
+                headerActions.innerHTML = '<div class="flex gap-2 sm:gap-3"><div class="bg-white bg-opacity-20 backdrop-blur-sm rounded-full px-2 sm:px-4 py-1 sm:py-2 flex items-center gap-1 sm:gap-2 text-xs sm:text-base"><svg class="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path></svg><span class="text-white font-bold">' + cart.length + '</span></div><button onclick="openOrderModal()" class="bg-gradient-to-r from-purple-500 to-orange-500 text-white px-3 sm:px-6 py-2 sm:py-3 rounded-full flex items-center gap-1 sm:gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs sm:text-base whitespace-nowrap"><svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg><span class="hidden sm:inline">Gen. Pedido</span><span class="sm:hidden">Pedido</span></button></div>';
             } else if (activeTab === 'productos') {
                 if (isAdmin()) {
                     headerActions.innerHTML = '<div class="flex gap-2 sm:gap-3 flex-wrap"><button onclick="openProductModal()" class="bg-gradient-to-r from-purple-500 to-orange-500 text-white px-3 sm:px-6 py-2 sm:py-3 rounded-full flex items-center gap-1 sm:gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs sm:text-base whitespace-nowrap"><svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg><span class="hidden sm:inline">Agregar</span><span class="sm:hidden">+</span></button><button onclick="document.getElementById(\'fileInput\').click()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:#1a4731;border:1px solid rgba(34,197,94,0.28);color:#86efac;"><i class="fa-solid fa-file-arrow-up"></i><span class="hidden sm:inline">Importar Excel</span><span class="sm:hidden">Importar</span></button><button onclick="publicarCatalogoFirestore()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:#1a3a5f;border:1px solid rgba(59,130,246,0.28);color:#93c5fd;"><i class="fa-solid fa-cloud-arrow-up"></i><span class="hidden sm:inline">Publicar catálogo</span><span class="sm:hidden">Publicar</span></button><button onclick="deleteAllProducts()" class="bg-gradient-to-r from-red-500 to-orange-600 text-white px-3 sm:px-6 py-2 sm:py-3 rounded-full flex items-center gap-1 sm:gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs sm:text-base whitespace-nowrap" title="Eliminar todos"><svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg><span class="hidden sm:inline">Eliminar Todos</span><span class="sm:hidden">Del</span></button></div>';
@@ -4809,139 +4639,96 @@ async function resetConteoAtomicoEnFirestore() {
 
         function renderInicioTab() {
             const filteredProducts = filterByGroup();
-            const totalProducts    = products.length;
-            const totalStockAll    = products.reduce((s, p) => s + getTotalStock(p), 0);
-            const cartCount        = cart.reduce((s, c) => s + (c.qty || 1), 0);
-            const ordersCount      = orders.length;
-            const syncOn           = typeof _syncEnabled !== 'undefined' ? _syncEnabled : true;
+            const totalStock = products.reduce((s, p) => s + getTotalStock(p), 0);
+            const cartTotal  = cart.reduce((s, i) => s + i.quantity, 0);
 
-            // ── Stats 2×2 ─────────────────────────────────────────────────────
-            let html = '<div class="stat-grid">';
-            html += '<div class="stat-card" onclick="void(0)">'
-                  + '<div class="stat-card__icon" style="background:rgba(59,130,246,0.12);">📦</div>'
-                  + '<div><div class="stat-card__val" style="color:#60a5fa;">' + totalProducts + '</div>'
-                  + '<div class="stat-card__label">Productos</div></div></div>';
-            html += '<div class="stat-card" onclick="void(0)">'
-                  + '<div class="stat-card__icon" style="background:rgba(34,197,94,0.12);">📊</div>'
-                  + '<div><div class="stat-card__val" style="color:#4ade80;">' + totalStockAll.toFixed(1) + '</div>'
-                  + '<div class="stat-card__label">Stock Total</div></div></div>';
-            html += '<div class="stat-card" style="cursor:pointer;" onclick="openOrderModal()">'
-                  + '<div class="stat-card__icon" style="background:rgba(245,158,11,0.12);">🛒</div>'
-                  + '<div><div class="stat-card__val" style="color:#fb923c;">' + cartCount.toFixed(1) + '</div>'
-                  + '<div class="stat-card__label">En Carrito</div></div></div>';
-            html += '<div class="stat-card" onclick="switchTab(\'pedidos\')"  style="cursor:pointer;">'
-                  + '<div class="stat-card__icon" style="background:rgba(59,130,246,0.12);">📋</div>'
-                  + '<div><div class="stat-card__val" style="color:#60a5fa;">' + ordersCount + '</div>'
-                  + '<div class="stat-card__label">Pedidos</div></div></div>';
+            let html = '';
+
+            // ── Stat cards row ────────────────────────────────────────────────
+            html += '<div style="display:flex;gap:10px;margin-bottom:10px;">';
+            html += '<div class="stat-card"><span class="stat-card__icon">📦</span><span class="stat-card__val blue">' + products.length + '</span><span class="stat-card__label">Productos</span></div>';
+            html += '<div class="stat-card"><span class="stat-card__icon">📊</span><span class="stat-card__val green">' + totalStock.toFixed(1) + '</span><span class="stat-card__label">Stock Total</span></div>';
+            html += '</div>';
+            html += '<div style="display:flex;gap:10px;margin-bottom:14px;">';
+            html += '<div class="stat-card"><span class="stat-card__icon">🛒</span><span class="stat-card__val orange">' + cartTotal.toFixed(1) + '</span><span class="stat-card__label">En Carrito</span></div>';
+            html += '<div class="stat-card"><span class="stat-card__icon">📋</span><span class="stat-card__val blue">' + orders.length + '</span><span class="stat-card__label">Pedidos</span></div>';
             html += '</div>';
 
-            // ── Búsqueda + filtro de grupo ─────────────────────────────────────
-            html += '<div class="inicio-search-row">';
-            html += '<input type="text" placeholder="Buscar producto..." value="' + escapeHtml(searchTerm) + '" oninput="updateSearchTerm(this.value);">';
-            html += '<select onchange="updateSelectedGroup(this.value);">';
-            getAvailableGroups().forEach(g => {
-                html += '<option value="' + g + '"' + (selectedGroup === g ? ' selected' : '') + '>' + escapeHtml(g) + '</option>';
+            // ── Search + Filter row ────────────────────────────────────────────
+            html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:12px;margin-bottom:10px;box-shadow:var(--shadow-card);">';
+            html += '<div style="display:flex;gap:8px;margin-bottom:8px;">';
+            html += '<input type="text" placeholder="Buscar producto..." value="' + escapeHtml(searchTerm) + '" oninput="updateSearchTerm(this.value);" style="flex:1;padding:8px 12px;background:var(--surface);border:1px solid var(--border-mid);border-radius:var(--r-md);color:var(--txt-primary);font-size:0.82rem;" />';
+            html += '<select onchange="updateSelectedGroup(this.value);" style="padding:8px 10px;background:var(--surface);border:1px solid var(--border-mid);border-radius:var(--r-md);color:var(--txt-primary);font-size:0.82rem;min-width:90px;">';
+            getAvailableGroups().forEach(group => {
+                html += '<option value="' + group + '"' + (selectedGroup === group ? ' selected' : '') + '>' + escapeHtml(group) + '</option>';
             });
             html += '</select></div>';
-
-            // ── Botones de acción (admin) ─────────────────────────────────────
+            // Action buttons
             if (isAdmin()) {
-                html += '<div class="inicio-btn-row">';
-                html += '<button class="inicio-btn primary" onclick="openProductModal()">'
-                      + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>'
-                      + 'Producto</button>';
-                html += '<button class="inicio-btn success" onclick="document.getElementById(\'fileInput\').click()">'
-                      + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>'
-                      + 'Excel</button>';
+                html += '<div style="display:flex;gap:8px;">';
+                html += '<button class="inicio-action-btn primary" onclick="openProductModal()"><svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>Producto</button>';
+                html += '<button class="inicio-action-btn success" onclick="document.getElementById(\'fileInput\').click()"><svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>Excel</button>';
                 html += '</div>';
             }
+            html += '</div>';
 
-            // ── Tarjetas de productos ─────────────────────────────────────────
+            // ── Product list ──────────────────────────────────────────────────
+            html += '<div style="display:flex;flex-direction:column;gap:8px;">';
             if (filteredProducts.length === 0) {
-                html += '<div style="text-align:center;padding:40px 20px;color:var(--txt-muted);">'
-                      + '<div style="font-size:2.5rem;margin-bottom:12px;">📦</div>'
-                      + '<p style="font-size:.88rem;">No se encontraron productos</p></div>';
+                html += '<div class="empty-state-card"><span class="empty-state-card__icon">📦</span><p class="empty-state-card__text">No se encontraron productos</p></div>';
             } else {
                 filteredProducts.forEach((product, idx) => {
-                    const sba   = product.stockByArea || { almacen: 0, barra1: 0, barra2: 0 };
-                    const total = getTotalStock(product);
-                    const hasData = total > 0;
-                    const delay = Math.min(idx * 30, 400);
-
-                    html += '<div class="prd-card' + (hasData ? ' has-data' : '') + '" style="animation-delay:' + delay + 'ms">';
-                    // Top row: nombre + botones
-                    html += '<div class="prd-card__top">';
-                    html += '<div class="prd-card__name">' + escapeHtml(product.name) + '</div>';
-                    html += '<div class="prd-card__actions">';
-                    html += '<button class="prd-action-btn cart" onclick="addToCart(\'' + escapeHtml(product.id) + '\')" title="Agregar al carrito">'
-                          + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg></button>';
+                    const delay = Math.min(idx * 35, 350);
+                    const sb = product.stockByArea || {};
+                    const almacen = (sb.almacen || 0); const barra1 = (sb.barra1 || 0); const barra2 = (sb.barra2 || 0);
+                    const totalP = almacen + barra1 + barra2;
+                    html += '<div class="inicio-prod-card" style="animation:springUp 0.22s var(--ease-out) both;animation-delay:' + delay + 'ms;">';
+                    html += '<div class="inicio-prod-card__header">';
+                    html += '<div class="inicio-prod-card__info">';
+                    html += '<div class="inicio-prod-card__name">' + escapeHtml(product.name) + '</div>';
+                    html += '<span class="inicio-prod-card__badge">1 ' + escapeHtml((product.group || 'GENERAL').toUpperCase()) + '</span>';
+                    html += '<div class="inicio-prod-card__meta">' + escapeHtml(product.id) + ' &nbsp;·&nbsp; ' + escapeHtml(product.unit || '') + ' &nbsp;·&nbsp; Total: ' + totalP.toFixed(2) + '</div>';
+                    html += '</div>';
+                    html += '<div class="inicio-prod-card__actions">';
+                    html += '<button class="inicio-prod-card__btn cart" onclick="addToCart(\'' + escapeHtml(product.id) + '\')" title="Agregar al carrito"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg></button>';
                     if (isAdmin()) {
-                        html += '<button class="prd-action-btn edit" onclick="editProduct(\'' + escapeHtml(product.id) + '\')" title="Editar producto">'
-                              + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button>';
-                        html += '<button class="prd-action-btn del" onclick="deleteProduct(\'' + escapeHtml(product.id) + '\')" title="Eliminar producto">'
-                              + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>';
+                        html += '<button class="inicio-prod-card__btn edit" onclick="editProduct(\'' + escapeHtml(product.id) + '\')" title="Editar"><svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button>';
+                        html += '<button class="inicio-prod-card__btn del" onclick="deleteProduct(\'' + escapeHtml(product.id) + '\')" title="Eliminar"><svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>';
                     }
                     html += '</div></div>';
-                    // Group badge
-                    html += '<div class="prd-card__group-badge">' + escapeHtml(product.group || 'General') + '</div>';
-                    // Meta: ID · Unit · Total
-                    html += '<div class="prd-card__meta">' + escapeHtml(product.id) + ' · ' + escapeHtml(product.unit || '') + ' · Total: ' + total.toFixed(2) + '</div>';
-                    // Area chips
-                    html += '<div class="prd-card__areas">';
-                    html += '<div class="prd-area-chip"><span class="prd-area-chip__label">Almacén</span><span class="prd-area-chip__val">' + (sba.almacen || 0).toFixed(2) + '</span></div>';
-                    html += '<div class="prd-area-chip"><span class="prd-area-chip__label">Barra 1</span><span class="prd-area-chip__val">' + (sba.barra1 || 0).toFixed(2) + '</span></div>';
-                    html += '<div class="prd-area-chip"><span class="prd-area-chip__label">Barra 2</span><span class="prd-area-chip__val">' + (sba.barra2 || 0).toFixed(2) + '</span></div>';
-                    html += '</div></div>';
+                    // Chips
+                    html += '<div class="inicio-prod-card__chips">';
+                    html += '<div class="inicio-chip"><span class="inicio-chip__val">' + almacen.toFixed(2) + '</span><span class="inicio-chip__label">Almacén</span></div>';
+                    html += '<div class="inicio-chip"><span class="inicio-chip__val">' + barra1.toFixed(2) + '</span><span class="inicio-chip__label">Barra 1</span></div>';
+                    html += '<div class="inicio-chip"><span class="inicio-chip__val">' + barra2.toFixed(2) + '</span><span class="inicio-chip__label">Barra 2</span></div>';
+                    html += '</div>';
+                    html += '</div>';
                 });
             }
+            html += '</div>';
 
-            // ── Zona admin: eliminar todos ─────────────────────────────────────
-            if (isAdmin() && filteredProducts.length > 0) {
-                html += '<button class="inicio-btn danger" onclick="deleteAllProducts()" style="margin-top:10px;">'
-                      + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:15px;height:15px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>'
-                      + 'Eliminar todos los productos</button>';
+            // ── Delete all + Sync section ─────────────────────────────────────
+            if (isAdmin() && products.length > 0) {
+                html += '<button onclick="deleteAllProducts()" style="display:block;width:100%;margin-top:14px;padding:12px;border-radius:var(--r-md);background:#4a1010;color:#fca5a5;border:1px solid rgba(239,68,68,.18);font-size:0.8rem;font-weight:600;cursor:pointer;text-align:center;">Eliminar todos los productos</button>';
             }
 
-            // ── Sincronización ─────────────────────────────────────────────────
-            html += '<div class="sync-card" style="margin-top:14px;">';
-            html += '<h3><span>⚙️</span> Sincronización</h3>';
-            html += '<div class="sync-card__row">';
-            html += '<div><div class="sync-status-text">☁️ ' + (syncOn ? 'Activa' : 'Pausada') + '</div>'
-                  + '<div class="sync-status-sub">' + (syncOn ? 'Datos subiéndose automáticamente a la nube.' : 'Sincronización en pausa.') + '</div></div>';
-            html += '<button class="sync-pause-btn" onclick="toggleSyncEnabled(); renderTab();">'
-                  + '<svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="' + (syncOn ? 'M10 9v6m4-6v6' : 'M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z') + 'M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>'
-                  + (syncOn ? 'Pausar' : 'Reanudar') + '</button>';
+            // Sync section
+            const syncActive = _db && navigator.onLine;
+            html += '<div class="sync-section" style="margin-top:14px;">';
+            html += '<div class="sync-section__title">⚙️ SINCRONIZACIÓN</div>';
+            html += '<div class="sync-section__row">';
+            html += '<div><div class="sync-section__status">☁️ ' + (syncActive ? 'Activa' : 'Sin conexión') + '</div>';
+            html += '<div class="sync-section__sub">' + (syncActive ? 'Datos subiéndose automáticamente a la nube.' : 'Los datos están guardados localmente.') + '</div></div>';
+            html += '<button class="sync-pause-btn" onclick="toggleSyncEnabled()"><span>⏸</span> Pausar</button>';
             html += '</div></div>';
 
-            // ── Reportes publicados (solo admin) ──────────────────────────────
+            // Reportes publicados (solo visible para todos)
+            html += '<div style="margin-top:14px;">';
+            html += '<div style="font-size:.78rem;font-weight:700;color:var(--txt-primary);letter-spacing:.05em;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px;">📊 REPORTES PUBLICADOS</div>';
             if (isAdmin()) {
-                html += '<div class="sync-card">';
-                html += '<h3><span>📊</span> Reportes Publicados</h3>';
-                html += '<button class="inicio-btn success" style="width:100%;justify-content:center;" onclick="generarYPublicarReporte()">'
-                      + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:15px;height:15px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>'
-                      + 'Generar y publicar reporte final</button>';
-                html += '<div id="inicioReportesLista" style="margin-top:10px;"></div>';
-                html += '</div>';
-                // Cargar lista de reportes desde admin tab si está disponible
-                setTimeout(() => {
-                    const el = document.getElementById('inicioReportesLista');
-                    if (el && _db) {
-                        _db.collection('reportes').orderBy('fecha', 'desc').limit(3).get()
-                            .then(snap => {
-                                if (snap.empty) { el.innerHTML = '<p style="font-size:.75rem;color:var(--txt-muted);">Sin reportes publicados aún.</p>'; return; }
-                                let rows = '';
-                                snap.forEach(doc => {
-                                    const d = doc.data();
-                                    const f = d.fecha ? new Date(d.fecha).toLocaleString('es-MX', {dateStyle:'short', timeStyle:'short'}) : '—';
-                                    rows += '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);font-size:.75rem;">'
-                                          + '<span style="color:var(--txt-secondary);">' + escapeHtml(d.titulo || 'Reporte') + '</span>'
-                                          + '<span style="color:var(--txt-muted);">' + f + '</span></div>';
-                                });
-                                el.innerHTML = rows;
-                            }).catch(() => { el.innerHTML = ''; });
-                    }
-                }, 100);
+                html += '<button onclick="generarYPublicarReporte()" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px;border-radius:var(--r-md);background:#1a4731;color:#86efac;border:1px solid rgba(34,197,94,.28);font-size:.82rem;font-weight:700;cursor:pointer;"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>Generar y publicar reporte final</button>';
             }
+            html += '</div>';
 
             return html;
         }
@@ -4978,23 +4765,40 @@ async function resetConteoAtomicoEnFirestore() {
         }
 
         function renderPedidosTab() {
-            let headerHtml = '<div style="margin-bottom:14px;"><h2 style="font-size:1.05rem;font-weight:700;color:var(--txt-primary);">Pedidos WhatsApp</h2><p style="font-size:.75rem;color:var(--txt-muted);">Solo en este dispositivo</p></div>';
+            let html = '';
+            html += '<div class="pedidos-title">Pedidos WhatsApp</div>';
+            html += '<div class="pedidos-sub" style="color:var(--txt-muted);font-size:.72rem;margin-bottom:14px;">Solo en este dispositivo</div>';
             if (orders.length === 0) {
-                return headerHtml + '<div class="bg-white rounded-2xl shadow-md" style="padding:50px 20px;text-align:center;"><div style="font-size:3rem;margin-bottom:12px;">🛒</div><p style="font-size:.95rem;font-weight:600;color:var(--txt-secondary);margin-bottom:6px;">No hay pedidos todavía</p><p style="font-size:.78rem;color:var(--txt-muted);">Ve a Inicio, agrega productos con 🛒 y genera un pedido</p></div>';
+                html += '<div class="pedidos-empty-card">';
+                html += '<span style="font-size:2.8rem;display:block;margin-bottom:12px;">🛒</span>';
+                html += '<p style="font-size:.82rem;color:var(--txt-muted);margin-bottom:4px;">No hay pedidos todavía</p>';
+                html += '<p style="font-size:.72rem;color:var(--txt-muted);">Ve a Inicio, agrega productos con 🛒 y genera un pedido</p>';
+                html += '</div>';
+                return html;
             }
-            let html = headerHtml + '<div class="mb-6">';
-            html += '<button onclick="deleteAllOrders()" class="bg-gradient-to-r from-red-500 to-orange-600 text-white px-6 py-3 rounded-xl flex items-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200" title="Eliminar todos los pedidos"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg><span class="font-medium">Eliminar todos los pedidos</span></button>';
-            html += '</div><div class="space-y-4">';
+            html += '<div class="adm-card" style="margin-bottom:10px;"><button onclick="deleteAllOrders()" style="display:flex;align-items:center;gap:7px;width:100%;padding:10px;border-radius:var(--r-md);background:#4a1010;color:#fca5a5;border:1px solid rgba(239,68,68,.18);font-size:.78rem;font-weight:600;cursor:pointer;justify-content:center;"><svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>Eliminar todos los pedidos</button></div>';
+            html += '<div style="display:flex;flex-direction:column;gap:10px;">';
             orders.forEach((order, idx) => {
                 const delay = Math.min(idx * 50, 400);
-                html += '<div class="bg-white rounded-2xl p-6 shadow-md" style="animation: tabContentIn 0.3s ease-out both; animation-delay:' + delay + 'ms"><div class="flex justify-between items-start mb-4"><div><h3 class="text-xl font-bold text-gray-900">' + escapeHtml(order.id) + '</h3><p class="text-gray-600">Proveedor: ' + escapeHtml(order.supplier) + '</p><p class="text-sm text-gray-600">Fecha: ' + escapeHtml(order.date) + '</p>';
-                if (order.deliveryDate) html += '<p class="text-sm text-gray-600">Entrega: ' + escapeHtml(order.deliveryDate) + '</p>';
-                html += '</div><div class="flex gap-2"><button onclick="shareOrderWhatsApp(\'' + escapeHtml(order.id) + '\')" class="p-2.5 bg-gradient-to-br from-green-500 to-emerald-500 text-white rounded-xl hover:shadow-lg transition-all transform active:scale-95"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg></button><button onclick="deleteOrder(\'' + escapeHtml(order.id) + '\')" class="p-2.5 bg-gradient-to-br from-red-500 to-orange-500 text-white rounded-xl hover:shadow-lg transition-all transform active:scale-95"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button></div></div><div class="overflow-x-auto"><table class="w-full"><thead class="bg-gradient-to-r from-purple-600 to-blue-600"><tr><th class="px-4 py-3 text-left text-sm font-semibold text-white">Nombre de Producto</th><th class="px-4 py-3 text-center text-sm font-semibold text-white">Unidad de Medida</th><th class="px-4 py-3 text-center text-sm font-semibold text-white">Cantidad</th></tr></thead><tbody class="divide-y divide-gray-200">';
+                html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-card);overflow:hidden;animation:springUp 0.22s var(--ease-out) both;animation-delay:' + delay + 'ms;">';
+                html += '<div style="padding:13px 14px;">';
+                html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">';
+                html += '<div><div style="font-size:.88rem;font-weight:700;color:var(--txt-primary);">' + escapeHtml(order.id) + '</div>';
+                html += '<div style="font-size:.72rem;color:var(--txt-muted);margin-top:2px;">Proveedor: ' + escapeHtml(order.supplier) + '</div>';
+                html += '<div style="font-size:.72rem;color:var(--txt-muted);">Fecha: ' + escapeHtml(order.date) + '</div>';
+                if (order.deliveryDate) html += '<div style="font-size:.72rem;color:var(--txt-muted);">Entrega: ' + escapeHtml(order.deliveryDate) + '</div>';
+                html += '</div>';
+                html += '<div style="display:flex;gap:6px;">';
+                html += '<button onclick="shareOrderWhatsApp(\'' + escapeHtml(order.id) + '\')" style="width:34px;height:34px;border-radius:var(--r-md);background:#1a4731;color:#86efac;border:1px solid rgba(34,197,94,.25);display:flex;align-items:center;justify-content:center;cursor:pointer;"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg></button>';
+                html += '<button onclick="deleteOrder(\'' + escapeHtml(order.id) + '\')" style="width:34px;height:34px;border-radius:var(--r-md);background:#4a1010;color:#fca5a5;border:1px solid rgba(239,68,68,.18);display:flex;align-items:center;justify-content:center;cursor:pointer;"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>';
+                html += '</div></div>';
+                html += '<div style="overflow-x:auto;"><table style="width:100%;font-size:.75rem;"><thead><tr style="background:var(--surface);"><th style="padding:6px 10px;text-align:left;color:var(--txt-muted);font-weight:600;">Nombre de Producto</th><th style="padding:6px 10px;text-align:center;color:var(--txt-muted);font-weight:600;">Unidad</th><th style="padding:6px 10px;text-align:center;color:var(--txt-muted);font-weight:600;">Cantidad</th></tr></thead><tbody>';
                 order.products.forEach(p => {
-                    html += '<tr><td class="px-4 py-3 text-gray-900">' + escapeHtml(p.name) + '</td><td class="px-4 py-3 text-center text-gray-600">' + escapeHtml(p.unit) + '</td><td class="px-4 py-3 text-center font-semibold text-gray-900">' + p.quantity + '</td></tr>';
+                    html += '<tr style="border-top:1px solid var(--border);"><td style="padding:6px 10px;color:var(--txt-primary);">' + escapeHtml(p.name) + '</td><td style="padding:6px 10px;text-align:center;color:var(--txt-secondary);">' + escapeHtml(p.unit) + '</td><td style="padding:6px 10px;text-align:center;font-weight:600;color:var(--txt-primary);">' + p.quantity + '</td></tr>';
                 });
-                html += '</tbody></table></div><div class="mt-4 pt-4 border-t border-gray-200"><div class="text-right mb-2"><span class="text-lg font-bold text-gray-900">Total Productos: ' + (order.total || 0).toFixed(2) + '</span></div>';
-                if (order.note) html += '<div class="mt-3 p-3 bg-purple-50 rounded-xl"><p class="text-sm font-medium text-gray-600 mb-1">Nota:</p><p class="text-gray-900">' + escapeHtml(order.note) + '</p></div>';
+                html += '</tbody></table></div>';
+                html += '<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border);text-align:right;font-size:.8rem;font-weight:700;color:var(--txt-primary);">Total Productos: ' + (order.total || 0).toFixed(2) + '</div>';
+                if (order.note) html += '<div style="margin-top:8px;padding:8px 10px;background:var(--surface);border-radius:var(--r-sm);font-size:.75rem;color:var(--txt-secondary);"><strong>Nota:</strong> ' + escapeHtml(order.note) + '</div>';
                 html += '</div></div>';
             });
             html += '</div>';
@@ -5092,7 +4896,6 @@ async function resetConteoAtomicoEnFirestore() {
             disableAreaButtons(true);
             const modal = document.getElementById('inventarioModal');
             modal.classList.remove('hidden');
-            document.body.classList.add('modal-open');
             setTimeout(() => {
                 const firstInput = modal.querySelector('input, button');
                 if (firstInput) firstInput.focus();
@@ -5150,7 +4953,6 @@ async function resetConteoAtomicoEnFirestore() {
             const modal = document.getElementById('inventarioModal');
             if (modal._trapHandler) { modal.removeEventListener('keydown', modal._trapHandler); modal._trapHandler = null; }
             modal.classList.add('hidden');
-            document.body.classList.remove('modal-open');
             inventarioModalProductId = null;
             isInventarioModalOpen = false;
             disableAreaButtons(false);
@@ -5252,8 +5054,7 @@ async function resetConteoAtomicoEnFirestore() {
             auditoriaAreaActiva = area;
             auditoriaView = 'counting';
             isAuditoriaMode = true;
-            selectedArea = area;
-            _conteoSearchTerm = '';   // limpiar búsqueda al entrar a nueva área
+            selectedArea = area; // sincronizar selector de área para el modal
             saveToLocalStorage();
             renderTab();
         }
@@ -5292,7 +5093,6 @@ async function resetConteoAtomicoEnFirestore() {
             auditoriaView = 'selection';
             auditoriaAreaActiva = null;
             isAuditoriaMode = false;
-            _conteoSearchTerm = '';   // limpiar búsqueda al salir del conteo
             saveToLocalStorage();
             renderTab();
         }
@@ -5307,14 +5107,9 @@ async function resetConteoAtomicoEnFirestore() {
 
         function auditoriaResetear() {
             // FIX #1 — Solo el administrador puede iniciar un nuevo ciclo de inventario.
+            // Un bartender no puede destruir los conteos de los demás.
             if (!isAdmin()) {
                 showNotification('⚠️ Solo el administrador puede iniciar un nuevo ciclo de inventario');
-                return;
-            }
-            // GUARD OFFLINE — si no hay conexión, el reset local quedaría desfasado
-            // de Firestore. Requerir conexión para garantizar coherencia entre dispositivos.
-            if (!navigator.onLine) {
-                showNotification('📴 Sin conexión — conecta a internet antes de iniciar nueva auditoría');
                 return;
             }
             showConfirm('⚠️ ¿Iniciar nueva auditoría?\n\nSe borrarán todos los conteos actuales de las tres áreas y se comenzará desde cero.\n\nEsta acción no se puede deshacer.', function() {
@@ -5372,26 +5167,6 @@ async function resetConteoAtomicoEnFirestore() {
             // del swap inseguro inventarioConteo = auditoriaConteo.
             // Pasar los datos de auditoría directamente como parámetro.
             exportToExcelConDatos('AUDITORIA', auditoriaConteo, products, null);
-        }
-
-        // ── BÚSQUEDA EN CONTEO ────────────────────────────────────────────────
-        function updateConteoSearch(val) {
-            _conteoSearchTerm = (val || '').trim();
-            renderTab();
-        }
-        function clearConteoSearch() {
-            _conteoSearchTerm = '';
-            const inp = document.getElementById('conteoSearchInput');
-            if (inp) inp.value = '';
-            renderTab();
-        }
-        // Resalta las coincidencias del término buscado dentro de un nombre
-        function highlightConteoMatch(name, term) {
-            if (!term) return escapeHtml(name);
-            const escaped   = escapeHtml(name);
-            const escapedTm = escapeHtml(term).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const re = new RegExp('(' + escapedTm + ')', 'gi');
-            return escaped.replace(re, '<mark class="conteo-match-highlight">$1</mark>');
         }
 
         function renderInventarioTab() {
@@ -5491,7 +5266,7 @@ async function resetConteoAtomicoEnFirestore() {
                 html += '<p style="text-align:center;font-size:0.68rem;color:var(--txt-muted);margin-top:8px;">Exporta a Excel con el conteo consolidado de las 3 áreas</p>';
                 // FIX — Admin: publicar reporte a Firestore directamente desde aquí
                 if (isAdmin()) {
-                    html += '<button onclick="generarYPublicarReporte()" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:8px;padding:10px 16px;border-radius:var(--r-md);background:var(--accent);color:#fff;font-size:0.8rem;font-weight:600;border:none;cursor:pointer;">';
+                    html += '<button onclick="generarYPublicarReporte()" style="display:block;width:100%;margin-top:8px;padding:10px 16px;border-radius:var(--r-md);background:var(--accent);color:#fff;font-size:0.8rem;font-weight:600;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">';
                     html += '<i class="fa-solid fa-cloud-arrow-up"></i> Publicar Reporte Global para Todos los Usuarios';
                     html += '</button>';
                 }
@@ -5553,7 +5328,7 @@ async function resetConteoAtomicoEnFirestore() {
             if (soloLectura) {
                 html += '<div style="margin:16px 0;padding:20px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);text-align:center;">';
                 html += '<div style="font-size:2rem;margin-bottom:8px;">🔒</div>';
-                html += '<p style="font-size:0.85rem;font-weight:600;color:var(--txt-primary);margin-bottom:6px;">Tu conteo de "' + nombreArea + '" está registrado</p>';
+                html += '<p style="font-size:0.85rem;font-weight:600;color:var(--txt);margin-bottom:6px;">Tu conteo de "' + nombreArea + '" está registrado</p>';
                 html += '<p style="font-size:0.75rem;color:var(--txt-muted);">Si necesitas hacer correcciones, pide al administrador que reabra esta área.</p>';
                 html += '<div style="margin-top:16px;padding:12px;background:var(--bg);border-radius:var(--r-md);">';
                 html += '<p style="font-size:0.7rem;font-weight:600;color:var(--txt-muted);margin-bottom:8px;">Resumen de tu conteo:</p>';
@@ -5567,7 +5342,7 @@ async function resetConteoAtomicoEnFirestore() {
                     resumen.slice(0, 8).forEach(p => {
                         const d = auditoriaConteo[p.id][area];
                         html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border);font-size:0.72rem;">';
-                        html += '<span style="color:var(--txt-primary);">' + escapeHtml(p.name) + '</span>';
+                        html += '<span style="color:var(--txt);">' + escapeHtml(p.name) + '</span>';
                         html += '<span style="color:var(--accent);font-weight:600;">' + (d.enteras || 0) + ' ent · ' + (d.abiertas || []).length + ' ab</span>';
                         html += '</div>';
                     });
@@ -5587,20 +5362,6 @@ async function resetConteoAtomicoEnFirestore() {
                 html += '<option value="' + group + '"' + (selectedGroup === group ? ' selected' : '') + '>' + escapeHtml(group) + '</option>';
             });
             html += '</select></div>';
-
-            // ── Buscador de producto ─────────────────────────────────────────
-            html += '<div class="conteo-search-wrap">';
-            html += '<svg class="search-icon" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">'
-                  + '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>';
-            html += '<input id="conteoSearchInput" type="search" class="conteo-search-input"'
-                  + ' placeholder="Buscar producto en este conteo…"'
-                  + ' value="' + escapeHtml(_conteoSearchTerm) + '"'
-                  + ' oninput="updateConteoSearch(this.value)"'
-                  + ' autocomplete="off" autocorrect="off" spellcheck="false">';
-            if (_conteoSearchTerm) {
-                html += '<button class="conteo-search-clear" onclick="clearConteoSearch()" title="Limpiar búsqueda" aria-label="Limpiar búsqueda">✕</button>';
-            }
-            html += '</div>';
 
             html += '<p class="text-xs text-gray-400 mb-3 px-1">Conteo ciego — toca cada producto para ingresar la cantidad física</p>';
 
@@ -5639,26 +5400,7 @@ async function resetConteoAtomicoEnFirestore() {
             }
 
             // ── Lista de tarjetas ─────────────────────────────────────────────
-            let filteredProducts = filterByGroup();
-            // Aplicar búsqueda de texto libre sobre nombre, ID y grupo
-            if (_conteoSearchTerm) {
-                const term = _conteoSearchTerm.toLowerCase();
-                filteredProducts = filteredProducts.filter(p =>
-                    (p.name  || '').toLowerCase().includes(term) ||
-                    (p.id    || '').toLowerCase().includes(term) ||
-                    (p.group || '').toLowerCase().includes(term)
-                );
-            }
-            // Contador de resultados
-            if (_conteoSearchTerm) {
-                html += '<div class="conteo-search-results">';
-                if (filteredProducts.length === 0) {
-                    html += 'Sin resultados para "<em>' + escapeHtml(_conteoSearchTerm) + '</em>"';
-                } else {
-                    html += '<em>' + filteredProducts.length + '</em> producto' + (filteredProducts.length !== 1 ? 's' : '') + ' encontrado' + (filteredProducts.length !== 1 ? 's' : '');
-                }
-                html += '</div>';
-            }
+            const filteredProducts = filterByGroup();
             html += '<div class="flex flex-col gap-3">';
 
             if (filteredProducts.length === 0) {
@@ -5700,7 +5442,7 @@ async function resetConteoAtomicoEnFirestore() {
 
                     html += '<div class="inv-card__header">';
                     html += '<div style="min-width:0;flex:1">';
-                    html += '<div class="inv-card__name">' + highlightConteoMatch(product.name, _conteoSearchTerm) + '</div>';
+                    html += '<div class="inv-card__name">' + escapeHtml(product.name) + '</div>';
                     html += '<span class="inv-card__group-badge">' + escapeHtml(product.group || 'General') + '</span>';
                     if (areaData.alerta_conflicto) {
                         html += '<div class="inv-card__conflict-badge"><i class="fa-solid fa-triangle-exclamation"></i> Conflicto abierta</div>';
@@ -5767,52 +5509,81 @@ async function resetConteoAtomicoEnFirestore() {
         function renderHistoriaTab() {
             let html = '';
 
-            // ── Sección: Reportes publicados por admin (visible para todos) ──
-            html += '<div id="historiaReportesWrap" style="margin-bottom:20px;">';
-            html += '<h3 style="font-size:.85rem;font-weight:600;color:var(--txt-primary);margin-bottom:10px;">📊 Reportes globales publicados</h3>';
-            html += '<div id="historiaReportesList" style="color:var(--txt-muted);font-size:.8rem;">Cargando…</div>';
+            // ── Save current section ──────────────────────────────────────────
+            html += '<div class="historia-save-card">';
+            html += '<div class="historia-save-title">GUARDAR CONTEO ACTUAL</div>';
+            html += '<div class="historia-area-tabs">';
+            ['almacen', 'barra1', 'barra2'].forEach(a => {
+                const label = a === 'almacen' ? 'Almacén' : a === 'barra1' ? 'Barra 1' : 'Barra 2';
+                html += '<button class="historia-area-tab' + (selectedArea === a ? ' active' : '') + '" onclick="switchArea(\'' + a + '\')">' + label + '</button>';
+            });
+            html += '</div>';
+            html += '<button class="historia-save-btn" onclick="saveInventorySnapshot()">⬇️ 💾 Guardar inventario de ' + (areas[selectedArea] || selectedArea) + '</button>';
             html += '</div>';
 
-            // ── Sección: Historial de inventarios locales ────────────────────
+            // ── Excel / Reset buttons ─────────────────────────────────────────
+            html += '<div class="historia-btns-row">';
+            html += '<button class="historia-excel-btn" onclick="exportToExcel(\'inventario\')">⬇️ Excel</button>';
+            html += '<button class="historia-reset-btn" onclick="resetAllInventario()">🗑️ Reset</button>';
+            html += '</div>';
+
+            // ── Saved inventories list ────────────────────────────────────────
             if (inventories.length === 0) {
-                html += '<div class="bg-white rounded-2xl p-12 text-center shadow-md"><svg class="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg><p class="text-gray-600">No hay inventarios guardados</p></div>';
-            } else {
-                html += '<div class="flex justify-between items-center mb-4">';
-                html += '<h3 style="font-size:.85rem;font-weight:600;color:var(--txt-primary);">📋 Historial de conteos</h3>';
-                html += '<button onclick="deleteAllInventories()" class="bg-gradient-to-r from-red-500 to-orange-600 text-white px-4 py-2 rounded-xl flex items-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs" title="Eliminar todo el historial"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg><span class="font-medium">Eliminar historial</span></button>';
+                html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:40px 20px;text-align:center;box-shadow:var(--shadow-card);">';
+                html += '<span style="font-size:2.4rem;display:block;margin-bottom:10px;">📁</span>';
+                html += '<p style="font-size:.79rem;color:var(--txt-muted);">No hay inventarios guardados</p>';
                 html += '</div>';
-                html += '<div class="space-y-4">';
+            } else {
+                html += '<div style="display:flex;flex-direction:column;gap:8px;">';
                 inventories.forEach((inv, idx) => {
                     const isExpanded = expandedInventories.has(inv.id);
                     const delay = Math.min(idx * 50, 400);
-                    html += '<div class="bg-white rounded-2xl shadow-md overflow-hidden" style="animation: tabContentIn 0.3s ease-out both; animation-delay:' + delay + 'ms">';
-                    html += '<div class="p-4 sm:p-6 cursor-pointer hover:bg-gray-50 transition-colors" onclick="toggleInventory(\'' + escapeHtml(inv.id) + '\')">';
-                    html += '<div class="flex items-center justify-between gap-4">';
-                    html += '<div class="flex-1">';
-                    html += '<div class="flex items-center gap-3 mb-1">';
-                    html += '<h3 class="text-lg font-bold text-gray-900">' + escapeHtml(inv.id) + '</h3>';
-                    html += '<span class="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded-full font-medium">' + escapeHtml(areas[inv.area] || inv.area || 'General') + '</span>';
+                    html += '<div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-card);overflow:hidden;animation:springUp 0.22s var(--ease-out) both;animation-delay:' + delay + 'ms;">';
+                    html += '<div style="padding:12px 14px;cursor:pointer;" onclick="toggleInventory(\'' + escapeHtml(inv.id) + '\')">';
+                    html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">';
+                    html += '<div style="flex:1;">';
+                    html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">';
+                    html += '<span style="font-size:.88rem;font-weight:700;color:var(--txt-primary);">' + escapeHtml(inv.id) + '</span>';
+                    html += '<span style="background:var(--accent-dim);color:var(--accent);border:1px solid var(--accent-dim2);border-radius:20px;padding:2px 8px;font-size:.6rem;font-weight:700;">' + escapeHtml(areas[inv.area] || inv.area || 'General') + '</span>';
                     html += '</div>';
-                    html += '<p class="text-sm text-gray-600">' + escapeHtml(inv.date) + ' • ' + inv.products.length + ' productos • Total: ' + (inv.totalProducts || 0).toFixed(2) + '</p>';
+                    html += '<p style="font-size:.7rem;color:var(--txt-muted);">' + escapeHtml(inv.date) + ' · ' + inv.products.length + ' productos · Total: ' + (inv.totalProducts || 0).toFixed(2) + '</p>';
                     html += '</div>';
-                    html += '<div class="flex items-center gap-2">';
-                    html += '<button onclick="event.stopPropagation(); downloadInventory(\'' + escapeHtml(inv.id) + '\')" class="p-2.5 bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl hover:shadow-lg transition-all transform active:scale-95" title="Descargar"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg></button>';
-                    html += '<button onclick="event.stopPropagation(); shareInventoryWhatsApp(\'' + escapeHtml(inv.id) + '\')" class="p-2.5 bg-gradient-to-br from-green-500 to-emerald-500 text-white rounded-xl hover:shadow-lg transition-all transform active:scale-95" title="Compartir"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg></button>';
-                    html += '<svg class="w-5 h-5 text-gray-600 transition-transform ' + (isExpanded ? 'rotate-180' : '') + '" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>';
+                    html += '<div style="display:flex;align-items:center;gap:6px;">';
+                    html += '<button onclick="event.stopPropagation();downloadInventory(\'' + escapeHtml(inv.id) + '\')" style="width:32px;height:32px;border-radius:var(--r-sm);background:var(--accent);color:#fff;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;"><svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button>';
+                    html += '<button onclick="event.stopPropagation();shareInventoryWhatsApp(\'' + escapeHtml(inv.id) + '\')" style="width:32px;height:32px;border-radius:var(--r-sm);background:#1a4731;color:#86efac;border:1px solid rgba(34,197,94,.25);display:flex;align-items:center;justify-content:center;cursor:pointer;"><svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg></button>';
+                    html += '<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:var(--txt-muted);transition:transform .2s;' + (isExpanded ? 'transform:rotate(180deg)' : '') + '"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>';
                     html += '</div></div></div>';
                     if (isExpanded) {
-                        html += '<div class="border-t border-gray-200 p-4 sm:p-6 bg-gray-50 animate-fadeIn"><div class="overflow-x-auto">';
-                        html += '<table class="w-full"><thead class="bg-gradient-to-r from-purple-600 to-blue-600"><tr><th class="px-4 py-3 text-left text-sm font-semibold text-white">Producto</th><th class="px-4 py-3 text-center text-sm font-semibold text-white">Stock (Enteras)</th><th class="px-4 py-3 text-center text-sm font-semibold text-white">Abiertas</th><th class="px-4 py-3 text-center text-sm font-semibold text-white">Grupo</th></tr></thead><tbody class="divide-y divide-gray-200 bg-white">';
+                        html += '<div style="border-top:1px solid var(--border);padding:12px 14px;background:var(--surface);"><div style="overflow-x:auto;">';
+                        html += '<table style="width:100%;font-size:.75rem;"><thead><tr style="background:var(--card);"><th style="padding:6px 10px;text-align:left;color:var(--txt-muted);font-weight:600;">Producto</th><th style="padding:6px 10px;text-align:center;color:var(--txt-muted);font-weight:600;">Stock</th><th style="padding:6px 10px;text-align:center;color:var(--txt-muted);font-weight:600;">Abiertas</th><th style="padding:6px 10px;text-align:center;color:var(--txt-muted);font-weight:600;">Grupo</th></tr></thead><tbody>';
                         inv.products.forEach(p => {
                             const abiertasStr = p.abiertas ? p.abiertas.map(a => (a || 0).toFixed(2)).join(' + ') : '';
-                            html += '<tr><td class="px-4 py-3 text-gray-900">' + escapeHtml(p.name) + '</td><td class="px-4 py-3 text-center text-gray-600">' + p.stock + ' ' + escapeHtml(p.unit) + '</td><td class="px-4 py-3 text-center text-orange-600">' + escapeHtml(abiertasStr) + '</td><td class="px-4 py-3 text-center font-semibold text-gray-900">' + escapeHtml(p.group || 'General') + '</td></tr>';
+                            html += '<tr style="border-top:1px solid var(--border);"><td style="padding:6px 10px;color:var(--txt-primary);">' + escapeHtml(p.name) + '</td><td style="padding:6px 10px;text-align:center;color:var(--txt-secondary);">' + p.stock + ' ' + escapeHtml(p.unit) + '</td><td style="padding:6px 10px;text-align:center;color:var(--amber);">' + escapeHtml(abiertasStr) + '</td><td style="padding:6px 10px;text-align:center;color:var(--txt-secondary);">' + escapeHtml(p.group || 'General') + '</td></tr>';
                         });
                         html += '</tbody></table></div></div>';
                     }
                     html += '</div>';
                 });
                 html += '</div>';
+                // Delete all historial
+                html += '<button onclick="deleteAllInventories()" style="display:flex;align-items:center;justify-content:center;gap:7px;width:100%;margin-top:12px;padding:10px;border-radius:var(--r-md);background:#4a1010;color:#fca5a5;border:1px solid rgba(239,68,68,.18);font-size:.78rem;font-weight:600;cursor:pointer;">🗑️ Eliminar historial completo</button>';
             }
+
+            // ── Sync control section ─────────────────────────────────────────
+            const syncActive = _db && navigator.onLine;
+            html += '<div class="sync-section" style="margin-top:14px;">';
+            html += '<div class="sync-section__title">⚙️ CONTROL DE SINCRONIZACIÓN</div>';
+            html += '<div class="sync-section__row">';
+            html += '<div><div class="sync-section__status">☁️ Sincronización ' + (syncActive ? 'activa' : 'inactiva') + '</div>';
+            html += '<div class="sync-section__sub">' + (syncActive ? 'Los datos se suben automáticamente a la nube.' : 'Sin conexión — datos en local.') + '</div></div>';
+            html += '<button class="sync-pause-btn" onclick="toggleSyncEnabled()">⏸ Pausar</button>';
+            html += '</div></div>';
+
+            // ── Reportes publicados ──────────────────────────────────────────
+            html += '<div id="historiaReportesWrap" style="margin-top:14px;">';
+            html += '<div style="font-size:.78rem;font-weight:700;color:var(--txt-primary);margin-bottom:10px;">📊 Reportes globales publicados</div>';
+            html += '<div id="historiaReportesList" style="color:var(--txt-muted);font-size:.8rem;">Cargando…</div>';
+            html += '</div>';
 
             // Cargar reportes async después de render
             setTimeout(function() {
@@ -5939,7 +5710,7 @@ async function resetConteoAtomicoEnFirestore() {
                 document.getElementById('productId').value = generateProductId();
             }
             modal.classList.remove('hidden');
-            document.body.classList.add('modal-open');
+            // Mover foco al primer campo interactivo
             setTimeout(() => {
                 const firstInput = modal.querySelector('input, select, button');
                 if (firstInput) firstInput.focus();
@@ -5959,7 +5730,6 @@ async function resetConteoAtomicoEnFirestore() {
             const modal = document.getElementById('productModal');
             if (modal._trapHandler) { modal.removeEventListener('keydown', modal._trapHandler); modal._trapHandler = null; }
             modal.classList.add('hidden');
-            document.body.classList.remove('modal-open');
             editingProductId = null;
         }
 
@@ -6097,7 +5867,6 @@ async function resetConteoAtomicoEnFirestore() {
             document.getElementById('orderNote').value = '';
             const modal = document.getElementById('orderModal');
             modal.classList.remove('hidden');
-            document.body.classList.add('modal-open');
             renderOrderTable();
             setTimeout(() => {
                 const firstInput = modal.querySelector('input, select, textarea, button');
@@ -6117,7 +5886,6 @@ async function resetConteoAtomicoEnFirestore() {
             const modal = document.getElementById('orderModal');
             if (modal._trapHandler) { modal.removeEventListener('keydown', modal._trapHandler); modal._trapHandler = null; }
             modal.classList.add('hidden');
-            document.body.classList.remove('modal-open');
         }
 
         function renderOrderTable() {
