@@ -185,7 +185,8 @@ _db   = firebase.firestore();
 _auth = firebase.auth();
 
 // Persistencia offline nativa de Firestore (caché local automático)
-_db.enablePersistence().catch(err => {
+// synchronizeTabs:true → compartir caché entre pestañas del mismo origen
+_db.enablePersistence({ synchronizeTabs: true }).catch(err => {
     if (err.code === 'failed-precondition') {
         console.warn("[Firebase] Persistencia offline no disponible (múltiples pestañas).");
     } else if (err.code === 'unimplemented') {
@@ -264,6 +265,7 @@ _db.enablePersistence().catch(err => {
     --accent-blue:var(--sky);
     --accent-green:var(--green);
     --shadow-mid: var(--shadow-card);
+    --modal-bg:   #1b2540;   /* fondo caja modal en modo oscuro */
 }
 
 /* ── TEMA CLARO ───────────────────────────────────────────── */
@@ -304,6 +306,7 @@ html[data-theme="light"] {
     --accent-3: var(--amber);
     --accent-blue: var(--sky);
     --accent-green: var(--green);
+    --modal-bg: #ffffff;   /* fondo caja modal en modo claro */
 }
 
 /* ─── Reset & Base ───────────────────────────────────────── */
@@ -1251,6 +1254,364 @@ html[data-theme="light"] .audit-count-area-badge { background: rgba(29,78,216,0.
 html[data-theme="light"] #syncDot::after { background: #1e293b; }
 
 /* ══════════════════════════════════════════════════════════
+   BOTTOM TAB BAR — navegación móvil inferior
+   ══════════════════════════════════════════════════════════ */
+#bottomTabBar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: var(--surface);
+    border-top: 1px solid var(--border-mid);
+    display: flex; align-items: stretch; justify-content: space-around;
+    height: 56px;
+    z-index: 200;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+    box-shadow: 0 -2px 12px rgba(0,0,0,0.35);
+}
+.btab-item {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 3px;
+    background: transparent; border: none;
+    color: var(--txt-muted);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.62rem; font-weight: 500;
+    cursor: pointer;
+    transition: color 0.15s ease, background 0.15s ease;
+    padding: 6px 4px 4px;
+    -webkit-tap-highlight-color: transparent;
+    min-height: unset !important;
+}
+.btab-item svg { width: 22px; height: 22px; flex-shrink: 0; }
+.btab-item:active { background: var(--accent-dim); }
+.btab-item.btab-active {
+    color: var(--accent);
+}
+.btab-item.btab-active svg { stroke: var(--accent); }
+html[data-theme="light"] #bottomTabBar {
+    background: #ffffff;
+    border-top-color: #e2e8f0;
+    box-shadow: 0 -1px 8px rgba(0,0,0,0.10);
+}
+
+/* ══════════════════════════════════════════════════════════
+   MODALES — Centrado universal + botones siempre visibles
+   ══════════════════════════════════════════════════════════ */
+
+/* En modo oscuro, la caja del modal usa colores del tema */
+html[data-theme="dark"] #productModal  > div,
+html[data-theme="dark"] #orderModal    > div,
+html[data-theme="dark"] #inventarioModal > div {
+    background: var(--card) !important;
+    color: var(--txt-primary) !important;
+}
+html[data-theme="dark"] #productModal  label,
+html[data-theme="dark"] #orderModal    label,
+html[data-theme="dark"] #inventarioModal label {
+    color: var(--txt-secondary) !important;
+}
+html[data-theme="dark"] #productModal  input,
+html[data-theme="dark"] #productModal  select,
+html[data-theme="dark"] #productModal  textarea,
+html[data-theme="dark"] #orderModal    input,
+html[data-theme="dark"] #orderModal    select,
+html[data-theme="dark"] #orderModal    textarea,
+html[data-theme="dark"] #inventarioModal input {
+    background: var(--surface) !important;
+    color: var(--txt-primary) !important;
+    border-color: var(--border-mid) !important;
+}
+html[data-theme="dark"] #productModal  h2,
+html[data-theme="dark"] #orderModal    h2,
+html[data-theme="dark"] #orderModal    h3,
+html[data-theme="dark"] #inventarioModal h2 {
+    color: var(--txt-primary) !important;
+}
+html[data-theme="dark"] #productModal  .text-gray-900,
+html[data-theme="dark"] #orderModal    .text-gray-900,
+html[data-theme="dark"] #inventarioModal .text-gray-900 { color: var(--txt-primary)   !important; }
+html[data-theme="dark"] #productModal  .text-gray-600,
+html[data-theme="dark"] #orderModal    .text-gray-600,
+html[data-theme="dark"] #inventarioModal .text-gray-600 { color: var(--txt-secondary) !important; }
+html[data-theme="dark"] #productModal  .text-gray-500,
+html[data-theme="dark"] #orderModal    .text-gray-500,
+html[data-theme="dark"] #inventarioModal .text-gray-500 { color: var(--txt-muted)     !important; }
+html[data-theme="dark"] #productModal  .text-gray-400,
+html[data-theme="dark"] #inventarioModal .text-gray-500 { color: var(--txt-muted)     !important; }
+html[data-theme="dark"] #productModal  .border-gray-200,
+html[data-theme="dark"] #orderModal    .border-gray-200,
+html[data-theme="dark"] #inventarioModal .border-gray-200 { border-color: var(--border-mid) !important; }
+html[data-theme="dark"] #orderModal    .bg-gray-50 { background: var(--surface) !important; }
+html[data-theme="dark"] #orderModal    .border-gray-200 { border-color: var(--border-mid) !important; }
+html[data-theme="dark"] #orderModal    .divide-gray-200 > tr { border-color: var(--border) !important; }
+html[data-theme="dark"] #orderModal    thead { background: linear-gradient(135deg, #1d4ed8, #2563eb) !important; }
+html[data-theme="dark"] #productModal  .hover\:bg-gray-50:hover { background: var(--surface) !important; }
+html[data-theme="dark"] #orderModal    .hover\:bg-gray-50:hover { background: var(--surface) !important; }
+html[data-theme="dark"] #inventarioModal .hover\:bg-gray-50:hover { background: var(--surface) !important; }
+
+/* Caja interior del modal */
+.modal-box {
+    max-height: calc(100dvh - 56px - 24px);
+    overflow-y: auto;
+    border-radius: 18px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Toast: siempre por encima de la tab bar */
+#toast {
+    bottom: calc(56px + 14px) !important;
+}
+
+/* Bloqueo de scroll del fondo cuando un modal está abierto */
+body.modal-open { overflow: hidden; position: fixed; width: 100%; }
+
+/* ── BUSCADOR EN CONTEO DE INVENTARIO ─────────────────────── */
+.conteo-search-wrap {
+    position: relative;
+    margin-bottom: 10px;
+}
+.conteo-search-wrap svg.search-icon {
+    position: absolute; left: 11px; top: 50%;
+    transform: translateY(-50%);
+    width: 16px; height: 16px;
+    stroke: var(--txt-muted);
+    pointer-events: none;
+}
+.conteo-search-input {
+    width: 100%;
+    padding: 9px 36px 9px 34px;
+    background: var(--card);
+    border: 1px solid var(--border-mid);
+    border-radius: var(--r-md);
+    color: var(--txt-primary);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.82rem;
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.conteo-search-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-dim);
+}
+.conteo-search-input::placeholder { color: var(--txt-muted); }
+.conteo-search-clear {
+    position: absolute; right: 8px; top: 50%;
+    transform: translateY(-50%);
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--border-mid);
+    border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--txt-muted);
+    font-size: 0.78rem; line-height: 1; padding: 0;
+    transition: background 0.12s ease;
+    min-height: unset !important;
+}
+.conteo-search-clear:hover { background: var(--border-strong); color: var(--txt-primary); }
+.conteo-search-results {
+    font-size: 0.68rem; font-weight: 600;
+    color: var(--txt-muted); letter-spacing: 0.04em;
+    margin-bottom: 8px; padding: 0 2px;
+}
+.conteo-search-results em { color: var(--accent); font-style: normal; font-weight: 700; }
+.conteo-match-highlight {
+    background: rgba(59,130,246,0.22);
+    border-radius: 2px;
+    color: var(--accent);
+    font-weight: 700;
+}
+html[data-theme="light"] .conteo-search-input { background: #fff; border-color: #cbd5e1; }
+html[data-theme="light"] .conteo-match-highlight { background: rgba(29,78,216,0.12); color: #1d4ed8; }
+
+
+/* Ajuste de padding inferior para no solapar con la tab bar */
+#mainContent { padding-bottom: 68px !important; }
+
+/* ══════════════════════════════════════════════════════════
+   INICIO TAB — Tarjetas de stats y product cards rediseñadas
+   ══════════════════════════════════════════════════════════ */
+.stat-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 10px; margin-bottom: 14px;
+}
+.stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 13px 14px;
+    box-shadow: var(--shadow-card);
+    display: flex; align-items: center; gap: 10px;
+    cursor: default;
+    transition: border-color 0.13s ease;
+}
+.stat-card:hover { border-color: var(--border-mid); }
+.stat-card__icon {
+    width: 40px; height: 40px; border-radius: var(--r-md);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.25rem; flex-shrink: 0;
+}
+.stat-card__val {
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 700; font-size: 1.35rem;
+    line-height: 1.1;
+}
+.stat-card__label {
+    font-size: 0.58rem; font-weight: 600;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--txt-muted);
+    margin-top: 2px;
+}
+
+/* Product card estilo screenshot */
+.prd-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 12px 14px;
+    box-shadow: var(--shadow-card);
+    margin-bottom: 10px;
+    transition: border-color 0.13s ease;
+    animation: cardIn 0.20s var(--ease-out) both;
+}
+.prd-card:hover { border-color: var(--border-mid); }
+.prd-card__top {
+    display: flex; align-items: flex-start;
+    justify-content: space-between; gap: 8px;
+    margin-bottom: 5px;
+}
+.prd-card__name {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-weight: 700; font-size: 0.82rem;
+    color: var(--txt-primary);
+    text-transform: uppercase;
+    line-height: 1.3; flex: 1; min-width: 0;
+}
+.prd-card__actions { display: flex; gap: 5px; flex-shrink: 0; }
+.prd-action-btn {
+    width: 34px; height: 34px; border-radius: var(--r-md);
+    display: flex; align-items: center; justify-content: center;
+    border: none; cursor: pointer; flex-shrink: 0;
+    transition: opacity 0.12s ease;
+    min-height: unset !important;
+}
+.prd-action-btn:hover { opacity: 0.82; }
+.prd-action-btn:active { transform: scale(0.92); }
+.prd-action-btn svg { width: 16px; height: 16px; }
+.prd-action-btn.cart  { background: var(--accent); color: #fff; }
+.prd-action-btn.edit  { background: #1e40af; color: #93c5fd; }
+.prd-action-btn.del   { background: #7f1d1d; color: #fca5a5; }
+
+.prd-card__group-badge {
+    display: inline-flex; align-items: center;
+    background: rgba(59,130,246,0.12);
+    border: 1px solid rgba(59,130,246,0.22);
+    border-radius: 20px;
+    padding: 2px 9px;
+    font-size: 0.62rem; font-weight: 700;
+    letter-spacing: 0.04em; text-transform: uppercase;
+    color: #93c5fd;
+    margin-bottom: 5px;
+}
+html[data-theme="light"] .prd-card__group-badge {
+    background: rgba(29,78,216,0.08);
+    border-color: rgba(29,78,216,0.18);
+    color: #1d4ed8;
+}
+
+.prd-card__meta {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem; color: var(--txt-secondary);
+    margin-bottom: 8px;
+}
+.prd-card__areas {
+    display: flex; gap: 8px;
+}
+.prd-area-chip {
+    flex: 1; background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 4px 6px;
+    text-align: center;
+}
+.prd-area-chip__label {
+    font-size: 0.52rem; font-weight: 600;
+    letter-spacing: 0.07em; text-transform: uppercase;
+    color: var(--txt-muted); display: block;
+}
+.prd-area-chip__val {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.92rem; font-weight: 700;
+    color: var(--txt-primary); display: block;
+}
+
+/* Barra de búsqueda e inputs en inicio */
+.inicio-search-row {
+    display: flex; gap: 8px; margin-bottom: 10px; align-items: stretch;
+}
+.inicio-search-row input {
+    flex: 1; background: var(--card);
+    border: 1px solid var(--border-mid);
+    border-radius: var(--r-md); padding: 8px 12px;
+    color: var(--txt-primary);
+    font-family: 'IBM Plex Sans', sans-serif; font-size: 0.8125rem;
+    outline: none; min-height: unset !important;
+}
+.inicio-search-row input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim); }
+.inicio-search-row input::placeholder { color: var(--txt-muted); }
+.inicio-search-row select {
+    background: var(--card); border: 1px solid var(--border-mid);
+    border-radius: var(--r-md); padding: 8px 10px;
+    color: var(--txt-primary); font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.8125rem; outline: none; min-height: unset !important;
+    flex-shrink: 0;
+}
+.inicio-btn-row { display: flex; gap: 8px; margin-bottom: 14px; }
+.inicio-btn {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 14px; border-radius: var(--r-md);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.78rem; font-weight: 600;
+    cursor: pointer; border: none;
+    transition: opacity 0.12s ease;
+    min-height: unset !important;
+}
+.inicio-btn:hover { opacity: 0.85; }
+.inicio-btn:active { transform: scale(0.97); }
+.inicio-btn svg { width: 15px; height: 15px; }
+.inicio-btn.primary { background: var(--accent); color: #fff; }
+.inicio-btn.success { background: #065f46; color: #86efac; border: 1px solid rgba(34,197,94,.28); }
+.inicio-btn.danger  { background: #7f1d1d; color: #fca5a5; border: 1px solid rgba(239,68,68,.22); width: 100%; justify-content: center; }
+
+.sync-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--r-lg); padding: 13px 16px; margin-bottom: 10px;
+    box-shadow: var(--shadow-card);
+}
+.sync-card h3 {
+    font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--txt-secondary);
+    display: flex; align-items: center; gap: 6px; margin-bottom: 9px;
+}
+.sync-card__row {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+.sync-status-text {
+    font-size: 0.82rem; font-weight: 600; color: var(--txt-primary);
+    display: flex; align-items: center; gap: 6px;
+}
+.sync-status-sub {
+    font-size: 0.68rem; color: var(--txt-muted); margin-top: 2px;
+}
+.sync-pause-btn {
+    display: flex; align-items: center; gap: 5px;
+    padding: 7px 13px; border-radius: 20px;
+    background: #7c2d12; border: 1px solid rgba(239,68,68,0.22);
+    color: #fca5a5; font-size: 0.73rem; font-weight: 600;
+    cursor: pointer; white-space: nowrap; min-height: unset !important;
+    transition: opacity 0.12s;
+}
+.sync-pause-btn:hover { opacity: 0.82; }
+
+/* ══════════════════════════════════════════════════════════
    AUTH — Pantalla de inicio de sesión
    ══════════════════════════════════════════════════════════ */
 #loginScreen {
@@ -1899,9 +2260,45 @@ html[data-theme="light"] #syncDot::after { background: #1e293b; }
     </div>
     </main>
 
+    <!-- ══════════════════════════════════════════════════════
+         BOTTOM TAB BAR — navegación inferior móvil
+         ══════════════════════════════════════════════════════ -->
+    <nav id="bottomTabBar" aria-label="Navegación inferior">
+        <button type="button" class="btab-item btab-active" data-btab="inicio" onclick="switchTab('inicio')" aria-label="Inicio">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+            </svg>
+            <span>Inicio</span>
+        </button>
+        <button type="button" class="btab-item" data-btab="inventario" onclick="switchTab('inventario')" aria-label="Conteo">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+            </svg>
+            <span>Conteo</span>
+        </button>
+        <button type="button" class="btab-item" data-btab="pedidos" onclick="switchTab('pedidos')" aria-label="Pedidos">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
+            </svg>
+            <span>Pedidos</span>
+        </button>
+        <button type="button" class="btab-item" data-btab="historia" onclick="switchTab('historia')" aria-label="Historia">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>Historia</span>
+        </button>
+        <button type="button" class="btab-item" onclick="sbOpen()" aria-label="Más opciones">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+            </svg>
+            <span>Más</span>
+        </button>
+    </nav>
+
     <!-- Modal Producto (sin stock) -->
-    <div id="productModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-end md:items-center justify-center z-50 animate-fadeIn hidden" role="dialog" aria-modal="true" aria-labelledby="productModalTitle">
-        <div class="bg-white shadow-2xl max-w-md w-full p-5 animate-slideUp max-h-[90vh] overflow-y-auto">
+    <div id="productModal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[300] animate-fadeIn hidden" style="padding:12px;" role="dialog" aria-modal="true" aria-labelledby="productModalTitle">
+        <div class="modal-box bg-white shadow-2xl max-w-md w-full p-5 animate-slideUp" style="border-radius:18px;max-height:calc(100dvh - 56px - 24px);overflow-y:auto;">
             <div class="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-6"></div>
             <h2 class="text-2xl font-bold text-gray-900 mb-6" id="productModalTitle">Agregar Producto</h2>
             <div class="space-y-4">
@@ -1952,7 +2349,7 @@ html[data-theme="light"] #syncDot::after { background: #1e293b; }
                     </div>
                     <p class="text-xs text-gray-400 mt-2">Cuando se llenen, las botellas abiertas se ingresan en oz y se convierten automáticamente a fracciones de botella.</p>
                 </div>
-                <div class="flex gap-3 mt-6 pt-4">
+                <div class="flex gap-3 mt-6 pt-4" style="position:sticky;bottom:0;background:var(--modal-bg,#fff);padding-bottom:4px;z-index:1;">
                     <button type="button" onclick="closeProductModal()" class="flex-1 px-5 py-2 border border-gray-200 text-gray-900 rounded hover:bg-gray-50 transition-all font-medium">Cancelar</button>
                     <button type="button" onclick="saveProduct()" class="flex-1 px-5 py-2 bg-gradient-to-r from-purple-500 to-orange-500 text-white rounded transition-all font-medium">Guardar</button>
                 </div>
@@ -1961,8 +2358,8 @@ html[data-theme="light"] #syncDot::after { background: #1e293b; }
     </div>
 
     <!-- Modal Pedido -->
-    <div id="orderModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-end md:items-center justify-center z-50 animate-fadeIn hidden" role="dialog" aria-modal="true" aria-labelledby="orderModalTitle">
-        <div class="bg-white shadow-2xl max-w-4xl w-full p-5 animate-slideUp max-h-[95vh] overflow-y-auto">
+    <div id="orderModal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[300] animate-fadeIn hidden" style="padding:12px;" role="dialog" aria-modal="true" aria-labelledby="orderModalTitle">
+        <div class="modal-box bg-white shadow-2xl max-w-4xl w-full p-5 animate-slideUp" style="border-radius:18px;max-height:calc(100dvh - 56px - 24px);overflow-y:auto;">
             <div class="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-6"></div>
             <h2 class="text-2xl font-bold text-gray-900 mb-6" id="orderModalTitle">Generar Pedido</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
@@ -2008,7 +2405,7 @@ html[data-theme="light"] #syncDot::after { background: #1e293b; }
                 </div>
             </div>
 
-            <div class="flex gap-3">
+            <div class="flex gap-3" style="position:sticky;bottom:0;background:var(--modal-bg,#fff);padding-top:12px;padding-bottom:4px;z-index:1;">
                 <button type="button" onclick="closeOrderModal()" class="flex-1 px-5 py-2 border border-gray-200 text-gray-900 rounded hover:bg-gray-50 transition-all font-medium">Cancelar</button>
                 <button type="button" onclick="createOrder()" class="flex-1 px-5 py-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded transition-all font-medium flex items-center justify-center gap-2">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2021,7 +2418,7 @@ html[data-theme="light"] #syncDot::after { background: #1e293b; }
     </div>
 
     <!-- Toast -->
-    <div id="toast" class="fixed bottom-6 left-1/2 transform -translate-x-1/2 z-50 hidden" role="status" aria-live="polite" aria-atomic="true">
+    <div id="toast" class="fixed left-1/2 transform -translate-x-1/2 z-[400] hidden" style="bottom:calc(56px + 14px);" role="status" aria-live="polite" aria-atomic="true">
         <div class="bg-purple-600 text-white px-6 py-3 rounded-full shadow-xl flex items-center gap-2">
             <div class="w-2 h-2 bg-white rounded-full animate-pulse"></div>
             <span class="font-medium" id="toastMessage"></span>
@@ -2029,8 +2426,8 @@ html[data-theme="light"] #syncDot::after { background: #1e293b; }
     </div>
 
     <!-- Modal Inventario -->
-    <div id="inventarioModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-end md:items-center justify-center z-50 animate-fadeIn hidden" role="dialog" aria-modal="true" aria-labelledby="inventarioModalTitle">
-        <div class="bg-white shadow-2xl max-w-sm w-full p-4 animate-slideUp max-h-[90vh] overflow-y-auto">
+    <div id="inventarioModal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[300] animate-fadeIn hidden" style="padding:12px;" role="dialog" aria-modal="true" aria-labelledby="inventarioModalTitle">
+        <div class="modal-box bg-white shadow-2xl max-w-sm w-full p-4 animate-slideUp" style="border-radius:18px;max-height:calc(100dvh - 56px - 24px);overflow-y:auto;">
             <div class="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-4"></div>
             <h2 class="text-xl font-bold text-gray-900 mb-1" id="inventarioModalTitle">Contar botellas</h2>
             <p class="text-sm text-gray-500 mb-2" id="inventarioModalSubtitle"></p>
@@ -2051,7 +2448,7 @@ html[data-theme="light"] #syncDot::after { background: #1e293b; }
                 </div>
                 <div id="inv_abiertasContainer" class="space-y-2"></div>
             </div>
-            <div class="flex gap-3 pt-2">
+            <div class="flex gap-3 pt-2" style="position:sticky;bottom:0;background:var(--modal-bg,#fff);padding-bottom:4px;z-index:1;">
                 <button type="button" onclick="closeInventarioModal()" class="flex-1 px-4 py-2 border border-gray-200 text-gray-700 rounded hover:bg-gray-50 transition-all font-medium">Cancelar</button>
                 <button type="button" onclick="saveInventarioModal()" class="flex-1 px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded transition-all font-medium">Guardar</button>
             </div>
@@ -2762,10 +3159,14 @@ const _deviceId = (function () {
                 _cloudSyncPending = true;
                 updateCloudSyncBadge('pending');
                 if (navigator.onLine && _db) {
-                    syncToCloud();
+                    // DEBOUNCE — esperar 900ms antes de subir, para agrupar
+                    // cambios rápidos (ej. escritura en campo) en una sola subida.
+                    clearTimeout(saveToLocalStorage._syncTimer);
+                    saveToLocalStorage._syncTimer = setTimeout(() => syncToCloud(), 900);
                 }
             }
         }
+        saveToLocalStorage._syncTimer = null;
 
         function loadFromLocalStorage() {
             const safeGet = (key, fallback) => {
@@ -3482,7 +3883,7 @@ async function resetConteoAtomicoEnFirestore() {
             if (!navigator.onLine) {
                 const bar = document.createElement('div');
                 bar.id = 'networkStatus';
-                bar.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#f59e0b;color:#fff;text-align:center;padding:6px;font-size:13px;font-weight:600;z-index:9999;';
+                bar.style.cssText = 'position:fixed;bottom:56px;left:0;right:0;background:#f59e0b;color:#fff;text-align:center;padding:6px;font-size:13px;font-weight:600;z-index:9999;';
                 bar.textContent = '⚠️ Sin conexión — los datos están guardados localmente';
                 document.body.appendChild(bar);
                 updateCloudSyncBadge('offline');
@@ -3508,6 +3909,7 @@ async function resetConteoAtomicoEnFirestore() {
         let _unsubNotifs    = null;
         let _notificaciones = [];
         let _ajustes        = [];
+        let _conteoSearchTerm = '';   // búsqueda dentro del conteo de inventario
 
         function isAdmin() { return currentUserRole === 'admin'; }
 
@@ -3553,6 +3955,11 @@ async function resetConteoAtomicoEnFirestore() {
 
         // ── Toggle sincronización ──────────────────────────────────────────
         function toggleSyncEnabled() {
+            // Solo el admin puede pausar/reanudar la sincronización
+            if (!isAdmin()) {
+                showNotification('⚠️ Solo el administrador puede pausar la sincronización');
+                return;
+            }
             _syncEnabled = !_syncEnabled;
             const pill = document.getElementById('syncPill');
             if (pill) pill.classList.toggle('on', _syncEnabled);
@@ -3958,15 +4365,16 @@ async function resetConteoAtomicoEnFirestore() {
                 html += '</div>';
             }
 
-            // Lista de ajustes
-            html += '<h3 style="font-size:.85rem;font-weight:600;color:var(--txt-primary);margin-bottom:10px;">';
-            html += isAdmin() ? '📋 Ajustes pendientes de revisión' : '📋 Mis solicitudes de ajuste';
+            html += '<div class="adm-card" style="padding:14px 16px;">';
+            html += '<h3 style="font-size:.82rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--txt-secondary);margin-bottom:12px;display:flex;align-items:center;gap:6px;">';
+            html += isAdmin() ? '🔧 Ajustes pendientes' : '🔧 Mis solicitudes';
             html += '</h3>';
 
             const lista = isAdmin() ? _ajustes : _ajustes.filter(function(a) { return a.solicitanteUid === currentUserUid; });
 
             if (lista.length === 0) {
-                html += '<div class="adm-card" style="text-align:center;padding:24px;color:var(--txt-muted);">Sin ajustes registrados</div>';
+                html += '<div class="adm-card" style="text-align:center;padding:32px 24px;">'
+                      + '<p style="font-size:.82rem;color:var(--txt-muted);">Sin ajustes pendientes</p></div>';
             } else {
                 lista.forEach(function(a) {
                     const ts = a.creadoEn ? new Date(a.creadoEn).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : '';
@@ -3979,7 +4387,7 @@ async function resetConteoAtomicoEnFirestore() {
                     html += '</div>';
                 });
             }
-            html += '</div>';
+            html += '</div></div>';
             return html;
         }
 
@@ -4248,6 +4656,11 @@ async function resetConteoAtomicoEnFirestore() {
                 if (btn.dataset.sbTab === tab) btn.classList.add('sb-active');
                 else btn.classList.remove('sb-active');
             });
+            // Sincronizar bottom tab bar
+            document.querySelectorAll('#bottomTabBar .btab-item').forEach(btn => {
+                if (btn.dataset.btab === tab) btn.classList.add('btab-active');
+                else btn.classList.remove('btab-active');
+            });
             saveToLocalStorage();
             renderTab();
         }
@@ -4378,7 +4791,11 @@ async function resetConteoAtomicoEnFirestore() {
         function updateHeaderActions() {
             const headerActions = document.getElementById('headerActions');
             if (activeTab === 'inicio') {
-                headerActions.innerHTML = '<div class="flex gap-2 sm:gap-3"><div class="bg-white bg-opacity-20 backdrop-blur-sm rounded-full px-2 sm:px-4 py-1 sm:py-2 flex items-center gap-1 sm:gap-2 text-xs sm:text-base"><svg class="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path></svg><span class="text-white font-bold">' + cart.length + '</span></div><button onclick="openOrderModal()" class="bg-gradient-to-r from-purple-500 to-orange-500 text-white px-3 sm:px-6 py-2 sm:py-3 rounded-full flex items-center gap-1 sm:gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs sm:text-base whitespace-nowrap"><svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg><span class="hidden sm:inline">Gen. Pedido</span><span class="sm:hidden">Pedido</span></button></div>';
+                // En inicio: header limpio — acciones en las tarjetas y stats
+                headerActions.innerHTML = '';
+            } else if (activeTab === 'inventario') {
+                // Conteo — botón Excel para exportar
+                headerActions.innerHTML = '<button onclick="exportarAuditoriaExcel()" style="display:flex;align-items:center;gap:6px;padding:7px 13px;border-radius:var(--r-md);background:#065f46;border:1px solid rgba(34,197,94,.28);color:#86efac;font-size:.75rem;font-weight:600;cursor:pointer;"><svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>Excel</button>';
             } else if (activeTab === 'productos') {
                 if (isAdmin()) {
                     headerActions.innerHTML = '<div class="flex gap-2 sm:gap-3 flex-wrap"><button onclick="openProductModal()" class="bg-gradient-to-r from-purple-500 to-orange-500 text-white px-3 sm:px-6 py-2 sm:py-3 rounded-full flex items-center gap-1 sm:gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs sm:text-base whitespace-nowrap"><svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg><span class="hidden sm:inline">Agregar</span><span class="sm:hidden">+</span></button><button onclick="document.getElementById(\'fileInput\').click()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:#1a4731;border:1px solid rgba(34,197,94,0.28);color:#86efac;"><i class="fa-solid fa-file-arrow-up"></i><span class="hidden sm:inline">Importar Excel</span><span class="sm:hidden">Importar</span></button><button onclick="publicarCatalogoFirestore()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:#1a3a5f;border:1px solid rgba(59,130,246,0.28);color:#93c5fd;"><i class="fa-solid fa-cloud-arrow-up"></i><span class="hidden sm:inline">Publicar catálogo</span><span class="sm:hidden">Publicar</span></button><button onclick="deleteAllProducts()" class="bg-gradient-to-r from-red-500 to-orange-600 text-white px-3 sm:px-6 py-2 sm:py-3 rounded-full flex items-center gap-1 sm:gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs sm:text-base whitespace-nowrap" title="Eliminar todos"><svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg><span class="hidden sm:inline">Eliminar Todos</span><span class="sm:hidden">Del</span></button></div>';
@@ -4392,18 +4809,140 @@ async function resetConteoAtomicoEnFirestore() {
 
         function renderInicioTab() {
             const filteredProducts = filterByGroup();
-            let html = '<div class="bg-white rounded-xl sm:rounded-2xl p-3 sm:p-5 mb-4 sm:mb-6 shadow-md"><div class="flex flex-col gap-2 sm:gap-3"><div class="relative"><svg class="absolute left-3 sm:left-4 top-1/2 transform -translate-y-1/2 text-gray-600 w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg><input type="text" placeholder="Buscar..." value="' + escapeHtml(searchTerm) + '" oninput="updateSearchTerm(this.value);" class="w-full pl-10 sm:pl-12 pr-3 sm:pr-4 py-2 sm:py-3 bg-white text-gray-900 border border-gray-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all text-sm sm:text-base"></div><select onchange="updateSelectedGroup(this.value);" class="px-3 sm:px-4 py-2 sm:py-3 bg-white text-gray-900 border border-gray-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all text-sm sm:text-base">';
-            getAvailableGroups().forEach(group => {
-                html += '<option value="' + group + '"' + (selectedGroup === group ? ' selected' : '') + '>' + escapeHtml(group) + '</option>';
-            });
-            html += '</select></div></div>';
-            html += '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">';
-            filteredProducts.forEach((product, idx) => {
-                const totalStock = getTotalStock(product);
-                const delay = Math.min(idx * 40, 400);
-                html += '<div class="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-5 shadow-md hover:shadow-lg transition-all" style="animation: tabContentIn 0.3s ease-out both; animation-delay:' + delay + 'ms"><div class="flex justify-between items-start mb-2 sm:mb-3"><div><h3 class="font-semibold text-gray-900 text-base sm:text-lg">' + escapeHtml(product.name) + '</h3><p class="text-xs sm:text-sm text-gray-600">' + escapeHtml(product.id) + '</p></div></div><div class="space-y-1 sm:space-y-2 mb-3 sm:mb-4"><div class="flex justify-between text-xs sm:text-sm"><span class="text-gray-600">Stock:</span><span class="font-semibold text-gray-900">' + totalStock + ' ' + escapeHtml(product.unit || '') + '</span></div><div class="flex justify-between text-xs sm:text-sm"><span class="text-gray-600">Grupo:</span><span class="font-semibold text-gray-900">' + escapeHtml(product.group || 'General') + '</span></div></div><button onclick="addToCart(\'' + escapeHtml(product.id) + '\')" class="w-full bg-gradient-to-r from-purple-500 to-blue-500 text-white py-2 sm:py-3 text-sm sm:text-base rounded-lg sm:rounded-xl font-medium hover:shadow-lg transition-all transform active:scale-95">Agregar</button></div>';
-            });
+            const totalProducts    = products.length;
+            const totalStockAll    = products.reduce((s, p) => s + getTotalStock(p), 0);
+            const cartCount        = cart.reduce((s, c) => s + (c.qty || 1), 0);
+            const ordersCount      = orders.length;
+            const syncOn           = typeof _syncEnabled !== 'undefined' ? _syncEnabled : true;
+
+            // ── Stats 2×2 ─────────────────────────────────────────────────────
+            let html = '<div class="stat-grid">';
+            html += '<div class="stat-card" onclick="void(0)">'
+                  + '<div class="stat-card__icon" style="background:rgba(59,130,246,0.12);">📦</div>'
+                  + '<div><div class="stat-card__val" style="color:#60a5fa;">' + totalProducts + '</div>'
+                  + '<div class="stat-card__label">Productos</div></div></div>';
+            html += '<div class="stat-card" onclick="void(0)">'
+                  + '<div class="stat-card__icon" style="background:rgba(34,197,94,0.12);">📊</div>'
+                  + '<div><div class="stat-card__val" style="color:#4ade80;">' + totalStockAll.toFixed(1) + '</div>'
+                  + '<div class="stat-card__label">Stock Total</div></div></div>';
+            html += '<div class="stat-card" style="cursor:pointer;" onclick="openOrderModal()">'
+                  + '<div class="stat-card__icon" style="background:rgba(245,158,11,0.12);">🛒</div>'
+                  + '<div><div class="stat-card__val" style="color:#fb923c;">' + cartCount.toFixed(1) + '</div>'
+                  + '<div class="stat-card__label">En Carrito</div></div></div>';
+            html += '<div class="stat-card" onclick="switchTab(\'pedidos\')"  style="cursor:pointer;">'
+                  + '<div class="stat-card__icon" style="background:rgba(59,130,246,0.12);">📋</div>'
+                  + '<div><div class="stat-card__val" style="color:#60a5fa;">' + ordersCount + '</div>'
+                  + '<div class="stat-card__label">Pedidos</div></div></div>';
             html += '</div>';
+
+            // ── Búsqueda + filtro de grupo ─────────────────────────────────────
+            html += '<div class="inicio-search-row">';
+            html += '<input type="text" placeholder="Buscar producto..." value="' + escapeHtml(searchTerm) + '" oninput="updateSearchTerm(this.value);">';
+            html += '<select onchange="updateSelectedGroup(this.value);">';
+            getAvailableGroups().forEach(g => {
+                html += '<option value="' + g + '"' + (selectedGroup === g ? ' selected' : '') + '>' + escapeHtml(g) + '</option>';
+            });
+            html += '</select></div>';
+
+            // ── Botones de acción (admin) ─────────────────────────────────────
+            if (isAdmin()) {
+                html += '<div class="inicio-btn-row">';
+                html += '<button class="inicio-btn primary" onclick="openProductModal()">'
+                      + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>'
+                      + 'Producto</button>';
+                html += '<button class="inicio-btn success" onclick="document.getElementById(\'fileInput\').click()">'
+                      + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>'
+                      + 'Excel</button>';
+                html += '</div>';
+            }
+
+            // ── Tarjetas de productos ─────────────────────────────────────────
+            if (filteredProducts.length === 0) {
+                html += '<div style="text-align:center;padding:40px 20px;color:var(--txt-muted);">'
+                      + '<div style="font-size:2.5rem;margin-bottom:12px;">📦</div>'
+                      + '<p style="font-size:.88rem;">No se encontraron productos</p></div>';
+            } else {
+                filteredProducts.forEach((product, idx) => {
+                    const sba   = product.stockByArea || { almacen: 0, barra1: 0, barra2: 0 };
+                    const total = getTotalStock(product);
+                    const hasData = total > 0;
+                    const delay = Math.min(idx * 30, 400);
+
+                    html += '<div class="prd-card' + (hasData ? ' has-data' : '') + '" style="animation-delay:' + delay + 'ms">';
+                    // Top row: nombre + botones
+                    html += '<div class="prd-card__top">';
+                    html += '<div class="prd-card__name">' + escapeHtml(product.name) + '</div>';
+                    html += '<div class="prd-card__actions">';
+                    html += '<button class="prd-action-btn cart" onclick="addToCart(\'' + escapeHtml(product.id) + '\')" title="Agregar al carrito">'
+                          + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg></button>';
+                    if (isAdmin()) {
+                        html += '<button class="prd-action-btn edit" onclick="editProduct(\'' + escapeHtml(product.id) + '\')" title="Editar producto">'
+                              + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button>';
+                        html += '<button class="prd-action-btn del" onclick="deleteProduct(\'' + escapeHtml(product.id) + '\')" title="Eliminar producto">'
+                              + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>';
+                    }
+                    html += '</div></div>';
+                    // Group badge
+                    html += '<div class="prd-card__group-badge">' + escapeHtml(product.group || 'General') + '</div>';
+                    // Meta: ID · Unit · Total
+                    html += '<div class="prd-card__meta">' + escapeHtml(product.id) + ' · ' + escapeHtml(product.unit || '') + ' · Total: ' + total.toFixed(2) + '</div>';
+                    // Area chips
+                    html += '<div class="prd-card__areas">';
+                    html += '<div class="prd-area-chip"><span class="prd-area-chip__label">Almacén</span><span class="prd-area-chip__val">' + (sba.almacen || 0).toFixed(2) + '</span></div>';
+                    html += '<div class="prd-area-chip"><span class="prd-area-chip__label">Barra 1</span><span class="prd-area-chip__val">' + (sba.barra1 || 0).toFixed(2) + '</span></div>';
+                    html += '<div class="prd-area-chip"><span class="prd-area-chip__label">Barra 2</span><span class="prd-area-chip__val">' + (sba.barra2 || 0).toFixed(2) + '</span></div>';
+                    html += '</div></div>';
+                });
+            }
+
+            // ── Zona admin: eliminar todos ─────────────────────────────────────
+            if (isAdmin() && filteredProducts.length > 0) {
+                html += '<button class="inicio-btn danger" onclick="deleteAllProducts()" style="margin-top:10px;">'
+                      + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:15px;height:15px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>'
+                      + 'Eliminar todos los productos</button>';
+            }
+
+            // ── Sincronización ─────────────────────────────────────────────────
+            html += '<div class="sync-card" style="margin-top:14px;">';
+            html += '<h3><span>⚙️</span> Sincronización</h3>';
+            html += '<div class="sync-card__row">';
+            html += '<div><div class="sync-status-text">☁️ ' + (syncOn ? 'Activa' : 'Pausada') + '</div>'
+                  + '<div class="sync-status-sub">' + (syncOn ? 'Datos subiéndose automáticamente a la nube.' : 'Sincronización en pausa.') + '</div></div>';
+            html += '<button class="sync-pause-btn" onclick="toggleSyncEnabled(); renderTab();">'
+                  + '<svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="' + (syncOn ? 'M10 9v6m4-6v6' : 'M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z') + 'M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>'
+                  + (syncOn ? 'Pausar' : 'Reanudar') + '</button>';
+            html += '</div></div>';
+
+            // ── Reportes publicados (solo admin) ──────────────────────────────
+            if (isAdmin()) {
+                html += '<div class="sync-card">';
+                html += '<h3><span>📊</span> Reportes Publicados</h3>';
+                html += '<button class="inicio-btn success" style="width:100%;justify-content:center;" onclick="generarYPublicarReporte()">'
+                      + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:15px;height:15px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>'
+                      + 'Generar y publicar reporte final</button>';
+                html += '<div id="inicioReportesLista" style="margin-top:10px;"></div>';
+                html += '</div>';
+                // Cargar lista de reportes desde admin tab si está disponible
+                setTimeout(() => {
+                    const el = document.getElementById('inicioReportesLista');
+                    if (el && _db) {
+                        _db.collection('reportes').orderBy('fecha', 'desc').limit(3).get()
+                            .then(snap => {
+                                if (snap.empty) { el.innerHTML = '<p style="font-size:.75rem;color:var(--txt-muted);">Sin reportes publicados aún.</p>'; return; }
+                                let rows = '';
+                                snap.forEach(doc => {
+                                    const d = doc.data();
+                                    const f = d.fecha ? new Date(d.fecha).toLocaleString('es-MX', {dateStyle:'short', timeStyle:'short'}) : '—';
+                                    rows += '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);font-size:.75rem;">'
+                                          + '<span style="color:var(--txt-secondary);">' + escapeHtml(d.titulo || 'Reporte') + '</span>'
+                                          + '<span style="color:var(--txt-muted);">' + f + '</span></div>';
+                                });
+                                el.innerHTML = rows;
+                            }).catch(() => { el.innerHTML = ''; });
+                    }
+                }, 100);
+            }
+
             return html;
         }
 
@@ -4439,10 +4978,11 @@ async function resetConteoAtomicoEnFirestore() {
         }
 
         function renderPedidosTab() {
+            let headerHtml = '<div style="margin-bottom:14px;"><h2 style="font-size:1.05rem;font-weight:700;color:var(--txt-primary);">Pedidos WhatsApp</h2><p style="font-size:.75rem;color:var(--txt-muted);">Solo en este dispositivo</p></div>';
             if (orders.length === 0) {
-                return '<div class="bg-white rounded-2xl p-12 text-center shadow-md"><svg class="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg><p class="text-gray-600">No hay pedidos registrados</p></div>';
+                return headerHtml + '<div class="bg-white rounded-2xl shadow-md" style="padding:50px 20px;text-align:center;"><div style="font-size:3rem;margin-bottom:12px;">🛒</div><p style="font-size:.95rem;font-weight:600;color:var(--txt-secondary);margin-bottom:6px;">No hay pedidos todavía</p><p style="font-size:.78rem;color:var(--txt-muted);">Ve a Inicio, agrega productos con 🛒 y genera un pedido</p></div>';
             }
-            let html = '<div class="mb-6">';
+            let html = headerHtml + '<div class="mb-6">';
             html += '<button onclick="deleteAllOrders()" class="bg-gradient-to-r from-red-500 to-orange-600 text-white px-6 py-3 rounded-xl flex items-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200" title="Eliminar todos los pedidos"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg><span class="font-medium">Eliminar todos los pedidos</span></button>';
             html += '</div><div class="space-y-4">';
             orders.forEach((order, idx) => {
@@ -4552,6 +5092,7 @@ async function resetConteoAtomicoEnFirestore() {
             disableAreaButtons(true);
             const modal = document.getElementById('inventarioModal');
             modal.classList.remove('hidden');
+            document.body.classList.add('modal-open');
             setTimeout(() => {
                 const firstInput = modal.querySelector('input, button');
                 if (firstInput) firstInput.focus();
@@ -4609,6 +5150,7 @@ async function resetConteoAtomicoEnFirestore() {
             const modal = document.getElementById('inventarioModal');
             if (modal._trapHandler) { modal.removeEventListener('keydown', modal._trapHandler); modal._trapHandler = null; }
             modal.classList.add('hidden');
+            document.body.classList.remove('modal-open');
             inventarioModalProductId = null;
             isInventarioModalOpen = false;
             disableAreaButtons(false);
@@ -4710,7 +5252,8 @@ async function resetConteoAtomicoEnFirestore() {
             auditoriaAreaActiva = area;
             auditoriaView = 'counting';
             isAuditoriaMode = true;
-            selectedArea = area; // sincronizar selector de área para el modal
+            selectedArea = area;
+            _conteoSearchTerm = '';   // limpiar búsqueda al entrar a nueva área
             saveToLocalStorage();
             renderTab();
         }
@@ -4749,6 +5292,7 @@ async function resetConteoAtomicoEnFirestore() {
             auditoriaView = 'selection';
             auditoriaAreaActiva = null;
             isAuditoriaMode = false;
+            _conteoSearchTerm = '';   // limpiar búsqueda al salir del conteo
             saveToLocalStorage();
             renderTab();
         }
@@ -4763,9 +5307,14 @@ async function resetConteoAtomicoEnFirestore() {
 
         function auditoriaResetear() {
             // FIX #1 — Solo el administrador puede iniciar un nuevo ciclo de inventario.
-            // Un bartender no puede destruir los conteos de los demás.
             if (!isAdmin()) {
                 showNotification('⚠️ Solo el administrador puede iniciar un nuevo ciclo de inventario');
+                return;
+            }
+            // GUARD OFFLINE — si no hay conexión, el reset local quedaría desfasado
+            // de Firestore. Requerir conexión para garantizar coherencia entre dispositivos.
+            if (!navigator.onLine) {
+                showNotification('📴 Sin conexión — conecta a internet antes de iniciar nueva auditoría');
                 return;
             }
             showConfirm('⚠️ ¿Iniciar nueva auditoría?\n\nSe borrarán todos los conteos actuales de las tres áreas y se comenzará desde cero.\n\nEsta acción no se puede deshacer.', function() {
@@ -4823,6 +5372,26 @@ async function resetConteoAtomicoEnFirestore() {
             // del swap inseguro inventarioConteo = auditoriaConteo.
             // Pasar los datos de auditoría directamente como parámetro.
             exportToExcelConDatos('AUDITORIA', auditoriaConteo, products, null);
+        }
+
+        // ── BÚSQUEDA EN CONTEO ────────────────────────────────────────────────
+        function updateConteoSearch(val) {
+            _conteoSearchTerm = (val || '').trim();
+            renderTab();
+        }
+        function clearConteoSearch() {
+            _conteoSearchTerm = '';
+            const inp = document.getElementById('conteoSearchInput');
+            if (inp) inp.value = '';
+            renderTab();
+        }
+        // Resalta las coincidencias del término buscado dentro de un nombre
+        function highlightConteoMatch(name, term) {
+            if (!term) return escapeHtml(name);
+            const escaped   = escapeHtml(name);
+            const escapedTm = escapeHtml(term).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const re = new RegExp('(' + escapedTm + ')', 'gi');
+            return escaped.replace(re, '<mark class="conteo-match-highlight">$1</mark>');
         }
 
         function renderInventarioTab() {
@@ -4922,7 +5491,7 @@ async function resetConteoAtomicoEnFirestore() {
                 html += '<p style="text-align:center;font-size:0.68rem;color:var(--txt-muted);margin-top:8px;">Exporta a Excel con el conteo consolidado de las 3 áreas</p>';
                 // FIX — Admin: publicar reporte a Firestore directamente desde aquí
                 if (isAdmin()) {
-                    html += '<button onclick="generarYPublicarReporte()" style="display:block;width:100%;margin-top:8px;padding:10px 16px;border-radius:var(--r-md);background:var(--accent);color:#fff;font-size:0.8rem;font-weight:600;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">';
+                    html += '<button onclick="generarYPublicarReporte()" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:8px;padding:10px 16px;border-radius:var(--r-md);background:var(--accent);color:#fff;font-size:0.8rem;font-weight:600;border:none;cursor:pointer;">';
                     html += '<i class="fa-solid fa-cloud-arrow-up"></i> Publicar Reporte Global para Todos los Usuarios';
                     html += '</button>';
                 }
@@ -4984,7 +5553,7 @@ async function resetConteoAtomicoEnFirestore() {
             if (soloLectura) {
                 html += '<div style="margin:16px 0;padding:20px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);text-align:center;">';
                 html += '<div style="font-size:2rem;margin-bottom:8px;">🔒</div>';
-                html += '<p style="font-size:0.85rem;font-weight:600;color:var(--txt);margin-bottom:6px;">Tu conteo de "' + nombreArea + '" está registrado</p>';
+                html += '<p style="font-size:0.85rem;font-weight:600;color:var(--txt-primary);margin-bottom:6px;">Tu conteo de "' + nombreArea + '" está registrado</p>';
                 html += '<p style="font-size:0.75rem;color:var(--txt-muted);">Si necesitas hacer correcciones, pide al administrador que reabra esta área.</p>';
                 html += '<div style="margin-top:16px;padding:12px;background:var(--bg);border-radius:var(--r-md);">';
                 html += '<p style="font-size:0.7rem;font-weight:600;color:var(--txt-muted);margin-bottom:8px;">Resumen de tu conteo:</p>';
@@ -4998,7 +5567,7 @@ async function resetConteoAtomicoEnFirestore() {
                     resumen.slice(0, 8).forEach(p => {
                         const d = auditoriaConteo[p.id][area];
                         html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border);font-size:0.72rem;">';
-                        html += '<span style="color:var(--txt);">' + escapeHtml(p.name) + '</span>';
+                        html += '<span style="color:var(--txt-primary);">' + escapeHtml(p.name) + '</span>';
                         html += '<span style="color:var(--accent);font-weight:600;">' + (d.enteras || 0) + ' ent · ' + (d.abiertas || []).length + ' ab</span>';
                         html += '</div>';
                     });
@@ -5018,6 +5587,20 @@ async function resetConteoAtomicoEnFirestore() {
                 html += '<option value="' + group + '"' + (selectedGroup === group ? ' selected' : '') + '>' + escapeHtml(group) + '</option>';
             });
             html += '</select></div>';
+
+            // ── Buscador de producto ─────────────────────────────────────────
+            html += '<div class="conteo-search-wrap">';
+            html += '<svg class="search-icon" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">'
+                  + '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>';
+            html += '<input id="conteoSearchInput" type="search" class="conteo-search-input"'
+                  + ' placeholder="Buscar producto en este conteo…"'
+                  + ' value="' + escapeHtml(_conteoSearchTerm) + '"'
+                  + ' oninput="updateConteoSearch(this.value)"'
+                  + ' autocomplete="off" autocorrect="off" spellcheck="false">';
+            if (_conteoSearchTerm) {
+                html += '<button class="conteo-search-clear" onclick="clearConteoSearch()" title="Limpiar búsqueda" aria-label="Limpiar búsqueda">✕</button>';
+            }
+            html += '</div>';
 
             html += '<p class="text-xs text-gray-400 mb-3 px-1">Conteo ciego — toca cada producto para ingresar la cantidad física</p>';
 
@@ -5056,7 +5639,26 @@ async function resetConteoAtomicoEnFirestore() {
             }
 
             // ── Lista de tarjetas ─────────────────────────────────────────────
-            const filteredProducts = filterByGroup();
+            let filteredProducts = filterByGroup();
+            // Aplicar búsqueda de texto libre sobre nombre, ID y grupo
+            if (_conteoSearchTerm) {
+                const term = _conteoSearchTerm.toLowerCase();
+                filteredProducts = filteredProducts.filter(p =>
+                    (p.name  || '').toLowerCase().includes(term) ||
+                    (p.id    || '').toLowerCase().includes(term) ||
+                    (p.group || '').toLowerCase().includes(term)
+                );
+            }
+            // Contador de resultados
+            if (_conteoSearchTerm) {
+                html += '<div class="conteo-search-results">';
+                if (filteredProducts.length === 0) {
+                    html += 'Sin resultados para "<em>' + escapeHtml(_conteoSearchTerm) + '</em>"';
+                } else {
+                    html += '<em>' + filteredProducts.length + '</em> producto' + (filteredProducts.length !== 1 ? 's' : '') + ' encontrado' + (filteredProducts.length !== 1 ? 's' : '');
+                }
+                html += '</div>';
+            }
             html += '<div class="flex flex-col gap-3">';
 
             if (filteredProducts.length === 0) {
@@ -5098,7 +5700,7 @@ async function resetConteoAtomicoEnFirestore() {
 
                     html += '<div class="inv-card__header">';
                     html += '<div style="min-width:0;flex:1">';
-                    html += '<div class="inv-card__name">' + escapeHtml(product.name) + '</div>';
+                    html += '<div class="inv-card__name">' + highlightConteoMatch(product.name, _conteoSearchTerm) + '</div>';
                     html += '<span class="inv-card__group-badge">' + escapeHtml(product.group || 'General') + '</span>';
                     if (areaData.alerta_conflicto) {
                         html += '<div class="inv-card__conflict-badge"><i class="fa-solid fa-triangle-exclamation"></i> Conflicto abierta</div>';
@@ -5337,7 +5939,7 @@ async function resetConteoAtomicoEnFirestore() {
                 document.getElementById('productId').value = generateProductId();
             }
             modal.classList.remove('hidden');
-            // Mover foco al primer campo interactivo
+            document.body.classList.add('modal-open');
             setTimeout(() => {
                 const firstInput = modal.querySelector('input, select, button');
                 if (firstInput) firstInput.focus();
@@ -5357,6 +5959,7 @@ async function resetConteoAtomicoEnFirestore() {
             const modal = document.getElementById('productModal');
             if (modal._trapHandler) { modal.removeEventListener('keydown', modal._trapHandler); modal._trapHandler = null; }
             modal.classList.add('hidden');
+            document.body.classList.remove('modal-open');
             editingProductId = null;
         }
 
@@ -5494,6 +6097,7 @@ async function resetConteoAtomicoEnFirestore() {
             document.getElementById('orderNote').value = '';
             const modal = document.getElementById('orderModal');
             modal.classList.remove('hidden');
+            document.body.classList.add('modal-open');
             renderOrderTable();
             setTimeout(() => {
                 const firstInput = modal.querySelector('input, select, textarea, button');
@@ -5513,6 +6117,7 @@ async function resetConteoAtomicoEnFirestore() {
             const modal = document.getElementById('orderModal');
             if (modal._trapHandler) { modal.removeEventListener('keydown', modal._trapHandler); modal._trapHandler = null; }
             modal.classList.add('hidden');
+            document.body.classList.remove('modal-open');
         }
 
         function renderOrderTable() {
