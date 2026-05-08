@@ -3257,13 +3257,20 @@ const _deviceId = (function () {
             const colRef = docRef.collection(subcollName);
             const totalChunks = Math.max(1, Math.ceil(dataArray.length / MAX_CHUNK_SIZE));
 
-            // Bug #2 fix: WRITE-FIRST strategy
-            // 1. Escribir nuevos chunks con prefijo "new_" ANTES de borrar los viejos.
-            //    Si otro dispositivo lee entre estos pasos, sigue viendo los chunks "chunk_N" intactos.
+            // FIX BUG CRÍTICO: La estrategia anterior con prefijo "new_chunk_N" causaba
+            // pérdida de datos. Al tener set(chunk_N) y delete(chunk_N) en el MISMO batch,
+            // el SDK de Firestore aplica el delete al final → los datos quedaban borrados.
+            //
+            // ESTRATEGIA CORREGIDA (write-first sin colisión de docs):
+            // 1. Escribir directamente los docs finales "chunk_N" (sobrescribe los viejos).
+            //    Cualquier lector sigue viendo datos válidos en todo momento.
+            // 2. En un segundo batch separado, borrar únicamente los docs "chunk_N" con
+            //    índice ≥ totalChunks (excess) y cualquier residuo "new_chunk_N" de ejecuciones
+            //    anteriores con la lógica rota.
             const writeBatch = _db.batch();
             for (let i = 0; i < totalChunks; i++) {
                 const chunk    = dataArray.slice(i * MAX_CHUNK_SIZE, (i + 1) * MAX_CHUNK_SIZE);
-                const chunkRef = colRef.doc('new_chunk_' + i);
+                const chunkRef = colRef.doc('chunk_' + i);
                 writeBatch.set(chunkRef, {
                     items:       chunk,
                     chunkIndex:  i,
@@ -3273,24 +3280,29 @@ const _deviceId = (function () {
             }
             await writeBatch.commit();
 
-            // 2. Ahora borrar chunks viejos y renombrar "new_chunk_N" → "chunk_N" en una sola pasada.
-            //    La ventana de datos vacíos queda eliminada.
+            // Eliminar docs obsoletos: chunks con índice mayor al nuevo total
+            // y cualquier doc temporal "new_chunk_N" que haya quedado de la versión anterior.
             const existingSnap = await colRef.get();
-            const cleanBatch   = _db.batch();
+            const toDelete = [];
             existingSnap.forEach(d => {
                 if (d.id.startsWith('new_')) {
-                    // Promover: copiar con ID definitivo y borrar el temporal
-                    const finalId = d.id.replace('new_', '');
-                    cleanBatch.set(colRef.doc(finalId), d.data());
-                    cleanBatch.delete(d.ref);
+                    // Residuo de versión anterior con bug — eliminar siempre
+                    toDelete.push(d.ref);
                 } else {
-                    // Borrar chunk viejo (ya fue reemplazado arriba)
-                    cleanBatch.delete(d.ref);
+                    const idx = parseInt(d.id.replace('chunk_', ''), 10);
+                    if (isNaN(idx) || idx >= totalChunks) {
+                        // Chunk de exceso (había más chunks antes) — eliminar
+                        toDelete.push(d.ref);
+                    }
                 }
             });
-            if (!existingSnap.empty) await cleanBatch.commit();
+            if (toDelete.length > 0) {
+                const delBatch = _db.batch();
+                toDelete.forEach(ref => delBatch.delete(ref));
+                await delBatch.commit();
+            }
 
-            console.info('[Firebase][Chunk] ' + subcollName + ' → ' + totalChunks + ' chunk(s) escritos (write-first).');
+            console.info('[Firebase][Chunk] ' + subcollName + ' → ' + totalChunks + ' chunk(s) escritos correctamente.');
         }
 
         /**
@@ -4811,7 +4823,7 @@ async function resetConteoAtomicoEnFirestore() {
             const filteredProducts = filterByGroup();
             const totalProducts    = products.length;
             const totalStockAll    = products.reduce((s, p) => s + getTotalStock(p), 0);
-            const cartCount        = cart.reduce((s, c) => s + (c.qty || 1), 0);
+            const cartCount        = cart.reduce((s, c) => s + (c.quantity || 1), 0); // FIX: era c.qty (undefined), debe ser c.quantity
             const ordersCount      = orders.length;
             const syncOn           = typeof _syncEnabled !== 'undefined' ? _syncEnabled : true;
 
@@ -6286,8 +6298,7 @@ async function resetConteoAtomicoEnFirestore() {
                 return val;
             }
             const str = String(val).trim()
-                .replace(/[€$£¥₩₹\s]/g, '')  // quitar monedas y espacios
-                .replace(/^-/, m => m);              // BUG-FIX M1: conservar signo negativo (positivo no necesita marca)
+                .replace(/[€$£¥₩₹\s]/g, '');  // quitar monedas y espacios (el signo negativo se preserva automáticamente)
 
             if (!str || str === '-' || str === '+') return 0;
 
@@ -6432,7 +6443,7 @@ async function resetConteoAtomicoEnFirestore() {
             reader.readAsArrayBuffer(file);
         }
 
-        function exportToExcel(modo) {
+        function exportToExcel(modo, fileNameOverride) { // FIX: parámetro fileNameOverride para soporte de nombres personalizados
             // Guard: sin productos no hay nada que exportar
             if (!Array.isArray(products) || products.length === 0) {
                 showNotification('⚠️ No hay productos para exportar');
@@ -6718,7 +6729,7 @@ async function resetConteoAtomicoEnFirestore() {
             XLSX.utils.book_append_sheet(wb, ws, sheetName);
 
             const prefix = modo === 'AUDITORIA' ? 'auditoria_consolidada_' : 'inventario_';
-            const fileName = prefix + new Date().toISOString().split('T')[0] + '.xlsx';
+            const fileName = fileNameOverride || (prefix + new Date().toISOString().split('T')[0] + '.xlsx'); // FIX: respetar nombre personalizado
             XLSX.writeFile(wb, fileName);
             const msg = modo === 'AUDITORIA'
                 ? '✅ Auditoría consolidada exportada a Excel'
