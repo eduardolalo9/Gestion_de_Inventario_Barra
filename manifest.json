@@ -1,12 +1,108 @@
 {
-  "name": "BarInventory",
-  "short_name": "BarInv",
-  "start_url": "/",
+  "name": "BarInventory — Control de Inventario",
+  "short_name": "BarInventory",
+  "description": "Sistema de inventario para bar y restaurante. Conteo ciego, auditoría y sincronización en tiempo real.",
+  "start_url": "/index/",
+  "scope": "/index/",
   "display": "standalone",
+  "orientation": "portrait-primary",
   "background_color": "#000000",
-  "theme_color": "#000000",
+  "theme_color": "#0A84FF",
+  "lang": "es-MX",
+  "dir": "ltr",
+  "categories": ["business", "productivity", "utilities"],
+
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
-  ]
+    {
+      "src": "/index/icons/icon-72.png",
+      "sizes": "72x72",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/index/icons/icon-96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/index/icons/icon-128.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/index/icons/icon-144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/index/icons/icon-152.png",
+      "sizes": "152x152",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/index/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/index/icons/icon-384.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/index/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+
+  "screenshots": [
+    {
+      "src": "/index/screenshots/screenshot-mobile.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Pantalla principal de inventario"
+    },
+    {
+      "src": "/index/screenshots/screenshot-tablet.png",
+      "sizes": "1024x768",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Panel de administración"
+    }
+  ],
+
+  "shortcuts": [
+    {
+      "name": "Nuevo Conteo",
+      "short_name": "Conteo",
+      "description": "Iniciar conteo de inventario rápido",
+      "url": "/index/?tab=inventario",
+      "icons": [{ "src": "/index/icons/icon-96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Auditoría",
+      "short_name": "Auditoría",
+      "description": "Abrir panel de auditoría física ciega",
+      "url": "/index/?tab=auditoria",
+      "icons": [{ "src": "/index/icons/icon-96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Pedidos",
+      "short_name": "Pedidos",
+      "description": "Ver y crear pedidos",
+      "url": "/index/?tab=pedidos",
+      "icons": [{ "src": "/index/icons/icon-96.png", "sizes": "96x96" }]
+    }
+  ],
+
+  "prefer_related_applications": false
 }
