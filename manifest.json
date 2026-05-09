@@ -1,85 +1,12 @@
 {
   "name": "BarInventory",
-  "short_name": "BarInventory",
-  "description": "Gestión de inventario y pedidos para bares",
-  "start_url": "./index.html",
+  "short_name": "BarInv",
+  "start_url": "/",
   "display": "standalone",
-  "orientation": "portrait-primary",
-  "background_color": "#0B0C0F",
-  "theme_color": "#F97316",
-  "lang": "es",
-  "scope": "./",
-  "categories": ["business", "utilities"],
-  "dir": "ltr",
-  "prefer_related_applications": false,
-
+  "background_color": "#000000",
+  "theme_color": "#000000",
   "icons": [
-    {
-      "src": "icons/icon-72x72.png",
-      "sizes": "72x72",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "icons/icon-96x96.png",
-      "sizes": "96x96",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "icons/icon-128x128.png",
-      "sizes": "128x128",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "icons/icon-144x144.png",
-      "sizes": "144x144",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "icons/icon-152x152.png",
-      "sizes": "152x152",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "icons/icon-192x192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "icons/icon-384x384.png",
-      "sizes": "384x384",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "icons/icon-512x512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
-    }
-  ],
-
-  "screenshots": [],
-
-  "shortcuts": [
-    {
-      "name": "Inventario",
-      "short_name": "Inventario",
-      "description": "Ir al inventario",
-      "url": "./index.html?tab=inventario",
-      "icons": [{ "src": "icons/icon-96x96.png", "sizes": "96x96" }]
-    },
-    {
-      "name": "Nuevo Pedido",
-      "short_name": "Pedido",
-      "description": "Crear pedido a proveedor",
-      "url": "./index.html?tab=pedidos",
-      "icons": [{ "src": "icons/icon-96x96.png", "sizes": "96x96" }]
-    }
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
   ]
 }
