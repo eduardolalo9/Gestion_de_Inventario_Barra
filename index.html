@@ -5,14 +5,9 @@
     <!-- FIX #15: viewport como primer meta, antes de cualquier script, para que el
          navegador calcule el viewport correcto antes de ejecutar ningún código. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0d1321">
+    <link rel="manifest" href="manifest.json">
 
-<link rel="manifest" href="/index/manifest.json">
-<meta name="theme-color" content="#0A84FF">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="BarInventory">
-<link rel="apple-touch-icon" href="/index/icons/icon-192.png">
     <script>
         // Evitar FOUC (Flash Of Unstyled Content): aplicar tema antes de renderizar
         (function() {
@@ -114,13 +109,12 @@
         // en https://console.cloud.google.com → Credenciales → Restricciones de clave.
         // (dominio HTTP Referrer + solo Firestore API)
         const firebaseConfig = {
-  apiKey: "AIzaSyDugu23uEgacqMUTsoBF8i7xfyDIDbiv0M",
-  authDomain: "bar-inventario-1109e.firebaseapp.com",
-  databaseURL: "https://bar-inventario-1109e-default-rtdb.firebaseio.com",
-  projectId: "bar-inventario-1109e",
-  storageBucket: "bar-inventario-1109e.firebasestorage.app",
-  messagingSenderId: "450765028668",
-  appId: "1:450765028668:web:54fdb19714d374ff02b239"
+  apiKey: "AIzaSyCjFziFbjsxZQq-CzkCsMuYXgZiFVYEXa0",
+  authDomain: "gestor-de-inventarios-76c19.firebaseapp.com",
+  projectId: "gestor-de-inventarios-76c19",
+  storageBucket: "gestor-de-inventarios-76c19.firebasestorage.app",
+  messagingSenderId: "520575498448",
+  appId: "1:520575498448:web:3a83c2e4fcaedfc9d386d5"
 };
 
         // ID del documento Firestore que almacena el estado de ESTA instalación.
@@ -3409,7 +3403,11 @@ const _deviceId = (function () {
                     _syncedAt:         Date.now(),
                     _ordersInChunks:      true,
                     _inventoriesInChunks: true,
-                    _conteoInSubcol:      true  // flag: inventarioConteo está en subcolección stockAreas
+                    _conteoInSubcol:      true,  // flag: inventarioConteo está en subcolección stockAreas
+                    // FIX SYNC-1: identificar quién escribió para que otros dispositivos
+                    // puedan distinguir cambios externos (admin) de eco propio.
+                    _lastWrittenBy:    currentUserUid || 'anonymous',
+                    _lastWrittenRole:  currentUserRole || 'user'
                 };
 
                 // Construir escrituras por área (merge:true = solo toca el área modificada)
@@ -3706,7 +3704,10 @@ async function resetConteoAtomicoEnFirestore() {
 
             try {
                 const docRef = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID);
-                const snap   = await docRef.get();
+                // FIX SYNC-2: forzar lectura desde servidor en la primera carga
+                // para ignorar caché stale de Firestore offline persistence.
+                // Sin esto, Firestore sirve datos viejos del caché antes que los reales.
+                const snap   = await docRef.get({ source: 'server' }).catch(() => docRef.get());
 
                 if (!snap.exists) {
                     // Primera vez: subir datos locales a la nube
@@ -3906,12 +3907,20 @@ async function resetConteoAtomicoEnFirestore() {
                 document.body.appendChild(bar);
                 updateCloudSyncBadge('offline');
             } else {
-                // Reconexión: sincronizar cambios pendientes
-                if (_cloudSyncPending && _db) {
-                    console.info('[Firebase] Reconectado — sincronizando cambios pendientes…');
-                    syncToCloud();
+                // FIX SYNC-5: Al reconectar, primero verificar si hay datos más recientes
+                // en la nube (admin pudo haber guardado mientras estábamos offline)
+                // y LUEGO subir los pendientes locales si aplica.
+                if (_db) {
+                    console.info('[Firebase] Reconectado — verificando cambios en la nube…');
+                    loadFromCloud().then(function() {
+                        // loadFromCloud ya llama syncToCloud() si local es más reciente
+                        updateCloudSyncBadge(_cloudSyncPending ? 'pending' : 'ok');
+                    }).catch(function(e) {
+                        console.warn('[Firebase] Error en loadFromCloud tras reconexión:', e);
+                        if (_cloudSyncPending) syncToCloud();
+                    });
                 } else {
-                    updateCloudSyncBadge(_db ? 'ok' : 'none');
+                    updateCloudSyncBadge('none');
                 }
             }
         }
@@ -3925,6 +3934,78 @@ async function resetConteoAtomicoEnFirestore() {
         let _unsubAjustes   = null;
         let _unsubCatalogo  = null;
         let _unsubNotifs    = null;
+        let _unsubMainDoc   = null;  // FIX SYNC-3: listener del documento principal de inventario
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  FIX SYNC-3: LISTENER EN TIEMPO REAL DEL DOCUMENTO PRINCIPAL
+        // ══════════════════════════════════════════════════════════════════════
+        /**
+         * subscribeMainDoc()
+         * ───────────────────
+         * Establece un onSnapshot en inventarioApp/{FIRESTORE_DOC_ID}.
+         * Cuando admin (u otro dispositivo) escribe en Firestore, TODOS los
+         * dispositivos reciben la actualización vía WebSocket en ~100-500ms,
+         * sin necesidad de polling ni recarga manual.
+         *
+         * Anti-echo de 2 capas:
+         *  1. hasPendingWrites = true → el cambio viene de este propio dispositivo
+         *     (Firestore lo marca antes de confirmación del servidor) → ignorar.
+         *  2. _lastWrittenBy === currentUserUid → confirmación de que escribió
+         *     este mismo usuario → ignorar.
+         *
+         * Si ninguna capa bloquea → es un cambio externo (admin u otro bartender)
+         * → llamar _applyCloudData() para actualizar estado y renderizar UI.
+         */
+        function subscribeMainDoc() {
+            if (!_db) return;
+            // Cancelar listener anterior si existía (ej. tras cierre de sesión)
+            if (typeof _unsubMainDoc === 'function') { _unsubMainDoc(); _unsubMainDoc = null; }
+
+            const docRef = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID);
+            _unsubMainDoc = docRef.onSnapshot(
+                { includeMetadataChanges: true },
+                function(snapshot) {
+                    if (!snapshot.exists) return;
+
+                    // Capa 1: ignorar escrituras propias aún en tránsito (optimistic updates)
+                    if (snapshot.metadata.hasPendingWrites) return;
+
+                    const data = snapshot.data();
+
+                    // Capa 2: ignorar si fue este mismo usuario/dispositivo quien escribió
+                    const writerUid = data._lastWrittenBy;
+                    if (writerUid && writerUid === currentUserUid) return;
+
+                    // Cambio externo confirmado: admin o bartender distinto.
+                    // Si es del servidor (no del caché local) proceder siempre.
+                    if (snapshot.metadata.fromCache) return; // caché local, esperar confirmación red
+
+                    const cloudTs = data._lastModified || 0;
+                    const localTs = parseInt(localStorage.getItem('inventarioApp_lastModified') || '0', 10);
+
+                    if (cloudTs <= localTs) return; // no hay nada más nuevo que lo local
+
+                    console.info('[RT-Sync] Cambio externo detectado por', writerUid || 'desconocido',
+                                 '— aplicando datos de admin/red…');
+                    updateCloudSyncBadge('syncing');
+
+                    _applyCloudData(data).then(function() {
+                        const quien = data._lastWrittenRole === 'admin' ? '👑 Admin' : '👤 Usuario';
+                        showNotification('🔄 Inventario actualizado por ' + quien);
+                    }).catch(function(err) {
+                        console.error('[RT-Sync] Error aplicando datos externos:', err);
+                        updateCloudSyncBadge('error');
+                    });
+                },
+                function(err) {
+                    console.warn('[RT-Sync] Error en listener del documento principal:', err);
+                    // En caso de error de permisos o red, no hacer crash — el sistema
+                    // seguirá funcionando con loadFromCloud() en reconexiones.
+                }
+            );
+
+            console.info('[RT-Sync] Listener activo en inventarioApp/' + FIRESTORE_DOC_ID);
+        }
         let _notificaciones = [];
         let _ajustes        = [];
         let _conteoSearchTerm = '';   // búsqueda dentro del conteo de inventario
@@ -3949,6 +4030,11 @@ async function resetConteoAtomicoEnFirestore() {
                 currentUserRole = 'user';
             }
             applyRoleUI();
+
+            // FIX SYNC-4: iniciar listener en tiempo real del documento principal
+            // DESPUÉS de cargar el rol, para que _applyCloudData sepa si somos admin o user.
+            subscribeMainDoc();
+
             if (isAdmin()) {
                 subscribeAjustesPendientes();
                 subscribeCatalogoAdmin();
@@ -6941,9 +7027,10 @@ async function resetConteoAtomicoEnFirestore() {
                 } else {
                     console.info('[Auth] Sin sesión — mostrando login.');
                     // Limpiar subscripciones activas
-                    if (typeof _unsubAjustes === 'function')  { _unsubAjustes();  _unsubAjustes  = null; }
-                    if (typeof _unsubCatalogo === 'function') { _unsubCatalogo(); _unsubCatalogo = null; }
-                    if (typeof _unsubNotifs === 'function')   { _unsubNotifs();   _unsubNotifs   = null; }
+                    if (typeof _unsubAjustes   === 'function') { _unsubAjustes();   _unsubAjustes   = null; }
+                    if (typeof _unsubCatalogo  === 'function') { _unsubCatalogo();  _unsubCatalogo  = null; }
+                    if (typeof _unsubNotifs    === 'function') { _unsubNotifs();    _unsubNotifs    = null; }
+                    if (typeof _unsubMainDoc   === 'function') { _unsubMainDoc();   _unsubMainDoc   = null; } // FIX SYNC-6
                     currentUserRole = null;
                     currentUserUid  = null;
                     showLogin();
