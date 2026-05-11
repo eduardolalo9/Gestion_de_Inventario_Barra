@@ -2549,20 +2549,8 @@ const _deviceId = (function () {
         let auditoriaView = 'selection'; // 'selection' | 'counting'
         let auditoriaAreaActiva = null;
         let auditoriaStatus = { almacen: 'pendiente', barra1: 'pendiente', barra2: 'pendiente' };
-        let auditoriaConteo = {}; // admin: vista agregada de todos los usuarios
+        let auditoriaConteo = {}; // { productId: { area: { enteras, abiertas } } }
         let isAuditoriaMode = false;
-
-        // ══════════════════════════════════════════════════════════════════════
-        //  AUDITORÍA AISLADA POR USUARIO — cada usuario guarda SU propio conteo.
-        //  Admin ve todos; usuarios solo ven el propio.
-        // ══════════════════════════════════════════════════════════════════════
-        let myAuditoriaConteo  = {};   // conteo propio (aislado)
-        let myAuditoriaStatus  = { almacen: 'pendiente', barra1: 'pendiente', barra2: 'pendiente' };
-        let myAuditoriaUnlocks = {};   // { 'prodId__area': { unlockedBy, unlockedAt, used } }
-        let allUsersAuditoria  = {};   // admin: { uid: { email, status, conteo, updatedAt } }
-        let _auditoriaSessionId = null;
-        let _unsubMyAuditoria  = null;
-        let _unsubAllUsers     = null;
 
         // ═════════════════════════════════════════════════════════════════════
         //  ESTADO MULTIUSUARIO
@@ -3128,12 +3116,8 @@ const _deviceId = (function () {
                 ['inventarioApp_auditoriaConteo',     JSON.stringify(auditoriaConteo)],
                 ['inventarioApp_auditoriaView',       auditoriaView],
                 ['inventarioApp_auditoriaAreaActiva', auditoriaAreaActiva || ''],
-                ['inventarioApp_auditoriaConteoPorUsuario', JSON.stringify(auditoriaConteoPorUsuario)],
-                // AUDITORÍA AISLADA POR USUARIO
-                ['inventarioApp_myAuditoriaConteo',  JSON.stringify(myAuditoriaConteo)],
-                ['inventarioApp_myAuditoriaStatus',  JSON.stringify(myAuditoriaStatus)],
-                ['inventarioApp_myAuditoriaUnlocks', JSON.stringify(myAuditoriaUnlocks)],
-                ['inventarioApp_auditoriaSessionId', _auditoriaSessionId || '']
+                // Multiusuario: conteos de TODOS los dispositivos (nunca sobreescribe)
+                ['inventarioApp_auditoriaConteoPorUsuario', JSON.stringify(auditoriaConteoPorUsuario)]
             ];
 
             // Marca temporal de este guardado (resolución de conflictos: último-gana)
@@ -3233,16 +3217,6 @@ const _deviceId = (function () {
             if (rawCPU && typeof rawCPU === 'object') {
                 auditoriaConteoPorUsuario = rawCPU;
             }
-
-            // ── Restaurar auditoría aislada por usuario ────────────────────────
-            const storedMyConteo = safeGet('inventarioApp_myAuditoriaConteo', {});
-            if (storedMyConteo && typeof storedMyConteo === 'object') myAuditoriaConteo = storedMyConteo;
-            const storedMyStatus = safeGet('inventarioApp_myAuditoriaStatus', { almacen: 'pendiente', barra1: 'pendiente', barra2: 'pendiente' });
-            if (storedMyStatus && typeof storedMyStatus === 'object') myAuditoriaStatus = storedMyStatus;
-            const storedMyUnlocks = safeGet('inventarioApp_myAuditoriaUnlocks', {});
-            if (storedMyUnlocks && typeof storedMyUnlocks === 'object') myAuditoriaUnlocks = storedMyUnlocks;
-            const storedSessionId = localStorage.getItem('inventarioApp_auditoriaSessionId');
-            if (storedSessionId) _auditoriaSessionId = storedSessionId || null;
 
             const parsedConteo = safeGet('inventarioApp_inventarioConteo', {});
             const migrated = {};
@@ -3429,11 +3403,7 @@ const _deviceId = (function () {
                     _syncedAt:         Date.now(),
                     _ordersInChunks:      true,
                     _inventoriesInChunks: true,
-                    _conteoInSubcol:      true,  // flag: inventarioConteo está en subcolección stockAreas
-                    // FIX SYNC-1: identificar quién escribió para que otros dispositivos
-                    // puedan distinguir cambios externos (admin) de eco propio.
-                    _lastWrittenBy:    currentUserUid || 'anonymous',
-                    _lastWrittenRole:  currentUserRole || 'user'
+                    _conteoInSubcol:      true  // flag: inventarioConteo está en subcolección stockAreas
                 };
 
                 // Construir escrituras por área (merge:true = solo toca el área modificada)
@@ -3689,216 +3659,8 @@ async function resetConteoAtomicoEnFirestore() {
     }
 }
 
-        // ══════════════════════════════════════════════════════════════════════
-        //  MÓDULO: AUDITORÍA AISLADA POR USUARIO
-        //  Firestore path: inventarioApp/{docId}/userAuditoria/{uid}
-        // ══════════════════════════════════════════════════════════════════════
-
-        /** Guarda el conteo propio del usuario en Firestore (solo escribe su UID) */
-        async function syncMyAuditoriaToFirestore() {
-            if (!_db || !currentUserUid || !navigator.onLine) return;
-            try {
-                const ref = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
-                               .collection('userAuditoria').doc(currentUserUid);
-                await ref.set({
-                    uid:        currentUserUid,
-                    email:      (_auth && _auth.currentUser) ? _auth.currentUser.email : currentUserUid,
-                    sessionId:  _auditoriaSessionId,
-                    status:     myAuditoriaStatus,
-                    conteo:     myAuditoriaConteo,
-                    updatedAt:  Date.now()
-                }, { merge: false }); // sobrescribir solo mi doc, nunca el de otros
-                console.info('[AuditUser] Mi conteo sincronizado ✓');
-            } catch (err) {
-                console.warn('[AuditUser] Error sync propio:', err);
-            }
-        }
-
         /**
-         * Escucha el doc propio del usuario en userAuditoria/{myUid}
-         * para detectar desbloqueos otorgados por el admin en tiempo real.
-         */
-        function subscribeMyAuditoria() {
-            if (!_db || !currentUserUid) return;
-            if (typeof _unsubMyAuditoria === 'function') { _unsubMyAuditoria(); _unsubMyAuditoria = null; }
-            const ref = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
-                           .collection('userAuditoria').doc(currentUserUid);
-            _unsubMyAuditoria = ref.onSnapshot(function(snap) {
-                if (!snap.exists || snap.metadata.hasPendingWrites) return;
-                const data = snap.data();
-                // Detectar si el admin cambió la sesión (nueva auditoría)
-                if (data.sessionId && data.sessionId !== _auditoriaSessionId) {
-                    _auditoriaSessionId = data.sessionId;
-                    myAuditoriaConteo   = {};
-                    myAuditoriaStatus   = { almacen: 'pendiente', barra1: 'pendiente', barra2: 'pendiente' };
-                    myAuditoriaUnlocks  = {};
-                    saveToLocalStorage();
-                    showNotification('🔄 Nueva auditoría iniciada por el administrador — tus conteos se reiniciaron');
-                    renderTab();
-                    return;
-                }
-                // Detectar desbloqueos nuevos del admin
-                const serverUnlocks = data.unlocks || {};
-                let nuevoDesbloqueo = false;
-                Object.keys(serverUnlocks).forEach(key => {
-                    if (!myAuditoriaUnlocks[key] || !myAuditoriaUnlocks[key].unlockedAt) {
-                        myAuditoriaUnlocks[key] = serverUnlocks[key];
-                        nuevoDesbloqueo = true;
-                    }
-                });
-                if (nuevoDesbloqueo) {
-                    saveToLocalStorage();
-                    showNotification('🔓 El administrador desbloqueó un producto para corrección');
-                    renderTab();
-                }
-            }, function(err) { console.warn('[AuditUser] Error listener propio:', err); });
-        }
-
-        /**
-         * Admin: escucha TODOS los documentos userAuditoria/* en tiempo real.
-         * Llena allUsersAuditoria con los conteos de cada usuario.
-         */
-        function subscribeAllUsersAuditoria() {
-            if (!_db || !isAdmin()) return;
-            if (typeof _unsubAllUsers === 'function') { _unsubAllUsers(); _unsubAllUsers = null; }
-            const colRef = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
-                              .collection('userAuditoria');
-            _unsubAllUsers = colRef.onSnapshot(function(snap) {
-                allUsersAuditoria = {};
-                snap.forEach(function(doc) {
-                    const data = doc.data();
-                    // Solo mostrar conteos de la sesión activa
-                    if (data.sessionId && data.sessionId !== _auditoriaSessionId) return;
-                    allUsersAuditoria[doc.id] = {
-                        uid:       doc.id,
-                        email:     data.email || doc.id,
-                        status:    data.status || { almacen: 'pendiente', barra1: 'pendiente', barra2: 'pendiente' },
-                        conteo:    data.conteo || {},
-                        unlocks:   data.unlocks || {},
-                        updatedAt: data.updatedAt || 0
-                    };
-                });
-                // Reconstruir auditoriaConteo agregado (suma/promedio de todos los usuarios)
-                _recalcAdminAggregatedConteo();
-                if (activeTab === 'inventario') renderTab();
-            }, function(err) { console.warn('[AuditAdmin] Error listener usuarios:', err); });
-        }
-
-        /** Recalcula auditoriaConteo como promedio de todos los usuarios (vista admin) */
-        function _recalcAdminAggregatedConteo() {
-            const AREAS = ['almacen', 'barra1', 'barra2'];
-            const aggregated = {};
-            const usersList  = Object.values(allUsersAuditoria);
-            if (usersList.length === 0) return;
-            // Recolectar todos los prodIds
-            const prodIds = new Set();
-            usersList.forEach(u => Object.keys(u.conteo).forEach(id => prodIds.add(id)));
-            prodIds.forEach(prodId => {
-                aggregated[prodId] = {};
-                AREAS.forEach(area => {
-                    const vals = usersList.map(u => u.conteo[prodId] && u.conteo[prodId][area])
-                                          .filter(Boolean);
-                    if (vals.length === 0) { aggregated[prodId][area] = { enteras: 0, abiertas: [] }; return; }
-                    const sumEnt = vals.reduce((s, v) => s + (v.enteras || 0), 0);
-                    aggregated[prodId][area] = {
-                        enteras:  Math.round(sumEnt / vals.length),
-                        abiertas: vals[0].abiertas || [], // usar primer usuario como referencia de abiertas
-                        _numUsuarios: vals.length
-                    };
-                });
-            });
-            auditoriaConteo = aggregated;
-        }
-
-        /**
-         * Admin desbloquea UN producto específico para que UN usuario lo corrija.
-         * Escribe el unlock en Firestore → subscribeMyAuditoria() lo detecta en tiempo real.
-         */
-        async function adminUnlockProducto(userId, prodId, area) {
-            if (!_db || !isAdmin()) return;
-            const key = prodId + '__' + area;
-            const unlockData = { unlockedBy: currentUserUid, unlockedAt: Date.now(), used: false };
-            try {
-                await _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
-                         .collection('userAuditoria').doc(userId)
-                         .set({ unlocks: { [key]: unlockData } }, { merge: true });
-                showNotification('🔓 Corrección habilitada para el usuario');
-            } catch (err) {
-                console.error('[AuditAdmin] Error unlock:', err);
-                showNotification('❌ Error al habilitar corrección');
-            }
-        }
-
-        /**
-         * Usuario guarda la corrección de un producto desbloqueado.
-         * Solo actualiza ESE producto; el resto del conteo permanece intacto.
-         */
-        async function guardarCorreccionProducto(prodId, area, enteras, abiertas) {
-            const key = prodId + '__' + area;
-            if (!myAuditoriaUnlocks[key]) {
-                showNotification('⚠️ Este producto no está habilitado para corrección');
-                return;
-            }
-            if (!myAuditoriaConteo[prodId]) myAuditoriaConteo[prodId] = {};
-            myAuditoriaConteo[prodId][area] = { enteras, abiertas, _corregidoEn: Date.now() };
-            // Marcar el unlock como usado (evitar correcciones múltiples sin nueva autorización)
-            myAuditoriaUnlocks[key] = Object.assign({}, myAuditoriaUnlocks[key], { used: true });
-            saveToLocalStorage();
-            await syncMyAuditoriaToFirestore();
-            showNotification('✅ Corrección guardada');
-            renderTab();
-        }
-
-        /**
-         * Admin: reinicar sesión de auditoría.
-         * Escribe nuevo sessionId en Firestore → todos los usuarios lo detectan y reinician.
-         */
-        async function _adminIniciarSesionFirestore(sessionId) {
-            if (!_db || !isAdmin() || !navigator.onLine) return;
-            try {
-                // Borrar todos los documentos de userAuditoria de la sesión anterior
-                const colRef = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
-                                   .collection('userAuditoria');
-                const snap = await colRef.get();
-                const batch = _db.batch();
-                snap.forEach(doc => batch.delete(doc.ref));
-                await batch.commit();
-                // Escribir la nueva sesión en el documento principal
-                await _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
-                         .set({ _auditoriaSessionId: sessionId, _auditoriaStartedBy: currentUserUid,
-                                _auditoriaStartedAt: Date.now() }, { merge: true });
-                console.info('[AuditAdmin] Nueva sesión', sessionId, 'iniciada ✓');
-            } catch (err) {
-                console.warn('[AuditAdmin] Error iniciando sesión en Firestore:', err);
-            }
-        }
-
-        /**
-         * Exportar a Excel solo el conteo propio del usuario (áreas finalizadas).
-         * El usuario NO ve los conteos de los demás.
-         */
-        function exportarExcelMiConteo() {
-            const areasFinalizadas = ['almacen', 'barra1', 'barra2']
-                .filter(a => myAuditoriaStatus[a] === 'completada');
-            if (areasFinalizadas.length === 0) {
-                showNotification('⚠️ Finaliza al menos un área antes de exportar');
-                return;
-            }
-            exportToExcelConDatos('AUDITORIA', myAuditoriaConteo, products,
-                'mi_conteo_' + new Date().toISOString().split('T')[0] + '.xlsx');
-        }
-
-        /**
-         * Admin: exportar el inventario total consolidado de todos los usuarios y áreas.
-         */
-        function exportarExcelAdminTotal() {
-            if (Object.keys(allUsersAuditoria).length === 0 && Object.keys(auditoriaConteo).length === 0) {
-                showNotification('⚠️ No hay conteos de usuarios para exportar');
-                return;
-            }
-            exportToExcelConDatos('AUDITORIA', auditoriaConteo, products,
-                'inventario_total_' + new Date().toISOString().split('T')[0] + '.xlsx');
-        }
+         * loadConflictosDesdeFirestore()
          * ─────────────────────────────
          * Al iniciar la app, descarga el estado de conflictos de abiertas
          * para mostrarlo en las tarjetas de auditoría.
@@ -3938,10 +3700,7 @@ async function resetConteoAtomicoEnFirestore() {
 
             try {
                 const docRef = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID);
-                // FIX SYNC-2: forzar lectura desde servidor en la primera carga
-                // para ignorar caché stale de Firestore offline persistence.
-                // Sin esto, Firestore sirve datos viejos del caché antes que los reales.
-                const snap   = await docRef.get({ source: 'server' }).catch(() => docRef.get());
+                const snap   = await docRef.get();
 
                 if (!snap.exists) {
                     // Primera vez: subir datos locales a la nube
@@ -4141,20 +3900,12 @@ async function resetConteoAtomicoEnFirestore() {
                 document.body.appendChild(bar);
                 updateCloudSyncBadge('offline');
             } else {
-                // FIX SYNC-5: Al reconectar, primero verificar si hay datos más recientes
-                // en la nube (admin pudo haber guardado mientras estábamos offline)
-                // y LUEGO subir los pendientes locales si aplica.
-                if (_db) {
-                    console.info('[Firebase] Reconectado — verificando cambios en la nube…');
-                    loadFromCloud().then(function() {
-                        // loadFromCloud ya llama syncToCloud() si local es más reciente
-                        updateCloudSyncBadge(_cloudSyncPending ? 'pending' : 'ok');
-                    }).catch(function(e) {
-                        console.warn('[Firebase] Error en loadFromCloud tras reconexión:', e);
-                        if (_cloudSyncPending) syncToCloud();
-                    });
+                // Reconexión: sincronizar cambios pendientes
+                if (_cloudSyncPending && _db) {
+                    console.info('[Firebase] Reconectado — sincronizando cambios pendientes…');
+                    syncToCloud();
                 } else {
-                    updateCloudSyncBadge('none');
+                    updateCloudSyncBadge(_db ? 'ok' : 'none');
                 }
             }
         }
@@ -4168,78 +3919,6 @@ async function resetConteoAtomicoEnFirestore() {
         let _unsubAjustes   = null;
         let _unsubCatalogo  = null;
         let _unsubNotifs    = null;
-        let _unsubMainDoc   = null;  // FIX SYNC-3: listener del documento principal de inventario
-
-        // ══════════════════════════════════════════════════════════════════════
-        //  FIX SYNC-3: LISTENER EN TIEMPO REAL DEL DOCUMENTO PRINCIPAL
-        // ══════════════════════════════════════════════════════════════════════
-        /**
-         * subscribeMainDoc()
-         * ───────────────────
-         * Establece un onSnapshot en inventarioApp/{FIRESTORE_DOC_ID}.
-         * Cuando admin (u otro dispositivo) escribe en Firestore, TODOS los
-         * dispositivos reciben la actualización vía WebSocket en ~100-500ms,
-         * sin necesidad de polling ni recarga manual.
-         *
-         * Anti-echo de 2 capas:
-         *  1. hasPendingWrites = true → el cambio viene de este propio dispositivo
-         *     (Firestore lo marca antes de confirmación del servidor) → ignorar.
-         *  2. _lastWrittenBy === currentUserUid → confirmación de que escribió
-         *     este mismo usuario → ignorar.
-         *
-         * Si ninguna capa bloquea → es un cambio externo (admin u otro bartender)
-         * → llamar _applyCloudData() para actualizar estado y renderizar UI.
-         */
-        function subscribeMainDoc() {
-            if (!_db) return;
-            // Cancelar listener anterior si existía (ej. tras cierre de sesión)
-            if (typeof _unsubMainDoc === 'function') { _unsubMainDoc(); _unsubMainDoc = null; }
-
-            const docRef = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID);
-            _unsubMainDoc = docRef.onSnapshot(
-                { includeMetadataChanges: true },
-                function(snapshot) {
-                    if (!snapshot.exists) return;
-
-                    // Capa 1: ignorar escrituras propias aún en tránsito (optimistic updates)
-                    if (snapshot.metadata.hasPendingWrites) return;
-
-                    const data = snapshot.data();
-
-                    // Capa 2: ignorar si fue este mismo usuario/dispositivo quien escribió
-                    const writerUid = data._lastWrittenBy;
-                    if (writerUid && writerUid === currentUserUid) return;
-
-                    // Cambio externo confirmado: admin o bartender distinto.
-                    // Si es del servidor (no del caché local) proceder siempre.
-                    if (snapshot.metadata.fromCache) return; // caché local, esperar confirmación red
-
-                    const cloudTs = data._lastModified || 0;
-                    const localTs = parseInt(localStorage.getItem('inventarioApp_lastModified') || '0', 10);
-
-                    if (cloudTs <= localTs) return; // no hay nada más nuevo que lo local
-
-                    console.info('[RT-Sync] Cambio externo detectado por', writerUid || 'desconocido',
-                                 '— aplicando datos de admin/red…');
-                    updateCloudSyncBadge('syncing');
-
-                    _applyCloudData(data).then(function() {
-                        const quien = data._lastWrittenRole === 'admin' ? '👑 Admin' : '👤 Usuario';
-                        showNotification('🔄 Inventario actualizado por ' + quien);
-                    }).catch(function(err) {
-                        console.error('[RT-Sync] Error aplicando datos externos:', err);
-                        updateCloudSyncBadge('error');
-                    });
-                },
-                function(err) {
-                    console.warn('[RT-Sync] Error en listener del documento principal:', err);
-                    // En caso de error de permisos o red, no hacer crash — el sistema
-                    // seguirá funcionando con loadFromCloud() en reconexiones.
-                }
-            );
-
-            console.info('[RT-Sync] Listener activo en inventarioApp/' + FIRESTORE_DOC_ID);
-        }
         let _notificaciones = [];
         let _ajustes        = [];
         let _conteoSearchTerm = '';   // búsqueda dentro del conteo de inventario
@@ -4264,19 +3943,12 @@ async function resetConteoAtomicoEnFirestore() {
                 currentUserRole = 'user';
             }
             applyRoleUI();
-
-            // FIX SYNC-4: iniciar listener en tiempo real del documento principal
-            // DESPUÉS de cargar el rol, para que _applyCloudData sepa si somos admin o user.
-            subscribeMainDoc();
-
             if (isAdmin()) {
                 subscribeAjustesPendientes();
                 subscribeCatalogoAdmin();
-                subscribeAllUsersAuditoria(); // Admin ve todos los conteos en tiempo real
             } else {
                 subscribeCatalogoUsuario();
                 subscribeNotificacionesUsuario();
-                subscribeMyAuditoria(); // Usuario escucha sus propios desbloqueos
             }
         }
 
@@ -5404,8 +5076,8 @@ async function resetConteoAtomicoEnFirestore() {
             if (isAuditoriaMode && auditoriaAreaActiva) {
                 areaKey = auditoriaAreaActiva;
                 areaLabel = areasAuditoria[areaKey] || areaKey;
-                if (!myAuditoriaConteo[productId]) myAuditoriaConteo[productId] = {};
-                conteoSource = myAuditoriaConteo[productId][areaKey] || { enteras: 0, abiertas: [] };
+                if (!auditoriaConteo[productId]) auditoriaConteo[productId] = {};
+                conteoSource = auditoriaConteo[productId][areaKey] || { enteras: 0, abiertas: [] };
             } else {
                 areaKey = selectedArea;
                 areaLabel = areas[areaKey] || areaKey;
@@ -5530,8 +5202,8 @@ async function resetConteoAtomicoEnFirestore() {
 
             if (isAuditoriaMode && auditoriaAreaActiva) {
                 // ── Guardar en objeto legacy (compatible con exportarAuditoriaExcel) ──
-                if (!myAuditoriaConteo[inventarioModalProductId]) myAuditoriaConteo[inventarioModalProductId] = {};
-                myAuditoriaConteo[inventarioModalProductId][auditoriaAreaActiva] = { enteras, abiertas };
+                if (!auditoriaConteo[inventarioModalProductId]) auditoriaConteo[inventarioModalProductId] = {};
+                auditoriaConteo[inventarioModalProductId][auditoriaAreaActiva] = { enteras, abiertas };
 
                 // ── Guardar en estructura multiusuario (sin sobreescribir otros) ──
                 // Cada usuario escribe SOLO su propia clave; los demás quedan intactos.
@@ -5588,33 +5260,42 @@ async function resetConteoAtomicoEnFirestore() {
         //  AUDITORÍA FÍSICA CIEGA — Funciones de control de flujo
         // ══════════════════════════════════════════════════════════════════════
 
-        function auditoriaVolverSeleccion() {
+        function auditoriaEntrarArea(area) {
+            auditoriaAreaActiva = area;
+            auditoriaView = 'counting';
+            isAuditoriaMode = true;
+            selectedArea = area;
+            _conteoSearchTerm = '';   // limpiar búsqueda al entrar a nueva área
+            saveToLocalStorage();
+            renderTab();
+        }
+
+        function auditoriaFinalizarConteo() {
             if (!auditoriaAreaActiva) return;
             const area = auditoriaAreaActiva;
             const nombreArea = areasAuditoria[area];
 
-            showConfirm('¿Finalizar conteo de ' + nombreArea + '?\n\nEsto guardará y bloqueará tu conteo del área. Solo el administrador podrá habilitar correcciones.', function() {
-                // Marcar MI área como completada (por usuario, no global)
-                myAuditoriaStatus[area] = 'completada';
-                auditoriaView    = 'selection';
+            // Confirmar finalización
+            showConfirm('¿Finalizar conteo de ' + nombreArea + '?\n\nEsto guardará los datos del área y te regresará al panel de áreas.', function() {
+                // Marcar área como completada
+                auditoriaStatus[area] = 'completada';
+                auditoriaView = 'selection';
                 auditoriaAreaActiva = null;
-                isAuditoriaMode  = false;
+                isAuditoriaMode = false;
                 saveToLocalStorage();
 
-                // Subir conteo propio a Firestore (bajo mi UID, aislado)
-                syncMyAuditoriaToFirestore().catch(err =>
-                    console.warn('[AuditUser] Error sync al finalizar:', err)
-                );
-
-                // Mantener también el sync atómico por área (para reportes admin)
+                // ── Escritura atómica al servidor (increment + conflicto abiertas) ──
                 syncConteoAtomicoPorArea(area).catch(err =>
                     console.warn('[Atomico] Error en sync final:', err)
                 );
+
+                // ── Escritura multiusuario: sube SOLO el conteo de este dispositivo ──
+                // merge:true en Firestore → nunca sobreescribe datos de otros usuarios
                 syncConteoPorUsuarioToFirestore(area).catch(err =>
                     console.warn('[MultiUser] Error en sync multiusuario:', err)
                 );
 
-                showNotification('✅ Conteo de ' + nombreArea + ' guardado y bloqueado');
+                showNotification('✅ Conteo de ' + nombreArea + ' guardado');
                 renderTab();
             });
         }
@@ -5629,69 +5310,38 @@ async function resetConteoAtomicoEnFirestore() {
         }
 
         function auditoriaTotalAreasCompletadas() {
-            // Usuarios ven su propio progreso; admin ve estado global agregado
-            const statusRef = isAdmin() ? auditoriaStatus : myAuditoriaStatus;
-            return Object.values(statusRef).filter(s => s === 'completada').length;
+            return Object.values(auditoriaStatus).filter(s => s === 'completada').length;
         }
 
         function auditoriaTodasCompletas() {
-            const statusRef = isAdmin() ? auditoriaStatus : myAuditoriaStatus;
-            return Object.values(statusRef).every(s => s === 'completada');
-        }
-
-        function auditoriaEntrarArea(area) {
-            // Bloquear entrada si el usuario ya finalizó esa área (solo admin puede entrar igual)
-            if (!isAdmin() && myAuditoriaStatus[area] === 'completada') {
-                // Ver si hay unlock para algún producto
-                const tieneUnlock = Object.keys(myAuditoriaUnlocks)
-                    .some(k => k.endsWith('__' + area) && !myAuditoriaUnlocks[k].used);
-                if (!tieneUnlock) {
-                    showNotification('🔒 Área completada — solicita al administrador habilitar una corrección');
-                    return;
-                }
-            }
-            auditoriaAreaActiva = area;
-            auditoriaView = 'counting';
-            isAuditoriaMode = true;
-            selectedArea = area;
-            _conteoSearchTerm = '';
-            saveToLocalStorage();
-            renderTab();
+            return Object.values(auditoriaStatus).every(s => s === 'completada');
         }
 
         function auditoriaResetear() {
+            // FIX #1 — Solo el administrador puede iniciar un nuevo ciclo de inventario.
             if (!isAdmin()) {
                 showNotification('⚠️ Solo el administrador puede iniciar un nuevo ciclo de inventario');
                 return;
             }
+            // GUARD OFFLINE — si no hay conexión, el reset local quedaría desfasado
+            // de Firestore. Requerir conexión para garantizar coherencia entre dispositivos.
             if (!navigator.onLine) {
                 showNotification('📴 Sin conexión — conecta a internet antes de iniciar nueva auditoría');
                 return;
             }
-            showConfirm('⚠️ ¿Iniciar nueva auditoría?\n\nSe borrarán todos los conteos actuales de TODOS los usuarios y áreas comenzando desde cero.\n\nEsta acción no se puede deshacer.', function() {
-                const newSessionId = String(Date.now());
-                // Reiniciar estado del admin
-                _auditoriaSessionId       = newSessionId;
-                auditoriaStatus           = { almacen: 'pendiente', barra1: 'pendiente', barra2: 'pendiente' };
-                auditoriaConteo           = {};
-                auditoriaConteoPorUsuario = {};
-                allUsersAuditoria         = {};
-                // Reiniciar estado propio del admin (él también cuenta)
-                myAuditoriaConteo  = {};
-                myAuditoriaStatus  = { almacen: 'pendiente', barra1: 'pendiente', barra2: 'pendiente' };
-                myAuditoriaUnlocks = {};
-                auditoriaView      = 'selection';
-                auditoriaAreaActiva = null;
-                isAuditoriaMode    = false;
+            showConfirm('⚠️ ¿Iniciar nueva auditoría?\n\nSe borrarán todos los conteos actuales de las tres áreas y se comenzará desde cero.\n\nEsta acción no se puede deshacer.', function() {
+                auditoriaStatus            = { almacen: 'pendiente', barra1: 'pendiente', barra2: 'pendiente' };
+                auditoriaConteo            = {};
+                auditoriaConteoPorUsuario  = {};   // limpiar también los conteos multiusuario
+                auditoriaView              = 'selection';
+                auditoriaAreaActiva        = null;
+                isAuditoriaMode            = false;
                 saveToLocalStorage();
-                // Borrar todos los conteos de usuarios en Firestore y escribir nuevo sessionId
-                _adminIniciarSesionFirestore(newSessionId).catch(err =>
-                    console.warn('[AuditAdmin] Error al reiniciar sesión en Firestore:', err)
-                );
+                // Limpiar también los documentos atómicos en Firestore (para que increment() parta de 0)
                 resetConteoAtomicoEnFirestore().catch(err =>
                     console.warn('[Atomico] No se pudo limpiar Firestore en reset:', err)
                 );
-                showNotification('✅ Nueva auditoría iniciada — todos los conteos en ceros');
+                showNotification('✅ Nueva auditoría iniciada');
                 renderTab();
             });
         }
@@ -5726,11 +5376,14 @@ async function resetConteoAtomicoEnFirestore() {
          * pero toma los datos de auditoriaConteo en lugar de inventarioConteo.
          */
         function exportarAuditoriaExcel() {
-            if (isAdmin()) {
-                exportarExcelAdminTotal();
-            } else {
-                exportarExcelMiConteo();
+            if (!auditoriaTodasCompletas()) {
+                showNotification('⚠️ Completa las 3 áreas antes de exportar');
+                return;
             }
+            // FIX #8 — Usar exportToExcelConDatos (versión paramétrica) en lugar
+            // del swap inseguro inventarioConteo = auditoriaConteo.
+            // Pasar los datos de auditoría directamente como parámetro.
+            exportToExcelConDatos('AUDITORIA', auditoriaConteo, products, null);
         }
 
         // ── BÚSQUEDA EN CONTEO ────────────────────────────────────────────────
@@ -5764,181 +5417,6 @@ async function resetConteoAtomicoEnFirestore() {
 
         // ── Pantalla 1: Selección de área ──────────────────────────────────────
         function renderAuditoriaSeleccion() {
-            const totalCompletas = auditoriaTotalAreasCompletadas();
-            const porcentaje = Math.round((totalCompletas / 3) * 100);
-            const todasCompletas = auditoriaTodasCompletas();
-            const statusRef = isAdmin() ? auditoriaStatus : myAuditoriaStatus;
-
-            let html = '<div class="audit-screen">';
-
-            // ── Header ────────────────────────────────────────────────────────
-            html += '<div class="bg-white rounded-xl p-4 sm:p-5 mb-4 shadow-md">';
-            html += '<div class="flex items-start justify-between gap-3 mb-3">';
-            html += '<div>';
-            html += '<p class="audit-header-title">Auditoría Física Ciega</p>';
-            html += '<p class="audit-header-sub">' + (isAdmin()
-                ? 'Panel de administrador — puedes ver todos los conteos y gestionar la sesión.'
-                : 'Cuenta tu área y finaliza. Solo tú ves tu conteo; el admin lo revisa al final.') + '</p>';
-            html += '</div>';
-            if (isAdmin()) {
-                html += '<button onclick="auditoriaResetear()" title="Iniciar nueva auditoría (solo admin)" style="flex-shrink:0;padding:6px 10px;border-radius:var(--r-md);background:var(--red-dim);border:1px solid rgba(239,68,68,0.18);color:var(--red-text);font-size:0.7rem;font-weight:600;cursor:pointer;white-space:nowrap;" class="flex items-center gap-1">';
-                html += '<svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>';
-                html += ' Nueva auditoría</button>';
-            }
-            html += '</div>';
-            // Barra de progreso
-            html += '<div class="flex items-center gap-3">';
-            html += '<div style="font-size:0.68rem;font-weight:600;color:var(--txt-muted);white-space:nowrap;">' + totalCompletas + ' / 3 áreas</div>';
-            html += '<div class="audit-progress-bar" style="flex:1;"><div class="audit-progress-fill" style="width:' + porcentaje + '%;"></div></div>';
-            html += '<div style="font-size:0.68rem;font-weight:700;color:' + (todasCompletas ? 'var(--green)' : 'var(--accent)') + ';white-space:nowrap;">' + porcentaje + '%</div>';
-            html += '</div>';
-            html += '</div>';
-
-            html += renderAuditUserPanel();
-
-            // ── Panel de usuarios (solo admin) ────────────────────────────────
-            if (isAdmin()) {
-                html += _renderAdminUsersPanel();
-            }
-
-            html += renderAuditComparePanel();
-
-            // ── Botones de área ───────────────────────────────────────────────
-            html += '<div class="flex flex-col gap-3 mb-4">';
-            ['almacen', 'barra1', 'barra2'].forEach(area => {
-                const isCompleta = statusRef[area] === 'completada';
-                const tieneUnlock = !isAdmin() && Object.keys(myAuditoriaUnlocks)
-                    .some(k => k.endsWith('__' + area) && !myAuditoriaUnlocks[k].used);
-                html += '<div class="audit-area-card' + (isCompleta ? ' completada' : '') + '"'
-                      + ' onclick="auditoriaEntrarArea(\'' + area + '\')"'
-                      + ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();auditoriaEntrarArea(\'' + area + '\');}"'
-                      + ' role="button" tabindex="0" aria-label="Entrar a ' + areasAuditoria[area] + '">';
-                html += '<div class="audit-area-icon"><i class="' + areasAuditoriaFA[area] + '" style="font-size:1.2rem;color:' + (isCompleta ? 'var(--green)' : 'var(--accent)') + ';"></i></div>';
-                html += '<div class="audit-area-info">';
-                html += '<div class="audit-area-name">' + areasAuditoria[area] + '</div>';
-                html += '<div class="audit-area-status ' + (isCompleta ? 'completada' : 'pendiente') + '">';
-                html += isCompleta
-                    ? '<svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg> Completada'
-                    : '<span style="width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;"></span> Pendiente';
-                html += '</div>';
-                if (isCompleta) {
-                    const conteoRef = isAdmin() ? auditoriaConteo : myAuditoriaConteo;
-                    const totalProductos = products.filter(p => conteoRef[p.id] && conteoRef[p.id][area] &&
-                        (conteoRef[p.id][area].enteras > 0 || (conteoRef[p.id][area].abiertas || []).some(a => a > 0))).length;
-                    html += '<div style="font-size:0.63rem;color:var(--txt-muted);margin-top:3px;">' + totalProductos + ' producto(s) con cantidad';
-                    if (isAdmin()) {
-                        html += ' · <a href="#" onclick="event.stopPropagation();reabrirArea(\'' + area + '\');" style="color:var(--amber);text-decoration:underline;font-weight:600;">↩ Reabrir</a>';
-                    } else if (tieneUnlock) {
-                        html += ' · <span style="color:var(--amber);font-weight:600;">🔓 Corrección habilitada</span>';
-                    } else {
-                        html += ' · <span style="color:var(--green);font-weight:600;">🔒 Bloqueada</span>';
-                    }
-                    html += '</div>';
-                }
-                html += '</div>';
-                html += '<svg class="audit-area-arrow" width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 18l6-6-6-6"/></svg>';
-                html += '</div>';
-            });
-            html += '</div>';
-
-            // ── Botones de exportar (rol-específicos) ─────────────────────────
-            if (todasCompletas) {
-                html += '<div style="animation: springUp 0.26s var(--ease-out) both;">';
-                if (isAdmin()) {
-                    // Admin: descarga total + publica
-                    html += '<button class="audit-export-btn" onclick="exportarExcelAdminTotal()">';
-                    html += '<i class="fa-solid fa-file-excel" style="font-size:1.1rem;"></i>';
-                    html += 'EXPORTAR INVENTARIO TOTAL (TODOS LOS USUARIOS)';
-                    html += '</button>';
-                    html += '<p style="text-align:center;font-size:0.68rem;color:var(--txt-muted);margin-top:8px;">Inventario consolidado de todos los almacenes y todos los usuarios</p>';
-                    html += '<button onclick="generarYPublicarReporte()" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:8px;padding:10px 16px;border-radius:var(--r-md);background:var(--accent);color:#fff;font-size:0.8rem;font-weight:600;border:none;cursor:pointer;">';
-                    html += '<i class="fa-solid fa-cloud-arrow-up"></i> Publicar Inventario Total para Todos los Usuarios';
-                    html += '</button>';
-                } else {
-                    // Usuario: solo descarga su propio conteo
-                    html += '<button class="audit-export-btn" onclick="exportarExcelMiConteo()">';
-                    html += '<i class="fa-solid fa-file-excel" style="font-size:1.1rem;"></i>';
-                    html += 'DESCARGAR MI CONTEO (ÁREAS FINALIZADAS)';
-                    html += '</button>';
-                    html += '<p style="text-align:center;font-size:0.68rem;color:var(--txt-muted);margin-top:8px;">Exporta únicamente tu conteo personal de las 3 áreas</p>';
-                }
-                html += '</div>';
-            } else {
-                const faltantes = ['almacen', 'barra1', 'barra2']
-                    .filter(a => statusRef[a] !== 'completada')
-                    .map(a => areasAuditoria[a]).join(', ');
-                html += '<div style="text-align:center;padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);">';
-                html += '<p style="font-size:0.75rem;color:var(--txt-muted);">El botón de exportación aparecerá cuando completes todas las áreas.</p>';
-                html += '<p style="font-size:0.7rem;color:var(--txt-muted);margin-top:4px;">Pendiente: <strong style="color:var(--amber);">' + faltantes + '</strong></p>';
-                html += '</div>';
-            }
-
-            html += '</div>'; // audit-screen
-            return html;
-        }
-
-        /** Panel admin: tabla de todos los usuarios con sus conteos y botones de unlock */
-        function _renderAdminUsersPanel() {
-            const users = Object.values(allUsersAuditoria);
-            if (users.length === 0) return '';
-            let html = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px;margin-bottom:16px;">';
-            html += '<p style="font-size:0.75rem;font-weight:700;color:var(--txt-primary);margin-bottom:10px;">👥 Conteos por usuario</p>';
-            users.forEach(u => {
-                const areasOk = ['almacen', 'barra1', 'barra2'].filter(a => u.status[a] === 'completada');
-                html += '<div style="border:1px solid var(--border);border-radius:var(--r-md);padding:10px;margin-bottom:8px;background:var(--bg);">';
-                html += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:6px;">';
-                html += '<span style="font-size:0.72rem;font-weight:600;color:var(--accent);">👤 ' + escapeHtml(u.email) + '</span>';
-                html += '<span style="font-size:0.65rem;color:var(--txt-muted);">' + areasOk.length + '/3 áreas</span>';
-                html += '</div>';
-                ['almacen', 'barra1', 'barra2'].forEach(area => {
-                    const st = u.status[area] === 'completada';
-                    const numProds = Object.keys(u.conteo).filter(pid =>
-                        u.conteo[pid] && u.conteo[pid][area] &&
-                        (u.conteo[pid][area].enteras > 0 || (u.conteo[pid][area].abiertas || []).some(v => v > 0))
-                    ).length;
-                    html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;font-size:0.68rem;border-top:1px solid var(--border);">';
-                    html += '<span style="color:var(--txt-muted);">' + areasAuditoria[area] + '</span>';
-                    html += '<span style="color:' + (st ? 'var(--green)' : 'var(--amber)') + ';font-weight:600;">' + (st ? '✓ Finalizado — ' + numProds + ' prods' : 'Pendiente') + '</span>';
-                    if (st) {
-                        html += '<button onclick="adminVerConteoUsuario(\'' + escapeHtml(u.uid) + '\',\'' + area + '\')" style="padding:2px 7px;border-radius:4px;background:var(--accent);color:#fff;font-size:0.62rem;border:none;cursor:pointer;">Ver</button>';
-                        html += '<button onclick="adminUnlockAreaUsuario(\'' + escapeHtml(u.uid) + '\',\'' + area + '\')" style="padding:2px 7px;border-radius:4px;background:var(--amber);color:#fff;font-size:0.62rem;border:none;cursor:pointer;margin-left:4px;">🔓 Habilitar</button>';
-                    }
-                    html += '</div>';
-                });
-                html += '</div>';
-            });
-            html += '</div>';
-            return html;
-        }
-
-        /** Admin muestra el conteo de un usuario en un área específica */
-        function adminVerConteoUsuario(uid, area) {
-            const u = allUsersAuditoria[uid];
-            if (!u) return;
-            const prods = products.filter(p => u.conteo[p.id] && u.conteo[p.id][area] &&
-                (u.conteo[p.id][area].enteras > 0 || (u.conteo[p.id][area].abiertas || []).some(v => v > 0)));
-            if (prods.length === 0) { showNotification('Sin productos contados en esta área'); return; }
-            const lines = prods.map(p => {
-                const d = u.conteo[p.id][area];
-                return escapeHtml(p.name) + ': ' + (d.enteras || 0) + ' ent, ' + (d.abiertas || []).length + ' ab';
-            }).join('\n');
-            showConfirm('Conteo de ' + u.email + ' — ' + areasAuditoria[area] + ':\n\n' + lines, function() {});
-        }
-
-        /** Admin habilita corrección de un área completa para un usuario (por producto) */
-        function adminUnlockAreaUsuario(uid, area) {
-            const u = allUsersAuditoria[uid];
-            if (!u) return;
-            // Mostrar lista de productos para elegir cuál desbloquear
-            const prods = products.filter(p => u.conteo[p.id] && u.conteo[p.id][area]);
-            if (prods.length === 0) { showNotification('No hay productos contados para desbloquear'); return; }
-            // Por simplicidad: desbloquear todos los productos del área para ese usuario
-            showConfirm('¿Habilitar corrección de TODOS los productos de ' + areasAuditoria[area] + ' para ' + u.email + '?\n\nEl usuario podrá modificar su conteo de esta área.', function() {
-                Promise.all(prods.map(p => adminUnlockProducto(uid, p.id, area)))
-                    .then(() => showNotification('🔓 Correcciones habilitadas para ' + u.email))
-                    .catch(err => { console.error(err); showNotification('❌ Error al habilitar'); });
-            });
-        }
             const totalCompletas = auditoriaTotalAreasCompletadas();
             const porcentaje = Math.round((totalCompletas / 3) * 100);
             const todasCompletas = auditoriaTodasCompletas();
@@ -6049,16 +5527,11 @@ async function resetConteoAtomicoEnFirestore() {
         function renderAuditoriaConteo() {
             const area = auditoriaAreaActiva;
             const nombreArea = areasAuditoria[area];
-            // Para el usuario: usa myAuditoriaStatus; para el admin: auditoriaStatus
-            const estaCompleta = isAdmin()
-                ? (auditoriaStatus[area] === 'completada')
-                : (myAuditoriaStatus[area] === 'completada');
-            // Usuario con área completada → solo lectura SALVO que tenga unlock pendiente
-            const tieneUnlocksPendientes = !isAdmin() && Object.keys(myAuditoriaUnlocks)
-                .some(k => k.endsWith('__' + area) && !myAuditoriaUnlocks[k].used);
-            const soloLectura = estaCompleta && !isAdmin() && !tieneUnlocksPendientes;
-            // Conteo a mostrar en las tarjetas
-            const conteoRef = isAdmin() ? auditoriaConteo : myAuditoriaConteo;
+            const estaCompleta = auditoriaStatus[area] === 'completada';
+            // FIX #4 — Determinar si esta pantalla debe ser de solo lectura.
+            // Bartender con área completada → solo lectura (no puede re-editar).
+            // Admin → siempre editable (necesita poder corregir errores).
+            const soloLectura = estaCompleta && !isAdmin();
 
             let html = '<div class="audit-screen">';
 
@@ -6080,7 +5553,7 @@ async function resetConteoAtomicoEnFirestore() {
             html += '</div>';
             html += '</div>';
             // Contador de productos ingresados
-            const ingresados = products.filter(p => conteoRef[p.id] && conteoRef[p.id][area] && (conteoRef[p.id][area].enteras > 0 || (conteoRef[p.id][area].abiertas || []).some(a => a > 0))).length;
+            const ingresados = products.filter(p => auditoriaConteo[p.id] && auditoriaConteo[p.id][area] && (auditoriaConteo[p.id][area].enteras > 0 || (auditoriaConteo[p.id][area].abiertas || []).some(a => a > 0))).length;
             html += '<div style="text-align:right;">';
             html += '<div style="font-size:0.65rem;font-weight:600;color:var(--txt-muted);">Con cantidad</div>';
             html += '<div style="font-family:\'IBM Plex Mono\',monospace;font-weight:700;font-size:1rem;color:var(--accent);">' + ingresados + '<span style="font-size:0.65rem;font-weight:500;color:var(--txt-muted);">/' + products.length + '</span></div>';
@@ -6097,18 +5570,16 @@ async function resetConteoAtomicoEnFirestore() {
                 html += '<div style="margin-top:16px;padding:12px;background:var(--bg);border-radius:var(--r-md);">';
                 html += '<p style="font-size:0.7rem;font-weight:600;color:var(--txt-muted);margin-bottom:8px;">Resumen de tu conteo:</p>';
                 const resumen = products.filter(p => {
-                    const d = conteoRef[p.id] && conteoRef[p.id][area];
+                    const d = auditoriaConteo[p.id] && auditoriaConteo[p.id][area];
                     return d && (d.enteras > 0 || (d.abiertas || []).some(v => v > 0));
                 });
                 if (resumen.length === 0) {
                     html += '<p style="font-size:0.72rem;color:var(--txt-muted);">No se registraron cantidades en esta área.</p>';
                 } else {
                     resumen.slice(0, 8).forEach(p => {
-                        const d = conteoRef[p.id][area];
-                        const key = p.id + '__' + area;
-                        const hasUnlock = myAuditoriaUnlocks[key] && !myAuditoriaUnlocks[key].used;
+                        const d = auditoriaConteo[p.id][area];
                         html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border);font-size:0.72rem;">';
-                        html += '<span style="color:var(--txt-primary);">' + escapeHtml(p.name) + (hasUnlock ? ' <span style="color:var(--amber);">🔓</span>' : '') + '</span>';
+                        html += '<span style="color:var(--txt-primary);">' + escapeHtml(p.name) + '</span>';
                         html += '<span style="color:var(--accent);font-weight:600;">' + (d.enteras || 0) + ' ent · ' + (d.abiertas || []).length + ' ab</span>';
                         html += '</div>';
                     });
@@ -6209,7 +5680,7 @@ async function resetConteoAtomicoEnFirestore() {
             } else {
                 filteredProducts.forEach((product, idx) => {
                     // Leer conteo de auditoría (no del inventario operativo)
-                    const areaData = (conteoRef[product.id] && conteoRef[product.id][area]) || { enteras: 0, abiertas: [] };
+                    const areaData = (auditoriaConteo[product.id] && auditoriaConteo[product.id][area]) || { enteras: 0, abiertas: [] };
                     const enteras  = areaData.enteras || 0;
                     const abiertas = areaData.abiertas || [];
                     const hasData  = enteras > 0 || abiertas.some(a => a > 0);
@@ -7464,13 +6935,9 @@ async function resetConteoAtomicoEnFirestore() {
                 } else {
                     console.info('[Auth] Sin sesión — mostrando login.');
                     // Limpiar subscripciones activas
-                    if (typeof _unsubAjustes   === 'function') { _unsubAjustes();   _unsubAjustes   = null; }
-                    if (typeof _unsubCatalogo  === 'function') { _unsubCatalogo();  _unsubCatalogo  = null; }
-                    if (typeof _unsubNotifs    === 'function') { _unsubNotifs();    _unsubNotifs    = null; }
-                    if (typeof _unsubMainDoc   === 'function') { _unsubMainDoc();   _unsubMainDoc   = null; } // FIX SYNC-6
-                    if (typeof _unsubAllUsers  === 'function') { _unsubAllUsers();  _unsubAllUsers  = null; }
-                    if (typeof _unsubMyAuditoria === 'function') { _unsubMyAuditoria(); _unsubMyAuditoria = null; }
-                    allUsersAuditoria = {};
+                    if (typeof _unsubAjustes === 'function')  { _unsubAjustes();  _unsubAjustes  = null; }
+                    if (typeof _unsubCatalogo === 'function') { _unsubCatalogo(); _unsubCatalogo = null; }
+                    if (typeof _unsubNotifs === 'function')   { _unsubNotifs();   _unsubNotifs   = null; }
                     currentUserRole = null;
                     currentUserUid  = null;
                     showLogin();
