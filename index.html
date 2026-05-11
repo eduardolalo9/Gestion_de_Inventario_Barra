@@ -24,49 +24,33 @@
          FIX 4 — RESILIENCIA OFFLINE: Registro del Service Worker
          ══════════════════════════════════════════════════════════ -->
     <script>
-        (function registerServiceWorker() {
-            if (!('serviceWorker' in navigator)) {
-                console.info('[SW] Service Workers no soportados en este navegador.');
-                return;
-            }
-            // Esperar a que la página esté completamente cargada para no
-            // competir con los recursos críticos de primer render.
-            window.addEventListener('load', function() {
-                navigator.serviceWorker.register('./sw.js')
+   (function registerServiceWorker() {
+    if (!('serviceWorker' in navigator)) {
+      console.info('[SW] Service Workers no soportados en este navegador.');
+      return;
+    }
+    window.addEventListener('load', function() {
+      navigator.serviceWorker.register('./sw.js')
+        .then(function(registration) {
+          console.info('[SW] Registrado con scope:', registration.scope);
 
-                    .then(function(registration) {
-                        console.info('[SW] Registrado con scope:', registration.scope);
-
-                        // Detectar actualizaciones del SW (nueva versión deployada)
-                        registration.addEventListener('updatefound', function() {
-                            var newWorker = registration.installing;
-                            newWorker.addEventListener('statechange', function() {
-                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                    // Nueva versión disponible — notificar al usuario
-                                    console.info('[SW] Nueva versión disponible. Recarga para actualizar.');
-                                    if (typeof showNotification === "function") {
-                                        showNotification('🔄 Nueva versión disponible — recarga la página');
-                                    }
-                                }
-                            });
-                        });
-                    })
-                    .catch(function(err) {
-                        // El SW es una mejora progresiva; su fallo no bloquea la app.
-                        console.warn('[SW] Error al registrar Service Worker:', err);
-                    });
-
-                // Escuchar mensajes del SW (ej. "CACHE_UPDATED")
-                navigator.serviceWorker.addEventListener('message', function(event) {
-                    if (event.data && event.data.type === 'SYNC_PENDING') {
-                        // El SW nos avisa que hay datos pendientes de subir
-                        if (_db && navigator.onLine && typeof syncToCloud === "function") {
-                            syncToCloud();
-                        }
-                    }
-                });
+          registration.addEventListener('updatefound', function() {
+            var newWorker = registration.installing;
+            newWorker.addEventListener('statechange', function() {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                console.info('[SW] Nueva versión disponible. Recarga para actualizar.');
+                if (typeof showNotification === "function") {
+                  showNotification('🔄 Nueva versión disponible — recarga la página');
+                }
+              }
             });
-        })();
+          });
+        })
+        .catch(function(err) {
+          console.warn('[SW] Error al registrar Service Worker:', err);
+        });
+    });
+  })();
     </script>
     <meta name="description" content="Sistema de control de inventario para barra — gestión de productos, pedidos y conteo físico.">
     <!-- FIX #2: CSP con worker-src 'self' añadido para permitir el Service Worker.
