@@ -32,7 +32,8 @@
             // Esperar a que la página esté completamente cargada para no
             // competir con los recursos críticos de primer render.
             window.addEventListener('load', function() {
-                navigator.serviceWorker.register('./sw.js')
+                navigator.serviceWorker.register('./service-worker.js')
+
                     .then(function(registration) {
                         console.info('[SW] Registrado con scope:', registration.scope);
 
