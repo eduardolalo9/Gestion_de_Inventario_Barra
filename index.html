@@ -3724,7 +3724,24 @@ async function resetConteoAtomicoEnFirestore() {
             const ref = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
                            .collection('userAuditoria').doc(currentUserUid);
             _unsubMyAuditoria = ref.onSnapshot(function(snap) {
-                if (!snap.exists || snap.metadata.hasPendingWrites) return;
+                if (snap.metadata.hasPendingWrites) return;
+                // Documento borrado = admin inició nueva sesión (borró todos los docs de userAuditoria)
+                if (!snap.exists) {
+                    // Solo reiniciar si teníamos datos (no es la primera carga)
+                    if (Object.keys(myAuditoriaConteo).length > 0 ||
+                        Object.values(myAuditoriaStatus).some(s => s === 'completada')) {
+                        myAuditoriaConteo  = {};
+                        myAuditoriaStatus  = { almacen: 'pendiente', barra1: 'pendiente', barra2: 'pendiente' };
+                        myAuditoriaUnlocks = {};
+                        auditoriaView      = 'selection';
+                        auditoriaAreaActiva = null;
+                        isAuditoriaMode    = false;
+                        saveToLocalStorage();
+                        showNotification('🔄 Nueva auditoría iniciada por el administrador — tus conteos se reiniciaron');
+                        renderTab();
+                    }
+                    return;
+                }
                 const data = snap.data();
                 // Detectar si el admin cambió la sesión (nueva auditoría)
                 if (data.sessionId && data.sessionId !== _auditoriaSessionId) {
@@ -4021,6 +4038,26 @@ async function resetConteoAtomicoEnFirestore() {
                 if (data.auditoriaStatus && typeof data.auditoriaStatus === 'object') auditoriaStatus = data.auditoriaStatus;
                 if (data.auditoriaConteo && typeof data.auditoriaConteo === 'object') auditoriaConteo = data.auditoriaConteo;
 
+                // Detectar cambio de sesión de auditoría (admin inició nueva auditoría)
+                if (data._auditoriaSessionId && data._auditoriaSessionId !== _auditoriaSessionId) {
+                    const isOwnReset = (data._auditoriaStartedBy === currentUserUid);
+                    _auditoriaSessionId = data._auditoriaSessionId;
+                    if (!isOwnReset) {
+                        // Reiniciar solo el conteo propio (no el estado global que viene del cloud)
+                        myAuditoriaConteo  = {};
+                        myAuditoriaStatus  = { almacen: 'pendiente', barra1: 'pendiente', barra2: 'pendiente' };
+                        myAuditoriaUnlocks = {};
+                        auditoriaView      = 'selection';
+                        auditoriaAreaActiva = null;
+                        isAuditoriaMode    = false;
+                        console.info('[AuditSession] Nueva sesión detectada — conteo reiniciado');
+                        // La notificación se mostrará al final del renderTab
+                        setTimeout(function() {
+                            showNotification('🔄 Nueva auditoría iniciada por el administrador — tus conteos se reiniciaron');
+                        }, 500);
+                    }
+                }
+
                 // Migración de formato inventarioConteo (igual que loadFromLocalStorage)
                 // Bug #1 fix: si _conteoInSubcol, leer cada área desde su propio subdocumento
                 let rawConteo = {};
@@ -4075,6 +4112,9 @@ async function resetConteoAtomicoEnFirestore() {
                 saveToLocalStorage();
                 if (data._lastModified) {
                     localStorage.setItem('inventarioApp_lastModified', String(data._lastModified));
+                }
+                if (data._auditoriaSessionId) {
+                    localStorage.setItem('inventarioApp_auditoriaSessionId', data._auditoriaSessionId);
                 }
 
                 _lastCloudSync = Date.now();
@@ -5588,7 +5628,7 @@ async function resetConteoAtomicoEnFirestore() {
         //  AUDITORÍA FÍSICA CIEGA — Funciones de control de flujo
         // ══════════════════════════════════════════════════════════════════════
 
-        function auditoriaVolverSeleccion() {
+        function auditoriaFinalizarConteo() {
             if (!auditoriaAreaActiva) return;
             const area = auditoriaAreaActiva;
             const nombreArea = areasAuditoria[area];
@@ -5596,9 +5636,11 @@ async function resetConteoAtomicoEnFirestore() {
             showConfirm('¿Finalizar conteo de ' + nombreArea + '?\n\nEsto guardará y bloqueará tu conteo del área. Solo el administrador podrá habilitar correcciones.', function() {
                 // Marcar MI área como completada (por usuario, no global)
                 myAuditoriaStatus[area] = 'completada';
-                auditoriaView    = 'selection';
+                // Admin también actualiza el status global del área
+                if (isAdmin()) auditoriaStatus[area] = 'completada';
+                auditoriaView       = 'selection';
                 auditoriaAreaActiva = null;
-                isAuditoriaMode  = false;
+                isAuditoriaMode     = false;
                 saveToLocalStorage();
 
                 // Subir conteo propio a Firestore (bajo mi UID, aislado)
