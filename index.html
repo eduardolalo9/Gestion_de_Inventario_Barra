@@ -7,8 +7,63 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#0d1321">
     <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="BarInventory">
 
+    <!-- FIX ICONS: Generar íconos PWA dinámicamente via Canvas para evitar 404
+         en manifest.json. Los íconos se crean en memoria y se registran como
+         link elements + se cachean en el SW para que el manifest los encuentre. -->
     <script>
+    (function generatePWAIcons() {
+        function makeIcon(size) {
+            var c = document.createElement('canvas');
+            c.width = c.height = size;
+            var ctx = c.getContext('2d');
+            // Fondo azul iOS
+            ctx.fillStyle = '#0A84FF';
+            ctx.beginPath();
+            ctx.roundRect(0, 0, size, size, size * 0.22);
+            ctx.fill();
+            // Letra B blanca centrada
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold ' + Math.round(size * 0.52) + 'px system-ui,sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('B', size / 2, size / 2 + size * 0.03);
+            return c.toDataURL('image/png');
+        }
+
+        try {
+            // Registrar favicon principal
+            var iconData = makeIcon(192);
+            var link192 = document.createElement('link');
+            link192.rel = 'icon'; link192.type = 'image/png'; link192.href = iconData;
+            document.head.appendChild(link192);
+            // Apple touch icon
+            var appleLink = document.createElement('link');
+            appleLink.rel = 'apple-touch-icon'; appleLink.href = makeIcon(180);
+            document.head.appendChild(appleLink);
+        } catch(e) { /* canvas no disponible, el SVG fallback ya está en el head */ }
+    })();
+        // ══════════════════════════════════════════════════════════════════════
+        //  EXPONER FUNCIONES CRÍTICAS EN window
+        //  Las funciones async dentro de <script> no siempre son accesibles
+        //  desde otros bloques <script> (auth IIFE). Asignación explícita garantiza
+        //  que estén disponibles en el momento en que onAuthStateChanged dispara.
+        // ══════════════════════════════════════════════════════════════════════
+        window.loadUserRole       = loadUserRole;
+        window.syncToCloud        = syncToCloud;
+        window.loadFromCloud      = loadFromCloud;
+        window.renderTab          = renderTab;
+        window.showNotification   = showNotification;
+        window.isAdmin            = isAdmin;
+        window.saveToLocalStorage = saveToLocalStorage;
+        window.subscribeMainDoc   = subscribeMainDoc;
+        window.subscribeMyAuditoria     = subscribeMyAuditoria;
+        window.subscribeAllUsersAuditoria = subscribeAllUsersAuditoria;
+
+    </script>
         // Evitar FOUC (Flash Of Unstyled Content): aplicar tema antes de renderizar
         (function() {
             try {
@@ -24,33 +79,53 @@
          FIX 4 — RESILIENCIA OFFLINE: Registro del Service Worker
          ══════════════════════════════════════════════════════════ -->
     <script>
-   (function registerServiceWorker() {
-    if (!('serviceWorker' in navigator)) {
-      console.info('[SW] Service Workers no soportados en este navegador.');
-      return;
-    }
-    window.addEventListener('load', function() {
-      navigator.serviceWorker.register('./sw.js')
-        .then(function(registration) {
-          console.info('[SW] Registrado con scope:', registration.scope);
+        (function registerServiceWorker() {
+            if (!('serviceWorker' in navigator)) {
+                console.info('[SW] Service Workers no soportados en este navegador.');
+                return;
+            }
+            // Esperar a que la página esté completamente cargada para no
+            // competir con los recursos críticos de primer render.
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(function(registration) {
+                        console.info('[SW] Registrado con scope:', registration.scope);
 
-          registration.addEventListener('updatefound', function() {
-            var newWorker = registration.installing;
-            newWorker.addEventListener('statechange', function() {
-              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                console.info('[SW] Nueva versión disponible. Recarga para actualizar.');
-                if (typeof showNotification === "function") {
-                  showNotification('🔄 Nueva versión disponible — recarga la página');
-                }
-              }
+                        // Detectar actualizaciones del SW (nueva versión deployada)
+                        registration.addEventListener('updatefound', function() {
+                            var newWorker = registration.installing;
+                            newWorker.addEventListener('statechange', function() {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    // Nueva versión disponible — notificar al usuario
+                                    console.info('[SW] Nueva versión disponible. Recarga para actualizar.');
+                                    if (typeof showNotification === "function") {
+                                        showNotification('🔄 Nueva versión disponible — recarga la página');
+                                    }
+                                }
+                            });
+                        });
+                    })
+                    .catch(function(err) {
+                        // El SW es una mejora progresiva; su fallo no bloquea la app.
+                        console.warn('[SW] Error al registrar Service Worker:', err);
+                    });
+
+                // Escuchar mensajes del SW (ej. "SYNC_PENDING")
+                navigator.serviceWorker.addEventListener('message', function(event) {
+                    // IMPORTANT: NO retornar true en este listener — hacerlo sin llamar
+                    // sendResponse() causa el error "message channel closed before response".
+                    if (!event.data) return;
+                    if (event.data.type === 'SYNC_PENDING') {
+                        // El SW nos avisa que hay datos pendientes de subir
+                        var _sync = window.syncToCloud || syncToCloud;
+                        if (_db && navigator.onLine && typeof _sync === 'function') {
+                            _sync();
+                        }
+                    }
+                    // No retornar nada (undefined) — listener síncrono, sin sendResponse
+                });
             });
-          });
-        })
-        .catch(function(err) {
-          console.warn('[SW] Error al registrar Service Worker:', err);
-        });
-    });
-  })();
+        })();
     </script>
     <meta name="description" content="Sistema de control de inventario para barra — gestión de productos, pedidos y conteo físico.">
     <!-- FIX #2: CSP con worker-src 'self' añadido para permitir el Service Worker.
@@ -93,7 +168,7 @@
         // usuario que abra el código fuente. Asegúrate de restringir la API Key
         // en https://console.cloud.google.com → Credenciales → Restricciones de clave.
         // (dominio HTTP Referrer + solo Firestore API)
-const firebaseConfig = {
+        const firebaseConfig = {
   apiKey: "AIzaSyCjFziFbjsxZQq-CzkCsMuYXgZiFVYEXa0",
   authDomain: "gestor-de-inventarios-76c19.firebaseapp.com",
   projectId: "gestor-de-inventarios-76c19",
@@ -7484,10 +7559,15 @@ async function resetConteoAtomicoEnFirestore() {
                 if (user) {
                     console.info('[Auth] Usuario autenticado:', user.email);
                     showApp(user);
-                    // Cargar rol del usuario desde Firestore
-                    loadUserRole(user.uid).catch(function(e) {
-                        console.warn('[Auth] Error cargando rol:', e);
-                    });
+                    // Cargar rol — usar window.loadUserRole para garantizar acceso cross-script
+                    var _loadRole = window.loadUserRole || loadUserRole;
+                    if (typeof _loadRole === 'function') {
+                        _loadRole(user.uid).catch(function(e) {
+                            console.warn('[Auth] Error cargando rol:', e);
+                        });
+                    } else {
+                        console.error('[Auth] loadUserRole no disponible — revisa el orden de los scripts');
+                    }
                 } else {
                     console.info('[Auth] Sin sesión — mostrando login.');
                     // Limpiar subscripciones activas

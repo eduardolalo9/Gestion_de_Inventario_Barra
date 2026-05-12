@@ -1,0 +1,32 @@
+{
+  "name": "BarInventory — Control de Inventario",
+  "short_name": "BarInventory",
+  "description": "Sistema de inventario para bar y restaurante. Conteo ciego, auditoría y sincronización en tiempo real.",
+  "start_url": "/Gestion_de_Inventario_Barra/",
+  "scope": "/Gestion_de_Inventario_Barra/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#000000",
+  "theme_color": "#0A84FF",
+  "lang": "es-MX",
+  "dir": "ltr",
+  "categories": ["business", "productivity"],
+  "prefer_related_applications": false,
+  "shortcuts": [
+    {
+      "name": "Nuevo Conteo",
+      "short_name": "Conteo",
+      "url": "/Gestion_de_Inventario_Barra/?tab=inventario"
+    },
+    {
+      "name": "Auditoría",
+      "short_name": "Auditoría",
+      "url": "/Gestion_de_Inventario_Barra/?tab=auditoria"
+    },
+    {
+      "name": "Pedidos",
+      "short_name": "Pedidos",
+      "url": "/Gestion_de_Inventario_Barra/?tab=pedidos"
+    }
+  ]
+}
