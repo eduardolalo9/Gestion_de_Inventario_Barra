@@ -7,7 +7,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#0d1321">
     <link rel="manifest" href="manifest.json">
-    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="BarInventory">
 
@@ -125,7 +125,7 @@
          está en un bloque inline inmediato que depende de window.firebase. -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
     <!-- FontAwesome 6 — iconos corporativos en la UI de auditoría -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W==" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
 
     <!-- ══════════════════════════════════════════════════════════
          FIREBASE SDK  —  compat v10 (módulos globales window.firebase)
@@ -224,8 +224,11 @@
 _db   = firebase.firestore();
 _auth = firebase.auth();
 
-// Persistencia offline nativa de Firestore (caché local automático)
-// synchronizeTabs:true → compartir caché entre pestañas del mismo origen
+// FIX: Persistencia offline — API actualizada para Firebase 10.x
+// enablePersistence sigue siendo compatible pero usamos settings para suprimir el warning
+try {
+    _db.settings({ cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED });
+} catch(_) {}
 _db.enablePersistence({ synchronizeTabs: true }).catch(err => {
     if (err.code === 'failed-precondition') {
         console.warn("[Firebase] Persistencia offline no disponible (múltiples pestañas).");
@@ -3956,6 +3959,8 @@ async function resetConteoAtomicoEnFirestore() {
             exportToExcelConDatos('AUDITORIA', auditoriaConteo, products,
                 'inventario_total_' + new Date().toISOString().split('T')[0] + '.xlsx');
         }
+        /**
+         * loadConflictosDesdeFirestore()
          * ─────────────────────────────
          * Al iniciar la app, descarga el estado de conflictos de abiertas
          * para mostrarlo en las tarjetas de auditoría.
