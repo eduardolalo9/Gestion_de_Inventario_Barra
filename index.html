@@ -11,59 +11,8 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="BarInventory">
 
-    <!-- FIX ICONS: Generar íconos PWA dinámicamente via Canvas para evitar 404
-         en manifest.json. Los íconos se crean en memoria y se registran como
-         link elements + se cachean en el SW para que el manifest los encuentre. -->
+    <!-- FOUC prevention: aplicar tema ANTES de cualquier render -->
     <script>
-    (function generatePWAIcons() {
-        function makeIcon(size) {
-            var c = document.createElement('canvas');
-            c.width = c.height = size;
-            var ctx = c.getContext('2d');
-            // Fondo azul iOS
-            ctx.fillStyle = '#0A84FF';
-            ctx.beginPath();
-            ctx.roundRect(0, 0, size, size, size * 0.22);
-            ctx.fill();
-            // Letra B blanca centrada
-            ctx.fillStyle = '#FFFFFF';
-            ctx.font = 'bold ' + Math.round(size * 0.52) + 'px system-ui,sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('B', size / 2, size / 2 + size * 0.03);
-            return c.toDataURL('image/png');
-        }
-
-        try {
-            // Registrar favicon principal
-            var iconData = makeIcon(192);
-            var link192 = document.createElement('link');
-            link192.rel = 'icon'; link192.type = 'image/png'; link192.href = iconData;
-            document.head.appendChild(link192);
-            // Apple touch icon
-            var appleLink = document.createElement('link');
-            appleLink.rel = 'apple-touch-icon'; appleLink.href = makeIcon(180);
-            document.head.appendChild(appleLink);
-        } catch(e) { /* canvas no disponible, el SVG fallback ya está en el head */ }
-    })();
-        // ══════════════════════════════════════════════════════════════════════
-        //  EXPONER FUNCIONES CRÍTICAS EN window
-        //  Las funciones async dentro de <script> no siempre son accesibles
-        //  desde otros bloques <script> (auth IIFE). Asignación explícita garantiza
-        //  que estén disponibles en el momento en que onAuthStateChanged dispara.
-        // ══════════════════════════════════════════════════════════════════════
-        window.loadUserRole       = loadUserRole;
-        window.syncToCloud        = syncToCloud;
-        window.loadFromCloud      = loadFromCloud;
-        window.renderTab          = renderTab;
-        window.showNotification   = showNotification;
-        window.isAdmin            = isAdmin;
-        window.saveToLocalStorage = saveToLocalStorage;
-        window.subscribeMainDoc   = subscribeMainDoc;
-        window.subscribeMyAuditoria     = subscribeMyAuditoria;
-        window.subscribeAllUsersAuditoria = subscribeAllUsersAuditoria;
-
-    </script>
         // Evitar FOUC (Flash Of Unstyled Content): aplicar tema antes de renderizar
         (function() {
             try {
@@ -73,6 +22,37 @@
                 document.documentElement.setAttribute('data-theme', 'dark');
             }
         })();
+    </script>
+
+    <!-- FIX ICONS: Generar íconos PWA dinámicamente via Canvas (evita 404 del manifest) -->
+    <script>
+    (function generatePWAIcons() {
+        function makeIcon(size) {
+            var c = document.createElement('canvas');
+            c.width = c.height = size;
+            var ctx = c.getContext('2d');
+            ctx.fillStyle = '#0A84FF';
+            try { ctx.roundRect(0, 0, size, size, size * 0.22); }
+            catch(_) { ctx.rect(0, 0, size, size); } // fallback: sin roundRect
+            ctx.fill();
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold ' + Math.round(size * 0.52) + 'px system-ui,sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('B', size / 2, size / 2 + size * 0.03);
+            return c.toDataURL('image/png');
+        }
+        try {
+            var link192 = document.createElement('link');
+            link192.rel = 'icon'; link192.type = 'image/png';
+            link192.href = makeIcon(192);
+            document.head.appendChild(link192);
+            var appleLink = document.createElement('link');
+            appleLink.rel = 'apple-touch-icon';
+            appleLink.href = makeIcon(180);
+            document.head.appendChild(appleLink);
+        } catch(e) { /* canvas no disponible */ }
+    })();
     </script>
 
     <!-- ══════════════════════════════════════════════════════════
@@ -7467,6 +7447,22 @@ async function resetConteoAtomicoEnFirestore() {
             };
             reader.readAsText(file);
         }
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  EXPONER FUNCIONES CRÍTICAS EN window
+        //  Garantiza acceso cross-script desde el auth IIFE cuando Firebase
+        //  dispara onAuthStateChanged de forma asíncrona.
+        // ══════════════════════════════════════════════════════════════════════
+        window.loadUserRole             = loadUserRole;
+        window.syncToCloud              = syncToCloud;
+        window.loadFromCloud            = loadFromCloud;
+        window.renderTab                = renderTab;
+        window.showNotification         = showNotification;
+        window.isAdmin                  = isAdmin;
+        window.saveToLocalStorage       = saveToLocalStorage;
+        window.subscribeMainDoc         = subscribeMainDoc;
+        window.subscribeMyAuditoria     = subscribeMyAuditoria;
+        window.subscribeAllUsersAuditoria = subscribeAllUsersAuditoria;
 
         // ==================== INICIALIZACIÓN UNIFICADA ====================
         // Un único listener DOMContentLoaded que centraliza toda la lógica de arranque
