@@ -149,7 +149,7 @@
         // en https://console.cloud.google.com → Credenciales → Restricciones de clave.
         // (dominio HTTP Referrer + solo Firestore API)
         const firebaseConfig = {
-  apiKey: "AIzaSyCjFziFbjsxZQq-CzkCsMuYXgZiFVYEXa0",
+    apiKey: "AIzaSyCjFziFbjsxZQq-CzkCsMuYXgZiFVYEXa0",
   authDomain: "gestor-de-inventarios-76c19.firebaseapp.com",
   projectId: "gestor-de-inventarios-76c19",
   storageBucket: "gestor-de-inventarios-76c19.firebasestorage.app",
@@ -6025,28 +6025,6 @@ async function resetConteoAtomicoEnFirestore() {
                     .then(() => showNotification('🔓 Correcciones habilitadas para ' + u.email))
                     .catch(err => { console.error(err); showNotification('❌ Error al habilitar'); });
             });
-        }
-      
-                // FIX — Admin: publicar reporte a Firestore directamente desde aquí
-                if (isAdmin()) {
-                    html += '<button onclick="generarYPublicarReporte()" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:8px;padding:10px 16px;border-radius:var(--r-md);background:var(--accent);color:#fff;font-size:0.8rem;font-weight:600;border:none;cursor:pointer;">';
-                    html += '<i class="fa-solid fa-cloud-arrow-up"></i> Publicar Reporte Global para Todos los Usuarios';
-                    html += '</button>';
-                }
-                html += '</div>';
-            } else {
-                // Mensaje de estado cuando no están todas completas
-                const faltantes = ['almacen', 'barra1', 'barra2']
-                    .filter(a => auditoriaStatus[a] !== 'completada')
-                    .map(a => areasAuditoria[a]).join(', ');
-                html += '<div style="text-align:center;padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);">';
-                html += '<p style="font-size:0.75rem;color:var(--txt-muted);">El botón de exportación aparecerá cuando completes todas las áreas.</p>';
-                html += '<p style="font-size:0.7rem;color:var(--txt-muted);margin-top:4px;">Pendiente: <strong style="color:var(--amber);">' + faltantes + '</strong></p>';
-                html += '</div>';
-            }
-
-            html += '</div>'; // audit-screen
-            return html;
         }
 
         // ── Pantalla 2: Conteo de un área específica ───────────────────────────
