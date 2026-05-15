@@ -1,10 +1,10 @@
 // ════════════════════════════════════════════════════════════════════════════
-//  BarInventory — Service Worker v2.1
+//  BarInventory — Service Worker v2.2
 //  Estrategia: Cache-First para assets estáticos, Network-First para Firebase.
 //  Garantiza funcionamiento offline y actualizaciones automáticas al deployar.
 // ════════════════════════════════════════════════════════════════════════════
 
-const CACHE_NAME    = 'barinventory-v2.1';
+const CACHE_NAME    = 'barinventory-v2.2';
 const OFFLINE_URL   = './index.html';
 
 // Assets que se cachean en la instalación (shell de la app)
@@ -34,7 +34,6 @@ self.addEventListener('install', function(event) {
                 return cache.addAll(PRECACHE_URLS);
             })
             .then(function() {
-                // Activar inmediatamente sin esperar a que cierren las pestañas anteriores
                 return self.skipWaiting();
             })
             .catch(function(err) {
@@ -59,7 +58,6 @@ self.addEventListener('activate', function(event) {
                 );
             })
             .then(function() {
-                // Tomar control de todas las pestañas abiertas inmediatamente
                 return self.clients.claim();
             })
     );
@@ -77,7 +75,7 @@ self.addEventListener('fetch', function(event) {
 
     // 3. Firebase / APIs externas → SIEMPRE red (nunca cachear datos de Firestore)
     if (NETWORK_ONLY_ORIGINS.some(function(origin) { return url.hostname.includes(origin); })) {
-        return; // dejar que el browser maneje normalmente
+        return;
     }
 
     // 4. Tailwind CDN y otros CDNs → Cache-First con fallback a red
@@ -92,8 +90,7 @@ self.addEventListener('fetch', function(event) {
         return;
     }
 
-    // 5. Assets propios de la app (index.html, manifest.json, etc.)
-    //    Estrategia: Stale-While-Revalidate — sirve del caché y actualiza en background
+    // 5. Assets propios de la app → Stale-While-Revalidate
     if (url.origin === self.location.origin) {
         event.respondWith(staleWhileRevalidate(event.request));
         return;
@@ -102,10 +99,6 @@ self.addEventListener('fetch', function(event) {
 
 // ── ESTRATEGIAS DE CACHÉ ─────────────────────────────────────────────────────
 
-/**
- * Cache-First: Sirve del caché; si no está, va a la red y lo cachea.
- * Ideal para assets estáticos de CDN que no cambian.
- */
 function cacheFirst(request) {
     return caches.match(request).then(function(cached) {
         if (cached) return cached;
@@ -123,10 +116,6 @@ function cacheFirst(request) {
     });
 }
 
-/**
- * Stale-While-Revalidate: Sirve del caché inmediatamente mientras
- * actualiza en background. Ideal para el shell de la app.
- */
 function staleWhileRevalidate(request) {
     var fetchPromise = fetch(request).then(function(response) {
         if (response && response.status === 200) {
@@ -139,20 +128,15 @@ function staleWhileRevalidate(request) {
     }).catch(function() { return null; });
 
     return caches.match(request).then(function(cached) {
-        // Si hay caché → devolver inmediatamente; la red actualiza en background
         if (cached) return cached;
-        // Si no hay caché → esperar a la red
         return fetchPromise.then(function(response) {
             if (response) return response;
-            // Sin red y sin caché → página offline
             return caches.match(OFFLINE_URL);
         });
     });
 }
 
 // ── BACKGROUND SYNC ──────────────────────────────────────────────────────────
-// Cuando el navegador recupera conexión, avisar a la app para que suba
-// los cambios pendientes a Firestore.
 self.addEventListener('sync', function(event) {
     if (event.tag === 'sync-inventario') {
         event.waitUntil(notifyClientsToSync());
@@ -168,7 +152,7 @@ function notifyClientsToSync() {
         });
 }
 
-// ── PUSH NOTIFICATIONS (futuro) ──────────────────────────────────────────────
+// ── PUSH NOTIFICATIONS ───────────────────────────────────────────────────────
 self.addEventListener('push', function(event) {
     if (!event.data) return;
     var data = {};
@@ -177,7 +161,7 @@ self.addEventListener('push', function(event) {
     event.waitUntil(
         self.registration.showNotification(data.title || 'BarInventory', {
             body:    data.body    || 'Tienes una actualización pendiente',
-            icon:    data.icon    || './manifest.json',
+            icon:    data.icon    || './icons/icon-192.png',
             badge:   data.badge   || '',
             vibrate: [200, 100, 200],
             data:    data.url ? { url: data.url } : {}
@@ -207,17 +191,14 @@ self.addEventListener('message', function(event) {
     if (!event.data) return;
 
     if (event.data.type === 'SKIP_WAITING') {
-        // La app pide activar la nueva versión inmediatamente
         self.skipWaiting();
     }
 
     if (event.data.type === 'CACHE_URLS' && Array.isArray(event.data.urls)) {
-        // La app pide pre-cachear URLs adicionales
         caches.open(CACHE_NAME).then(function(cache) {
             cache.addAll(event.data.urls).catch(function(e) {
                 console.warn('[SW] Error cacheando URLs adicionales:', e);
             });
         });
     }
-    // IMPORTANTE: No retornar true — evita el error "message channel closed"
 });
