@@ -4717,6 +4717,34 @@ async function resetConteoAtomicoEnFirestore() {
         }
 
         /**
+         * eliminarReporte(reporteId)
+         * Solo admin puede eliminar un reporte global publicado de Firestore.
+         * Pide confirmación antes de borrar y recarga la lista al terminar.
+         */
+        async function eliminarReporte(reporteId) {
+            if (!isAdmin()) {
+                showNotification('⚠️ Solo el administrador puede eliminar reportes');
+                return;
+            }
+            if (!_db) { showNotification('❌ Sin conexión a base de datos'); return; }
+            showConfirm('¿Eliminar este reporte publicado?\n\nEsta acción no se puede deshacer. Los usuarios ya no podrán descargarlo.', async function() {
+                try {
+                    await _db.collection('reportes').doc(reporteId).delete();
+                    showNotification('🗑️ Reporte eliminado correctamente');
+                    // Refrescar la lista de reportes en pantalla
+                    const el = document.getElementById('historiaReportesList');
+                    if (el) {
+                        el.innerHTML = '<span style="color:var(--txt-muted);font-size:.79rem;">Actualizando…</span>';
+                        setTimeout(function() { renderTab(); }, 300);
+                    }
+                } catch (e) {
+                    console.error('[Reporte] Error eliminando:', e);
+                    showNotification('❌ Error al eliminar el reporte');
+                }
+            });
+        }
+
+        /**
          * exportToExcelConDatos(modo, conteoData, productsList, fileName)
          * FIX #6/#8 — Versión paramétrica de exportToExcel que acepta los datos
          * directamente en lugar de leer variables globales. Elimina el swap inseguro
@@ -6349,10 +6377,18 @@ async function resetConteoAtomicoEnFirestore() {
                         let rhtml = '';
                         snap.docs.forEach(function(d) {
                             const r = d.data();
-                            rhtml += '<div class="rep-card">';
+                            rhtml += '<div class="rep-card" style="position:relative;">';
                             rhtml += '<div class="rep-card-title">📊 ' + escapeHtml(r.fecha || d.id) + '</div>';
                             rhtml += '<div class="rep-card-meta">' + (r.totalProductos || 0) + ' productos · publicado por admin</div>';
+                            rhtml += '<div style="display:flex;align-items:center;gap:8px;margin-top:6px;">';
                             rhtml += '<button class="adm-btn primary" style="margin:0;padding:7px 14px;" onclick="descargarReporte(\'' + d.id + '\')"><i class="fa-solid fa-download"></i> Descargar Excel</button>';
+                            // Icono eliminar — solo visible para admin
+                            if (typeof isAdmin === 'function' && isAdmin()) {
+                                rhtml += '<button onclick="eliminarReporte(\'' + d.id + '\')" title="Eliminar reporte" style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:var(--r-md);background:var(--red-dim,rgba(239,68,68,.12));border:1px solid rgba(239,68,68,.22);color:var(--red-text,#ef4444);cursor:pointer;flex-shrink:0;transition:background .18s;" onmouseover="this.style.background=\'rgba(239,68,68,.22)\'" onmouseout="this.style.background=\'var(--red-dim,rgba(239,68,68,.12))\'">';
+                                rhtml += '<svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>';
+                                rhtml += '</button>';
+                            }
+                            rhtml += '</div>';
                             rhtml += '</div>';
                         });
                         el.innerHTML = rhtml;
