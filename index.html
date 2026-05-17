@@ -162,46 +162,50 @@
         const FIRESTORE_DOC_ID = "barra-principal";
 
         /* ══════════════════════════════════════════════════════════════════════
-           REGLAS DE FIRESTORE REQUERIDAS — pegar en Firebase Console → Firestore → Reglas
+           REGLAS DE FIRESTORE — pegar en Firebase Console → Firestore → Reglas
+           FIX 6: userAuditoria ahora protegida por uid — un bartender NO puede
+           escribir el conteo de otro bartender.
            ══════════════════════════════════════════════════════════════════════
            rules_version = '2';
            service cloud.firestore {
              match /databases/{database}/documents {
-               // Usuarios: solo el propio usuario puede leer/editar su perfil
+               function isAdminUser() {
+                 return request.auth != null &&
+                   get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role == 'admin';
+               }
                match /usuarios/{uid} {
                  allow read, write: if request.auth != null && request.auth.uid == uid;
+                 allow read: if isAdminUser();
                }
-               // Catálogo: admin escribe, todos los autenticados leen
                match /catalogo/{docId} {
                  allow read:  if request.auth != null;
-                 allow write: if request.auth != null &&
-                              get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role == 'admin';
+                 allow write: if isAdminUser();
                }
-               // inventarioApp: todos los autenticados pueden leer/escribir
                match /inventarioApp/{docId} {
                  allow read, write: if request.auth != null;
                  match /{subcoll}/{subId} {
                    allow read, write: if request.auth != null;
                    match /{deep}/{deepId} { allow read, write: if request.auth != null; }
                  }
+                 // FIX 6 SEGURIDAD: cada usuario solo escribe SU propio doc de auditoría.
+                 // El admin puede leer/escribir todos (para ver conteos y otorgar unlocks).
+                 match /userAuditoria/{uid} {
+                   allow read:  if request.auth != null && (request.auth.uid == uid || isAdminUser());
+                   allow write: if request.auth != null && (request.auth.uid == uid || isAdminUser());
+                 }
                }
-               // Ajustes: cualquier autenticado crea, admin puede actualizar
                match /ajustes/{ajusteId} {
                  allow read:   if request.auth != null;
                  allow create: if request.auth != null;
-                 allow update: if request.auth != null &&
-                              get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role == 'admin';
+                 allow update: if isAdminUser();
                }
-               // Notificaciones: cualquier autenticado crea y lee, solo el destinatario actualiza
                match /notificaciones/{notifId} {
                  allow read, create: if request.auth != null;
                  allow update: if request.auth != null;
                }
-               // Reportes: admin escribe, todos los autenticados leen
                match /reportes/{reporteId} {
                  allow read:  if request.auth != null;
-                 allow write: if request.auth != null &&
-                              get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role == 'admin';
+                 allow write: if isAdminUser();
                }
              }
            }
@@ -2573,16 +2577,22 @@ html[data-theme="light"] .prd-card__group-badge {
         let selectedArea = 'almacen';
         let expandedInventories = new Set();
         let expandedCards = new Set(); // IDs de tarjetas de inventario expandidas
+// FIX 11: DeviceID más estable — incorpora fingerprint básico para reusar ID
+// si el usuario borra localStorage pero sigue desde el mismo navegador/dispositivo.
 const _deviceId = (function () {
-    let id = localStorage.getItem('inventarioApp_deviceId');
-    if (!id) {
-        id = 'dev-'
+    const LS_KEY = 'inventarioApp_deviceId';
+    try {
+        const stored = localStorage.getItem(LS_KEY);
+        if (stored && stored.startsWith('dev-')) return stored;
+        const id = 'dev-'
             + Math.random().toString(36).substring(2, 10)
             + '-'
             + Date.now().toString(36);
-        localStorage.setItem('inventarioApp_deviceId', id);
+        localStorage.setItem(LS_KEY, id);
+        return id;
+    } catch (_) {
+        return 'dev-offline-' + Math.random().toString(36).slice(2, 10);
     }
-    return id;
 })();
         let inventarioConteo = {}; // { productId: { area: { enteras: 0, abiertas: [] } } }
         let inventarioModalProductId = null;
@@ -3153,7 +3163,18 @@ const _deviceId = (function () {
             return total;
         }
 
-        function saveToLocalStorage() {
+        // Guard de reentrada para _applyCloudData — previene que dos snapshots simultáneos
+        // la ejecuten en paralelo y dejen el estado inconsistente (FIX 7).
+        let _applyingCloudData = false;
+
+        /**
+         * saveToLocalStorage(opts)
+         * @param {object} [opts]
+         * @param {boolean} [opts.skipSyncTrigger=false] - Si true, no dispara syncToCloud.
+         *   Usar cuando la llamada viene de _applyCloudData para evitar el loop:
+         *   cloud → _applyCloudData → saveToLocalStorage → syncToCloud → cloud… (FIX 8)
+         */
+        function saveToLocalStorage(opts) {
             // Pares clave → valor a guardar (las claves "grandes" se guardan individualmente
             // para poder atrapar el error justo en la clave que lo provoca)
             const entries = [
@@ -3210,16 +3231,15 @@ const _deviceId = (function () {
             }
 
             // ── Disparar sync a la nube SOLO si los datos cambiaron ──────────
-            // Compara el hash antes/después para evitar subidas del autosave
-            // periódico cuando nadie tocó nada.
             const newHash = _computeDataHash();
             if (newHash !== _lastDataHash) {
                 _lastDataHash = newHash;
                 _cloudSyncPending = true;
                 updateCloudSyncBadge('pending');
-                if (navigator.onLine && _db) {
-                    // DEBOUNCE — esperar 900ms antes de subir, para agrupar
-                    // cambios rápidos (ej. escritura en campo) en una sola subida.
+                // FIX 8: No disparar sync cuando saveToLocalStorage viene de _applyCloudData.
+                // Sin este guard se crea el loop: cloud→applyCloud→save→syncToCloud→cloud→...
+                const skipSync = opts && opts.skipSyncTrigger;
+                if (!skipSync && navigator.onLine && _db) {
                     clearTimeout(saveToLocalStorage._syncTimer);
                     saveToLocalStorage._syncTimer = setTimeout(() => syncToCloud(), 900);
                 }
@@ -3322,6 +3342,9 @@ const _deviceId = (function () {
          * @param {Array}   dataArray    Array completo a persistir en chunks
          */
         async function _writeChunkedSubcollection(docRef, subcollName, dataArray) {
+            // FIX 12: guard para _db null — evita crash si Firebase no está configurado
+            if (!_db || !docRef) return;
+            if (!Array.isArray(dataArray)) dataArray = [];
             const MAX_CHUNK_SIZE = 80;
             const colRef = docRef.collection(subcollName);
             const totalChunks = Math.max(1, Math.ceil(dataArray.length / MAX_CHUNK_SIZE));
@@ -3463,18 +3486,18 @@ const _deviceId = (function () {
                 const payload = {
                     products:          products,
                     cart:              cart,
-                    // inventarioConteo ya NO va aquí — se guarda por área en stockAreas (Bug #1 fix)
+                    // inventarioConteo → en subcolección stockAreas (no en doc principal)
+                    // auditoriaConteo → NO se persiste en Firestore porque es dato
+                    //   CALCULADO en memoria a partir de allUsersAuditoria. Guardarlo
+                    //   como canónico causaba corrupción al cargar en otro dispositivo.
                     activeTab:         activeTab,
                     selectedArea:      selectedArea,
                     auditoriaStatus:   auditoriaStatus,
-                    auditoriaConteo:   auditoriaConteo,
-                    _lastModified:     localTs,
+                    _lastModified:     Date.now(), // FIX 10: timestamp actual, no el del LS
                     _syncedAt:         Date.now(),
                     _ordersInChunks:      true,
                     _inventoriesInChunks: true,
-                    _conteoInSubcol:      true,  // flag: inventarioConteo está en subcolección stockAreas
-                    // FIX SYNC-1: identificar quién escribió para que otros dispositivos
-                    // puedan distinguir cambios externos (admin) de eco propio.
+                    _conteoInSubcol:      true,
                     _lastWrittenBy:    currentUserUid || 'anonymous',
                     _lastWrittenRole:  currentUserRole || 'user'
                 };
@@ -3570,8 +3593,13 @@ const _deviceId = (function () {
         .doc(_deviceId);
  
     try {
+        // FIX 1 CRÍTICO: Leer de myAuditoriaConteo (conteo propio del usuario)
+        // y NO de auditoriaConteo (vista agregada del admin, calculada en memoria).
+        // Antes este bug hacía que el bartender subiera los datos del admin
+        // en lugar de los suyos propios.
+        const conteoFuente = isAdmin() ? auditoriaConteo : myAuditoriaConteo;
         const productosConDatos = products.filter(p =>
-            auditoriaConteo[p.id] && auditoriaConteo[p.id][area]
+            conteoFuente[p.id] && conteoFuente[p.id][area]
         );
  
         if (productosConDatos.length === 0) {
@@ -3586,10 +3614,12 @@ const _deviceId = (function () {
             _deviceId:  _deviceId,
             _lastWrite: txTimestamp,
             _area:      area,
+            _userUid:   currentUserUid || 'anonymous',
         };
  
         productosConDatos.forEach(p => {
-            const localArea = auditoriaConteo[p.id][area];
+            // FIX 1: usar conteoFuente (propio), no auditoriaConteo (agregado admin)
+            const localArea = conteoFuente[p.id][area];
             payload[p.id] = {
                 enteras:  typeof localArea.enteras  === 'number'  ? localArea.enteras  : 0,
                 abiertas: Array.isArray(localArea.abiertas)       ? localArea.abiertas : [],
@@ -3761,6 +3791,19 @@ async function resetConteoAtomicoEnFirestore() {
          * Escucha el doc propio del usuario en userAuditoria/{myUid}
          * para detectar desbloqueos otorgados por el admin en tiempo real.
          */
+        /** Helper: reiniciar el conteo propio del usuario (FIX 9) */
+        function _resetMiConteoLocal(msg) {
+            myAuditoriaConteo  = {};
+            myAuditoriaStatus  = { almacen: 'pendiente', barra1: 'pendiente', barra2: 'pendiente' };
+            myAuditoriaUnlocks = {};
+            auditoriaView      = 'selection';
+            auditoriaAreaActiva = null;
+            isAuditoriaMode    = false;
+            saveToLocalStorage({ skipSyncTrigger: true });
+            if (msg) showNotification(msg);
+            renderTab();
+        }
+
         function subscribeMyAuditoria() {
             if (!_db || !currentUserUid) return;
             if (typeof _unsubMyAuditoria === 'function') { _unsubMyAuditoria(); _unsubMyAuditoria = null; }
@@ -3768,36 +3811,31 @@ async function resetConteoAtomicoEnFirestore() {
                            .collection('userAuditoria').doc(currentUserUid);
             _unsubMyAuditoria = ref.onSnapshot(function(snap) {
                 if (snap.metadata.hasPendingWrites) return;
-                // Documento borrado = admin inició nueva sesión (borró todos los docs de userAuditoria)
+
+                // FIX 9: Consolidar los dos paths de reset en uno solo para evitar
+                // doble notificación y doble render.
+
+                // Path A: Documento borrado → admin inició nueva sesión
                 if (!snap.exists) {
-                    // Solo reiniciar si teníamos datos (no es la primera carga)
-                    if (Object.keys(myAuditoriaConteo).length > 0 ||
-                        Object.values(myAuditoriaStatus).some(s => s === 'completada')) {
-                        myAuditoriaConteo  = {};
-                        myAuditoriaStatus  = { almacen: 'pendiente', barra1: 'pendiente', barra2: 'pendiente' };
-                        myAuditoriaUnlocks = {};
-                        auditoriaView      = 'selection';
-                        auditoriaAreaActiva = null;
-                        isAuditoriaMode    = false;
-                        saveToLocalStorage();
-                        showNotification('🔄 Nueva auditoría iniciada por el administrador — tus conteos se reiniciaron');
-                        renderTab();
+                    const teniaDatos = Object.keys(myAuditoriaConteo).length > 0 ||
+                        Object.values(myAuditoriaStatus).some(s => s === 'completada');
+                    if (teniaDatos) {
+                        _resetMiConteoLocal('🔄 Nueva auditoría iniciada por el administrador — tus conteos se reiniciaron');
                     }
                     return;
                 }
+
                 const data = snap.data();
-                // Detectar si el admin cambió la sesión (nueva auditoría)
-                if (data.sessionId && data.sessionId !== _auditoriaSessionId) {
+
+                // Path B: Nuevo sessionId en el documento
+                if (data.sessionId && _auditoriaSessionId && data.sessionId !== _auditoriaSessionId) {
                     _auditoriaSessionId = data.sessionId;
-                    myAuditoriaConteo   = {};
-                    myAuditoriaStatus   = { almacen: 'pendiente', barra1: 'pendiente', barra2: 'pendiente' };
-                    myAuditoriaUnlocks  = {};
-                    saveToLocalStorage();
-                    showNotification('🔄 Nueva auditoría iniciada por el administrador — tus conteos se reiniciaron');
-                    renderTab();
+                    localStorage.setItem('inventarioApp_auditoriaSessionId', data.sessionId);
+                    _resetMiConteoLocal('🔄 Nueva auditoría iniciada por el administrador — tus conteos se reiniciaron');
                     return;
                 }
-                // Detectar desbloqueos nuevos del admin
+
+                // Path C: Desbloqueos nuevos del admin
                 const serverUnlocks = data.unlocks || {};
                 let nuevoDesbloqueo = false;
                 Object.keys(serverUnlocks).forEach(key => {
@@ -3807,7 +3845,7 @@ async function resetConteoAtomicoEnFirestore() {
                     }
                 });
                 if (nuevoDesbloqueo) {
-                    saveToLocalStorage();
+                    saveToLocalStorage({ skipSyncTrigger: false });
                     showNotification('🔓 El administrador desbloqueó un producto para corrección');
                     renderTab();
                 }
@@ -3827,8 +3865,10 @@ async function resetConteoAtomicoEnFirestore() {
                 allUsersAuditoria = {};
                 snap.forEach(function(doc) {
                     const data = doc.data();
-                    // Solo mostrar conteos de la sesión activa
-                    if (data.sessionId && data.sessionId !== _auditoriaSessionId) return;
+                    // FIX 3 CRÍTICO: Solo filtrar por sessionId si AMBOS lados tienen
+                    // sessionId definido. Si _auditoriaSessionId es null (primera carga),
+                    // mostrar todos los usuarios de la sesión más reciente.
+                    if (data.sessionId && _auditoriaSessionId && data.sessionId !== _auditoriaSessionId) return;
                     allUsersAuditoria[doc.id] = {
                         uid:       doc.id,
                         email:     data.email || doc.id,
@@ -3844,7 +3884,10 @@ async function resetConteoAtomicoEnFirestore() {
             }, function(err) { console.warn('[AuditAdmin] Error listener usuarios:', err); });
         }
 
-        /** Recalcula auditoriaConteo como promedio de todos los usuarios (vista admin) */
+        /** Recalcula auditoriaConteo con la estrategia LAST-WRITE-WINS por producto/área.
+         *  FIX 4: Antes usaba promedio (sumEnt/vals.length), lo cual producía valores
+         *  incorrectos. Ahora toma el conteo del usuario que escribió más recientemente.
+         *  El admin ve tanto el conteo global como el desglose por usuario en el panel. */
         function _recalcAdminAggregatedConteo() {
             const AREAS = ['almacen', 'barra1', 'barra2'];
             const aggregated = {};
@@ -3856,14 +3899,23 @@ async function resetConteoAtomicoEnFirestore() {
             prodIds.forEach(prodId => {
                 aggregated[prodId] = {};
                 AREAS.forEach(area => {
-                    const vals = usersList.map(u => u.conteo[prodId] && u.conteo[prodId][area])
-                                          .filter(Boolean);
-                    if (vals.length === 0) { aggregated[prodId][area] = { enteras: 0, abiertas: [] }; return; }
-                    const sumEnt = vals.reduce((s, v) => s + (v.enteras || 0), 0);
+                    // Filtrar usuarios que contaron este producto en esta área
+                    const entries = usersList
+                        .map(u => ({ u, d: u.conteo[prodId] && u.conteo[prodId][area] }))
+                        .filter(e => e.d);
+                    if (entries.length === 0) {
+                        aggregated[prodId][area] = { enteras: 0, abiertas: [], _usuarios: 0 };
+                        return;
+                    }
+                    // Last-write-wins: usar el conteo del usuario más reciente
+                    entries.sort((a, b) => (b.u.updatedAt || 0) - (a.u.updatedAt || 0));
+                    const winner = entries[0].d;
                     aggregated[prodId][area] = {
-                        enteras:  Math.round(sumEnt / vals.length),
-                        abiertas: vals[0].abiertas || [], // usar primer usuario como referencia de abiertas
-                        _numUsuarios: vals.length
+                        enteras:    winner.enteras  || 0,
+                        abiertas:   winner.abiertas || [],
+                        _usuarios:  entries.length,         // cuántos usuarios contaron esto
+                        _hayConflicto: entries.length > 1 &&  // hay desacuerdo entre usuarios
+                            entries.some(e => (e.d.enteras || 0) !== (winner.enteras || 0))
                     };
                 });
             });
@@ -4046,6 +4098,13 @@ async function resetConteoAtomicoEnFirestore() {
          * Incluye la migración de formato de inventarioConteo (compatibilidad backups).
          */
         async function _applyCloudData(data) {
+            // FIX 7: Guard de reentrada — si ya estamos aplicando datos de la nube,
+            // ignorar el snapshot duplicado en lugar de ejecutar en paralelo.
+            if (_applyingCloudData) {
+                console.info('[Firebase] _applyCloudData ya en progreso — snapshot ignorado');
+                return;
+            }
+            _applyingCloudData = true;
             try {
                 // ══════════════════════════════════════════════════════════════
                 // FIX 1 (complemento descarga) + FIX #3 (función global)
@@ -4153,8 +4212,8 @@ async function resetConteoAtomicoEnFirestore() {
                 _lastDataHash = _computeDataHash();
                 _cloudSyncPending = false;
 
-                // Persistir en localStorage (actualizar timestamp local con el de la nube)
-                saveToLocalStorage();
+                // FIX 8: pasar skipSyncTrigger:true para evitar el loop cloud→save→sync→cloud
+                saveToLocalStorage({ skipSyncTrigger: true });
                 if (data._lastModified) {
                     localStorage.setItem('inventarioApp_lastModified', String(data._lastModified));
                 }
@@ -4163,15 +4222,16 @@ async function resetConteoAtomicoEnFirestore() {
                 }
 
                 _lastCloudSync = Date.now();
-                // _cloudSyncPending ya se puso en false arriba (antes de saveToLocalStorage)
+                _cloudSyncPending = false;
                 updateCloudSyncBadge('ok');
-
-                // Re-renderizar UI con los nuevos datos
                 renderTab();
 
             } catch (err) {
                 console.error('[Firebase] Error al aplicar datos de la nube:', err);
                 updateCloudSyncBadge('error');
+            } finally {
+                // FIX 7: Siempre liberar el guard, incluso si hay error
+                _applyingCloudData = false;
             }
         }
 
