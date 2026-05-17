@@ -3767,12 +3767,25 @@ async function resetConteoAtomicoEnFirestore() {
         //  Firestore path: inventarioApp/{docId}/userAuditoria/{uid}
         // ══════════════════════════════════════════════════════════════════════
 
+        // FIX BUG 2: Flag de sincronización pendiente para conteos de auditoría.
+        // Si syncMyAuditoriaToFirestore falla, se marca true y se reintenta
+        // automáticamente cuando el dispositivo recupere conexión.
+        let _auditSyncPending = false;
+
         /** Guarda el conteo propio del usuario en Firestore (solo escribe su UID) */
         async function syncMyAuditoriaToFirestore() {
-            if (!_db || !currentUserUid || !navigator.onLine) return;
+            if (!_db || !currentUserUid || !navigator.onLine) {
+                // Offline: marcar pendiente para reintento al reconectar
+                _auditSyncPending = true;
+                return;
+            }
             try {
                 const ref = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
                                .collection('userAuditoria').doc(currentUserUid);
+                // FIX BUG 1 CRÍTICO: usar merge:true para NO borrar campos escritos
+                // por otros (en especial los 'unlocks' que el admin escribe para
+                // habilitar correcciones). merge:false sobreescribía el doc completo
+                // y eliminaba los unlocks en cada guardado del bartender.
                 await ref.set({
                     uid:        currentUserUid,
                     email:      (_auth && _auth.currentUser) ? _auth.currentUser.email : currentUserUid,
@@ -3780,10 +3793,14 @@ async function resetConteoAtomicoEnFirestore() {
                     status:     myAuditoriaStatus,
                     conteo:     myAuditoriaConteo,
                     updatedAt:  Date.now()
-                }, { merge: false }); // sobrescribir solo mi doc, nunca el de otros
+                }, { merge: true }); // merge:true → preserva 'unlocks' y otros campos del admin
+                _auditSyncPending = false;
                 console.info('[AuditUser] Mi conteo sincronizado ✓');
             } catch (err) {
-                console.warn('[AuditUser] Error sync propio:', err);
+                // FIX BUG 2: marcar pendiente para reintento automático al reconectar
+                _auditSyncPending = true;
+                console.warn('[AuditUser] Error sync propio — reintento al reconectar:', err);
+                showNotification('⚠️ Conteo guardado localmente — subirá al reconectar');
             }
         }
 
@@ -4291,6 +4308,13 @@ async function resetConteoAtomicoEnFirestore() {
                 // y LUEGO subir los pendientes locales si aplica.
                 if (_db) {
                     console.info('[Firebase] Reconectado — verificando cambios en la nube…');
+                    // FIX BUG 2: resubir conteo de auditoría si quedó pendiente
+                    if (_auditSyncPending) {
+                        console.info('[AuditUser] Reintentando sync de conteo pendiente…');
+                        syncMyAuditoriaToFirestore().catch(e =>
+                            console.warn('[AuditUser] Reintento fallido:', e)
+                        );
+                    }
                     loadFromCloud().then(function() {
                         // loadFromCloud ya llama syncToCloud() si local es más reciente
                         updateCloudSyncBadge(_cloudSyncPending ? 'pending' : 'ok');
