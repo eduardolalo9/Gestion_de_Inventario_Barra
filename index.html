@@ -2478,6 +2478,8 @@ html[data-theme="light"] .prd-card__group-badge {
             <div class="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-4"></div>
             <h2 class="text-xl font-bold text-gray-900 mb-1" id="inventarioModalTitle">Contar botellas</h2>
             <p class="text-sm text-gray-500 mb-2" id="inventarioModalSubtitle"></p>
+            <!-- Nota de contexto para admin en modo suplemento de auditoría -->
+            <div id="inv_adminContextNote" style="display:none;margin-bottom:10px;padding:8px 12px;background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.28);border-radius:8px;font-size:0.75rem;color:var(--amber);line-height:1.5;"></div>
             <div class="mb-4">
                 <label for="inv_enteras" class="block text-sm font-semibold text-gray-700 mb-2">🍾 Botellas Enteras</label>
                 <input type="number" id="inv_enteras" min="0" step="0.001" value="0" oninput="if(parseFloat(this.value)<0||isNaN(parseFloat(this.value)))this.value=0;" class="w-full px-4 py-2 bg-white text-gray-900 border-2 border-blue-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center text-base font-bold">
@@ -3928,38 +3930,64 @@ async function resetConteoAtomicoEnFirestore() {
             }, function(err) { console.warn('[AuditAdmin] Error listener usuarios:', err); });
         }
 
-        /** Recalcula auditoriaConteo con la estrategia LAST-WRITE-WINS por producto/área.
-         *  FIX 4: Antes usaba promedio (sumEnt/vals.length), lo cual producía valores
-         *  incorrectos. Ahora toma el conteo del usuario que escribió más recientemente.
-         *  El admin ve tanto el conteo global como el desglose por usuario en el panel. */
+        /**
+         * Recalcula auditoriaConteo con estrategia ADITIVA por producto/área.
+         *
+         * ── ESTRATEGIA ADITIVA (FIX admin-supplement) ───────────────────────
+         * • enteras  → SUMA de todos los participantes (usuario + admin suman)
+         * • abiertas → CONCATENACIÓN de todos los arrays (admin agrega las que faltaron)
+         *
+         * Esto permite que el admin cuente las botellas abiertas que el usuario
+         * olvidó en el MISMO almacén sin borrar el conteo del usuario.
+         *
+         * Ejemplo:
+         *   Usuario: enteras=5, abiertas=[0.7]  (contó botella entera + una abierta)
+         *   Admin:   enteras=0, abiertas=[0.5]  (agrega la botella abierta que faltó)
+         *   Resultado: enteras=5, abiertas=[0.7, 0.5]  ← CORRECTO
+         *   (Antes con LAST-WRITE-WINS: enteras=0, abiertas=[0.5] ← BORRABA al usuario)
+         *
+         * Conflicto real: solo se marca si 2+ usuarios contaron enteras > 0 con
+         * valores distintos (doble-conteo real, no suplemento).
+         * ────────────────────────────────────────────────────────────────────── */
         function _recalcAdminAggregatedConteo() {
-            const AREAS = ['almacen', 'barra1', 'barra2'];
-            const aggregated = {};
-            const usersList  = Object.values(allUsersAuditoria);
+            var AREAS = ['almacen', 'barra1', 'barra2'];
+            var aggregated = {};
+            var usersList  = Object.values(allUsersAuditoria);
             if (usersList.length === 0) return;
-            // Recolectar todos los prodIds
-            const prodIds = new Set();
-            usersList.forEach(u => Object.keys(u.conteo).forEach(id => prodIds.add(id)));
-            prodIds.forEach(prodId => {
+            // Recolectar todos los prodIds presentes en cualquier usuario
+            var prodIds = new Set();
+            usersList.forEach(function(u) { Object.keys(u.conteo).forEach(function(id) { prodIds.add(id); }); });
+            prodIds.forEach(function(prodId) {
                 aggregated[prodId] = {};
-                AREAS.forEach(area => {
-                    // Filtrar usuarios que contaron este producto en esta área
-                    const entries = usersList
-                        .map(u => ({ u, d: u.conteo[prodId] && u.conteo[prodId][area] }))
-                        .filter(e => e.d);
+                AREAS.forEach(function(area) {
+                    // Filtrar participantes que tienen datos para este producto/área
+                    var entries = usersList
+                        .map(function(u) { return { u: u, d: u.conteo[prodId] && u.conteo[prodId][area] }; })
+                        .filter(function(e) { return !!e.d; });
                     if (entries.length === 0) {
                         aggregated[prodId][area] = { enteras: 0, abiertas: [], _usuarios: 0 };
                         return;
                     }
-                    // Last-write-wins: usar el conteo del usuario más reciente
-                    entries.sort((a, b) => (b.u.updatedAt || 0) - (a.u.updatedAt || 0));
-                    const winner = entries[0].d;
+                    // MERGE ADITIVO: cada participante SUMA su parte al total.
+                    // El admin entra solo lo que faltó → se añade al conteo del usuario.
+                    var totalEnteras = 0;
+                    var allAbiertas  = [];
+                    entries.forEach(function(e) {
+                        totalEnteras += (typeof e.d.enteras === 'number' ? e.d.enteras : 0);
+                        if (Array.isArray(e.d.abiertas)) {
+                            allAbiertas = allAbiertas.concat(e.d.abiertas);
+                        }
+                    });
+                    // Conflicto real: 2+ participantes contaron enteras > 0 con valores distintos.
+                    // (Si solo el admin puso enteras > 0, no es conflicto, es suplemento.)
+                    var nonZeroEnt = entries.filter(function(e) { return (e.d.enteras || 0) > 0; });
+                    var hayConflicto = nonZeroEnt.length >= 2 &&
+                        nonZeroEnt.some(function(e) { return (e.d.enteras || 0) !== (nonZeroEnt[0].d.enteras || 0); });
                     aggregated[prodId][area] = {
-                        enteras:    winner.enteras  || 0,
-                        abiertas:   winner.abiertas || [],
-                        _usuarios:  entries.length,         // cuántos usuarios contaron esto
-                        _hayConflicto: entries.length > 1 &&  // hay desacuerdo entre usuarios
-                            entries.some(e => (e.d.enteras || 0) !== (winner.enteras || 0))
+                        enteras:       totalEnteras,
+                        abiertas:      allAbiertas,
+                        _usuarios:     entries.length,
+                        _hayConflicto: hayConflicto
                     };
                 });
             });
@@ -5647,6 +5675,37 @@ async function resetConteoAtomicoEnFirestore() {
             document.getElementById('inventarioModalTitle').textContent = product.name;
             document.getElementById('inventarioModalSubtitle').textContent = (product.group || 'General') + ' · ' + (product.unit || '') + ' — ' + areaLabel;
 
+            // ── Nota de contexto para el ADMIN en modo suplemento de auditoría ─────────
+            // Muestra al admin qué contaron los usuarios para que sepa exactamente
+            // qué es lo que debe AGREGAR (no volver a contar lo ya registrado).
+            var ctxNote = document.getElementById('inv_adminContextNote');
+            if (ctxNote) {
+                if (isAdmin() && isAuditoriaMode && auditoriaAreaActiva) {
+                    var otrosConteos = Object.values(allUsersAuditoria).filter(function(u) {
+                        return u.uid !== currentUserUid &&
+                               u.conteo[productId] && u.conteo[productId][areaKey] &&
+                               ((u.conteo[productId][areaKey].enteras || 0) > 0 ||
+                                (u.conteo[productId][areaKey].abiertas || []).some(function(v){ return v > 0; }));
+                    });
+                    if (otrosConteos.length > 0) {
+                        var lineas = otrosConteos.map(function(u) {
+                            var d = u.conteo[productId][areaKey];
+                            return escapeHtml(u.email) + ': <strong>' + (d.enteras || 0) + ' ent</strong> + <strong>' + (d.abiertas || []).length + ' ab</strong>';
+                        }).join(' &nbsp;|&nbsp; ');
+                        ctxNote.innerHTML = '➕ <strong>Modo suplemento:</strong> Ingresa SOLO lo que falta (se sumará al conteo existente).<br>'
+                                          + '<span style="font-size:0.7rem;opacity:0.9;">Ya registrado por usuario → ' + lineas + '</span>';
+                        ctxNote.style.display = '';
+                    } else {
+                        ctxNote.style.display = 'none';
+                        ctxNote.innerHTML = '';
+                    }
+                } else {
+                    ctxNote.style.display = 'none';
+                    ctxNote.innerHTML = '';
+                }
+            }
+            // ────────────────────────────────────────────────────────────────────────────
+
             // Mostrar hint de unidad en botellas abiertas
             const hintEl = document.getElementById('inv_abiertasUnidadHint');
             if (hintEl) {
@@ -6218,6 +6277,8 @@ async function resetConteoAtomicoEnFirestore() {
                 html += '<div style="font-size:0.62rem;color:var(--amber);margin-top:4px;font-weight:600;">🔒 Área completada — solicita al administrador reabrir para corregir</div>';
             } else if (estaCompleta && isAdmin()) {
                 html += '<div style="font-size:0.62rem;color:var(--green);margin-top:4px;font-weight:600;">✓ Área completada — editando como administrador</div>';
+            } else if (isAdmin()) {
+                html += '<div style="font-size:0.62rem;color:var(--amber);margin-top:4px;font-weight:600;">➕ Modo suplemento — tu conteo se suma al de los usuarios</div>';
             }
             html += '</div>';
             html += '</div>';
