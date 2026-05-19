@@ -2478,8 +2478,6 @@ html[data-theme="light"] .prd-card__group-badge {
             <div class="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-4"></div>
             <h2 class="text-xl font-bold text-gray-900 mb-1" id="inventarioModalTitle">Contar botellas</h2>
             <p class="text-sm text-gray-500 mb-2" id="inventarioModalSubtitle"></p>
-            <!-- Nota de contexto para admin en modo suplemento de auditoría -->
-            <div id="inv_adminContextNote" style="display:none;margin-bottom:10px;padding:8px 12px;background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.28);border-radius:8px;font-size:0.75rem;color:var(--amber);line-height:1.5;"></div>
             <div class="mb-4">
                 <label for="inv_enteras" class="block text-sm font-semibold text-gray-700 mb-2">🍾 Botellas Enteras</label>
                 <input type="number" id="inv_enteras" min="0" step="0.001" value="0" oninput="if(parseFloat(this.value)<0||isNaN(parseFloat(this.value)))this.value=0;" class="w-full px-4 py-2 bg-white text-gray-900 border-2 border-blue-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center text-base font-bold">
@@ -3831,57 +3829,50 @@ async function resetConteoAtomicoEnFirestore() {
             _unsubMyAuditoria = ref.onSnapshot(function(snap) {
                 if (snap.metadata.hasPendingWrites) return;
 
-                // ─────────────────────────────────────────────────────────────
-                // Path A: El documento userAuditoria/{uid} no existe en Firestore.
+                // ── Path A: Documento NO existe en Firestore ─────────────────
+                // BUG CORREGIDO: Antes este path reseteaba el conteo local cuando
+                // el doc no existía en Firestore. Esto era un FALSO POSITIVO:
+                // el doc puede no existir porque el usuario nunca sincronizó
+                // (carga de página, primera vez, sin internet al finalizar).
+                // NO es señal de que el admin reinició la auditoría.
                 //
-                // FIX CRÍTICO (BUG 1): NO resetear aquí.
-                //
-                // Antes este path reseteaba myAuditoriaConteo si el doc no existía
-                // Y el usuario tenía datos locales — lo que borraba TODO el conteo
-                // aunque el admin NO hubiera iniciado una nueva auditoría.
-                //
-                // La ausencia del doc significa simplemente que el usuario aún no
-                // finalizó ningún área (su primera escritura a Firestore ocurre en
-                // auditoriaFinalizarConteo → syncMyAuditoriaToFirestore). No es señal
-                // de "nueva auditoría".
-                //
-                // El reset real por "nueva auditoría del admin" llega via el listener
-                // del documento principal (subscribeMainDoc → _applyCloudData) que
-                // detecta el cambio de _auditoriaSessionId en inventarioApp/{docId}.
-                // ─────────────────────────────────────────────────────────────
-                if (!snap.exists) return;
+                // CORRECCIÓN: si hay datos locales y el doc no existe → SUBIR
+                // los datos locales a Firestore (recuperación), no borrarlos.
+                // El reset real SOLO viene del cambio de sessionId en el
+                // documento PRINCIPAL, detectado en _applyCloudData.
+                if (!snap.exists) {
+                    const teniaDatos = Object.keys(myAuditoriaConteo).length > 0 ||
+                        Object.values(myAuditoriaStatus).some(s => s === 'completada');
+                    if (teniaDatos) {
+                        console.info('[AuditUser] Doc no existe — recuperando conteo local a Firestore…');
+                        syncMyAuditoriaToFirestore().catch(e =>
+                            console.warn('[AuditUser] Error de recuperación:', e)
+                        );
+                    }
+                    return;
+                }
 
                 const data = snap.data();
 
-                // ─────────────────────────────────────────────────────────────
-                // Path B: El doc existe y tiene sessionId.
-                //
-                // FIX (BUG 2): Diferenciar "primer arranque" de "nueva auditoría real".
-                //
-                // Si _auditoriaSessionId es null/vacío (localStorage limpio o primera
-                // visita), simplemente adoptamos el sessionId del servidor SIN resetear.
-                // Resetear aquí causaba pérdida de datos en usuarios que recargaban
-                // la página con localStorage vacío pero con datos ya contados en sesión.
-                //
-                // Solo reseteamos si YA teníamos un sessionId anterior Y cambió —
-                // eso sí indica que el admin inició una nueva auditoría explícitamente.
-                // ─────────────────────────────────────────────────────────────
-                if (data.sessionId && data.sessionId !== _auditoriaSessionId) {
-                    if (!_auditoriaSessionId) {
-                        // Primer arranque: adoptar sessionId sin resetear
-                        _auditoriaSessionId = data.sessionId;
-                        try { localStorage.setItem('inventarioApp_auditoriaSessionId', data.sessionId); } catch(_) {}
-                        // No retornar: continuar para procesar desbloqueos (Path C)
-                    } else {
-                        // Sesión anterior diferente: nueva auditoría real del admin
-                        _auditoriaSessionId = data.sessionId;
-                        try { localStorage.setItem('inventarioApp_auditoriaSessionId', data.sessionId); } catch(_) {}
-                        _resetMiConteoLocal('🔄 Nueva auditoría iniciada por el administrador — tus conteos se reiniciaron');
-                        return;
-                    }
+                // ── Path B: Nuevo sessionId → admin inició nueva auditoría ───
+                // DOBLE GUARDIA: solo comparar si AMBOS lados tienen sessionId.
+                // Si local es null (primera carga o LS limpio) → NO es cambio
+                // de sesión, es simplemente que no teníamos el ID aún.
+                if (data.sessionId && _auditoriaSessionId &&
+                    data.sessionId !== _auditoriaSessionId) {
+                    _auditoriaSessionId = data.sessionId;
+                    localStorage.setItem('inventarioApp_auditoriaSessionId', data.sessionId);
+                    _resetMiConteoLocal('🔄 Nueva auditoría iniciada por el administrador — tus conteos se reiniciaron');
+                    return;
                 }
 
-                // Path C: Desbloqueos nuevos del admin
+                // Si el doc existe y local no tenía sessionId → sincronizarlo sin resetear
+                if (data.sessionId && !_auditoriaSessionId) {
+                    _auditoriaSessionId = data.sessionId;
+                    localStorage.setItem('inventarioApp_auditoriaSessionId', data.sessionId);
+                }
+
+                // ── Path C: Desbloqueos nuevos del admin ─────────────────────
                 const serverUnlocks = data.unlocks || {};
                 let nuevoDesbloqueo = false;
                 Object.keys(serverUnlocks).forEach(key => {
@@ -3930,64 +3921,38 @@ async function resetConteoAtomicoEnFirestore() {
             }, function(err) { console.warn('[AuditAdmin] Error listener usuarios:', err); });
         }
 
-        /**
-         * Recalcula auditoriaConteo con estrategia ADITIVA por producto/área.
-         *
-         * ── ESTRATEGIA ADITIVA (FIX admin-supplement) ───────────────────────
-         * • enteras  → SUMA de todos los participantes (usuario + admin suman)
-         * • abiertas → CONCATENACIÓN de todos los arrays (admin agrega las que faltaron)
-         *
-         * Esto permite que el admin cuente las botellas abiertas que el usuario
-         * olvidó en el MISMO almacén sin borrar el conteo del usuario.
-         *
-         * Ejemplo:
-         *   Usuario: enteras=5, abiertas=[0.7]  (contó botella entera + una abierta)
-         *   Admin:   enteras=0, abiertas=[0.5]  (agrega la botella abierta que faltó)
-         *   Resultado: enteras=5, abiertas=[0.7, 0.5]  ← CORRECTO
-         *   (Antes con LAST-WRITE-WINS: enteras=0, abiertas=[0.5] ← BORRABA al usuario)
-         *
-         * Conflicto real: solo se marca si 2+ usuarios contaron enteras > 0 con
-         * valores distintos (doble-conteo real, no suplemento).
-         * ────────────────────────────────────────────────────────────────────── */
+        /** Recalcula auditoriaConteo con la estrategia LAST-WRITE-WINS por producto/área.
+         *  FIX 4: Antes usaba promedio (sumEnt/vals.length), lo cual producía valores
+         *  incorrectos. Ahora toma el conteo del usuario que escribió más recientemente.
+         *  El admin ve tanto el conteo global como el desglose por usuario en el panel. */
         function _recalcAdminAggregatedConteo() {
-            var AREAS = ['almacen', 'barra1', 'barra2'];
-            var aggregated = {};
-            var usersList  = Object.values(allUsersAuditoria);
+            const AREAS = ['almacen', 'barra1', 'barra2'];
+            const aggregated = {};
+            const usersList  = Object.values(allUsersAuditoria);
             if (usersList.length === 0) return;
-            // Recolectar todos los prodIds presentes en cualquier usuario
-            var prodIds = new Set();
-            usersList.forEach(function(u) { Object.keys(u.conteo).forEach(function(id) { prodIds.add(id); }); });
-            prodIds.forEach(function(prodId) {
+            // Recolectar todos los prodIds
+            const prodIds = new Set();
+            usersList.forEach(u => Object.keys(u.conteo).forEach(id => prodIds.add(id)));
+            prodIds.forEach(prodId => {
                 aggregated[prodId] = {};
-                AREAS.forEach(function(area) {
-                    // Filtrar participantes que tienen datos para este producto/área
-                    var entries = usersList
-                        .map(function(u) { return { u: u, d: u.conteo[prodId] && u.conteo[prodId][area] }; })
-                        .filter(function(e) { return !!e.d; });
+                AREAS.forEach(area => {
+                    // Filtrar usuarios que contaron este producto en esta área
+                    const entries = usersList
+                        .map(u => ({ u, d: u.conteo[prodId] && u.conteo[prodId][area] }))
+                        .filter(e => e.d);
                     if (entries.length === 0) {
                         aggregated[prodId][area] = { enteras: 0, abiertas: [], _usuarios: 0 };
                         return;
                     }
-                    // MERGE ADITIVO: cada participante SUMA su parte al total.
-                    // El admin entra solo lo que faltó → se añade al conteo del usuario.
-                    var totalEnteras = 0;
-                    var allAbiertas  = [];
-                    entries.forEach(function(e) {
-                        totalEnteras += (typeof e.d.enteras === 'number' ? e.d.enteras : 0);
-                        if (Array.isArray(e.d.abiertas)) {
-                            allAbiertas = allAbiertas.concat(e.d.abiertas);
-                        }
-                    });
-                    // Conflicto real: 2+ participantes contaron enteras > 0 con valores distintos.
-                    // (Si solo el admin puso enteras > 0, no es conflicto, es suplemento.)
-                    var nonZeroEnt = entries.filter(function(e) { return (e.d.enteras || 0) > 0; });
-                    var hayConflicto = nonZeroEnt.length >= 2 &&
-                        nonZeroEnt.some(function(e) { return (e.d.enteras || 0) !== (nonZeroEnt[0].d.enteras || 0); });
+                    // Last-write-wins: usar el conteo del usuario más reciente
+                    entries.sort((a, b) => (b.u.updatedAt || 0) - (a.u.updatedAt || 0));
+                    const winner = entries[0].d;
                     aggregated[prodId][area] = {
-                        enteras:       totalEnteras,
-                        abiertas:      allAbiertas,
-                        _usuarios:     entries.length,
-                        _hayConflicto: hayConflicto
+                        enteras:    winner.enteras  || 0,
+                        abiertas:   winner.abiertas || [],
+                        _usuarios:  entries.length,         // cuántos usuarios contaron esto
+                        _hayConflicto: entries.length > 1 &&  // hay desacuerdo entre usuarios
+                            entries.some(e => (e.d.enteras || 0) !== (winner.enteras || 0))
                     };
                 });
             });
@@ -4215,15 +4180,18 @@ async function resetConteoAtomicoEnFirestore() {
                 if (data.auditoriaConteo && typeof data.auditoriaConteo === 'object') auditoriaConteo = data.auditoriaConteo;
 
                 // Detectar cambio de sesión de auditoría (admin inició nueva auditoría)
-                if (data._auditoriaSessionId && data._auditoriaSessionId !== _auditoriaSessionId) {
+                // BUG CORREGIDO: La condición anterior era:
+                //   data._auditoriaSessionId && data._auditoriaSessionId !== _auditoriaSessionId
+                // Si _auditoriaSessionId local era null (primera carga, LS limpio),
+                // SIEMPRE era diferente al valor de Firestore → reset falso en cada carga.
+                // CORRECCIÓN: solo resetear si AMBOS lados tienen sessionId Y son diferentes.
+                // Nunca resetear en primera carga (cuando local es null).
+                if (data._auditoriaSessionId && _auditoriaSessionId &&
+                    data._auditoriaSessionId !== _auditoriaSessionId) {
                     const isOwnReset = (data._auditoriaStartedBy === currentUserUid);
-                    const teniaSesionAnterior = !!_auditoriaSessionId; // null/'' = primer arranque
                     _auditoriaSessionId = data._auditoriaSessionId;
-                    if (!isOwnReset && teniaSesionAnterior) {
-                        // FIX: Solo resetear si ya teníamos una sesión previa Y el admin
-                        // inició una nueva. Si _auditoriaSessionId era null (primer arranque
-                        // o localStorage vacío), no hay datos previos que perder y el reset
-                        // solo causaría confusión al usuario.
+                    if (!isOwnReset) {
+                        // Reiniciar solo el conteo propio (no el estado global que viene del cloud)
                         myAuditoriaConteo  = {};
                         myAuditoriaStatus  = { almacen: 'pendiente', barra1: 'pendiente', barra2: 'pendiente' };
                         myAuditoriaUnlocks = {};
@@ -4231,14 +4199,14 @@ async function resetConteoAtomicoEnFirestore() {
                         auditoriaAreaActiva = null;
                         isAuditoriaMode    = false;
                         console.info('[AuditSession] Nueva sesión detectada — conteo reiniciado');
-                        // La notificación se mostrará al final del renderTab
                         setTimeout(function() {
                             showNotification('🔄 Nueva auditoría iniciada por el administrador — tus conteos se reiniciaron');
                         }, 500);
-                    } else if (!isOwnReset && !teniaSesionAnterior) {
-                        // Primer arranque: solo adoptar el sessionId sin notificar ni resetear
-                        console.info('[AuditSession] SessionId adoptado en primer arranque:', _auditoriaSessionId);
                     }
+                } else if (data._auditoriaSessionId && !_auditoriaSessionId) {
+                    // Primera carga: guardar el sessionId actual sin resetear nada
+                    _auditoriaSessionId = data._auditoriaSessionId;
+                    localStorage.setItem('inventarioApp_auditoriaSessionId', data._auditoriaSessionId);
                 }
 
                 // Migración de formato inventarioConteo (igual que loadFromLocalStorage)
@@ -5675,37 +5643,6 @@ async function resetConteoAtomicoEnFirestore() {
             document.getElementById('inventarioModalTitle').textContent = product.name;
             document.getElementById('inventarioModalSubtitle').textContent = (product.group || 'General') + ' · ' + (product.unit || '') + ' — ' + areaLabel;
 
-            // ── Nota de contexto para el ADMIN en modo suplemento de auditoría ─────────
-            // Muestra al admin qué contaron los usuarios para que sepa exactamente
-            // qué es lo que debe AGREGAR (no volver a contar lo ya registrado).
-            var ctxNote = document.getElementById('inv_adminContextNote');
-            if (ctxNote) {
-                if (isAdmin() && isAuditoriaMode && auditoriaAreaActiva) {
-                    var otrosConteos = Object.values(allUsersAuditoria).filter(function(u) {
-                        return u.uid !== currentUserUid &&
-                               u.conteo[productId] && u.conteo[productId][areaKey] &&
-                               ((u.conteo[productId][areaKey].enteras || 0) > 0 ||
-                                (u.conteo[productId][areaKey].abiertas || []).some(function(v){ return v > 0; }));
-                    });
-                    if (otrosConteos.length > 0) {
-                        var lineas = otrosConteos.map(function(u) {
-                            var d = u.conteo[productId][areaKey];
-                            return escapeHtml(u.email) + ': <strong>' + (d.enteras || 0) + ' ent</strong> + <strong>' + (d.abiertas || []).length + ' ab</strong>';
-                        }).join(' &nbsp;|&nbsp; ');
-                        ctxNote.innerHTML = '➕ <strong>Modo suplemento:</strong> Ingresa SOLO lo que falta (se sumará al conteo existente).<br>'
-                                          + '<span style="font-size:0.7rem;opacity:0.9;">Ya registrado por usuario → ' + lineas + '</span>';
-                        ctxNote.style.display = '';
-                    } else {
-                        ctxNote.style.display = 'none';
-                        ctxNote.innerHTML = '';
-                    }
-                } else {
-                    ctxNote.style.display = 'none';
-                    ctxNote.innerHTML = '';
-                }
-            }
-            // ────────────────────────────────────────────────────────────────────────────
-
             // Mostrar hint de unidad en botellas abiertas
             const hintEl = document.getElementById('inv_abiertasUnidadHint');
             if (hintEl) {
@@ -5776,8 +5713,6 @@ async function resetConteoAtomicoEnFirestore() {
             vals.forEach((v, i) => renderAbiertaInput(v, i, tieneConversion(product)));
         }
 
-        saveInventarioModal._auditSyncTimer = null; // timer de debounce para sync parcial de auditoría
-
         function closeInventarioModal() {
             const modal = document.getElementById('inventarioModal');
             if (modal._trapHandler) { modal.removeEventListener('keydown', modal._trapHandler); modal._trapHandler = null; }
@@ -5821,7 +5756,7 @@ async function resetConteoAtomicoEnFirestore() {
             }
 
             if (isAuditoriaMode && auditoriaAreaActiva) {
-                // ── Guardar en objeto propio del usuario ──────────────────────────────
+                // ── Guardar en objeto legacy (compatible con exportarAuditoriaExcel) ──
                 if (!myAuditoriaConteo[inventarioModalProductId]) myAuditoriaConteo[inventarioModalProductId] = {};
                 myAuditoriaConteo[inventarioModalProductId][auditoriaAreaActiva] = { enteras, abiertas };
 
@@ -5843,18 +5778,6 @@ async function resetConteoAtomicoEnFirestore() {
 
                 saveToLocalStorage();
                 showNotification('Conteo guardado en ' + areasAuditoria[auditoriaAreaActiva]);
-
-                // FIX BUG 3: Sync parcial a Firestore → admin ve progreso en tiempo real.
-                // Se usa un debounce ligero (800ms) para no saturar Firestore en conteos
-                // rápidos de múltiples productos consecutivos.
-                clearTimeout(saveInventarioModal._auditSyncTimer);
-                saveInventarioModal._auditSyncTimer = setTimeout(function() {
-                    if (_db && navigator.onLine) {
-                        syncMyAuditoriaToFirestore().catch(function(e) {
-                            console.warn('[AuditUser] Error en sync parcial al guardar producto:', e);
-                        });
-                    }
-                }, 800);
             } else {
                 // Guardar en el inventario operativo regular
                 if (!inventarioConteo[inventarioModalProductId]) inventarioConteo[inventarioModalProductId] = {};
@@ -6277,8 +6200,6 @@ async function resetConteoAtomicoEnFirestore() {
                 html += '<div style="font-size:0.62rem;color:var(--amber);margin-top:4px;font-weight:600;">🔒 Área completada — solicita al administrador reabrir para corregir</div>';
             } else if (estaCompleta && isAdmin()) {
                 html += '<div style="font-size:0.62rem;color:var(--green);margin-top:4px;font-weight:600;">✓ Área completada — editando como administrador</div>';
-            } else if (isAdmin()) {
-                html += '<div style="font-size:0.62rem;color:var(--amber);margin-top:4px;font-weight:600;">➕ Modo suplemento — tu conteo se suma al de los usuarios</div>';
             }
             html += '</div>';
             html += '</div>';
