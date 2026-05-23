@@ -1412,62 +1412,108 @@ html[data-theme="dark"] #inventarioModal .hover\:bg-gray-50:hover { background: 
 body.modal-open { overflow: hidden; position: fixed; width: 100%; }
 
 /* ── BUSCADOR EN CONTEO DE INVENTARIO ─────────────────────── */
-.conteo-search-wrap {
+/* ── Smart Search Bar ────────────────────────────────────────────────────── */
+.csb-wrap {
     position: relative;
     margin-bottom: 10px;
 }
-.conteo-search-wrap svg.search-icon {
-    position: absolute; left: 11px; top: 50%;
+/* Estado activo (hay texto): borde + glow accent */
+.csb-wrap--active .csb-input {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-dim2);
+    background: var(--surface);
+}
+.csb-icon {
+    position: absolute; left: 13px; top: 50%;
     transform: translateY(-50%);
-    width: 16px; height: 16px;
+    width: 17px; height: 17px;
     stroke: var(--txt-muted);
     pointer-events: none;
+    transition: stroke 0.18s;
 }
-.conteo-search-input {
+.csb-wrap--active .csb-icon { stroke: var(--accent); }
+.csb-input {
     width: 100%;
-    padding: 9px 36px 9px 34px;
+    padding: 11px 44px 11px 40px;
     background: var(--card);
-    border: 1px solid var(--border-mid);
-    border-radius: var(--r-md);
+    border: 1.5px solid var(--border-mid);
+    border-radius: var(--r-lg);
     color: var(--txt-primary);
     font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 0.82rem;
+    font-size: 0.9rem;
     outline: none;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    -webkit-appearance: none; appearance: none;
+    transition: border-color 0.18s, box-shadow 0.18s, background 0.18s;
 }
-.conteo-search-input:focus {
+.csb-input::-webkit-search-cancel-button,
+.csb-input::-webkit-search-decoration { display: none; }
+.csb-input::placeholder { color: var(--txt-muted); font-size: 0.84rem; }
+.csb-input:focus {
     border-color: var(--accent);
-    box-shadow: 0 0 0 2px var(--accent-dim);
+    box-shadow: 0 0 0 3px var(--accent-dim2);
+    background: var(--surface);
 }
-.conteo-search-input::placeholder { color: var(--txt-muted); }
-.conteo-search-clear {
-    position: absolute; right: 8px; top: 50%;
-    transform: translateY(-50%);
-    width: 22px; height: 22px;
+/* Botón limpiar: siempre en DOM, aparece animado con .csb-wrap--active */
+.csb-clear {
+    position: absolute; right: 9px; top: 50%;
+    transform: translateY(-50%) scale(0.7);
+    width: 26px; height: 26px;
     border-radius: 50%;
     background: var(--border-mid);
     border: none; cursor: pointer;
     display: flex; align-items: center; justify-content: center;
-    color: var(--txt-muted);
-    font-size: 0.78rem; line-height: 1; padding: 0;
-    transition: background 0.12s ease;
+    color: var(--txt-secondary);
+    font-size: 0.72rem; line-height: 1; padding: 0;
+    transition: background 0.14s, color 0.14s,
+                transform 0.18s cubic-bezier(.34,1.56,.64,1),
+                opacity 0.18s;
     min-height: unset !important;
+    opacity: 0; pointer-events: none;
 }
-.conteo-search-clear:hover { background: var(--border-strong); color: var(--txt-primary); }
-.conteo-search-results {
-    font-size: 0.68rem; font-weight: 600;
-    color: var(--txt-muted); letter-spacing: 0.04em;
+.csb-wrap--active .csb-clear {
+    opacity: 1; pointer-events: auto;
+    transform: translateY(-50%) scale(1);
+}
+.csb-clear:hover { background: var(--accent); color: #fff; transform: translateY(-50%) scale(1.12); }
+/* Barra de meta-información de resultados */
+.csb-meta {
+    display: flex; align-items: center; flex-wrap: wrap;
+    gap: 5px;
+    font-size: 0.72rem; font-weight: 600;
+    color: var(--txt-muted); letter-spacing: 0.02em;
     margin-bottom: 8px; padding: 0 2px;
+    min-height: 22px;
+    animation: csb-meta-in 0.15s ease;
 }
-.conteo-search-results em { color: var(--accent); font-style: normal; font-weight: 700; }
-.conteo-match-highlight {
-    background: rgba(59,130,246,0.22);
-    border-radius: 2px;
-    color: var(--accent);
-    font-weight: 700;
+@keyframes csb-meta-in {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
 }
-html[data-theme="light"] .conteo-search-input { background: #fff; border-color: #cbd5e1; }
-html[data-theme="light"] .conteo-match-highlight { background: rgba(29,78,216,0.12); color: #1d4ed8; }
+.csb-meta em { color: var(--accent); font-style: normal; font-weight: 700; }
+/* Pills de estado */
+.csb-tag {
+    display: inline-flex; align-items: center; gap: 3px;
+    padding: 2px 8px; border-radius: 99px;
+    font-size: 0.64rem; font-weight: 700;
+    letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap;
+}
+.csb-tag--ok   { background: rgba(34,197,94,0.15);  color: #22c55e; }
+.csb-tag--none { background: rgba(239,68,68,0.13);  color: #ef4444; }
+.csb-tag--esc  {
+    background: var(--border-mid); color: var(--txt-muted);
+    font-weight: 500; text-transform: none; font-size: 0.67rem; letter-spacing: 0;
+}
+/* Highlight de coincidencias en las tarjetas */
+.csb-match {
+    background: rgba(59,130,246,0.22); border-radius: 2px;
+    color: var(--accent); font-weight: 700; padding: 0 1px;
+}
+html[data-theme="light"] .csb-input { background: #fff; border-color: #cbd5e1; }
+html[data-theme="light"] .csb-input:focus,
+html[data-theme="light"] .csb-wrap--active .csb-input { background: #fff; }
+html[data-theme="light"] .csb-match  { background: rgba(29,78,216,0.13); color: #1d4ed8; }
+html[data-theme="light"] .csb-tag--ok   { color: #16a34a; }
+html[data-theme="light"] .csb-tag--none { color: #dc2626; }
 
 
 /* Ajuste de padding inferior para no solapar con la tab bar */
@@ -4486,6 +4532,7 @@ async function resetConteoAtomicoEnFirestore() {
         let _notificaciones = [];
         let _ajustes        = [];
         let _conteoSearchTerm = '';   // búsqueda dentro del conteo de inventario
+        let _csSearchTimer    = null;  // debounce handle del buscador inteligente
 
         function isAdmin() { return currentUserRole === 'admin'; }
 
@@ -5537,16 +5584,16 @@ async function resetConteoAtomicoEnFirestore() {
                 setTimeout(() => {
                     const el = document.getElementById('inicioReportesLista');
                     if (el && _db) {
-                        _db.collection('reportes').orderBy('fecha', 'desc').limit(3).get()
+                        _db.collection('reportes').orderBy('fechaTs', 'desc').limit(3) // FIX-4: fechaTs (número) ordena correctamente.get()
                             .then(snap => {
                                 if (snap.empty) { el.innerHTML = '<p style="font-size:.75rem;color:var(--txt-muted);">Sin reportes publicados aún.</p>'; return; }
                                 let rows = '';
                                 snap.forEach(doc => {
                                     const d = doc.data();
-                                    const f = d.fecha ? new Date(d.fecha).toLocaleString('es-MX', {dateStyle:'short', timeStyle:'short'}) : '—';
+                                    const f = d.fecha || '—'; // FIX-4: d.fecha ya es string legible; no reparsear con new Date()
                                     rows += '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);font-size:.75rem;">'
-                                          + '<span style="color:var(--txt-secondary);">' + escapeHtml(d.titulo || 'Reporte') + '</span>'
-                                          + '<span style="color:var(--txt-muted);">' + f + '</span></div>';
+                                          + '<span style="color:var(--txt-secondary);">' + escapeHtml(f) + '</span>'
+                                          + '<span style="color:var(--txt-muted);">' + escapeHtml(String(d.totalProductos || 0)) + ' prods</span></div>';
                                 });
                                 el.innerHTML = rows;
                             }).catch(() => { el.innerHTML = ''; });
@@ -6023,7 +6070,7 @@ async function resetConteoAtomicoEnFirestore() {
                 // Sincronizar nuevo estado a Firestore si hay conexión
                 if (_db && navigator.onLine) {
                     _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
-                        .set({ ['auditoriaStatus_' + area]: 'pendiente' }, { merge: true })
+                        .update({ ['auditoriaStatus.' + area]: 'pendiente' }) // FIX-2: campo anidado correcto para que _applyCloudData lo lea
                         .catch(err => console.warn('[Reabrir] Error sync:', err));
                 }
                 showNotification('↩️ Área "' + nombreArea + '" reabierta para corrección');
@@ -6044,23 +6091,114 @@ async function resetConteoAtomicoEnFirestore() {
         }
 
         // ── BÚSQUEDA EN CONTEO ────────────────────────────────────────────────
+        // ── Utilidad: extrae bigramas de un string ────────────────────────────────
+        function _csBigrams(str) {
+            const b = [];
+            for (let i = 0; i < str.length - 1; i++) b.push(str.slice(i, i + 2));
+            return b;
+        }
+
+        /**
+         * Búsqueda fuzzy/multi-palabra.
+         * Normaliza acentos, divide la query en palabras y para cada una:
+         *   10pts  → substring exacto en cualquier campo
+         *    7pts  → prefijo de token (startsWith)
+         *   1-6pts → similitud de bigramas ≥ 0.45 (tolerancia a typos)
+         *    0pts  → sin coincidencia → el producto se descarta
+         * Retorna score > 0 si hay match, 0 si no.
+         */
+        function _csFuzzyMatch(product, query) {
+            if (!query) return 1;
+            const norm = s => (s || '').toLowerCase()
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const words = norm(query.trim()).split(/\s+/).filter(Boolean);
+            if (!words.length) return 1;
+
+            const fields = [norm(product.name), norm(product.id), norm(product.group)];
+            const haystack = fields.join(' ');
+            const tokens   = haystack.split(/\s+/).filter(Boolean);
+
+            let totalScore = 0;
+            for (const word of words) {
+                if (!word) continue;
+                let wordScore = 0;
+
+                // Substring exacto (mejor)
+                if (haystack.includes(word)) {
+                    wordScore = 10;
+                }
+                // Prefijo de algún token
+                else if (tokens.some(t => t.startsWith(word))) {
+                    wordScore = 7;
+                }
+                // Tolerancia a typos vía bigramas (solo para palabras ≥ 3 chars)
+                else if (word.length >= 3) {
+                    const qBig = _csBigrams(word);
+                    let bestSim = 0;
+                    for (const token of tokens) {
+                        if (Math.abs(token.length - word.length) > 3) continue;
+                        const tBig   = _csBigrams(token);
+                        const common = qBig.filter(b => tBig.includes(b)).length;
+                        if (common === 0) continue;
+                        const sim = (2 * common) / (qBig.length + tBig.length);
+                        if (sim > bestSim) bestSim = sim;
+                    }
+                    if (bestSim >= 0.45) wordScore = Math.max(1, Math.round(bestSim * 6));
+                }
+
+                // Si alguna palabra no matchea, el producto queda excluido
+                if (wordScore === 0) return 0;
+                totalScore += wordScore;
+            }
+            return totalScore;
+        }
+
+        /**
+         * Resalta en el nombre del producto TODAS las palabras de la query.
+         * Soporta búsqueda multi-palabra: "tequila rep" resalta ambas palabras.
+         */
+        function highlightConteoMatch(name, query) {
+            if (!name) return '';
+            if (!query) return escapeHtml(name);
+            const words = query.trim().split(/\s+/).filter(w => w.length >= 2);
+            if (!words.length) return escapeHtml(name);
+            let result = escapeHtml(name);
+            for (const word of words) {
+                const esc = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                try {
+                    result = result.replace(new RegExp('(' + esc + ')', 'gi'),
+                        '<mark class="csb-match">$1</mark>');
+                } catch (_) { /* regex inválida — ignorar */ }
+            }
+            return result;
+        }
+
+        /**
+         * updateConteoSearch — con debounce (180ms) y skip si el término no cambió.
+         * Restaura foco al input después del render (manejado por _getElementSelector via id).
+         */
         function updateConteoSearch(val) {
-            _conteoSearchTerm = (val || '').trim();
-            renderTab();
+            const next = (val || '').trimStart();
+            clearTimeout(_csSearchTimer);
+            _csSearchTimer = setTimeout(function() {
+                const trimmed = next.trimEnd();
+                if (trimmed === _conteoSearchTerm) return; // sin cambio → no re-render
+                _conteoSearchTerm = trimmed;
+                // Actualizar clase del wrapper sin esperar re-render completo
+                const wrap = document.getElementById('csb-wrap');
+                if (wrap) wrap.classList.toggle('csb-wrap--active', !!_conteoSearchTerm);
+                renderTab();
+            }, 180);
         }
+
         function clearConteoSearch() {
+            clearTimeout(_csSearchTimer);
             _conteoSearchTerm = '';
-            const inp = document.getElementById('conteoSearchInput');
-            if (inp) inp.value = '';
+            const inp  = document.getElementById('csb-input');
+            const wrap = document.getElementById('csb-wrap');
+            if (inp)  { inp.value = ''; inp.focus(); }
+            if (wrap) wrap.classList.remove('csb-wrap--active');
             renderTab();
-        }
-        // Resalta las coincidencias del término buscado dentro de un nombre
-        function highlightConteoMatch(name, term) {
-            if (!term) return escapeHtml(name);
-            const escaped   = escapeHtml(name);
-            const escapedTm = escapeHtml(term).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const re = new RegExp('(' + escapedTm + ')', 'gi');
-            return escaped.replace(re, '<mark class="conteo-match-highlight">$1</mark>');
         }
 
         function renderInventarioTab() {
@@ -6334,18 +6472,19 @@ async function resetConteoAtomicoEnFirestore() {
             });
             html += '</select></div>';
 
-            // ── Buscador de producto ─────────────────────────────────────────
-            html += '<div class="conteo-search-wrap">';
-            html += '<svg class="search-icon" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">'
+            // ── Buscador inteligente ─────────────────────────────────────────────
+            html += '<div class="csb-wrap' + (_conteoSearchTerm ? ' csb-wrap--active' : '') + '" id="csb-wrap">';
+            html += '<svg class="csb-icon" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">'
                   + '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>';
-            html += '<input id="conteoSearchInput" type="search" class="conteo-search-input"'
-                  + ' placeholder="Buscar producto en este conteo…"'
+            html += '<input id="csb-input" type="search" class="csb-input"'
+                  + ' placeholder="Buscar por nombre, código o grupo\u2026"'
                   + ' value="' + escapeHtml(_conteoSearchTerm) + '"'
                   + ' oninput="updateConteoSearch(this.value)"'
-                  + ' autocomplete="off" autocorrect="off" spellcheck="false">';
-            if (_conteoSearchTerm) {
-                html += '<button class="conteo-search-clear" onclick="clearConteoSearch()" title="Limpiar búsqueda" aria-label="Limpiar búsqueda">✕</button>';
-            }
+                  + ' onkeydown="if(event.key===\'Escape\'){event.preventDefault();event.stopPropagation();clearConteoSearch();}"'
+                  + ' autocomplete="off" autocorrect="off" spellcheck="false"'
+                  + ' aria-label="Buscar producto en el conteo">';
+            // El botón limpiar está siempre en el DOM; .csb-wrap--active controla su visibilidad
+            html += '<button class="csb-clear" onclick="clearConteoSearch()" title="Limpiar (Esc)" aria-label="Limpiar búsqueda">✕</button>';
             html += '</div>';
 
             html += '<p class="text-xs text-gray-400 mb-3 px-1">Conteo ciego — toca cada producto para ingresar la cantidad física</p>';
@@ -6386,22 +6525,26 @@ async function resetConteoAtomicoEnFirestore() {
 
             // ── Lista de tarjetas ─────────────────────────────────────────────
             let filteredProducts = filterByGroup();
-            // Aplicar búsqueda de texto libre sobre nombre, ID y grupo
+            // Búsqueda fuzzy/multi-palabra: nombre, código, grupo — con tolerancia a typos
             if (_conteoSearchTerm) {
-                const term = _conteoSearchTerm.toLowerCase();
-                filteredProducts = filteredProducts.filter(p =>
-                    (p.name  || '').toLowerCase().includes(term) ||
-                    (p.id    || '').toLowerCase().includes(term) ||
-                    (p.group || '').toLowerCase().includes(term)
-                );
+                const csScored = filteredProducts
+                    .map(p => ({ p, score: _csFuzzyMatch(p, _conteoSearchTerm) }))
+                    .filter(x => x.score > 0);
+                csScored.sort((a, b) => b.score - a.score); // mejor match primero
+                filteredProducts = csScored.map(x => x.p);
             }
-            // Contador de resultados
+            // Contador de resultados con estado visual
             if (_conteoSearchTerm) {
-                html += '<div class="conteo-search-results">';
+                html += '<div class="csb-meta">';
                 if (filteredProducts.length === 0) {
-                    html += 'Sin resultados para "<em>' + escapeHtml(_conteoSearchTerm) + '</em>"';
+                    html += '<span class="csb-tag csb-tag--none">Sin resultados</span>'
+                          + ' para "<em>' + escapeHtml(_conteoSearchTerm) + '</em>"'
+                          + ' <span class="csb-tag csb-tag--esc">Esc · limpiar</span>';
                 } else {
-                    html += '<em>' + filteredProducts.length + '</em> producto' + (filteredProducts.length !== 1 ? 's' : '') + ' encontrado' + (filteredProducts.length !== 1 ? 's' : '');
+                    html += '<span class="csb-tag csb-tag--ok">' + filteredProducts.length
+                          + ' encontrado' + (filteredProducts.length !== 1 ? 's' : '') + '</span>'
+                          + ' para "<em>' + escapeHtml(_conteoSearchTerm) + '</em>"'
+                          + ' <span class="csb-tag csb-tag--esc">Esc · limpiar</span>';
                 }
                 html += '</div>';
             }
@@ -6469,17 +6612,22 @@ async function resetConteoAtomicoEnFirestore() {
                     html += '<span class="inv-chip__label">' + (usaConversion ? ab1Raw.toFixed(1) + ' oz' : 'Abierta 1') + '</span>';
                     html += '</div>';
 
+                    html += '</div>'; // FIX-3: cierre de .inv-card__chips ANTES de chips extra
+
                     if (hasExtra) {
+                        // FIX-3: wrap chips extra en .inv-card__extra con id="card-extra-{id}"
+                        // para que toggleCardExpand() lo encuentre y aplique la clase .open
+                        html += '<div class="inv-card__extra' + (isExpanded ? ' open' : '') + '" id="card-extra-' + escapeHtml(product.id) + '">';
                         puntosAbiertas.slice(1).forEach((pt, i) => {
                             const rawOz = abiertas[i + 1] || 0;
                             const chipLabel = usaConversion ? (pt * 100).toFixed(0) + '%' : pt.toFixed(2);
-                            html += '<div class="inv-chip abierta' + (pt === 0 ? ' empty' : '') + '" id="extra-chip-' + escapeHtml(product.id) + '-' + (i+2) + '" style="display:' + (isExpanded ? 'flex' : 'none') + ';flex-direction:column;">';
+                            html += '<div class="inv-chip abierta' + (pt === 0 ? ' empty' : '') + '">';
                             html += '<span class="inv-chip__val">' + chipLabel + '</span>';
                             html += '<span class="inv-chip__label">' + (usaConversion ? rawOz.toFixed(1) + ' oz' : 'Abierta ' + (i + 2)) + '</span>';
                             html += '</div>';
                         });
+                        html += '</div>'; // close .inv-card__extra
                     }
-                    html += '</div>';
 
                     if (hasExtra) {
                         html += '<button class="inv-card__expand-btn' + (isExpanded ? ' open' : '') + '" id="card-expand-btn-' + escapeHtml(product.id) + '" onclick="toggleCardExpand(\'' + escapeHtml(product.id) + '\', event)" aria-expanded="' + isExpanded + '">';
@@ -6803,6 +6951,8 @@ async function resetConteoAtomicoEnFirestore() {
                 cart = cart.filter(item => item.id !== id);
                 delete inventarioConteo[id];
                 delete auditoriaConteo[id];  // Bug #5 fix: evitar entradas huérfanas que rompen exportToExcel
+                if (myAuditoriaConteo) delete myAuditoriaConteo[id]; // FIX-5: limpiar conteo propio del usuario
+                if (auditoriaConteoPorUsuario) delete auditoriaConteoPorUsuario[id]; // FIX-5: limpiar conteos multiusuario
                 saveToLocalStorage();
                 showNotification('Producto eliminado');
                 renderTab();
@@ -6814,6 +6964,8 @@ async function resetConteoAtomicoEnFirestore() {
             if (products.length === 0) { showNotification('No hay productos para eliminar'); return; }
             showConfirm('¿Está seguro de que desea eliminar TODOS los productos? Esta acción no se puede deshacer.', function() {
                 products = []; cart = []; inventarioConteo = {};
+                // FIX-6: limpiar conteos de auditoría huérfanos al eliminar todos los productos
+                auditoriaConteo = {}; myAuditoriaConteo = {}; auditoriaConteoPorUsuario = {};
                 // CORRECCIÓN BUG 2: los pedidos son registros históricos inmutables.
                 // Solo se vacía el carrito activo; los productos de pedidos ya creados
                 // se conservan tal como estaban al momento de generarlos.
@@ -7717,9 +7869,9 @@ async function resetConteoAtomicoEnFirestore() {
             // de seguridad peligroso: cualquier fallo de SDK exponía la app sin login.
             console.error('[Auth] Firebase Auth no disponible — mostrando pantalla de login con aviso.');
             authLoadingScreen.classList.add('auth-hidden');
-            // Mostrar login
-            const loginWrap = $id('loginWrapper');
-            if (loginWrap) loginWrap.classList.add('auth-visible');
+            // Mostrar login — FIX-1: 'loginWrapper' no existe en el DOM.
+            // El elemento correcto es 'loginScreen'. showLogin() lo muestra correctamente.
+            showLogin();
             // Mostrar aviso de error de configuración al usuario
             const loginError = $id('loginError');
             if (loginError) {
