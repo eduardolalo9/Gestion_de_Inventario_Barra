@@ -96,8 +96,11 @@
                     // sendResponse() causa el error "message channel closed before response".
                     if (!event.data) return;
                     if (event.data.type === 'SYNC_PENDING') {
-                        // El SW nos avisa que hay datos pendientes de subir
-                        var _sync = window.syncToCloud || syncToCloud;
+                        // El SW nos avisa que hay datos pendientes de subir.
+                        // FIX: usar SOLO window.syncToCloud (referencia explícita y segura).
+                        // El fallback "|| syncToCloud" era redundante pero podía generar
+                        // ReferenceError si este bloque se ejecutaba antes del script principal.
+                        var _sync = window.syncToCloud;
                         if (_db && navigator.onLine && typeof _sync === 'function') {
                             _sync();
                         }
@@ -149,13 +152,13 @@
         // en https://console.cloud.google.com → Credenciales → Restricciones de clave.
         // (dominio HTTP Referrer + solo Firestore API)
         const firebaseConfig = {
-    apiKey: "AIzaSyCjFziFbjsxZQq-CzkCsMuYXgZiFVYEXa0",
-  authDomain: "gestor-de-inventarios-76c19.firebaseapp.com",
-  projectId: "gestor-de-inventarios-76c19",
-  storageBucket: "gestor-de-inventarios-76c19.firebasestorage.app",
-  messagingSenderId: "520575498448",
-  appId: "1:520575498448:web:3a83c2e4fcaedfc9d386d5"
-};
+            apiKey:            "AIzaSyCjFziFbjsxZQq-CzkCsMuYXgZiFVYEXa0",
+            authDomain:        "gestor-de-inventarios-76c19.firebaseapp.com",
+            projectId:         "gestor-de-inventarios-76c19",
+            storageBucket:     "gestor-de-inventarios-76c19.firebasestorage.app",
+            messagingSenderId: "520575498448",
+            appId:             "1:520575498448:web:3a83c2e4fcaedfc9d386d5"
+        };
 
         // ID del documento Firestore que almacena el estado de ESTA instalación.
         // Cambia este valor si quieres múltiples instancias (ej. "barra-norte", "barra-sur").
@@ -224,24 +227,24 @@
                 return;
             }
             try {
-               firebase.initializeApp(firebaseConfig);
-_db   = firebase.firestore();
-_auth = firebase.auth();
+                firebase.initializeApp(firebaseConfig);
+                _db   = firebase.firestore();
+                _auth = firebase.auth();
 
-// FIX: Persistencia offline — API actualizada para Firebase 10.x
-// enablePersistence sigue siendo compatible pero usamos settings para suprimir el warning
-try {
-    _db.settings({ cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED });
-} catch(_) {}
-_db.enablePersistence({ synchronizeTabs: true }).catch(err => {
-    if (err.code === 'failed-precondition') {
-        console.warn("[Firebase] Persistencia offline no disponible (múltiples pestañas).");
-    } else if (err.code === 'unimplemented') {
-        console.warn("[Firebase] Persistencia offline no soportada en este navegador.");
-    } else {
-        console.warn("Persistencia falló:", err);
-    }
-});
+                // FIX: Persistencia offline — API actualizada para Firebase 10.x
+                // enablePersistence sigue siendo compatible pero usamos settings para suprimir el warning
+                try {
+                    _db.settings({ cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED });
+                } catch (_) {}
+                _db.enablePersistence({ synchronizeTabs: true }).catch(err => {
+                    if (err.code === 'failed-precondition') {
+                        console.warn("[Firebase] Persistencia offline no disponible (múltiples pestañas).");
+                    } else if (err.code === 'unimplemented') {
+                        console.warn("[Firebase] Persistencia offline no soportada en este navegador.");
+                    } else {
+                        console.warn("Persistencia falló:", err);
+                    }
+                });
                 console.info("[Firebase] Inicializado correctamente ✓");
             } catch (e) {
                 console.error("[Firebase] Error al inicializar:", e);
@@ -2590,11 +2593,11 @@ html[data-theme="light"] .prd-card__group-badge {
 
         function initTheme() {
             let saved = 'dark';
-            try { 
-    let t = localStorage.getItem('inventarioApp_theme');
-    if (t !== 'dark' && t !== 'light') t = 'dark'; 
-    saved = t;
-} catch(_) {}
+            try {
+                let t = localStorage.getItem('inventarioApp_theme');
+                if (t !== 'dark' && t !== 'light') t = 'dark';
+                saved = t;
+            } catch (_) {}
             applyTheme(saved);
         }
 
@@ -2623,23 +2626,23 @@ html[data-theme="light"] .prd-card__group-badge {
         let selectedArea = 'almacen';
         let expandedInventories = new Set();
         let expandedCards = new Set(); // IDs de tarjetas de inventario expandidas
-// FIX 11: DeviceID más estable — incorpora fingerprint básico para reusar ID
-// si el usuario borra localStorage pero sigue desde el mismo navegador/dispositivo.
-const _deviceId = (function () {
-    const LS_KEY = 'inventarioApp_deviceId';
-    try {
-        const stored = localStorage.getItem(LS_KEY);
-        if (stored && stored.startsWith('dev-')) return stored;
-        const id = 'dev-'
-            + Math.random().toString(36).substring(2, 10)
-            + '-'
-            + Date.now().toString(36);
-        localStorage.setItem(LS_KEY, id);
-        return id;
-    } catch (_) {
-        return 'dev-offline-' + Math.random().toString(36).slice(2, 10);
-    }
-})();
+        // FIX 11: DeviceID más estable — incorpora fingerprint básico para reusar ID
+        // si el usuario borra localStorage pero sigue desde el mismo navegador/dispositivo.
+        const _deviceId = (function () {
+            const LS_KEY = 'inventarioApp_deviceId';
+            try {
+                const stored = localStorage.getItem(LS_KEY);
+                if (stored && stored.startsWith('dev-')) return stored;
+                const id = 'dev-'
+                    + Math.random().toString(36).substring(2, 10)
+                    + '-'
+                    + Date.now().toString(36);
+                localStorage.setItem(LS_KEY, id);
+                return id;
+            } catch (_) {
+                return 'dev-offline-' + Math.random().toString(36).slice(2, 10);
+            }
+        })();
         let inventarioConteo = {}; // { productId: { area: { enteras: 0, abiertas: [] } } }
         let inventarioModalProductId = null;
         let isInventarioModalOpen = false; // Para controlar botones de área
@@ -2995,7 +2998,10 @@ const _deviceId = (function () {
             html += '<div class="audit-user-info">';
             html += '<div class="audit-user-label">Dispositivo actual</div>';
             html += '<div class="audit-user-name-text">' + escapeHtml(user.userName) + '</div>';
-            html += '<div class="audit-user-id-text">' + escapeHtml(user.userId.slice(0, 22)) + '…</div>';
+            const displayId = user.userId.length > 22
+                ? user.userId.slice(0, 22) + '…'
+                : user.userId;
+            html += '<div class="audit-user-id-text">' + escapeHtml(displayId) + '</div>';
             html += '</div>';
             html += '<button class="audit-rename-btn" onclick="toggleAuditRename()">'
                   + '<i class="fa-solid fa-pen" style="font-size:.65rem;margin-right:4px;"></i>'
@@ -3859,6 +3865,7 @@ async function resetConteoAtomicoEnFirestore() {
          * Escucha el doc propio del usuario en userAuditoria/{myUid}
          * para detectar desbloqueos otorgados por el admin en tiempo real.
          */
+
         /** Helper: reiniciar el conteo propio del usuario (FIX 9) */
         function _resetMiConteoLocal(msg) {
             myAuditoriaConteo  = {};
@@ -4092,7 +4099,7 @@ async function resetConteoAtomicoEnFirestore() {
         }
 
         /**
-         * Admin: reinicar sesión de auditoría.
+         * Admin: reiniciar sesión de auditoría.
          * Escribe nuevo sessionId en Firestore → todos los usuarios lo detectan y reinician.
          */
         async function _adminIniciarSesionFirestore(sessionId) {
@@ -4147,19 +4154,19 @@ async function resetConteoAtomicoEnFirestore() {
          * Al iniciar la app, descarga el estado de conflictos de abiertas
          * para mostrarlo en las tarjetas de auditoría.
          */
-       async function loadConflictosDesdeFirestore() {
-    if (!_db || !navigator.onLine) return;
-    try {
-        await Promise.all([
-            _cargarYAgeregarConteos('almacen'),
-            _cargarYAgeregarConteos('barra1'),
-            _cargarYAgeregarConteos('barra2'),
-        ]);
-        console.info('[MultiDisp] Conteos de todos los dispositivos cargados ✓');
-    } catch (err) {
-        console.warn('[MultiDisp] No se pudieron cargar conteos desde Firestore:', err);
-    }
-}
+        async function loadConflictosDesdeFirestore() {
+            if (!_db || !navigator.onLine) return;
+            try {
+                await Promise.all([
+                    _cargarYAgeregarConteos('almacen'),
+                    _cargarYAgeregarConteos('barra1'),
+                    _cargarYAgeregarConteos('barra2'),
+                ]);
+                console.info('[MultiDisp] Conteos de todos los dispositivos cargados ✓');
+            } catch (err) {
+                console.warn('[MultiDisp] No se pudieron cargar conteos desde Firestore:', err);
+            }
+        }
 
         /**
          * loadFromCloud()
@@ -6120,7 +6127,7 @@ async function resetConteoAtomicoEnFirestore() {
 
             let totalScore = 0;
             for (const word of words) {
-                if (!word) continue;
+                // Nota: words ya fue filtrado con .filter(Boolean); la guarda redundante se eliminó.
                 let wordScore = 0;
 
                 // Substring exacto (mejor)
@@ -7201,6 +7208,8 @@ async function resetConteoAtomicoEnFirestore() {
                 return parseFloat(str.replace(/\./g, '').replace(',', '.')) || 0;
             }
             // Coma como único separador decimal: 1234,56
+            // FIX: (,\d+) sin cuantificador lo hacía obligatorio; se mantiene correcto porque
+            // el test ya exige exactamente "dígitos,dígitos" — el $ ancla el fin de cadena.
             if (/^\d+(,\d+)$/.test(str)) {
                 return parseFloat(str.replace(',', '.')) || 0;
             }
