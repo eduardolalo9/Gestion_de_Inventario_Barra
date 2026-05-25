@@ -1247,6 +1247,63 @@ html[data-theme="light"] .audit-area-card.completada .audit-area-icon { backgrou
 html[data-theme="light"] .audit-count-header { background: #f0f4f8; }
 html[data-theme="light"] .audit-count-area-badge { background: rgba(29,78,216,0.07); border-color: rgba(29,78,216,0.14); }
 
+/* ── PANEL ADMIN TIEMPO REAL ─────────────────────────────── */
+@keyframes livePulse {
+    0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 0 rgba(34,197,94,0.55); }
+    50%       { opacity: 0.7; transform: scale(1.18); box-shadow: 0 0 0 5px rgba(34,197,94,0); }
+}
+@keyframes countingBlink {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.45; }
+}
+.audit-live-dot {
+    display: inline-block;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #22c55e;
+    animation: livePulse 1.6s ease-in-out infinite;
+    flex-shrink: 0;
+}
+.audit-counting-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 1px 6px; border-radius: 20px;
+    background: rgba(251,191,36,0.13);
+    border: 1px solid rgba(251,191,36,0.28);
+    color: #fbbf24;
+    font-size: 0.6rem; font-weight: 700;
+    animation: countingBlink 2s ease-in-out infinite;
+}
+.audit-done-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 1px 6px; border-radius: 20px;
+    background: rgba(34,197,94,0.10);
+    border: 1px solid rgba(34,197,94,0.22);
+    color: #22c55e;
+    font-size: 0.6rem; font-weight: 700;
+}
+.audit-user-row {
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 10px;
+    margin-bottom: 8px;
+    background: var(--bg);
+    transition: border-color 0.2s;
+}
+.audit-user-row.live { border-color: rgba(34,197,94,0.28); }
+.audit-area-row {
+    display: flex; align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap; gap: 4px;
+    padding: 5px 0;
+    font-size: 0.68rem;
+    border-top: 1px solid var(--border);
+}
+.audit-area-row-label { color: var(--txt-muted); min-width: 68px; }
+.audit-area-row-count { font-family: 'IBM Plex Mono', monospace; font-size: 0.65rem; color: var(--txt-muted); }
+.audit-timestamp { font-size: 0.6rem; color: var(--txt-muted); margin-top: 2px; }
+html[data-theme="light"] .audit-user-row { box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+html[data-theme="light"] .audit-user-row.live { border-color: rgba(22,163,74,0.28); }
+
 /* ── SEMÁFORO DE SINCRONIZACIÓN (Header) ─────────────────── */
 #syncDot {
     width: 10px; height: 10px;
@@ -1637,6 +1694,60 @@ html[data-theme="light"] .prd-card__group-badge {
     font-family: 'IBM Plex Mono', monospace;
     font-size: 0.92rem; font-weight: 700;
     color: var(--txt-primary); display: block;
+}
+
+/* ── CONTEO DE AUDITORÍA en tarjetas de inicio ────────────── */
+.prd-audit-divider {
+    display: flex; align-items: center; gap: 6px;
+    margin: 8px 0 6px;
+    font-size: 0.58rem; font-weight: 700;
+    letter-spacing: 0.07em; text-transform: uppercase;
+    color: var(--txt-muted);
+}
+.prd-audit-divider::before,
+.prd-audit-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+}
+/* Chips de auditoría — mismo layout que los de stock pero con paleta diferenciada */
+.prd-area-chip--audit {
+    background: rgba(139,92,246,0.07);
+    border-color: rgba(139,92,246,0.18);
+}
+html[data-theme="light"] .prd-area-chip--audit {
+    background: rgba(109,40,217,0.06);
+    border-color: rgba(109,40,217,0.16);
+}
+/* Valor principal (enteras) */
+.prd-area-chip__val--audit {
+    color: #a78bfa;
+    font-size: 0.88rem;
+}
+html[data-theme="light"] .prd-area-chip__val--audit { color: #6d28d9; }
+/* Sub-línea de abiertas */
+.prd-audit-abiertas {
+    display: block;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.56rem; font-weight: 600;
+    color: #c4b5fd;
+    margin-top: 1px;
+    white-space: nowrap;
+}
+html[data-theme="light"] .prd-audit-abiertas { color: #7c3aed; }
+/* Chip vacío (sin datos en esa área) */
+.prd-area-chip__val--empty {
+    color: var(--txt-muted);
+    font-size: 0.75rem;
+    font-weight: 400;
+}
+/* Badge "sin auditoría" cuando no hay ningún dato */
+.prd-no-audit {
+    font-size: 0.6rem;
+    color: var(--txt-muted);
+    padding: 4px 0 0;
+    font-style: italic;
 }
 
 /* Barra de búsqueda e inputs en inicio */
@@ -5472,6 +5583,43 @@ async function resetConteoAtomicoEnFirestore() {
             }
         }
 
+        /**
+         * _getAuditConteoParaProducto(prodId)
+         * ─────────────────────────────────────
+         * Devuelve los datos de auditoría para un producto desglosados por área.
+         * Fuente: auditoriaConteo (admin) o myAuditoriaConteo (usuario regular),
+         * exactamente la misma lógica que usa renderAuditoriaConteo().
+         *
+         * Retorna un objeto { almacen, barra1, barra2, _hayDatos } donde cada área es:
+         *   null  → sin datos contados
+         *   { enteras, numAbiertas, sumaAbiertas } → con datos
+         */
+        function _getAuditConteoParaProducto(prodId) {
+            // Misma fuente de verdad que renderAuditoriaConteo
+            const conteoFuente = isAdmin() ? auditoriaConteo : myAuditoriaConteo;
+            const AREAS        = ['almacen', 'barra1', 'barra2'];
+            var result         = { _hayDatos: false };
+
+            AREAS.forEach(function(area) {
+                var d = conteoFuente[prodId] && conteoFuente[prodId][area];
+                if (!d) { result[area] = null; return; }
+
+                var enteras     = d.enteras || 0;
+                var abiertasArr = d.abiertas || [];
+                var suma        = abiertasArr.reduce(function(s, v) { return s + (v || 0); }, 0);
+                var hayValor    = enteras > 0 || abiertasArr.some(function(v) { return v > 0; });
+
+                if (hayValor) {
+                    result[area]     = { enteras: enteras, numAbiertas: abiertasArr.length, sumaAbiertas: suma };
+                    result._hayDatos = true;
+                } else {
+                    result[area] = null;
+                }
+            });
+
+            return result;
+        }
+
         function renderInicioTab() {
             const filteredProducts = filterByGroup();
             const totalProducts    = products.length;
@@ -5551,12 +5699,45 @@ async function resetConteoAtomicoEnFirestore() {
                     html += '<div class="prd-card__group-badge">' + escapeHtml(product.group || 'General') + '</div>';
                     // Meta: ID · Unit · Total
                     html += '<div class="prd-card__meta">' + escapeHtml(product.id) + ' · ' + escapeHtml(product.unit || '') + ' · Total: ' + total.toFixed(2) + '</div>';
-                    // Area chips
+                    // Area chips (stock operativo)
                     html += '<div class="prd-card__areas">';
                     html += '<div class="prd-area-chip"><span class="prd-area-chip__label">Almacén</span><span class="prd-area-chip__val">' + (sba.almacen || 0).toFixed(2) + '</span></div>';
                     html += '<div class="prd-area-chip"><span class="prd-area-chip__label">Barra 1</span><span class="prd-area-chip__val">' + (sba.barra1 || 0).toFixed(2) + '</span></div>';
-                    html += '<div class="prd-area-chip"><span class="prd-area-chip__label">Barra 2</span><span class="prd-area-chip__val">' + (sba.barra2 || 0).toFixed(2) + '</span></div>';
-                    html += '</div></div>';
+                    html += '<div class="prd-area-chip"><span class="prd-area-chip__val">' + (sba.barra2 || 0).toFixed(2) + '</span></div>';
+                    html += '</div>';
+
+                    // ── Sección de conteo de auditoría ───────────────────────────
+                    var ad = _getAuditConteoParaProducto(product.id);
+                    html += '<div class="prd-audit-divider">📋 Conteo auditoría</div>';
+                    if (ad._hayDatos) {
+                        var AUDIT_AREAS  = ['almacen', 'barra1', 'barra2'];
+                        var AUDIT_LABELS = { almacen: 'Almacén', barra1: 'Barra 1', barra2: 'Barra 2' };
+                        html += '<div class="prd-card__areas">';
+                        AUDIT_AREAS.forEach(function(area) {
+                            var d = ad[area];
+                            html += '<div class="prd-area-chip prd-area-chip--audit">';
+                            html += '<span class="prd-area-chip__label">' + AUDIT_LABELS[area] + '</span>';
+                            if (d) {
+                                html += '<span class="prd-area-chip__val prd-area-chip__val--audit">'
+                                      + d.enteras
+                                      + ' <span style="font-size:0.6rem;font-weight:500;color:var(--txt-muted);">ent</span>'
+                                      + '</span>';
+                                if (d.numAbiertas > 0) {
+                                    html += '<span class="prd-audit-abiertas">'
+                                          + d.numAbiertas + ' ab (' + d.sumaAbiertas.toFixed(2) + ')'
+                                          + '</span>';
+                                }
+                            } else {
+                                html += '<span class="prd-area-chip__val prd-area-chip__val--empty">—</span>';
+                            }
+                            html += '</div>';
+                        });
+                        html += '</div>';
+                    } else {
+                        html += '<p class="prd-no-audit">Sin datos de auditoría</p>';
+                    }
+
+                    html += '</div>';
                 });
             }
 
@@ -6332,37 +6513,150 @@ async function resetConteoAtomicoEnFirestore() {
             return html;
         }
 
-        /** Panel admin: tabla de todos los usuarios con sus conteos y botones de unlock */
+        /**
+         * _adminRelTime(ts) — formatea un timestamp en texto relativo compacto.
+         * Ejemplo: "hace 5 s", "hace 2 min", "hace 1 h"
+         */
+        function _adminRelTime(ts) {
+            if (!ts) return '';
+            const diff = Math.floor((Date.now() - ts) / 1000);
+            if (diff < 5)   return 'justo ahora';
+            if (diff < 60)  return 'hace ' + diff + ' s';
+            if (diff < 3600) return 'hace ' + Math.floor(diff / 60) + ' min';
+            return 'hace ' + Math.floor(diff / 3600) + ' h';
+        }
+
+        /**
+         * Panel admin: tabla en TIEMPO REAL de todos los usuarios con sus conteos.
+         *
+         * Mejoras vs versión anterior:
+         *  • Muestra contador de productos contados incluso para áreas "Pendiente"
+         *    (el Firestore onSnapshot ya alimenta allUsersAuditoria en tiempo real)
+         *  • Dot verde pulsante "● EN VIVO" cuando hay usuarios contando
+         *  • Badge animado "CONTANDO…" con número de productos en curso
+         *  • Timestamp relativo ("hace 5 s") por usuario
+         *  • Borde verde en tarjetas de usuarios activos
+         *  • Total de botellas enteras + abiertas por área (no solo número de productos)
+         */
         function _renderAdminUsersPanel() {
             const users = Object.values(allUsersAuditoria);
             if (users.length === 0) return '';
+
+            const AREAS = ['almacen', 'barra1', 'barra2'];
+
+            // ¿Hay algún usuario actualmente contando (área pendiente con productos ya cargados)?
+            const hayAlguienContando = users.some(u =>
+                AREAS.some(a => u.status[a] !== 'completada' &&
+                    Object.keys(u.conteo).some(pid =>
+                        u.conteo[pid] && u.conteo[pid][a] &&
+                        (u.conteo[pid][a].enteras > 0 || (u.conteo[pid][a].abiertas || []).some(v => v > 0))
+                    )
+                )
+            );
+
             let html = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px;margin-bottom:16px;">';
-            html += '<p style="font-size:0.75rem;font-weight:700;color:var(--txt-primary);margin-bottom:10px;">👥 Conteos por usuario</p>';
-            users.forEach(u => {
-                const areasOk = ['almacen', 'barra1', 'barra2'].filter(a => u.status[a] === 'completada');
-                html += '<div style="border:1px solid var(--border);border-radius:var(--r-md);padding:10px;margin-bottom:8px;background:var(--bg);">';
-                html += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:6px;">';
-                html += '<span style="font-size:0.72rem;font-weight:600;color:var(--accent);">👤 ' + escapeHtml(u.email) + '</span>';
-                html += '<span style="font-size:0.65rem;color:var(--txt-muted);">' + areasOk.length + '/3 áreas</span>';
-                html += '</div>';
-                ['almacen', 'barra1', 'barra2'].forEach(area => {
-                    const st = u.status[area] === 'completada';
-                    const numProds = Object.keys(u.conteo).filter(pid =>
-                        u.conteo[pid] && u.conteo[pid][area] &&
-                        (u.conteo[pid][area].enteras > 0 || (u.conteo[pid][area].abiertas || []).some(v => v > 0))
-                    ).length;
-                    html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;font-size:0.68rem;border-top:1px solid var(--border);">';
-                    html += '<span style="color:var(--txt-muted);">' + areasAuditoria[area] + '</span>';
-                    html += '<span style="color:' + (st ? 'var(--green)' : 'var(--amber)') + ';font-weight:600;">' + (st ? '✓ Finalizado — ' + numProds + ' prods' : 'Pendiente') + '</span>';
-                    if (st) {
-                        html += '<button onclick="adminVerConteoUsuario(\'' + escapeHtml(u.uid) + '\',\'' + area + '\')" style="padding:2px 7px;border-radius:4px;background:var(--accent);color:#fff;font-size:0.62rem;border:none;cursor:pointer;">Ver</button>';
-                        html += '<button onclick="adminUnlockAreaUsuario(\'' + escapeHtml(u.uid) + '\',\'' + area + '\')" style="padding:2px 7px;border-radius:4px;background:var(--amber);color:#fff;font-size:0.62rem;border:none;cursor:pointer;margin-left:4px;">🔓 Habilitar</button>';
-                    }
-                    html += '</div>';
-                });
-                html += '</div>';
-            });
+
+            // ── Cabecera del panel con indicador EN VIVO ────────────────────
+            html += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:10px;">';
+            html += '<p style="font-size:0.75rem;font-weight:700;color:var(--txt-primary);margin:0;">👥 Conteos por usuario</p>';
+            if (hayAlguienContando) {
+                html += '<span style="display:inline-flex;align-items:center;gap:5px;font-size:0.62rem;font-weight:700;color:#22c55e;">'
+                      + '<span class="audit-live-dot"></span>EN VIVO</span>';
+            }
             html += '</div>';
+
+            // ── Tarjeta por usuario ─────────────────────────────────────────
+            users.forEach(function(u) {
+                const areasOk        = AREAS.filter(a => u.status[a] === 'completada');
+                const totalAreas     = areasOk.length;
+                const isLive         = AREAS.some(a => u.status[a] !== 'completada' &&
+                    Object.keys(u.conteo).some(pid =>
+                        u.conteo[pid] && u.conteo[pid][a] &&
+                        (u.conteo[pid][a].enteras > 0 || (u.conteo[pid][a].abiertas || []).some(v => v > 0))
+                    )
+                );
+                const relTime = u.updatedAt ? _adminRelTime(u.updatedAt) : '';
+
+                html += '<div class="audit-user-row' + (isLive ? ' live' : '') + '">';
+
+                // Cabecera del usuario
+                html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:4px;">';
+                html += '<div style="display:flex;flex-direction:column;gap:1px;">';
+                html += '<span style="font-size:0.72rem;font-weight:600;color:var(--accent);">👤 ' + escapeHtml(u.email) + '</span>';
+                if (relTime) {
+                    html += '<span class="audit-timestamp">⏱ ' + relTime + '</span>';
+                }
+                html += '</div>';
+                html += '<span style="font-size:0.65rem;color:var(--txt-muted);">' + totalAreas + '/3 áreas</span>';
+                html += '</div>';
+
+                // ── Fila por área ───────────────────────────────────────────
+                AREAS.forEach(function(area) {
+                    const completada = u.status[area] === 'completada';
+
+                    // Contar productos con cantidad en esta área (siempre, no solo si completada)
+                    const prodsConCantidad = Object.keys(u.conteo).filter(function(pid) {
+                        const d = u.conteo[pid] && u.conteo[pid][area];
+                        return d && (d.enteras > 0 || (d.abiertas || []).some(function(v) { return v > 0; }));
+                    });
+                    const numProds = prodsConCantidad.length;
+
+                    // Sumar totales de botellas para esta área
+                    var totalEnteras = 0, totalAbiertas = 0;
+                    prodsConCantidad.forEach(function(pid) {
+                        var d = u.conteo[pid][area];
+                        totalEnteras  += (d.enteras || 0);
+                        totalAbiertas += (d.abiertas || []).reduce(function(s, v) { return s + (v || 0); }, 0);
+                    });
+
+                    const hayDatosEnCurso = !completada && numProds > 0;
+
+                    html += '<div class="audit-area-row">';
+
+                    // Nombre del área
+                    html += '<span class="audit-area-row-label">' + areasAuditoria[area] + '</span>';
+
+                    // Badge de estado
+                    if (completada) {
+                        html += '<span class="audit-done-badge">'
+                              + '<svg width="9" height="9" fill="none" stroke="currentColor" viewBox="0 0 24 24">'
+                              + '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>'
+                              + ' Finalizado</span>';
+                    } else if (hayDatosEnCurso) {
+                        html += '<span class="audit-counting-badge">⬤ CONTANDO…</span>';
+                    } else {
+                        html += '<span style="font-size:0.62rem;color:var(--txt-muted);">Sin iniciar</span>';
+                    }
+
+                    // Contador de productos y botellas (siempre visible si hay datos)
+                    if (numProds > 0) {
+                        html += '<span class="audit-area-row-count">'
+                              + numProds + ' prod'
+                              + (numProds !== 1 ? 's' : '')
+                              + ' · ' + totalEnteras + ' ent'
+                              + (totalAbiertas > 0 ? ' · ' + totalAbiertas.toFixed(2) + ' ab' : '')
+                              + '</span>';
+                    }
+
+                    // Botones de acción (solo áreas completadas)
+                    if (completada) {
+                        html += '<div style="display:flex;gap:4px;flex-shrink:0;">';
+                        html += '<button onclick="adminVerConteoUsuario(\'' + escapeHtml(u.uid) + '\',\'' + area + '\')"'
+                              + ' style="padding:2px 7px;border-radius:4px;background:var(--accent);color:#fff;font-size:0.62rem;border:none;cursor:pointer;">'
+                              + 'Ver</button>';
+                        html += '<button onclick="adminUnlockAreaUsuario(\'' + escapeHtml(u.uid) + '\',\'' + area + '\')"'
+                              + ' style="padding:2px 7px;border-radius:4px;background:var(--amber);color:#fff;font-size:0.62rem;border:none;cursor:pointer;">'
+                              + '🔓 Habilitar</button>';
+                        html += '</div>';
+                    }
+
+                    html += '</div>'; // audit-area-row
+                });
+
+                html += '</div>'; // audit-user-row
+            });
+
+            html += '</div>'; // panel container
             return html;
         }
 
