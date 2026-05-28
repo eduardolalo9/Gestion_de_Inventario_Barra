@@ -5699,43 +5699,23 @@ async function resetConteoAtomicoEnFirestore() {
                     html += '<div class="prd-card__group-badge">' + escapeHtml(product.group || 'General') + '</div>';
                     // Meta: ID · Unit · Total
                     html += '<div class="prd-card__meta">' + escapeHtml(product.id) + ' · ' + escapeHtml(product.unit || '') + ' · Total: ' + total.toFixed(2) + '</div>';
-                    // Area chips (stock operativo)
+                    // Area chips — total contado de auditoría por área
+                    var ad           = _getAuditConteoParaProducto(product.id);
+                    var CHIP_LABELS  = { almacen: 'Almacén', barra1: 'Barra 1', barra2: 'Barra 2' };
                     html += '<div class="prd-card__areas">';
-                    html += '<div class="prd-area-chip"><span class="prd-area-chip__label">Almacén</span><span class="prd-area-chip__val">' + (sba.almacen || 0).toFixed(2) + '</span></div>';
-                    html += '<div class="prd-area-chip"><span class="prd-area-chip__label">Barra 1</span><span class="prd-area-chip__val">' + (sba.barra1 || 0).toFixed(2) + '</span></div>';
-                    html += '<div class="prd-area-chip"><span class="prd-area-chip__val">' + (sba.barra2 || 0).toFixed(2) + '</span></div>';
-                    html += '</div>';
-
-                    // ── Sección de conteo de auditoría ───────────────────────────
-                    var ad = _getAuditConteoParaProducto(product.id);
-                    html += '<div class="prd-audit-divider">📋 Conteo auditoría</div>';
-                    if (ad._hayDatos) {
-                        var AUDIT_AREAS  = ['almacen', 'barra1', 'barra2'];
-                        var AUDIT_LABELS = { almacen: 'Almacén', barra1: 'Barra 1', barra2: 'Barra 2' };
-                        html += '<div class="prd-card__areas">';
-                        AUDIT_AREAS.forEach(function(area) {
-                            var d = ad[area];
-                            html += '<div class="prd-area-chip prd-area-chip--audit">';
-                            html += '<span class="prd-area-chip__label">' + AUDIT_LABELS[area] + '</span>';
-                            if (d) {
-                                html += '<span class="prd-area-chip__val prd-area-chip__val--audit">'
-                                      + d.enteras
-                                      + ' <span style="font-size:0.6rem;font-weight:500;color:var(--txt-muted);">ent</span>'
-                                      + '</span>';
-                                if (d.numAbiertas > 0) {
-                                    html += '<span class="prd-audit-abiertas">'
-                                          + d.numAbiertas + ' ab (' + d.sumaAbiertas.toFixed(2) + ')'
-                                          + '</span>';
-                                }
-                            } else {
-                                html += '<span class="prd-area-chip__val prd-area-chip__val--empty">—</span>';
-                            }
-                            html += '</div>';
-                        });
+                    ['almacen', 'barra1', 'barra2'].forEach(function(area) {
+                        var d          = ad[area];
+                        var totalAudit = d ? (d.enteras + d.sumaAbiertas) : null;
+                        html += '<div class="prd-area-chip">';
+                        html += '<span class="prd-area-chip__label">' + CHIP_LABELS[area] + '</span>';
+                        if (totalAudit !== null) {
+                            html += '<span class="prd-area-chip__val">' + totalAudit.toFixed(2) + '</span>';
+                        } else {
+                            html += '<span class="prd-area-chip__val" style="color:var(--txt-muted);font-size:0.78rem;font-weight:500;">—</span>';
+                        }
                         html += '</div>';
-                    } else {
-                        html += '<p class="prd-no-audit">Sin datos de auditoría</p>';
-                    }
+                    });
+                    html += '</div>';
 
                     html += '</div>';
                 });
