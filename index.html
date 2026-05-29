@@ -4095,7 +4095,9 @@ async function resetConteoAtomicoEnFirestore() {
                 });
                 // Reconstruir auditoriaConteo agregado (suma/promedio de todos los usuarios)
                 _recalcAdminAggregatedConteo();
-                if (activeTab === 'inventario') renderTab();
+                // FIX: incluir 'inicio' para que los chips de auditoría se actualicen
+                // en tiempo real aunque el admin esté en esa pestaña (antes solo 'inventario')
+                if (activeTab === 'inventario' || activeTab === 'inicio') renderTab();
             }, function(err) { console.warn('[AuditAdmin] Error listener usuarios:', err); });
         }
 
@@ -4112,7 +4114,9 @@ async function resetConteoAtomicoEnFirestore() {
             const AREAS = ['almacen', 'barra1', 'barra2'];
             const aggregated = {};
             const usersList  = Object.values(allUsersAuditoria);
-            if (usersList.length === 0) return;
+            // FIX: limpiar siempre aunque no haya usuarios — evita datos obsoletos
+            // tras un reset de sesión (antes retornaba sin tocar auditoriaConteo)
+            if (usersList.length === 0) { auditoriaConteo = {}; return; }
 
             // Separar admins de usuarios regulares
             const adminEntries   = usersList.filter(u => u.isAdmin);
@@ -5676,10 +5680,13 @@ async function resetConteoAtomicoEnFirestore() {
                       + '<p style="font-size:.88rem;">No se encontraron productos</p></div>';
             } else {
                 filteredProducts.forEach((product, idx) => {
-                    const sba   = product.stockByArea || { almacen: 0, barra1: 0, barra2: 0 };
-                    const total = getTotalStock(product);
-                    const hasData = total > 0;
-                    const delay = Math.min(idx * 30, 400);
+                    // FIX: sba (stockByArea) eliminada — ya no se usa en los chips.
+                    // hasData ahora refleja si hay datos de auditoría, que es lo que
+                    // muestran los chips (antes usaba getTotalStock/stockByArea, inconsistente).
+                    const total   = getTotalStock(product);   // sigue usándose en la línea meta
+                    const adCheck = _getAuditConteoParaProducto(product.id);
+                    const hasData = adCheck._hayDatos || total > 0;
+                    const delay   = Math.min(idx * 30, 400);
 
                     html += '<div class="prd-card' + (hasData ? ' has-data' : '') + '" style="animation-delay:' + delay + 'ms">';
                     // Top row: nombre + botones
@@ -5700,7 +5707,7 @@ async function resetConteoAtomicoEnFirestore() {
                     // Meta: ID · Unit · Total
                     html += '<div class="prd-card__meta">' + escapeHtml(product.id) + ' · ' + escapeHtml(product.unit || '') + ' · Total: ' + total.toFixed(2) + '</div>';
                     // Area chips — total contado de auditoría por área
-                    var ad           = _getAuditConteoParaProducto(product.id);
+                    var ad           = adCheck;   // reutilizar el resultado ya calculado arriba
                     var CHIP_LABELS  = { almacen: 'Almacén', barra1: 'Barra 1', barra2: 'Barra 2' };
                     html += '<div class="prd-card__areas">';
                     ['almacen', 'barra1', 'barra2'].forEach(function(area) {
@@ -5752,7 +5759,7 @@ async function resetConteoAtomicoEnFirestore() {
                 setTimeout(() => {
                     const el = document.getElementById('inicioReportesLista');
                     if (el && _db) {
-                        _db.collection('reportes').orderBy('fechaTs', 'desc').limit(3) // FIX-4: fechaTs (número) ordena correctamente.get()
+                        _db.collection('reportes').orderBy('fechaTs', 'desc').limit(3).get() // FIX: .get() estaba dentro del comentario — cadena rota
                             .then(snap => {
                                 if (snap.empty) { el.innerHTML = '<p style="font-size:.75rem;color:var(--txt-muted);">Sin reportes publicados aún.</p>'; return; }
                                 let rows = '';
