@@ -1750,6 +1750,70 @@ html[data-theme="light"] .prd-audit-abiertas { color: #7c3aed; }
     font-style: italic;
 }
 
+/* ── GROUP PILL RAIL — filtro horizontal de grupos ──────── */
+.grp-rail {
+    display: flex;
+    gap: 5px;
+    overflow-x: auto;
+    padding-bottom: 3px;         /* espacio para que el scrollbar no tape las pills */
+    scrollbar-width: none;       /* Firefox */
+    -ms-overflow-style: none;    /* IE/Edge */
+    /* snap suave en móvil */
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+}
+.grp-rail::-webkit-scrollbar { display: none; }
+
+.grp-pill {
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+    padding: 5px 11px;
+    border-radius: 20px;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid var(--border-mid);
+    background: var(--card);
+    color: var(--txt-secondary);
+    transition: background 0.13s, color 0.13s, border-color 0.13s, transform 0.1s;
+    scroll-snap-align: start;
+    flex-shrink: 0;
+    line-height: 1;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+.grp-pill:hover {
+    background: var(--accent-dim);
+    border-color: var(--accent-dim2);
+    color: var(--accent);
+}
+.grp-pill:active { transform: scale(0.94); }
+.grp-pill--active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    box-shadow: 0 1px 6px rgba(59,130,246,0.28);
+}
+/* Wrapper con fade lateral para indicar scroll */
+.grp-rail-wrap {
+    position: relative;
+    margin-bottom: 10px;
+}
+.grp-rail-wrap::after {
+    content: '';
+    position: absolute;
+    top: 0; right: 0;
+    width: 28px; height: 100%;
+    background: linear-gradient(to right, transparent, var(--surface, #141e33));
+    pointer-events: none;
+    border-radius: 0 var(--r-md) var(--r-md) 0;
+}
+html[data-theme="light"] .grp-rail-wrap::after {
+    background: linear-gradient(to right, transparent, #f8fafc);
+}
+
 /* Barra de búsqueda e inputs en inicio */
 .inicio-search-row {
     display: flex; gap: 8px; margin-bottom: 10px; align-items: stretch;
@@ -5655,11 +5719,18 @@ async function resetConteoAtomicoEnFirestore() {
             // ── Búsqueda + filtro de grupo ─────────────────────────────────────
             html += '<div class="inicio-search-row">';
             html += '<input type="text" placeholder="Buscar producto..." value="' + escapeHtml(searchTerm) + '" oninput="updateSearchTerm(this.value);">';
-            html += '<select onchange="updateSelectedGroup(this.value);">';
-            getAvailableGroups().forEach(g => {
-                html += '<option value="' + g + '"' + (selectedGroup === g ? ' selected' : '') + '>' + escapeHtml(g) + '</option>';
+            html += '</div>';
+
+            // ── Pill-rail de grupos (horizontal, sin select) ───────────────────
+            html += '<div class="grp-rail-wrap"><div class="grp-rail">';
+            getAvailableGroups().forEach(function(g) {
+                var isActive = selectedGroup === g;
+                html += '<button type="button" class="grp-pill' + (isActive ? ' grp-pill--active' : '') + '"'
+                      + ' onclick="updateSelectedGroup(\'' + escapeHtml(g).replace(/'/g, '&#39;') + '\')">'
+                      + escapeHtml(g)
+                      + '</button>';
             });
-            html += '</select></div>';
+            html += '</div></div>';
 
             // ── Botones de acción (admin) ─────────────────────────────────────
             if (isAdmin()) {
@@ -5781,11 +5852,17 @@ async function resetConteoAtomicoEnFirestore() {
 
         function renderProductosTab() {
             const filteredProducts = filterByGroup();
-            let html = '<div class="bg-white rounded-xl sm:rounded-2xl p-3 sm:p-5 mb-4 sm:mb-6 shadow-md"><select onchange="updateSelectedGroup(this.value);" class="w-full px-3 sm:px-4 py-2 sm:py-3 bg-white text-gray-900 border border-gray-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all text-sm sm:text-base">';
-            getAvailableGroups().forEach(group => {
-                html += '<option value="' + group + '"' + (selectedGroup === group ? ' selected' : '') + '>' + escapeHtml(group) + '</option>';
+            let html = '';
+            // ── Pill-rail de grupos ───────────────────────────────────────────
+            html += '<div class="grp-rail-wrap"><div class="grp-rail">';
+            getAvailableGroups().forEach(function(group) {
+                var isActive = selectedGroup === group;
+                html += '<button type="button" class="grp-pill' + (isActive ? ' grp-pill--active' : '') + '"'
+                      + ' onclick="updateSelectedGroup(\'' + escapeHtml(group).replace(/'/g, '&#39;') + '\')">'
+                      + escapeHtml(group)
+                      + '</button>';
             });
-            html += '</select></div>';
+            html += '</div></div>';
             if (!isAdmin()) {
                 html += '<div style="background:var(--accent-dim);border:1px solid var(--accent-dim2);border-radius:var(--r-md);padding:8px 12px;margin-bottom:12px;font-size:.78rem;color:var(--accent);">📋 Catálogo de solo lectura — solo el administrador puede modificar productos</div>';
             }
@@ -6753,12 +6830,16 @@ async function resetConteoAtomicoEnFirestore() {
                 return html;
             }
 
-            // ── Filtro de grupo ──────────────────────────────────────────────
-            html += '<div class="bg-white rounded-xl p-3 mb-3 shadow-md"><select onchange="updateSelectedGroup(this.value);" class="w-full px-3 py-2 bg-white text-gray-900 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm">';
-            getAvailableGroups().forEach(group => {
-                html += '<option value="' + group + '"' + (selectedGroup === group ? ' selected' : '') + '>' + escapeHtml(group) + '</option>';
+            // ── Pill-rail de grupos (horizontal, reemplaza <select>) ──────────
+            html += '<div class="grp-rail-wrap"><div class="grp-rail">';
+            getAvailableGroups().forEach(function(group) {
+                var isActive = selectedGroup === group;
+                html += '<button type="button" class="grp-pill' + (isActive ? ' grp-pill--active' : '') + '"'
+                      + ' onclick="updateSelectedGroup(\'' + escapeHtml(group).replace(/'/g, '&#39;') + '\')">'
+                      + escapeHtml(group)
+                      + '</button>';
             });
-            html += '</select></div>';
+            html += '</div></div>';
 
             // ── Buscador inteligente ─────────────────────────────────────────────
             html += '<div class="csb-wrap' + (_conteoSearchTerm ? ' csb-wrap--active' : '') + '" id="csb-wrap">';
