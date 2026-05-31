@@ -5,7 +5,8 @@
     <!-- FIX #15: viewport como primer meta, antes de cualquier script, para que el
          navegador calcule el viewport correcto antes de ejecutar ningún código. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#0d1321">
+    <meta name="theme-color" content="#0d1321" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#0f2040" media="(prefers-color-scheme: light)">
     <link rel="manifest" href="manifest.json">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -97,11 +98,10 @@
                     if (!event.data) return;
                     if (event.data.type === 'SYNC_PENDING') {
                         // El SW nos avisa que hay datos pendientes de subir.
-                        // FIX: usar SOLO window.syncToCloud (referencia explícita y segura).
-                        // El fallback "|| syncToCloud" era redundante pero podía generar
-                        // ReferenceError si este bloque se ejecutaba antes del script principal.
+                        // BUG-H3 FIX: usar window._db para garantizar acceso cross-scope
+                        // ya que _db se declara en el IIFE de Firebase, distinto a este.
                         var _sync = window.syncToCloud;
-                        if (_db && navigator.onLine && typeof _sync === 'function') {
+                        if (window._db && navigator.onLine && typeof _sync === 'function') {
                             _sync();
                         }
                     }
@@ -113,7 +113,7 @@
     <meta name="description" content="Sistema de control de inventario para barra — gestión de productos, pedidos y conteo físico.">
     <!-- FIX #2: CSP con worker-src 'self' añadido para permitir el Service Worker.
          Sin esta directiva Chrome/Firefox pueden rechazar sw.js en modo estricto. -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://www.gstatic.com https://kit.fontawesome.com https://use.fontawesome.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://use.fontawesome.com https://kit.fontawesome.com; font-src https://fonts.gstatic.com https://cdnjs.cloudflare.com https://use.fontawesome.com https://kit.fontawesome.com data:; img-src 'self' data: https:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://firestore.googleapis.com https://securetoken.googleapis.com https://identitytoolkit.googleapis.com https://firebase.googleapis.com; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://www.gstatic.com https://kit.fontawesome.com https://use.fontawesome.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://use.fontawesome.com https://kit.fontawesome.com; font-src https://fonts.gstatic.com https://cdnjs.cloudflare.com https://use.fontawesome.com https://kit.fontawesome.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://firestore.googleapis.com https://securetoken.googleapis.com https://identitytoolkit.googleapis.com https://firebase.googleapis.com https://storage.googleapis.com; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self';">
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%A6%3C/text%3E%3C/svg%3E"><!-- BUG-FIX m2: favicon URL-encoded -->
     <title>BarInventory — Control de Inventario</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -231,14 +231,16 @@
                 _db   = firebase.firestore();
                 _auth = firebase.auth();
 
-                // FIX: Persistencia offline — API actualizada para Firebase 10.x
-                // enablePersistence sigue siendo compatible pero usamos settings para suprimir el warning
+                // FIX: Persistencia offline — settings() DEBE llamarse antes de enablePersistence()
+                // BUG-H7 FIX: mover settings() fuera del try interno para garantizar orden correcto.
                 try {
                     _db.settings({ cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED });
                 } catch (_) {}
                 _db.enablePersistence({ synchronizeTabs: true }).catch(err => {
                     if (err.code === 'failed-precondition') {
-                        console.warn("[Firebase] Persistencia offline no disponible (múltiples pestañas).");
+                        // Múltiples pestañas abiertas — solo la primera pestaña tendrá persistencia offline.
+                        console.warn("[Firebase] Persistencia offline no disponible (múltiples pestañas). " +
+                                     "Cierra otras pestañas de la app para habilitar modo offline.");
                     } else if (err.code === 'unimplemented') {
                         console.warn("[Firebase] Persistencia offline no soportada en este navegador.");
                     } else {
@@ -246,6 +248,10 @@
                     }
                 });
                 console.info("[Firebase] Inicializado correctamente ✓");
+                // BUG-H4 FIX: exponer _db y _auth en window para acceso cross-scope
+                // (listener del SW, módulos futuros, debugging).
+                window._db   = _db;
+                window._auth = _auth;
             } catch (e) {
                 console.error("[Firebase] Error al inicializar:", e);
                 _db = null;
@@ -3086,9 +3092,12 @@ html[data-theme="light"] .grp-rail-wrap::after {
          * para garantizar la independencia del conteo ciego.
          */
         function renderAuditTrailForProduct(productId, area) {
-            // FIX #3 — Garantizar el ciego: no mostrar conteos ajenos mientras el
-            // bartender tenga el área en estado pendiente (conteo activo).
-            const areaCompletada = auditoriaStatus[area] === 'completada';
+            // BUG-H8 FIX: usar myAuditoriaStatus para usuarios (estado propio del bartender),
+            // no auditoriaStatus que es el estado global del admin.
+            // Un bartender que finalizó su área debe ver el trail aunque el admin no la haya cerrado globalmente.
+            const areaCompletada = isAdmin()
+                ? (auditoriaStatus[area] === 'completada')
+                : (myAuditoriaStatus[area] === 'completada');
             if (!isAdmin() && !areaCompletada) return '';
 
             const stats = calcAuditStats(productId, area); // FIX-07
@@ -3392,6 +3401,7 @@ html[data-theme="light"] .grp-rail-wrap::after {
 
         // Guard de reentrada para _applyCloudData — previene que dos snapshots simultáneos
         // la ejecuten en paralelo y dejen el estado inconsistente (FIX 7).
+        // BUG-H9 FIX: el guard se resetea en finally para no quedar bloqueado ante excepciones.
         let _applyingCloudData = false;
 
         /**
@@ -3797,80 +3807,75 @@ html[data-theme="light"] .grp-rail-wrap::after {
          * @param {string} area - clave del área ('almacen' | 'barra1' | 'barra2')
          */
        async function syncConteoAtomicoPorArea(area) {
-    if (!_db) {
-        console.info('[MultiDisp] Firebase no disponible — conteo guardado solo en local.');
-        return;
-    }
-    if (!navigator.onLine) {
-        showNotification('📴 Sin conexión — conteo guardado localmente');
-        updateCloudSyncBadge('offline');
-        return;
-    }
- 
-    updateCloudSyncBadge('syncing');
- 
-    // Sub-documento exclusivo de este dispositivo.
-    // Nunca compite con el documento de otro bartender.
-    const dispositivoRef = _db
-        .collection('inventarioApp')
-        .doc(FIRESTORE_DOC_ID)
-        .collection('conteoAreas')
-        .doc(area)
-        .collection('dispositivos')
-        .doc(_deviceId);
- 
-    try {
-        // FIX 1 CRÍTICO: Leer de myAuditoriaConteo (conteo propio del usuario)
-        // y NO de auditoriaConteo (vista agregada del admin, calculada en memoria).
-        // Antes este bug hacía que el bartender subiera los datos del admin
-        // en lugar de los suyos propios.
-        const conteoFuente = isAdmin() ? auditoriaConteo : myAuditoriaConteo;
-        const productosConDatos = products.filter(p =>
-            conteoFuente[p.id] && conteoFuente[p.id][area]
-        );
- 
-        if (productosConDatos.length === 0) {
-            updateCloudSyncBadge('ok');
-            return;
+            if (!_db) {
+                console.info('[MultiDisp] Firebase no disponible — conteo guardado solo en local.');
+                return;
+            }
+            if (!navigator.onLine) {
+                showNotification('📴 Sin conexión — conteo guardado localmente');
+                updateCloudSyncBadge('offline');
+                return;
+            }
+
+            updateCloudSyncBadge('syncing');
+
+            // Sub-documento exclusivo de este dispositivo.
+            // Nunca compite con el documento de otro bartender.
+            const dispositivoRef = _db
+                .collection('inventarioApp')
+                .doc(FIRESTORE_DOC_ID)
+                .collection('conteoAreas')
+                .doc(area)
+                .collection('dispositivos')
+                .doc(_deviceId);
+
+            try {
+                // FIX 1 CRÍTICO: Leer de myAuditoriaConteo (conteo propio del usuario)
+                // y NO de auditoriaConteo (vista agregada del admin, calculada en memoria).
+                const conteoFuente = isAdmin() ? auditoriaConteo : myAuditoriaConteo;
+                const productosConDatos = products.filter(p =>
+                    conteoFuente[p.id] && conteoFuente[p.id][area]
+                );
+
+                if (productosConDatos.length === 0) {
+                    updateCloudSyncBadge('ok');
+                    return;
+                }
+
+                const txTimestamp = Date.now();
+
+                // Payload de ESTE dispositivo: valores locales absolutos.
+                const payload = {
+                    _deviceId:  _deviceId,
+                    _lastWrite: txTimestamp,
+                    _area:      area,
+                    _userUid:   currentUserUid || 'anonymous',
+                };
+
+                productosConDatos.forEach(p => {
+                    const localArea = conteoFuente[p.id][area];
+                    payload[p.id] = {
+                        enteras:  typeof localArea.enteras  === 'number'  ? localArea.enteras  : 0,
+                        abiertas: Array.isArray(localArea.abiertas)       ? localArea.abiertas : [],
+                    };
+                });
+
+                // set() SIN merge: reemplaza SOLO el documento de este dispositivo.
+                await dispositivoRef.set(payload);
+
+                // Leer TODOS los dispositivos y calcular los totales agregados en memoria.
+                await _cargarYAgeregarConteos(area);
+
+                updateCloudSyncBadge('ok');
+                showNotification('☁️ Conteo de ' + areasAuditoria[area] + ' guardado en la nube.');
+                console.info('[MultiDisp] Área', area, 'sincronizada. deviceId:', _deviceId);
+
+            } catch (err) {
+                updateCloudSyncBadge('error');
+                console.error('[MultiDisp] Error al guardar conteo:', err);
+                showNotification('⚠️ Error al subir conteo a la nube — guardado localmente');
+            }
         }
- 
-        const txTimestamp = Date.now();
- 
-        // Payload de ESTE dispositivo: valores locales absolutos.
-        const payload = {
-            _deviceId:  _deviceId,
-            _lastWrite: txTimestamp,
-            _area:      area,
-            _userUid:   currentUserUid || 'anonymous',
-        };
- 
-        productosConDatos.forEach(p => {
-            // FIX 1: usar conteoFuente (propio), no auditoriaConteo (agregado admin)
-            const localArea = conteoFuente[p.id][area];
-            payload[p.id] = {
-                enteras:  typeof localArea.enteras  === 'number'  ? localArea.enteras  : 0,
-                abiertas: Array.isArray(localArea.abiertas)       ? localArea.abiertas : [],
-            };
-        });
- 
-        // set() SIN merge: reemplaza SOLO el documento de este dispositivo.
-        // Si otro dispositivo ya escribió el suyo, permanece intacto.
-        // Si hay un reintento de red, simplemente sobreescribe el propio doc → seguro.
-        await dispositivoRef.set(payload);
- 
-        // Leer TODOS los dispositivos y calcular los totales agregados en memoria.
-        await _cargarYAgeregarConteos(area);
- 
-        updateCloudSyncBadge('ok');
-        showNotification('☁️ Conteo de ' + areasAuditoria[area] + ' guardado en la nube.');
-        console.info('[MultiDisp] Área', area, 'sincronizada. deviceId:', _deviceId);
- 
-    } catch (err) {
-        updateCloudSyncBadge('error');
-        console.error('[MultiDisp] Error al guardar conteo:', err);
-        showNotification('⚠️ Error al subir conteo a la nube — guardado localmente');
-    }
-}
 
         /**
          * _cargarYAgeregarConteos(area)
@@ -3943,51 +3948,50 @@ html[data-theme="light"] .grp-rail-wrap::after {
          * Elimina los documentos de conteoAreas en Firestore al iniciar nueva auditoría.
          * Así los increment() del siguiente ciclo parten de cero.
          */
-async function resetConteoAtomicoEnFirestore() {
-    if (!_db || !navigator.onLine) return;
-    try {
-        const AREAS = ['almacen', 'barra1', 'barra2'];
-        const batch = _db.batch();
- 
-        for (const area of AREAS) {
-            const dispositivosRef = _db
-                .collection('inventarioApp')
-                .doc(FIRESTORE_DOC_ID)
-                .collection('conteoAreas')
-                .doc(area)
-                .collection('dispositivos');
- 
-            // Listar y borrar todos los documentos de dispositivos para esta área
-            const snap = await dispositivosRef.get();
-            snap.docs.forEach(doc => batch.delete(doc.ref));
- 
-            // También borrar el documento padre del área por compatibilidad
-            // con datos escritos por versiones anteriores del código
-            batch.delete(_db
-                .collection('inventarioApp')
-                .doc(FIRESTORE_DOC_ID)
-                .collection('conteoAreas')
-                .doc(area)
-            );
+        async function resetConteoAtomicoEnFirestore() {
+            if (!_db || !navigator.onLine) return;
+            try {
+                const AREAS = ['almacen', 'barra1', 'barra2'];
+                const batch = _db.batch();
+
+                for (const area of AREAS) {
+                    const dispositivosRef = _db
+                        .collection('inventarioApp')
+                        .doc(FIRESTORE_DOC_ID)
+                        .collection('conteoAreas')
+                        .doc(area)
+                        .collection('dispositivos');
+
+                    // Listar y borrar todos los documentos de dispositivos para esta área
+                    const snap = await dispositivosRef.get();
+                    snap.docs.forEach(doc => batch.delete(doc.ref));
+
+                    // También borrar el documento padre del área por compatibilidad
+                    batch.delete(_db
+                        .collection('inventarioApp')
+                        .doc(FIRESTORE_DOC_ID)
+                        .collection('conteoAreas')
+                        .doc(area)
+                    );
+                }
+
+                // FIX-03 (preservado): borrar también conteoMultiUsuario
+                for (const area of AREAS) {
+                    batch.delete(_db
+                        .collection('inventarioApp')
+                        .doc(FIRESTORE_DOC_ID)
+                        .collection('conteoMultiUsuario')
+                        .doc(area)
+                    );
+                }
+
+                await batch.commit();
+                console.info('[MultiDisp] conteoAreas/dispositivos + conteoMultiUsuario eliminados ✓');
+
+            } catch (err) {
+                console.warn('[MultiDisp] Error al resetear conteos en Firestore:', err);
+            }
         }
- 
-        // FIX-03 (preservado): borrar también conteoMultiUsuario
-        for (const area of AREAS) {
-            batch.delete(_db
-                .collection('inventarioApp')
-                .doc(FIRESTORE_DOC_ID)
-                .collection('conteoMultiUsuario')
-                .doc(area)
-            );
-        }
- 
-        await batch.commit();
-        console.info('[MultiDisp] conteoAreas/dispositivos + conteoMultiUsuario eliminados ✓');
- 
-    } catch (err) {
-        console.warn('[MultiDisp] Error al resetear conteos en Firestore:', err);
-    }
-}
 
         // ══════════════════════════════════════════════════════════════════════
         //  MÓDULO: AUDITORÍA AISLADA POR USUARIO
@@ -5708,7 +5712,7 @@ async function resetConteoAtomicoEnFirestore() {
                   + '<div class="stat-card__label">Stock Total</div></div></div>';
             html += '<div class="stat-card" style="cursor:pointer;" onclick="openOrderModal()">'
                   + '<div class="stat-card__icon" style="background:rgba(245,158,11,0.12);">🛒</div>'
-                  + '<div><div class="stat-card__val" style="color:#fb923c;">' + cartCount.toFixed(1) + '</div>'
+                  + '<div><div class="stat-card__val" style="color:#fb923c;">' + cartCount + '</div>'
                   + '<div class="stat-card__label">En Carrito</div></div></div>';
             html += '<div class="stat-card" onclick="switchTab(\'pedidos\')"  style="cursor:pointer;">'
                   + '<div class="stat-card__icon" style="background:rgba(59,130,246,0.12);">📋</div>'

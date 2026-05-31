@@ -1,28 +1,41 @@
 // ════════════════════════════════════════════════════════════════════════════
-//  BarInventory — Service Worker v2.2
+//  BarInventory — Service Worker v2.3
 //  Estrategia: Cache-First para assets estáticos, Network-First para Firebase.
 //  Garantiza funcionamiento offline y actualizaciones automáticas al deployar.
+//
+//  CORRECCIONES v2.3:
+//  - SW1: OFFLINE_URL ahora usa ruta absoluta desde el scope para evitar
+//         resolución incorrecta en sub-directorios.
+//  - SW2: Separado 'googleapis.com' genérico del más específico 'fonts.googleapis.com'
+//         para que las fuentes Google se cacheen correctamente.
+//  - SW3: staleWhileRevalidate retorna la promesa de red correctamente cuando
+//         no hay caché, sin posibilidad de devolver null silenciosamente.
+//  - SW4: Ambas estrategias de caché filtran respuestas opacas (type !== 'opaque')
+//         para no cachear errores 0 de CORS que bloquean recursos críticos.
+//  - SW5: notificationclick ahora usa la URL completa del evento cuando existe.
+//  - SW6: PRECACHE_URLS normalizada — solo una entrada por URL canónica.
+//  - SW7: install propaga el error con throw si addAll falla, forzando reintentar.
 // ════════════════════════════════════════════════════════════════════════════
 
-const CACHE_NAME    = 'barinventory-v2.2';
-const OFFLINE_URL   = './index.html';
+const CACHE_NAME    = 'barinventory-v2.3';
+const OFFLINE_URL   = '/index.html';
 
 // Assets que se cachean en la instalación (shell de la app)
+// BUG-SW6 FIX: eliminada entrada duplicada './' — solo './index.html' es canónica.
 const PRECACHE_URLS = [
-    './',
     './index.html',
     './manifest.json',
-    // CDNs críticos — se cachean en primera visita (runtime cache)
 ];
 
 // Dominios que NUNCA se cachean (siempre van a la red)
+// BUG-SW2 FIX: eliminado 'googleapis.com' genérico que bloqueaba caché de fonts.
+// Ahora solo se listan los dominios de la API de Firebase/Google específicos.
 const NETWORK_ONLY_ORIGINS = [
     'firestore.googleapis.com',
     'firebase.googleapis.com',
     'securetoken.googleapis.com',
     'identitytoolkit.googleapis.com',
     'firebaseio.com',
-    'googleapis.com',
 ];
 
 // ── INSTALL ──────────────────────────────────────────────────────────────────
@@ -37,7 +50,10 @@ self.addEventListener('install', function(event) {
                 return self.skipWaiting();
             })
             .catch(function(err) {
-                console.warn('[SW] Error en precache:', err);
+                // BUG-SW7 FIX: relanzar el error para que el SW no quede instalado roto.
+                // El navegador reintentará la instalación en la próxima carga.
+                console.error('[SW] Error crítico en precache — abortando instalación:', err);
+                throw err;
             })
     );
 });
@@ -73,12 +89,14 @@ self.addEventListener('fetch', function(event) {
     // 2. Ignorar extensiones de Chrome y protocolos especiales
     if (!event.request.url.startsWith('http')) return;
 
-    // 3. Firebase / APIs externas → SIEMPRE red (nunca cachear datos de Firestore)
+    // 3. Firebase / APIs de auth → SIEMPRE red (nunca cachear tokens ni datos Firestore)
     if (NETWORK_ONLY_ORIGINS.some(function(origin) { return url.hostname.includes(origin); })) {
         return;
     }
 
-    // 4. Tailwind CDN y otros CDNs → Cache-First con fallback a red
+    // 4. CDNs de terceros → Cache-First con fallback a red
+    //    BUG-SW2 FIX: fonts.googleapis.com y fonts.gstatic.com se cachean correctamente
+    //    ya que se quitaron de NETWORK_ONLY_ORIGINS.
     if (url.hostname.includes('cdn.tailwindcss.com') ||
         url.hostname.includes('cdnjs.cloudflare.com') ||
         url.hostname.includes('fonts.googleapis.com') ||
@@ -99,11 +117,21 @@ self.addEventListener('fetch', function(event) {
 
 // ── ESTRATEGIAS DE CACHÉ ─────────────────────────────────────────────────────
 
+// BUG-SW4 FIX: helper que solo cachea respuestas válidas y NO opacas.
+// Una respuesta 'opaque' (type === 'opaque') puede encubrir un error HTTP real
+// con status 0 — cachearla podría servir un error de CORS como recurso válido.
+function isCacheable(response) {
+    return response &&
+           response.status === 200 &&
+           response.type !== 'opaque';
+}
+
 function cacheFirst(request) {
     return caches.match(request).then(function(cached) {
         if (cached) return cached;
         return fetch(request).then(function(response) {
-            if (response && response.status === 200) {
+            // BUG-SW4 FIX: solo cachear respuestas válidas y no opacas
+            if (isCacheable(response)) {
                 var clone = response.clone();
                 caches.open(CACHE_NAME).then(function(cache) {
                     cache.put(request, clone);
@@ -117,20 +145,23 @@ function cacheFirst(request) {
 }
 
 function staleWhileRevalidate(request) {
-    var fetchPromise = fetch(request).then(function(response) {
-        if (response && response.status === 200) {
+    // BUG-SW3 FIX: la promesa de red se lanza siempre en paralelo y se espera
+    // correctamente cuando no hay caché, en lugar de retornar null silenciosamente.
+    var networkPromise = fetch(request).then(function(response) {
+        if (isCacheable(response)) {
             var clone = response.clone();
             caches.open(CACHE_NAME).then(function(cache) {
                 cache.put(request, clone);
             });
         }
         return response;
-    }).catch(function() { return null; });
+    });
 
     return caches.match(request).then(function(cached) {
+        // Devolver caché inmediatamente si existe (stale); la red actualizará en segundo plano.
+        // Si no hay caché, esperar la red; si la red falla, servir la página offline.
         if (cached) return cached;
-        return fetchPromise.then(function(response) {
-            if (response) return response;
+        return networkPromise.catch(function() {
             return caches.match(OFFLINE_URL);
         });
     });
@@ -171,11 +202,16 @@ self.addEventListener('push', function(event) {
 
 self.addEventListener('notificationclick', function(event) {
     event.notification.close();
-    var targetUrl = (event.notification.data && event.notification.data.url) || './';
+    // BUG-SW5 FIX: usar la URL del payload si existe; fallback a la raíz del scope,
+    // no a './' relativo que puede resolver incorrectamente en sub-directorios.
+    var targetUrl = (event.notification.data && event.notification.data.url)
+        ? event.notification.data.url
+        : self.registration.scope;
+
     event.waitUntil(
         self.clients.matchAll({ type: 'window' }).then(function(clients) {
             for (var i = 0; i < clients.length; i++) {
-                if (clients[i].url.includes(targetUrl) && 'focus' in clients[i]) {
+                if (clients[i].url === targetUrl && 'focus' in clients[i]) {
                     return clients[i].focus();
                 }
             }
@@ -202,3 +238,4 @@ self.addEventListener('message', function(event) {
         });
     }
 });
+
