@@ -3302,11 +3302,17 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
         function _computeDataHash() {
             // Solo hashea las colecciones que realmente importan para la nube.
             // JSON.stringify es determinista para el mismo objeto → suficiente como hash.
+            // BUG-1 FIX: incluir myAuditoriaConteo y myAuditoriaStatus para que
+            // cualquier guardado de conteo de auditoría dispare syncToCloud automáticamente.
+            // Antes, el hash omitía la auditoría y el sync nunca se activaba al guardar
+            // productos en modo auditoría → conteos podían perderse si la app se cerraba.
             try {
                 return JSON.stringify(products) +
                        JSON.stringify(orders) +
                        JSON.stringify(inventories) +
-                       JSON.stringify(inventarioConteo);
+                       JSON.stringify(inventarioConteo) +
+                       JSON.stringify(myAuditoriaConteo) +
+                       JSON.stringify(myAuditoriaStatus);
             } catch (_) { return ''; }
         }
 
@@ -3872,16 +3878,22 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 try {
                     localStorage.setItem(key, value);
                 } catch (e) {
+                    // BUG-15 FIX: NO usar break — continuar guardando el resto de claves.
+                    // Antes, si una clave fallaba por cuota de localStorage llena, el loop
+                    // se detenía y todas las claves siguientes (myAuditoriaConteo, etc.)
+                    // quedaban sin actualizar. Al recargar, el conteo de auditoría
+                    // regresaba al estado anterior aunque otras colecciones sí se habían
+                    // actualizado, dejando el estado en inconsistencia.
+                    // Ahora: notificar el error específico y continuar con todas las claves.
                     console.error('Error al guardar "' + key + '":', e);
                     if (key === 'inventarioApp_inventories') {
                         showNotification('⚠️ Historial muy grande. Usa "Exportar datos" y elimina historiales antiguos.');
                     } else if (key === 'inventarioApp_inventarioConteo') {
                         showNotification('⚠️ Conteo de inventario no pudo guardarse. Exporta tus datos ahora.');
                     } else {
-                        showNotification('⚠️ Error al guardar datos. Exporta un respaldo inmediatamente.');
+                        showNotification('⚠️ Error al guardar "' + key.replace('inventarioApp_','') + '". Exporta un respaldo.');
                     }
-                    // Si falla una clave crítica, detener para no corromper el estado parcial
-                    break;
+                    // continuar — NO break
                 }
             }
 
@@ -4138,6 +4150,12 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 // ══════════════════════════════════════════════════════════════
 
                 // ── Preparar payload OPERATIVO (sin orders ni inventories) ─────
+                // BUG-9 FIX: calcular nowMs UNA sola vez y usarlo en todo el payload.
+                // Antes se llamaba Date.now() en dos lugares distintos (líneas separadas),
+                // generando timestamps _lastModified y _syncedAt potencialmente distintos.
+                // Si un segundo dispositivo leía la nube con un cloudTs > localTs podría
+                // descargar en lugar de subir sus cambios locales válidos.
+                const nowMs = Date.now();
                 const payload = {
                     products:          products,
                     cart:              cart,
@@ -4148,8 +4166,8 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                     activeTab:         activeTab,
                     selectedArea:      selectedArea,
                     auditoriaStatus:   auditoriaStatus,
-                    _lastModified:     Date.now(), // FIX 10: timestamp actual, no el del LS
-                    _syncedAt:         Date.now(),
+                    _lastModified:     nowMs,
+                    _syncedAt:         nowMs,
                     _ordersInChunks:      true,
                     _inventoriesInChunks: true,
                     _conteoInSubcol:      true,
@@ -4181,7 +4199,10 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 ]);
 
                 _cloudSyncPending = false;
-                _lastCloudSync    = Date.now();
+                _lastCloudSync    = nowMs; // BUG-9 FIX: mismo nowMs que el payload
+                // Actualizar localStorage con el mismo timestamp que se subió a la nube,
+                // para que la próxima comparación cloudTs > localTs sea consistente.
+                try { localStorage.setItem('inventarioApp_lastModified', String(nowMs)); } catch(_) {}
                 _syncInProgress   = false;
                 updateCloudSyncBadge('ok');
                 console.info('[Firebase] Sincronizado ✓ (' + new Date(_lastCloudSync).toLocaleTimeString() + ')');
@@ -4248,9 +4269,17 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 .doc(_deviceId);
 
             try {
-                // FIX 1 CRÍTICO: Leer de myAuditoriaConteo (conteo propio del usuario)
-                // y NO de auditoriaConteo (vista agregada del admin, calculada en memoria).
-                const conteoFuente = isAdmin() ? auditoriaConteo : myAuditoriaConteo;
+                // BUG-3 FIX: Leer SIEMPRE de myAuditoriaConteo (conteo propio del usuario),
+                // tanto para bartenders como para el admin.
+                // Antes: isAdmin() ? auditoriaConteo : myAuditoriaConteo
+                // El problema: auditoriaConteo es la VISTA AGREGADA calculada en memoria
+                // (_recalcAdminAggregatedConteo) — contiene el promedio/suma de TODOS los
+                // usuarios, no el conteo propio del admin. Subir eso a conteoAreas
+                // envenenaba la colección con datos duplicados que generarYPublicarReporte
+                // luego volvía a promediar, produciendo valores incorrectos.
+                // El admin, igual que cualquier bartender, tiene su propio conteo en
+                // myAuditoriaConteo y es eso lo que debe quedar en su documento de dispositivo.
+                const conteoFuente = myAuditoriaConteo;
                 const productosConDatos = products.filter(p =>
                     conteoFuente[p.id] && conteoFuente[p.id][area]
                 );
@@ -4507,32 +4536,31 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 const data = snap.data();
 
                 // ─────────────────────────────────────────────────────────────
-                // Path B: El doc existe y tiene sessionId.
+                // Path B: Adoptar sessionId si es la primera vez que lo vemos.
                 //
-                // FIX (BUG 2): Diferenciar "primer arranque" de "nueva auditoría real".
+                // BUG-2 FIX: ELIMINADO el reset de conteo desde este listener.
                 //
-                // Si _auditoriaSessionId es null/vacío (localStorage limpio o primera
-                // visita), simplemente adoptamos el sessionId del servidor SIN resetear.
-                // Resetear aquí causaba pérdida de datos en usuarios que recargaban
-                // la página con localStorage vacío pero con datos ya contados en sesión.
+                // Antes se reseteaba myAuditoriaConteo aquí cuando el sessionId
+                // cambiaba, causando un DOBLE RESET: este listener Y _applyCloudData
+                // (via subscribeMainDoc) ejecutaban el reset en paralelo, borrando
+                // el conteo del bartender dos veces con dos notificaciones distintas.
                 //
-                // Solo reseteamos si YA teníamos un sessionId anterior Y cambió —
-                // eso sí indica que el admin inició una nueva auditoría explícitamente.
+                // La fuente de verdad para el reset de sesión es ÚNICAMENTE
+                // subscribeMainDoc → _applyCloudData, que ya maneja correctamente
+                // el caso "primer arranque" vs "nueva auditoría real".
+                //
+                // Este listener SOLO adopta el sessionId en caso de primer arranque
+                // (para que subscribeAllUsersAuditoria pueda filtrar correctamente)
+                // y procesa desbloqueos del admin (Path C).
                 // ─────────────────────────────────────────────────────────────
-                if (data.sessionId && data.sessionId !== _auditoriaSessionId) {
-                    if (!_auditoriaSessionId) {
-                        // Primer arranque: adoptar sessionId sin resetear
-                        _auditoriaSessionId = data.sessionId;
-                        try { localStorage.setItem('inventarioApp_auditoriaSessionId', data.sessionId); } catch(_) {}
-                        // No retornar: continuar para procesar desbloqueos (Path C)
-                    } else {
-                        // Sesión anterior diferente: nueva auditoría real del admin
-                        _auditoriaSessionId = data.sessionId;
-                        try { localStorage.setItem('inventarioApp_auditoriaSessionId', data.sessionId); } catch(_) {}
-                        _resetMiConteoLocal('🔄 Nueva auditoría iniciada por el administrador — tus conteos se reiniciaron');
-                        return;
-                    }
+                if (data.sessionId && !_auditoriaSessionId) {
+                    // Primer arranque sin sessionId local: adoptar del servidor sin resetear
+                    _auditoriaSessionId = data.sessionId;
+                    try { localStorage.setItem('inventarioApp_auditoriaSessionId', data.sessionId); } catch(_) {}
+                    console.info('[AuditUser] SessionId adoptado desde userAuditoria en primer arranque:', data.sessionId);
                 }
+                // Si sessionId cambió pero ya teníamos uno: el reset ya fue hecho
+                // por _applyCloudData → NO hacer nada aquí (evitar doble reset).
 
                 // Path C: Desbloqueos nuevos del admin
                 const serverUnlocks = data.unlocks || {};
@@ -4710,9 +4738,20 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 const colRef = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
                                    .collection('userAuditoria');
                 const snap = await colRef.get();
-                const batch = _db.batch();
-                snap.forEach(doc => batch.delete(doc.ref));
-                await batch.commit();
+
+                // BUG-14 FIX: Firestore limita a 500 operaciones por batch.
+                // Antes se metían todos los docs en un único batch.delete(), lo que
+                // lanzaba una excepción si había más de 500 documentos (p.ej. sesiones
+                // acumuladas sin limpiar), dejando la nueva sesión sin inicializar.
+                // Ahora se procesan en batches de 499 secuencialmente.
+                const BATCH_SIZE = 499;
+                const docs = snap.docs;
+                for (let i = 0; i < docs.length; i += BATCH_SIZE) {
+                    const batch = _db.batch();
+                    docs.slice(i, i + BATCH_SIZE).forEach(doc => batch.delete(doc.ref));
+                    await batch.commit();
+                }
+
                 // Escribir la nueva sesión en el documento principal
                 await _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
                          .set({ _auditoriaSessionId: sessionId, _auditoriaStartedBy: currentUserUid,
@@ -4720,6 +4759,7 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 console.info('[AuditAdmin] Nueva sesión', sessionId, 'iniciada ✓');
             } catch (err) {
                 console.warn('[AuditAdmin] Error iniciando sesión en Firestore:', err);
+                throw err; // re-lanzar para que auditoriaResetear pueda notificar al admin
             }
         }
 
@@ -5026,7 +5066,12 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
             if (!navigator.onLine) {
                 const bar = document.createElement('div');
                 bar.id = 'networkStatus';
-                bar.style.cssText = 'position:fixed;bottom:80px;left:0;right:0;background:#f59e0b;color:#fff;text-align:center;padding:6px;font-size:13px;font-weight:600;z-index:9999;';
+                // BUG-16 FIX: usar env(safe-area-inset-bottom) en lugar de bottom:80px fijo.
+                // En iPhone (home indicator) y Android ≥ API 29 la barra de navegación del
+                // sistema puede tener más de 80px, quedando el aviso debajo de los controles
+                // de la app. calc(env(safe-area-inset-bottom) + 64px) garantiza que la barra
+                // siempre quede por encima del nav bar del sistema Y del nav bar de la app.
+                bar.style.cssText = 'position:fixed;bottom:calc(env(safe-area-inset-bottom, 0px) + 64px);left:0;right:0;background:#f59e0b;color:#fff;text-align:center;padding:6px;font-size:13px;font-weight:600;z-index:9999;';
                 bar.textContent = '⚠️ Sin conexión — los datos están guardados localmente';
                 document.body.appendChild(bar);
                 updateCloudSyncBadge('offline');
@@ -5323,13 +5368,23 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
         // ── MÓDULO: AJUSTES ────────────────────────────────────────────────
         function subscribeAjustesPendientes() {
             if (!_db || _unsubAjustes) return;
+            // BUG-8 FIX: variable privada para rastrear el conteo previo de pendientes.
+            // Antes se notificaba en CADA snapshot (incluyendo cuando el admin resolvía
+            // un ajuste o cuando cualquier campo cambiaba), inundando al admin con la
+            // misma notificación repetidamente. Ahora solo se notifica si el número de
+            // pendientes aumentó respecto al snapshot anterior (= nuevo ajuste creado).
+            let _prevPendingAjustes = -1; // -1 = estado inicial sin datos
             _unsubAjustes = _db.collection('ajustes')
                 .orderBy('creadoEn', 'desc')
                 .limit(50)
                 .onSnapshot(function(snap) {
                     _ajustes = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
                     const pending = _ajustes.filter(function(a) { return a.estado === 'pendiente'; }).length;
-                    if (pending > 0) showNotification('🔔 ' + pending + ' ajuste(s) pendiente(s) de aprobar');
+                    // Notificar solo si hay más pendientes que antes (nuevo ajuste)
+                    if (pending > _prevPendingAjustes && _prevPendingAjustes >= 0) {
+                        showNotification('🔔 ' + pending + ' ajuste(s) pendiente(s) de aprobar');
+                    }
+                    _prevPendingAjustes = pending;
                     if (activeTab === 'ajustes') renderTab();
                 }, function(err) { console.warn('[Ajustes] Error listener:', err); });
         }
@@ -6566,6 +6621,31 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                     ts:       Date.now()         // timestamp exacto del guardado
                 };
 
+                // BUG-5 FIX: Si el admin está contando, actualizar allUsersAuditoria con
+                // su propio conteo inmediatamente (en memoria) y recalcular auditoriaConteo.
+                // Antes, el admin solo veía su conteo al recibir el snapshot de Firestore
+                // (subscribeAllUsersAuditoria), lo que fallaba en offline o con latencia alta.
+                // Ahora se actualiza localmente de inmediato, igual que en el listener.
+                if (isAdmin() && currentUserUid) {
+                    if (!allUsersAuditoria[currentUserUid]) {
+                        allUsersAuditoria[currentUserUid] = {
+                            uid:       currentUserUid,
+                            email:     (_auth && _auth.currentUser) ? _auth.currentUser.email : currentUserUid,
+                            status:    myAuditoriaStatus,
+                            conteo:    myAuditoriaConteo,
+                            unlocks:   myAuditoriaUnlocks,
+                            updatedAt: Date.now(),
+                            isAdmin:   true
+                        };
+                    } else {
+                        allUsersAuditoria[currentUserUid].conteo    = myAuditoriaConteo;
+                        allUsersAuditoria[currentUserUid].status    = myAuditoriaStatus;
+                        allUsersAuditoria[currentUserUid].updatedAt = Date.now();
+                        allUsersAuditoria[currentUserUid].isAdmin   = true;
+                    }
+                    _recalcAdminAggregatedConteo();
+                }
+
                 saveToLocalStorage();
                 showNotification('Conteo guardado en ' + areasAuditoria[auditoriaAreaActiva]);
 
@@ -6699,7 +6779,7 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 showNotification('📴 Sin conexión — conecta a internet antes de iniciar nueva auditoría');
                 return;
             }
-            showConfirm('⚠️ ¿Iniciar nueva auditoría?\n\nSe borrarán todos los conteos actuales de TODOS los usuarios y áreas comenzando desde cero.\n\nEsta acción no se puede deshacer.', function() {
+            showConfirm('⚠️ ¿Iniciar nueva auditoría?\n\nSe borrarán todos los conteos actuales de TODOS los usuarios y áreas comenzando desde cero.\n\nEsta acción no se puede deshacer.', async function() {
                 const newSessionId = String(Date.now());
                 // Reiniciar estado del admin
                 _auditoriaSessionId       = newSessionId;
@@ -6715,15 +6795,27 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 auditoriaAreaActiva = null;
                 isAuditoriaMode    = false;
                 saveToLocalStorage();
-                // Borrar todos los conteos de usuarios en Firestore y escribir nuevo sessionId
-                _adminIniciarSesionFirestore(newSessionId).catch(err =>
-                    console.warn('[AuditAdmin] Error al reiniciar sesión en Firestore:', err)
-                );
-                resetConteoAtomicoEnFirestore().catch(err =>
-                    console.warn('[Atomico] No se pudo limpiar Firestore en reset:', err)
-                );
-                showNotification('✅ Nueva auditoría iniciada — todos los conteos en ceros');
                 renderTab();
+                showNotification('⏳ Iniciando nueva auditoría en la nube…');
+
+                // BUG-4 FIX: Ejecutar SECUENCIALMENTE con await.
+                // Antes se lanzaban las dos promesas en paralelo sin await, lo que
+                // creaba una race condition: si _adminIniciarSesionFirestore terminaba
+                // primero y propagaba el nuevo sessionId, los bartenders comenzaban a
+                // contar mientras conteoMultiUsuario aún tenía datos de la sesión anterior
+                // (resetConteoAtomicoEnFirestore todavía no había terminado).
+                // Al hacer las operaciones secuenciales, garantizamos que Firestore esté
+                // completamente limpio ANTES de que cualquier dispositivo reciba la señal.
+                try {
+                    // Paso 1: Limpiar documentos userAuditoria y escribir nuevo sessionId
+                    await _adminIniciarSesionFirestore(newSessionId);
+                    // Paso 2: Limpiar conteoAreas y conteoMultiUsuario (subcolecciones legacy)
+                    await resetConteoAtomicoEnFirestore();
+                    showNotification('✅ Nueva auditoría iniciada — todos los conteos en ceros');
+                } catch (err) {
+                    console.warn('[AuditAdmin] Error al reiniciar auditoría en Firestore:', err);
+                    showNotification('⚠️ Auditoría iniciada localmente — verifica la conexión');
+                }
             });
         }
 
@@ -6740,6 +6832,13 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
             const nombreArea = areasAuditoria[area] || area;
             showConfirm('¿Reabrir el área "' + nombreArea + '"?\n\nLos conteos existentes se conservan. Los bartenders podrán modificar sus datos.', function() {
                 auditoriaStatus[area] = 'pendiente';
+                // BUG-7 FIX: también resetear myAuditoriaStatus del admin para esa área.
+                // Antes solo se actualizaba auditoriaStatus (el estado global compartido),
+                // pero myAuditoriaStatus[area] permanecía 'completada'. Cuando el admin
+                // intentaba entrar al área que él mismo reabrió, auditoriaEntrarArea
+                // leía myAuditoriaStatus y mostraba "Área completada — solicita corrección",
+                // bloqueando al admin. Ahora ambos estados se sincronizan.
+                if (myAuditoriaStatus[area]) myAuditoriaStatus[area] = 'pendiente';
                 saveToLocalStorage();
                 // Sincronizar nuevo estado a Firestore si hay conexión
                 if (_db && navigator.onLine) {
@@ -6832,13 +6931,22 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
          * Soporta búsqueda multi-palabra: "tequila rep" resalta ambas palabras.
          */
         function highlightConteoMatch(name, query) {
+            // BUG-10 FIX: El regex debe operar en el mismo espacio de caracteres.
+            // Antes: escapeHtml(name) generaba "Tequila &amp; Co." y luego el regex
+            // buscaba la palabra cruda "Co" → matcheaba "Co" dentro de "&amp;amp;" en
+            // nombres con caracteres especiales, produciendo HTML roto.
+            // Solución: escapar TAMBIÉN cada palabra de búsqueda para HTML antes de
+            // construir el regex, de modo que ambos operen sobre el mismo string escapado.
             if (!name) return '';
             if (!query) return escapeHtml(name);
             const words = query.trim().split(/\s+/).filter(w => w.length >= 2);
             if (!words.length) return escapeHtml(name);
-            let result = escapeHtml(name);
+            let result = escapeHtml(name); // base: nombre ya escapado para HTML
             for (const word of words) {
-                const esc = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                // 1. Escapar la palabra para HTML (por si contiene & < > etc.)
+                const wordEscapedHtml = escapeHtml(word);
+                // 2. Escapar caracteres especiales de regex en la versión HTML-escaped
+                const esc = wordEscapedHtml.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 try {
                     result = result.replace(new RegExp('(' + esc + ')', 'gi'),
                         '<mark class="csb-match">$1</mark>');
@@ -8437,6 +8545,13 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 auditoriaStatus,             // Bug #3 fix: incluir estado por área
                 auditoriaView,               // Bug #3 fix: incluir vista activa
                 auditoriaAreaActiva,         // Bug #3 fix: incluir área activa
+                // BUG-6 FIX: incluir el conteo propio del usuario (aislado por UID).
+                // Antes estos campos no se exportaban, por lo que un backup tomado durante
+                // una auditoría activa perdía todo el conteo ya capturado por el bartender.
+                myAuditoriaConteo,
+                myAuditoriaStatus,
+                myAuditoriaUnlocks,
+                _auditoriaSessionId,
                 activeTab,
                 searchTerm,
                 selectedGroup,
@@ -8504,6 +8619,19 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                         auditoriaView       = data.auditoriaView       || 'selection';
                         auditoriaAreaActiva = data.auditoriaAreaActiva || null;
                         isAuditoriaMode     = (auditoriaView === 'counting' && !!auditoriaAreaActiva);
+
+                        // BUG-6 FIX: restaurar conteo propio del usuario desde backup.
+                        // Antes no se exportaban ni restauraban estos campos, por lo que
+                        // un backup tomado durante una auditoría activa perdía el conteo
+                        // ya capturado por el bartender al importar.
+                        if (data.myAuditoriaConteo && typeof data.myAuditoriaConteo === 'object')
+                            myAuditoriaConteo = data.myAuditoriaConteo;
+                        if (data.myAuditoriaStatus && typeof data.myAuditoriaStatus === 'object')
+                            myAuditoriaStatus = data.myAuditoriaStatus;
+                        if (data.myAuditoriaUnlocks && typeof data.myAuditoriaUnlocks === 'object')
+                            myAuditoriaUnlocks = data.myAuditoriaUnlocks;
+                        if (data._auditoriaSessionId)
+                            _auditoriaSessionId = data._auditoriaSessionId;
 
                         activeTab = data.activeTab || 'inicio';
                         searchTerm = data.searchTerm || '';
