@@ -3696,17 +3696,19 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 .collection('conteoMultiUsuario')
                 .doc(area);
             try {
-                // Recopilar solo los productos contados por este usuario en esta área
-                const productos = {}; // FIX-07
+                // BUG-1 FIX CRÍTICO: leer de myAuditoriaConteo (fuente canónica de verdad)
+                // auditoriaConteoPorUsuario es el sistema antiguo y ya no recibe escrituras.
+                // syncMyAuditoriaToFirestore (la función de finalización) ya usa myAuditoriaConteo
+                // correctamente. Esta función debe ser consistente.
+                const conteoFuenteUsuario = myAuditoriaConteo;
+                const productos = {};
                 products.forEach(function(p) {
-                    const byUser = auditoriaConteoPorUsuario[p.id] &&
-                                   auditoriaConteoPorUsuario[p.id][area] &&
-                                   auditoriaConteoPorUsuario[p.id][area][cu.userId];
-                    if (byUser) {
+                    const areaData = conteoFuenteUsuario[p.id] && conteoFuenteUsuario[p.id][area];
+                    if (areaData && (areaData.enteras > 0 || (areaData.abiertas || []).some(v => v > 0))) {
                         productos[p.id] = {
-                            enteras:  byUser.enteras,
-                            abiertas: byUser.abiertas,
-                            ts:       byUser.ts
+                            enteras:  areaData.enteras  || 0,
+                            abiertas: areaData.abiertas || [],
+                            ts:       areaData._ts || Date.now()
                         };
                     }
                 });
@@ -3793,7 +3795,10 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                         );
                     } catch (_) {}
                     renderTab();
-                    console.info('[MultiUser] Conteos de todos los dispositivos cargados ✓');
+                    console.info('[MultiUser] Conteos legacy cargados ✓ (conteoMultiUsuario → auditoriaConteoPorUsuario).');
+                    // NOTA: El sistema principal de conteo usa myAuditoriaConteo + userAuditoria/{uid}.
+                    // conteoMultiUsuario es el sistema legacy que solo queda activo en syncConteoPorUsuarioToFirestore
+                    // para compatibilidad con datos anteriores. BUG-1 FIX lo alineó para leer de myAuditoriaConteo.
                 }
             } catch (err) {
                 console.warn('[MultiUser] Error al cargar conteos desde Firestore:', err);
@@ -3954,13 +3959,30 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
 
             // ── Restaurar auditoría aislada por usuario ────────────────────────
             const storedMyConteo = safeGet('inventarioApp_myAuditoriaConteo', {});
-            if (storedMyConteo && typeof storedMyConteo === 'object') myAuditoriaConteo = storedMyConteo;
+            if (storedMyConteo && typeof storedMyConteo === 'object') {
+                // BUG-7 FIX: migrar conteos viejos sin _ts para que BUG-5 FIX funcione
+                // con datos ya almacenados en localStorage antes de esta versión.
+                const fallbackTs = Date.now();
+                Object.keys(storedMyConteo).forEach(function(prodId) {
+                    Object.keys(storedMyConteo[prodId] || {}).forEach(function(area) {
+                        if (!storedMyConteo[prodId][area]._ts) {
+                            storedMyConteo[prodId][area]._ts = fallbackTs;
+                        }
+                    });
+                });
+                myAuditoriaConteo = storedMyConteo;
+            }
             const storedMyStatus = safeGet('inventarioApp_myAuditoriaStatus', { almacen: 'pendiente', barra1: 'pendiente', barra2: 'pendiente' });
             if (storedMyStatus && typeof storedMyStatus === 'object') myAuditoriaStatus = storedMyStatus;
             const storedMyUnlocks = safeGet('inventarioApp_myAuditoriaUnlocks', {});
             if (storedMyUnlocks && typeof storedMyUnlocks === 'object') myAuditoriaUnlocks = storedMyUnlocks;
             const storedSessionId = localStorage.getItem('inventarioApp_auditoriaSessionId');
-            if (storedSessionId) _auditoriaSessionId = storedSessionId || null;
+            // BUG-8 FIX: solo restaurar si es string real y no vacío.
+            // '' significa sin sesión previa → mantener null para que subscribeAllUsersAuditoria
+            // muestre todos los usuarios (primer arranque del admin).
+            if (storedSessionId && storedSessionId.trim().length > 0) {
+                _auditoriaSessionId = storedSessionId;
+            }
 
             const parsedConteo = safeGet('inventarioApp_inventarioConteo', {});
             const migrated = {};
@@ -4273,8 +4295,9 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 productosConDatos.forEach(p => {
                     const localArea = conteoFuente[p.id][area];
                     payload[p.id] = {
-                        enteras:  typeof localArea.enteras  === 'number'  ? localArea.enteras  : 0,
-                        abiertas: Array.isArray(localArea.abiertas)       ? localArea.abiertas : [],
+                        enteras:   typeof localArea.enteras  === 'number'  ? localArea.enteras  : 0,
+                        abiertas:  Array.isArray(localArea.abiertas)       ? localArea.abiertas : [],
+                        _lastWrite: localArea._ts || txTimestamp, // BUG-3 FIX: timestamp por producto para last-write-wins correcto
                     };
                 });
 
@@ -4403,6 +4426,11 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                     );
                 }
 
+                // BUG-11 FIX: borrar los documentos individuales de conteoMultiUsuario/{area}
+                // (el borrado anterior solo borraba el doc padre, no sus contenidos).
+                // Nota: Firestore NO borra subcolecciones automáticamente al borrar el padre.
+                // Los datos de área en conteoMultiUsuario son documentos planos sin subcolección,
+                // así que el borrado del doc es suficiente — verificado.
                 await batch.commit();
                 console.info('[MultiDisp] conteoAreas/dispositivos + conteoMultiUsuario eliminados ✓');
 
@@ -4435,17 +4463,29 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 // por otros (en especial los 'unlocks' que el admin escribe para
                 // habilitar correcciones). merge:false sobreescribía el doc completo
                 // y eliminaba los unlocks en cada guardado del bartender.
+                // BUG-5 FIX: enriquecer cada entrada de conteo con _ts para
+                // que _recalcAdminAggregatedConteo use el timestamp correcto por producto
+                // (el campo _ts se escribe en saveInventarioModal, BUG-2 FIX).
+                // Si un producto no tiene _ts (conteos viejos), usar updatedAt como fallback.
+                const now = Date.now();
+                const conteoConTs = {};
+                Object.keys(myAuditoriaConteo).forEach(function(prodId) {
+                    conteoConTs[prodId] = {};
+                    Object.keys(myAuditoriaConteo[prodId] || {}).forEach(function(area) {
+                        const src = myAuditoriaConteo[prodId][area];
+                        conteoConTs[prodId][area] = Object.assign({}, src, {
+                            _ts: src._ts || now
+                        });
+                    });
+                });
+
                 await ref.set({
                     uid:        currentUserUid,
                     email:      (_auth && _auth.currentUser) ? _auth.currentUser.email : currentUserUid,
                     sessionId:  _auditoriaSessionId,
                     status:     myAuditoriaStatus,
-                    conteo:     myAuditoriaConteo,
-                    updatedAt:  Date.now(),
-                    // FIX ADMIN-MERGE: marcar si quien escribe es admin.
-                    // _recalcAdminAggregatedConteo usará esta bandera para dar
-                    // prioridad absoluta al conteo del admin (que ya incluye el
-                    // conteo del usuario como base, gracias al fix en openInventarioModal).
+                    conteo:     conteoConTs,   // BUG-5 FIX: conteo con _ts por producto
+                    updatedAt:  now,
                     isAdmin:    isAdmin()
                 }, { merge: true }); // merge:true → preserva 'unlocks' y otros campos del admin
                 _auditSyncPending = false;
@@ -4645,7 +4685,14 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                         return;
                     }
 
-                    entries.sort((a, b) => (b.u.updatedAt || 0) - (a.u.updatedAt || 0));
+                    // BUG-4 FIX: usar timestamp del conteo del PRODUCTO específico
+                    // (d._ts o d._lastWrite), no el updatedAt del documento de usuario
+                    // que refleja cualquier escritura del usuario (en cualquier área).
+                    entries.sort((a, b) => {
+                        const tsA = (a.d._ts || a.d._lastWrite || a.u.updatedAt || 0);
+                        const tsB = (b.d._ts || b.d._lastWrite || b.u.updatedAt || 0);
+                        return tsB - tsA;
+                    });
                     const winner = entries[0].d;
                     aggregated[prodId][area] = {
                         enteras:       winner.enteras  || 0,
@@ -4690,7 +4737,7 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 return;
             }
             if (!myAuditoriaConteo[prodId]) myAuditoriaConteo[prodId] = {};
-            myAuditoriaConteo[prodId][area] = { enteras, abiertas, _corregidoEn: Date.now() };
+            myAuditoriaConteo[prodId][area] = { enteras, abiertas, _corregidoEn: Date.now(), _ts: Date.now() }; // BUG-12 FIX
             // Marcar el unlock como usado (evitar correcciones múltiples sin nueva autorización)
             myAuditoriaUnlocks[key] = Object.assign({}, myAuditoriaUnlocks[key], { used: true });
             saveToLocalStorage();
@@ -4711,7 +4758,11 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                                    .collection('userAuditoria');
                 const snap = await colRef.get();
                 const batch = _db.batch();
-                snap.forEach(doc => batch.delete(doc.ref));
+                // BUG-6 FIX: excluir el doc del propio admin para no triggerar su propio
+                // onSnapshot con un delete que causaría un loop de reset.
+                snap.forEach(doc => {
+                    if (doc.id !== currentUserUid) batch.delete(doc.ref);
+                });
                 await batch.commit();
                 // Escribir la nueva sesión en el documento principal
                 await _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
@@ -5718,10 +5769,31 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
             initAuditUser();
 
             loadFromLocalStorage();
+
+            // BUG-15 FIX COMPLEMENT: restaurar flag de audit sync pendiente
+            // Si la sesión anterior cerró con un timer de sync activo, reintentar al reconectar.
+            try {
+                if (localStorage.getItem('inventarioApp_auditSyncPending') === '1') {
+                    _auditSyncPending = true;
+                    localStorage.removeItem('inventarioApp_auditSyncPending');
+                    console.info('[AuditUser] Sync de auditoría pendiente detectado — se reintentará al conectar.');
+                }
+            } catch(_) {}
             // FIX 1 — sincronizar stockByArea con inventarioConteo al arranque
             syncStockByAreaFromConteo();
 
-            window.addEventListener('beforeunload', () => saveToLocalStorage());
+            window.addEventListener('beforeunload', function() {
+                saveToLocalStorage();
+                // BUG-15 FIX: si hay un sync de auditoría debounced pendiente,
+                // marcarlo como pendiente para que se reintente al reconectar en la próxima sesión.
+                // clearTimeout cancela el timer para no disparar en pleno cierre.
+                if (saveInventarioModal._auditSyncTimer) {
+                    clearTimeout(saveInventarioModal._auditSyncTimer);
+                    saveInventarioModal._auditSyncTimer = null;
+                    _auditSyncPending = true;
+                    try { localStorage.setItem('inventarioApp_auditSyncPending', '1'); } catch(_) {}
+                }
+            });
 
             // BUG-FIX m3: updateNetworkStatus ahora es global (definida fuera de initializeApp)
             window.addEventListener('online',  updateNetworkStatus);
@@ -6548,7 +6620,7 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
             if (isAuditoriaMode && auditoriaAreaActiva) {
                 // ── Guardar en objeto propio del usuario ──────────────────────────────
                 if (!myAuditoriaConteo[inventarioModalProductId]) myAuditoriaConteo[inventarioModalProductId] = {};
-                myAuditoriaConteo[inventarioModalProductId][auditoriaAreaActiva] = { enteras, abiertas };
+                myAuditoriaConteo[inventarioModalProductId][auditoriaAreaActiva] = { enteras, abiertas, _ts: Date.now() }; // BUG-2 FIX: timestamp para last-write-wins
 
                 // ── Guardar en estructura multiusuario (sin sobreescribir otros) ──
                 // Cada usuario escribe SOLO su propia clave; los demás quedan intactos.
@@ -8441,7 +8513,13 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 searchTerm,
                 selectedGroup,
                 selectedArea,
-                expandedInventories: Array.from(expandedInventories)
+                expandedInventories: Array.from(expandedInventories),
+                // BUG-9 FIX: incluir conteo propio del usuario — sin esto, un backup/restore
+                // borraba todo el conteo de auditoría personal del usuario.
+                myAuditoriaConteo,
+                myAuditoriaStatus,
+                myAuditoriaUnlocks,
+                _auditoriaSessionId
             };
             const json = JSON.stringify(data, null, 2);
             const blob = new Blob([json], { type: 'application/json' });
@@ -8504,6 +8582,14 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                         auditoriaView       = data.auditoriaView       || 'selection';
                         auditoriaAreaActiva = data.auditoriaAreaActiva || null;
                         isAuditoriaMode     = (auditoriaView === 'counting' && !!auditoriaAreaActiva);
+                        // BUG-10 FIX: restaurar conteo propio del usuario desde backup
+                        if (data.myAuditoriaConteo && typeof data.myAuditoriaConteo === 'object')
+                            myAuditoriaConteo = data.myAuditoriaConteo;
+                        if (data.myAuditoriaStatus && typeof data.myAuditoriaStatus === 'object')
+                            myAuditoriaStatus = data.myAuditoriaStatus;
+                        if (data.myAuditoriaUnlocks && typeof data.myAuditoriaUnlocks === 'object')
+                            myAuditoriaUnlocks = data.myAuditoriaUnlocks;
+                        if (data._auditoriaSessionId) _auditoriaSessionId = data._auditoriaSessionId;
 
                         activeTab = data.activeTab || 'inicio';
                         searchTerm = data.searchTerm || '';
