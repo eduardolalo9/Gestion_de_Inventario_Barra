@@ -58,11 +58,6 @@
 
     <!-- ══════════════════════════════════════════════════════════
          FIX 4 — RESILIENCIA OFFLINE: Registro del Service Worker
-         CAP-FIX-2: Se añade guardia para no registrar el SW cuando
-         la app corre dentro del WebView de Capacitor. Capacitor
-         gestiona su propio caché nativo; registrar el SW además
-         puede interferir con el routing interno y causar errores
-         de fetch silenciosos en Android/iOS.
          ══════════════════════════════════════════════════════════ -->
     <script>
         (function registerServiceWorker() {
@@ -70,18 +65,6 @@
                 console.info('[SW] Service Workers no soportados en este navegador.');
                 return;
             }
-
-            // CAP-FIX-2: Detectar entorno Capacitor/Cordova y saltar registro del SW.
-            // window.Capacitor existe cuando la app corre en el WebView nativo.
-            // En ese contexto el SW no tiene las mismas garantías que en el navegador
-            // y Capacitor ya maneja caché offline por su propia capa nativa.
-            var isCapacitor = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
-            var isCordova   = !!(window.cordova);
-            if (isCapacitor || isCordova) {
-                console.info('[SW] Entorno nativo detectado (Capacitor/Cordova) — SW omitido, caché nativo activo.');
-                return;
-            }
-
             // Esperar a que la página esté completamente cargada para no
             // competir con los recursos críticos de primer render.
             window.addEventListener('load', function() {
@@ -129,55 +112,30 @@
     </script>
     <meta name="description" content="Sistema de control de inventario para barra — gestión de productos, pedidos y conteo físico.">
     <!-- FIX #2: CSP con worker-src 'self' añadido para permitir el Service Worker.
-         Sin esta directiva Chrome/Firefox pueden rechazar sw.js en modo estricto.
-         CAP-FIX-1: Se añadieron los esquemas capacitor: e ionic: a connect-src, script-src
-         e img-src. Cuando la app corre dentro del WebView de Capacitor el origen de las
-         peticiones es capacitor://localhost (Android) o ionic://localhost (iOS) en lugar
-         del dominio web habitual. Sin estos esquemas, Firebase Auth y Firestore rechazan
-         TODAS las peticiones con error de CSP, dejando la app sin base de datos. -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' capacitor: ionic:; script-src 'self' 'unsafe-inline' capacitor: ionic: https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://www.gstatic.com https://kit.fontawesome.com https://use.fontawesome.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://use.fontawesome.com https://kit.fontawesome.com; font-src https://fonts.gstatic.com https://cdnjs.cloudflare.com https://use.fontawesome.com https://kit.fontawesome.com data:; img-src 'self' data: blob: https: capacitor: ionic:; connect-src 'self' capacitor: ionic: https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://firestore.googleapis.com https://securetoken.googleapis.com https://identitytoolkit.googleapis.com https://firebase.googleapis.com https://storage.googleapis.com; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self' capacitor: ionic:;">
+         Sin esta directiva Chrome/Firefox pueden rechazar sw.js en modo estricto. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://www.gstatic.com https://kit.fontawesome.com https://use.fontawesome.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://use.fontawesome.com https://kit.fontawesome.com; font-src https://fonts.gstatic.com https://cdnjs.cloudflare.com https://use.fontawesome.com https://kit.fontawesome.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://firestore.googleapis.com https://securetoken.googleapis.com https://identitytoolkit.googleapis.com https://firebase.googleapis.com https://storage.googleapis.com; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self';">
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%A6%3C/text%3E%3C/svg%3E"><!-- BUG-FIX m2: favicon URL-encoded -->
     <title>BarInventory — Control de Inventario</title>
-    <!-- Google Fonts — carga asíncrona para no bloquear el render inicial.
-         En Capacitor sin conexión al arrancar, una fuente bloqueante detiene
-         toda la app. Con media=print/onload se carga en segundo plano. -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap"
-          rel="stylesheet" media="print" onload="this.media='all';this.onload=null;">
-    <noscript>
-        <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-    </noscript>
-    <!-- Tailwind CDN — solo estilos, no bloquea funcionalidad si falla.
-         onerror evita que un timeout del CDN detenga el arranque de la app. -->
-    <script src="https://cdn.tailwindcss.com" onerror="console.warn('[BarInventory] Tailwind CDN no disponible — estilos de respaldo activos')"></script>
-    <!-- SheetJS — cargado desde archivo LOCAL para funcionar offline en el APK.
-         NOMBRE DEL ARCHIVO: xlsx.full.min.js (con puntos, no guiones bajos).
-         Copiar exactamente con ese nombre a www/ junto a index.html. -->
-    <script src="./xlsx.full.min.js" defer></script>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- FIX #11: Tailwind CDN (Play CDN, ~358 KB sin purgar) es solo apto para desarrollo.
+         Para producción, usa el CLI de Tailwind para generar un CSS purgeado (~5-15 KB).
+         Ver: https://tailwindcss.com/docs/installation — mientras tanto el CDN funciona. -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FIX #10: defer en SheetJS — solo se necesita al exportar/importar (acción del usuario),
+         nunca durante el arranque. Firebase SDK no puede diferirse porque initFirebase()
+         está en un bloque inline inmediato que depende de window.firebase. -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
     <!-- FontAwesome 6 — iconos corporativos en la UI de auditoría -->
-    <!-- FontAwesome — carga asíncrona no bloqueante para no detener el render
-         si cdnjs.cloudflare.com está lento o sin conexión en el arranque. -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
-          media="print" onload="this.media='all';this.onload=null;"
-          crossorigin="anonymous" referrerpolicy="no-referrer">
-    <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"></noscript>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
 
     <!-- ══════════════════════════════════════════════════════════
-         FIREBASE SDK — Bundle auto-contenido (App + Auth + Firestore)
-         ──────────────────────────────────────────────────────────
-         AUTH-FIX: Un solo archivo que bundlea los 3 módulos de Firebase.
-         Los archivos individuales del npm package (firebase-app-compat.js,
-         firebase-auth-compat.js, firebase-firestore-compat.js) NO son
-         auto-contenidos — son wrappers que dependen de módulos internos
-         no disponibles en el browser. Esto causaba que firebase.auth()
-         fallara silenciosamente con network-request-failed al intentar
-         hacer signInWithEmailAndPassword en el WebView de Capacitor.
-         Este bundle fue generado con esbuild --bundle --format=iife
-         y expone window.firebase con app + auth + firestore incluidos.
-         INSTRUCCIÓN: copiar firebase-bundle.js a www/ junto a index.html.
+         FIREBASE SDK  —  compat v10 (módulos globales window.firebase)
          ══════════════════════════════════════════════════════════ -->
-    <script src="./firebase-bundle.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 
     <!-- ══════════════════════════════════════════════════════════
          CONFIGURACIÓN FIREBASE
@@ -193,8 +151,7 @@
         // usuario que abra el código fuente. Asegúrate de restringir la API Key
         // en https://console.cloud.google.com → Credenciales → Restricciones de clave.
         // (dominio HTTP Referrer + solo Firestore API)
-        const firebaseConfig = {
- const firebaseConfig = {
+const firebaseConfig = {
   apiKey: "AIzaSyDaMcyv_o0YYv9XRDG1A-V3IrboLFK53-o",
   authDomain: "gestor-de-inventarios-76c19.firebaseapp.com",
   projectId: "gestor-de-inventarios-76c19",
@@ -276,39 +233,20 @@
 
                 // FIX: Persistencia offline — settings() DEBE llamarse antes de enablePersistence()
                 // BUG-H7 FIX: mover settings() fuera del try interno para garantizar orden correcto.
-                // CAP-FIX-4: No llamar enablePersistence() en entorno Capacitor. En WebView nativo
-                // el caché offline ya lo gestiona la capa nativa de Capacitor. Además,
-                // enablePersistence puede lanzar 'failed-precondition' en WebView de algunos
-                // fabricantes Android y bloquear la inicialización completa de Firestore.
-                var _runningNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
                 try {
-                    // CAP-FIX-6: En Android WebView, Firestore usa WebSockets por defecto (useFetchStreams=true
-                    // en el bundle). Muchos WebViews de fabricantes (Huawei, Samsung, Xiaomi) bloquean
-                    // los WebSockets de Firebase Firestore causando que onAuthStateChanged nunca resuelva.
-                    // experimentalForceLongPolling=true fuerza HTTP long-polling, que siempre funciona.
-                    var _firestoreSettings = { cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED };
-                    if (_runningNative) {
-                        _firestoreSettings.experimentalForceLongPolling = true;
-                        _firestoreSettings.merge = true;
-                        console.info('[Firebase] Firestore: long-polling forzado para WebView nativo.');
-                    }
-                    _db.settings(_firestoreSettings);
+                    _db.settings({ cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED });
                 } catch (_) {}
-                if (!_runningNative) {
-                    _db.enablePersistence({ synchronizeTabs: true }).catch(err => {
-                        if (err.code === 'failed-precondition') {
-                            // Múltiples pestañas abiertas — solo la primera pestaña tendrá persistencia offline.
-                            console.warn("[Firebase] Persistencia offline no disponible (múltiples pestañas). " +
-                                         "Cierra otras pestañas de la app para habilitar modo offline.");
-                        } else if (err.code === 'unimplemented') {
-                            console.warn("[Firebase] Persistencia offline no soportada en este navegador.");
-                        } else {
-                            console.warn("Persistencia falló:", err);
-                        }
-                    });
-                } else {
-                    console.info("[Firebase] Persistencia offline omitida — caché nativo de Capacitor activo.");
-                }
+                _db.enablePersistence({ synchronizeTabs: true }).catch(err => {
+                    if (err.code === 'failed-precondition') {
+                        // Múltiples pestañas abiertas — solo la primera pestaña tendrá persistencia offline.
+                        console.warn("[Firebase] Persistencia offline no disponible (múltiples pestañas). " +
+                                     "Cierra otras pestañas de la app para habilitar modo offline.");
+                    } else if (err.code === 'unimplemented') {
+                        console.warn("[Firebase] Persistencia offline no soportada en este navegador.");
+                    } else {
+                        console.warn("Persistencia falló:", err);
+                    }
+                });
                 console.info("[Firebase] Inicializado correctamente ✓");
                 // BUG-H4 FIX: exponer _db y _auth en window para acceso cross-scope
                 // (listener del SW, módulos futuros, debugging).
@@ -320,243 +258,6 @@
             }
         })();
     </script>
-
-    <!-- ══════════════════════════════════════════════════════════
-         CAP-FIX-3 — HELPERS GLOBALES CAPACITOR
-         ──────────────────────────────────────────────────────────
-         Bloque de utilidades que detectan si la app corre en
-         entorno nativo (Capacitor) y proveen wrappers seguros
-         para las APIs que se comportan distinto en WebView:
-           · _isNativeApp()       → booleano, verdad única
-           · _capacitorOpenUrl()  → reemplaza window.open()
-           · _capacitorStorage    → wrapper localStorage / Preferences
-         Estos helpers se declaran ANTES del JS de la app para que
-         cualquier función pueda importarlos sin importar el orden
-         de carga. Si Capacitor no está presente, los helpers caen
-         silenciosamente al comportamiento web estándar.
-         ══════════════════════════════════════════════════════════ -->
-    <script>
-    (function setupCapacitorHelpers() {
-
-        // ── 1. Detección de entorno nativo ────────────────────────────────────
-        // Una sola fuente de verdad para toda la app.
-        // Capacitor inyecta window.Capacitor antes de ejecutar el HTML.
-        window._isNativeApp = function() {
-            return !!(
-                window.Capacitor &&
-                window.Capacitor.isNativePlatform &&
-                window.Capacitor.isNativePlatform()
-            );
-        };
-
-        // ── 2. Apertura de URLs externas (reemplaza window.open) ─────────────
-        // CAP-FIX-5 (combinado aquí): window.open() está bloqueado por defecto
-        // en WebView de Android e iOS. Este helper usa el plugin Browser de
-        // Capacitor cuando está disponible, y cae a window.open en el navegador.
-        //
-        // USO: reemplazar window.open(url, '_blank') por _capacitorOpenUrl(url)
-        //
-        // Para que funcione en producción con Capacitor, instalar el plugin:
-        //   npm install @capacitor/browser && npx cap sync
-        window._capacitorOpenUrl = async function(url) {
-            if (!url) return;
-
-            if (window._isNativeApp()) {
-                try {
-                    // Intentar usar @capacitor/browser si está disponible
-                    // El plugin se carga dinámicamente para no romper la web
-                    if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Browser) {
-                        await window.Capacitor.Plugins.Browser.open({ url: url });
-                        return;
-                    }
-                } catch (e) {
-                    console.warn('[Cap] Browser plugin no disponible, usando fallback:', e);
-                }
-                // Fallback nativo: location.href abre el intent de Android/iOS
-                // para URLs wa.me esto abre WhatsApp directamente
-                window.location.href = url;
-            } else {
-                // Navegador web: comportamiento estándar
-                window.open(url, '_blank', 'noopener,noreferrer');
-            }
-        };
-
-        // ── 3. Storage wrapper (localStorage → Capacitor Preferences) ────────
-        // En WebView de Android el límite de localStorage puede ser < 5 MB.
-        // Este wrapper usa @capacitor/preferences cuando está disponible,
-        // y cae a localStorage en el navegador web sin cambiar ninguna API.
-        //
-        // Las funciones saveToLocalStorage / loadFromLocalStorage del app
-        // ya usan localStorage directamente — este wrapper está disponible
-        // para una migración gradual futura si se instala @capacitor/preferences:
-        //   npm install @capacitor/preferences && npx cap sync
-        window._capacitorStorage = {
-            set: async function(key, value) {
-                if (window._isNativeApp() &&
-                    window.Capacitor && window.Capacitor.Plugins &&
-                    window.Capacitor.Plugins.Preferences) {
-                    await window.Capacitor.Plugins.Preferences.set({ key: key, value: String(value) });
-                } else {
-                    try { localStorage.setItem(key, value); } catch(e) {
-                        console.warn('[Storage] localStorage lleno para clave:', key, e);
-                    }
-                }
-            },
-            get: async function(key) {
-                if (window._isNativeApp() &&
-                    window.Capacitor && window.Capacitor.Plugins &&
-                    window.Capacitor.Plugins.Preferences) {
-                    var result = await window.Capacitor.Plugins.Preferences.get({ key: key });
-                    return result ? result.value : null;
-                } else {
-                    try { return localStorage.getItem(key); } catch(e) { return null; }
-                }
-            },
-            remove: async function(key) {
-                if (window._isNativeApp() &&
-                    window.Capacitor && window.Capacitor.Plugins &&
-                    window.Capacitor.Plugins.Preferences) {
-                    await window.Capacitor.Plugins.Preferences.remove({ key: key });
-                } else {
-                    try { localStorage.removeItem(key); } catch(e) {}
-                }
-            }
-        };
-
-        // ── 4. Logging de entorno al arrancar ─────────────────────────────────
-        window.addEventListener('DOMContentLoaded', function() {
-            if (window._isNativeApp()) {
-                var platform = (window.Capacitor.getPlatform && window.Capacitor.getPlatform()) || 'native';
-                console.info('[Cap] Corriendo como app nativa en plataforma:', platform);
-            } else {
-                console.info('[Cap] Corriendo en navegador web — helpers en modo fallback.');
-            }
-        });
-
-        // ── 5. Descarga de archivos compatible con WebView nativo ─────────────
-        //
-        // CAP-CRÍTICO-1: En Android/iOS el WebView bloquea los clicks programáticos
-        // sobre <a download="...">. XLSX.writeFile(), los exports CSV y los backups JSON
-        // usan este mecanismo internamente y por eso nunca generan el archivo en el
-        // teléfono — no hay error visible, simplemente no ocurre nada.
-        //
-        // Solución: en entorno nativo convertir el contenido a base64, escribirlo con
-        // @capacitor/filesystem en el directorio Documents (siempre accesible sin permisos
-        // extra en Android 10+) y luego abrir el diálogo de compartir con @capacitor/share
-        // para que el usuario lo guarde en Descargas, lo envíe por WhatsApp, etc.
-        //
-        // En el navegador web se usa el comportamiento estándar de blob+anchor.
-        //
-        // PARÁMETROS:
-        //   fileName  — nombre del archivo con extensión (ej. "auditoria_2026-06-06.xlsx")
-        //   content   — Uint8Array, ArrayBuffer, o string (para CSV/JSON)
-        //   mimeType  — tipo MIME del archivo
-        //
-        window._nativeDownload = async function(fileName, content, mimeType) {
-            if (!fileName || content == null) return;
-
-            if (window._isNativeApp()) {
-                try {
-                    var FS    = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem;
-                    var Share = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Share;
-
-                    if (!FS) {
-                        showNotification('⚠️ Plugin Filesystem no disponible — reinstala la app');
-                        return;
-                    }
-
-                    // ── Conversión a base64 ────────────────────────────────────
-                    // BUG-EXCEL-FIX-1: El loop byte-by-byte anterior era O(n²)
-                    // causando que el WebView se bloqueara o colapsara con archivos
-                    // xlsx de cualquier tamaño. Ahora se usa un método eficiente:
-                    // · Para strings (CSV/JSON): encodeURIComponent + unescape + btoa
-                    // · Para binarios (xlsx): Blob + FileReader.readAsDataURL, que
-                    //   delega la conversión al motor nativo del navegador en O(n).
-                    var base64Data;
-                    if (typeof content === 'string') {
-                        // CSV / JSON — string directo
-                        base64Data = btoa(unescape(encodeURIComponent(content)));
-                    } else {
-                        // Uint8Array / ArrayBuffer — xlsx binario
-                        // Usar FileReader para conversión eficiente en O(n)
-                        var blob = new Blob([content], { type: mimeType });
-                        base64Data = await new Promise(function(resolve, reject) {
-                            var reader = new FileReader();
-                            reader.onload = function() {
-                                // readAsDataURL devuelve "data:mime;base64,XXXXX"
-                                // Extraer solo la parte base64 después de la coma
-                                var result = reader.result;
-                                resolve(result.substring(result.indexOf(',') + 1));
-                            };
-                            reader.onerror = function() { reject(reader.error); };
-                            reader.readAsDataURL(blob);
-                        });
-                    }
-
-                    // ── Escribir archivo en Documents ──────────────────────────
-                    // BUG-EXCEL-FIX-2: writeFile es async y debe completarse ANTES
-                    // de llamar getUri y share. Antes _nativeDownload se llamaba sin
-                    // await en exportToExcel, causando que Share intentara abrir un
-                    // archivo que Filesystem aún no había terminado de escribir.
-                    showNotification('⏳ Guardando ' + fileName + '…');
-                    await FS.writeFile({
-                        path:      fileName,
-                        data:      base64Data,
-                        directory: 'DOCUMENTS',
-                        recursive: true
-                    });
-
-                    // ── Obtener URI y compartir ───────────────────────────────
-                    var uriResult = await FS.getUri({
-                        path:      fileName,
-                        directory: 'DOCUMENTS'
-                    });
-
-                    if (Share && uriResult && uriResult.uri) {
-                        await Share.share({
-                            title:       fileName,
-                            url:         uriResult.uri,
-                            dialogTitle: 'Guardar o compartir ' + fileName
-                        });
-                        showNotification('✅ ' + fileName + ' listo para compartir');
-                    } else {
-                        showNotification('✅ Guardado en Documentos: ' + fileName);
-                    }
-
-                } catch (e) {
-                    console.error('[NativeDownload] Error:', e);
-                    // Fallback: Web Share API con Blob si está disponible
-                    try {
-                        if (navigator.share && navigator.canShare) {
-                            var fallbackBlob = new Blob([content], { type: mimeType });
-                            var fallbackFile = new File([fallbackBlob], fileName, { type: mimeType });
-                            if (navigator.canShare({ files: [fallbackFile] })) {
-                                await navigator.share({ files: [fallbackFile], title: fileName });
-                                return;
-                            }
-                        }
-                        showNotification('⚠️ Error al exportar: ' + (e.message || JSON.stringify(e)));
-                    } catch (e2) {
-                        showNotification('⚠️ Error al exportar: ' + (e2.message || e2));
-                    }
-                }
-            } else {
-                // ── Navegador web: blob + anchor estándar ─────────────────────
-                var webBlob = new Blob([content], { type: mimeType });
-                var url     = URL.createObjectURL(webBlob);
-                var a       = document.createElement('a');
-                a.href      = url;
-                a.download  = fileName;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                setTimeout(function() { URL.revokeObjectURL(url); }, 1500);
-            }
-        };
-
-    })();
-    </script>
-
     <style>
 /* =================================================================
    ENTERPRISE DESIGN SYSTEM — BarInventory
@@ -2481,284 +2182,59 @@ html[data-theme="light"] .inicio-btn.primary { color: #ffffff; }
 .sync-pause-btn:hover { opacity: 0.82; }
 
 /* ══════════════════════════════════════════════════════════
-   AUTH — Pantalla de inicio de sesión — Rediseño v2
+   AUTH — Pantalla de inicio de sesión
    ══════════════════════════════════════════════════════════ */
-
-/* ── Fondo full-screen con gradiente atmosférico ── */
 #loginScreen {
     position: fixed; inset: 0;
+    background: var(--bg);
     display: flex; align-items: center; justify-content: center;
     z-index: 9999;
-    padding: 24px 20px;
-    overflow: hidden;
-    background: #090a0d;
-    animation: loginFadeIn 0.35s var(--ease-out) both;
+    padding: 16px;
+    animation: fadeIn 0.22s var(--ease-out) both;
 }
 #loginScreen.auth-hidden { display: none !important; }
 
-/* Orbes de luz de fondo */
-#loginScreen::before,
-#loginScreen::after {
-    content: '';
-    position: absolute;
-    border-radius: 50%;
-    pointer-events: none;
-    filter: blur(80px);
-    opacity: 0.28;
-}
-#loginScreen::before {
-    width: 380px; height: 380px;
-    background: radial-gradient(circle, #f59e0b 0%, #d97706 60%, transparent 100%);
-    top: -120px; right: -80px;
-    animation: orbFloat 8s ease-in-out infinite alternate;
-}
-#loginScreen::after {
-    width: 280px; height: 280px;
-    background: radial-gradient(circle, #a8c7fa 0%, #6490e8 60%, transparent 100%);
-    bottom: -80px; left: -60px;
-    animation: orbFloat 11s ease-in-out infinite alternate-reverse;
-}
-
-@keyframes orbFloat {
-    from { transform: translate(0, 0) scale(1); }
-    to   { transform: translate(20px, 30px) scale(1.08); }
-}
-@keyframes loginFadeIn {
-    from { opacity: 0; transform: translateY(16px); }
-    to   { opacity: 1; transform: translateY(0); }
-}
-
-/* ── Card glassmorphism ── */
 .login-card {
-    position: relative; z-index: 1;
-    width: 100%; max-width: 390px;
-    background: rgba(29, 29, 39, 0.72);
-    backdrop-filter: blur(28px) saturate(160%);
-    -webkit-backdrop-filter: blur(28px) saturate(160%);
-    border: 1px solid rgba(255,255,255,0.07);
-    border-radius: 28px;
-    padding: 36px 28px 28px;
-    box-shadow:
-        0 32px 64px rgba(0,0,0,0.55),
-        0 8px 24px rgba(0,0,0,0.35),
-        inset 0 1px 0 rgba(255,255,255,0.06);
-    animation: cardSlideUp 0.45s var(--ease-out) 0.08s both;
-}
-@keyframes cardSlideUp {
-    from { opacity: 0; transform: translateY(28px) scale(0.97); }
-    to   { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-html[data-theme="light"] .login-card {
-    background: rgba(255,251,254,0.88);
-    border-color: rgba(0,0,0,0.06);
-    box-shadow: 0 24px 48px rgba(0,0,0,0.14), 0 4px 12px rgba(0,0,0,0.08);
-}
-
-/* ── Header: ícono + marca ── */
-.login-brand {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 14px;
-    margin-bottom: 28px;
-}
-
-.login-logo-icon-wrap {
-    width: 68px; height: 68px;
-    border-radius: 20px;
-    background: linear-gradient(135deg, #f59e0b 0%, #d97706 50%, #b45309 100%);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 32px;
-    box-shadow:
-        0 8px 24px rgba(245,158,11,0.35),
-        0 2px 8px rgba(0,0,0,0.3),
-        inset 0 1px 0 rgba(255,255,255,0.2);
-    animation: iconPop 0.5s var(--ease-spring) 0.2s both;
-}
-@keyframes iconPop {
-    from { opacity: 0; transform: scale(0.6) rotate(-12deg); }
-    to   { opacity: 1; transform: scale(1) rotate(0deg); }
-}
-
-.login-brand-text {
-    text-align: center;
-}
-.login-logo-text {
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 1.5rem;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    color: var(--txt-primary);
-    line-height: 1.1;
-}
-.login-logo-sub {
-    font-size: 0.75rem;
-    font-weight: 500;
-    color: var(--amber);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    margin-top: 3px;
-    opacity: 0.85;
-}
-
-/* ── Títulos ── */
-.login-title {
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 1.05rem;
-    font-weight: 600;
-    color: var(--txt-primary);
-    margin: 0 0 4px;
-    text-align: center;
-    letter-spacing: -0.01em;
-}
-.login-subtitle {
-    font-size: 0.78rem;
-    color: var(--txt-muted);
-    margin: 0 0 24px;
-    text-align: center;
-    line-height: 1.5;
-}
-
-/* ── Campos de formulario con label flotante ── */
-.login-field {
-    position: relative;
-    margin-bottom: 16px;
-}
-
-.login-field-inner {
-    position: relative;
-    display: flex;
-    align-items: center;
-}
-
-.login-field-icon {
-    position: absolute;
-    left: 14px;
-    color: var(--txt-muted);
-    font-size: 15px;
-    pointer-events: none;
-    transition: color 0.2s ease;
-    z-index: 1;
-    line-height: 1;
-}
-
-.login-label {
-    display: block;
-    font-size: 0.72rem;
-    font-weight: 600;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    color: var(--txt-muted);
-    margin-bottom: 6px;
-    padding-left: 2px;
-    transition: color 0.2s ease;
-}
-
-.login-input {
-    width: 100%;
-    height: 50px;
-    padding: 0 14px 0 42px;
-    background: rgba(255,255,255,0.04);
-    border: 1.5px solid rgba(202,196,208,0.12);
-    border-radius: 14px;
-    color: var(--txt-primary);
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 0.9rem;
-    outline: none;
-    transition:
-        border-color 0.2s ease,
-        background 0.2s ease,
-        box-shadow 0.2s ease;
-    box-sizing: border-box;
-    -webkit-appearance: none;
-}
-.login-input::placeholder { color: var(--txt-muted); opacity: 0.6; }
-
-.login-input:focus {
-    border-color: var(--amber);
-    background: rgba(245,158,11,0.05);
-    box-shadow: 0 0 0 3px rgba(245,158,11,0.12);
-}
-.login-input:focus + .login-field-icon,
-.login-field-inner:focus-within .login-field-icon {
-    color: var(--amber);
-}
-
-html[data-theme="light"] .login-input {
-    background: rgba(0,0,0,0.03);
-    border-color: rgba(0,0,0,0.12);
-    color: var(--txt-primary);
-}
-html[data-theme="light"] .login-input:focus {
-    border-color: var(--amber);
-    background: rgba(245,158,11,0.04);
-}
-
-/* ── Toggle mostrar/ocultar contraseña ── */
-.login-pw-toggle {
-    position: absolute;
-    right: 12px;
-    background: none;
+    background: var(--card);                /* M3 Surface Container */
     border: none;
-    color: var(--txt-muted);
-    cursor: pointer;
-    padding: 6px;
-    border-radius: 8px;
-    font-size: 14px;
-    transition: color 0.15s ease, background 0.15s ease;
-    line-height: 1;
-    -webkit-tap-highlight-color: transparent;
+    border-radius: 28px;                   /* M3 shape Extra Large */
+    padding: 28px 24px 24px;
+    box-shadow: var(--shadow-elev3);
+    max-width: 400px; width: 100%;
+    position: relative; overflow: hidden;
 }
-.login-pw-toggle:hover { color: var(--txt-secondary); background: rgba(255,255,255,0.06); }
-
-/* ── Error ── */
-.login-error {
-    margin-bottom: 14px;
-    padding: 10px 14px;
-    background: rgba(255,180,171,0.09);
-    border: 1px solid rgba(255,100,80,0.25);
-    border-radius: var(--r-md);
-    color: var(--red-text);
-    font-size: 0.775rem;
-    font-weight: 500;
-    display: none;
-    animation: loginFadeIn 0.16s ease both;
-    text-align: center;
+/* Subtle tonal tint on top edge (M3 elevation tint) */
+.login-card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg,
+        transparent 5%,
+        rgba(168,199,250,0.22) 50%,
+        transparent 95%);
+    pointer-events: none;
 }
-.login-error.visible { display: block; }
+html[data-theme="light"] .login-card {
+    background: #fffbfe;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12), 0 1px 4px rgba(0,0,0,0.08);
+}
 
-/* ── Botón principal con gradiente amber ── */
+/* M3 Filled Button — login */
 .login-btn {
     width: 100%;
-    height: 52px;
+    height: 48px;
     padding: 0 24px;
     border-radius: var(--r-full);
-    background: linear-gradient(135deg, #f59e0b 0%, #d97706 60%, #b45309 100%);
-    color: #000;
+    background: var(--accent);
+    color: var(--accent-on, #003063);
     border: none;
     font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 0.9rem;
-    font-weight: 700;
-    letter-spacing: 0.02em;
+    font-size: 0.875rem; font-weight: 500; letter-spacing: 0.005em;
     cursor: pointer;
-    display: flex; align-items: center; justify-content: center; gap: 8px;
-    transition:
-        transform 0.15s var(--ease-out),
-        box-shadow 0.2s var(--ease-std),
-        filter 0.2s ease;
+    display: flex; align-items: center; justify-content: center;
+    transition: box-shadow 0.2s var(--ease-std), transform 0.15s var(--ease-out);
     position: relative; overflow: hidden;
     -webkit-tap-highlight-color: transparent;
-    margin-top: 6px;
-    box-shadow:
-        0 6px 20px rgba(245,158,11,0.35),
-        0 2px 8px rgba(0,0,0,0.25);
-}
-.login-btn::before {
-    content: '';
-    position: absolute; inset: 0;
-    background: linear-gradient(180deg, rgba(255,255,255,0.18) 0%, transparent 60%);
-    pointer-events: none;
 }
 .login-btn::after {
     content: '';
@@ -2766,54 +2242,37 @@ html[data-theme="light"] .login-input:focus {
     background: #fff; opacity: 0;
     transition: opacity 0.15s ease; pointer-events: none;
 }
-.login-btn:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 10px 28px rgba(245,158,11,0.45), 0 4px 12px rgba(0,0,0,0.3);
-    filter: brightness(1.06);
+.login-btn:hover:not(:disabled)::after  { opacity: 0.08; }
+.login-btn:active:not(:disabled)::after { opacity: 0.16; }
+.login-btn:hover:not(:disabled)  { box-shadow: var(--shadow-elev2); }
+.login-btn:active:not(:disabled) { transform: scale(0.98); box-shadow: none; }
+.login-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.login-error {
+    margin-top: 12px; padding: 9px 12px;
+    background: var(--red-dim);
+    border: 1px solid rgba(239,68,68,0.28);
+    border-radius: var(--r-md);
+    color: var(--red-text);
+    font-size: 0.775rem; font-weight: 500;
+    display: none;
+    animation: fadeIn 0.16s ease both;
 }
-.login-btn:active:not(:disabled) {
-    transform: scale(0.97) translateY(0);
-    box-shadow: 0 3px 10px rgba(245,158,11,0.3);
-}
-.login-btn:hover:not(:disabled)::after  { opacity: 0.06; }
-.login-btn:active:not(:disabled)::after { opacity: 0.12; }
-.login-btn:disabled { opacity: 0.45; cursor: not-allowed; filter: none; transform: none; }
-
-/* Ícono de candado en el botón */
-.login-btn-icon { font-size: 16px; flex-shrink: 0; }
-
-/* ── Divider y footer ── */
+.login-error.visible { display: block; }
 .login-divider {
-    display: flex; align-items: center; gap: 10px;
-    margin: 22px 0 16px;
+    height: 1px; background: var(--border);
+    margin: 20px 0;
 }
-.login-divider::before,
-.login-divider::after {
-    content: ''; flex: 1;
-    height: 1px;
-    background: var(--border);
-}
-.login-divider-dot {
-    width: 4px; height: 4px;
-    border-radius: 50%;
-    background: var(--border-mid);
-}
-
 .login-footer {
     text-align: center;
-    font-size: 0.68rem;
-    color: var(--txt-muted);
-    opacity: 0.7;
-    line-height: 1.4;
+    font-size: 0.68rem; color: var(--txt-muted);
 }
-.login-footer-icon { font-size: 10px; margin-right: 3px; }
 
 /* Spinner para el botón de login */
 @keyframes spin { to { transform: rotate(360deg); } }
 .login-spinner {
-    width: 17px; height: 17px;
-    border: 2.5px solid rgba(0,0,0,0.2);
-    border-top-color: #000;
+    width: 15px; height: 15px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
     border-radius: 50%;
     animation: spin 0.7s linear infinite;
     flex-shrink: 0;
@@ -3296,101 +2755,46 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
 </head>
 <body class="min-h-screen">
 
-    <!-- authLoadingScreen: mantenido para compatibilidad con el JS que lo referencia.
-         El spinner visual de arranque ahora es #appBootSpinner (más prominente).
-         Este div se oculta desde el inicio — solo el JS lo muestra si es necesario. -->
-    <div id="authLoadingScreen" class="auth-hidden">
+    <!-- ══════════════════════════════════════════════════════
+         AUTH — Pantalla de carga mientras Firebase verifica sesión
+         ══════════════════════════════════════════════════════ -->
+    <div id="authLoadingScreen">
         <div class="auth-loading-spinner"></div>
         <span class="auth-loading-text">Verificando sesión…</span>
     </div>
 
     <!-- ══════════════════════════════════════════════════════
-         AUTH — Pantalla de Login — Rediseño v2
+         AUTH — Pantalla de Login
          ══════════════════════════════════════════════════════ -->
-    <!-- ══════════════════════════════════════════════════════════
-         SPINNER DE CARGA INICIAL
-         Visible inmediatamente mientras los scripts arrancan.
-         initializeApp() lo elimina cuando la app está lista.
-         Sin esto: pantalla negra sin ningún indicador de progreso.
-         ══════════════════════════════════════════════════════════ -->
-    <div id="appBootSpinner" style="position:fixed;inset:0;background:#090a0d;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:99999;gap:20px;">
-        <div style="width:52px;height:52px;border-radius:16px;background:linear-gradient(135deg,#f59e0b,#b45309);display:flex;align-items:center;justify-content:center;font-size:26px;box-shadow:0 8px 24px rgba(245,158,11,0.35);">🍸</div>
-        <div style="width:36px;height:36px;border:3px solid rgba(245,158,11,0.2);border-top-color:#f59e0b;border-radius:50%;animation:_spinBoot 0.8s linear infinite;"></div>
-        <p id="appBootSpinnerText" style="color:rgba(255,255,255,0.45);font-family:system-ui,sans-serif;font-size:0.75rem;letter-spacing:0.08em;text-transform:uppercase;transition:opacity 0.3s ease;">Verificando sesión…</p>
-    </div>
-    <style>@keyframes _spinBoot{to{transform:rotate(360deg)}}</style>
-
     <div id="loginScreen" class="auth-hidden">
         <div class="login-card">
-
-            <!-- ── Marca ─────────────────────────────────── -->
-            <div class="login-brand">
-                <div class="login-logo-icon-wrap">🍸</div>
-                <div class="login-brand-text">
+            <div class="login-logo">
+                <div class="login-logo-icon">📦</div>
+                <div>
                     <div class="login-logo-text">BarInventory</div>
                     <div class="login-logo-sub">Control de Inventario</div>
                 </div>
             </div>
-
-            <!-- ── Títulos ────────────────────────────────── -->
             <p class="login-title">Bienvenido de vuelta</p>
-            <p class="login-subtitle">Ingresa tus credenciales para acceder al sistema.</p>
+            <p class="login-subtitle">Ingresa tus credenciales para acceder al sistema de inventario.</p>
 
-            <!-- ── Campo email ───────────────────────────── -->
             <div class="login-field">
                 <label class="login-label" for="loginEmail">Correo electrónico</label>
-                <div class="login-field-inner">
-                    <span class="login-field-icon">✉️</span>
-                    <input type="email" id="loginEmail" class="login-input"
-                        placeholder="tu@correo.com"
-                        autocomplete="email"
-                        inputmode="email">
-                </div>
+                <input type="email" id="loginEmail" class="login-input" placeholder="tu@correo.com" autocomplete="email">
             </div>
-
-            <!-- ── Campo contraseña ──────────────────────── -->
             <div class="login-field">
                 <label class="login-label" for="loginPassword">Contraseña</label>
-                <div class="login-field-inner">
-                    <span class="login-field-icon">🔑</span>
-                    <input type="password" id="loginPassword" class="login-input"
-                        placeholder="••••••••"
-                        autocomplete="current-password">
-                    <button type="button" class="login-pw-toggle" id="loginPwToggle"
-                        onclick="(function(){
-                            var inp = document.getElementById('loginPassword');
-                            var btn = document.getElementById('loginPwToggle');
-                            if(inp.type==='password'){
-                                inp.type='text';
-                                btn.textContent='🙈';
-                                btn.title='Ocultar contraseña';
-                            } else {
-                                inp.type='password';
-                                btn.textContent='👁️';
-                                btn.title='Mostrar contraseña';
-                            }
-                        })()"
-                        title="Mostrar contraseña"
-                        aria-label="Mostrar u ocultar contraseña">👁️</button>
-                </div>
+                <input type="password" id="loginPassword" class="login-input" placeholder="••••••••" autocomplete="current-password">
             </div>
 
-            <!-- ── Error ─────────────────────────────────── -->
             <div id="loginError" class="login-error"></div>
 
-            <!-- ── Botón ─────────────────────────────────── -->
             <button type="button" id="loginBtn" class="login-btn" onclick="handleLogin()">
-                <span class="login-btn-icon">🔓</span>
                 <span id="loginBtnText">Iniciar sesión</span>
             </button>
 
-            <!-- ── Footer ────────────────────────────────── -->
-            <div class="login-divider"><div class="login-divider-dot"></div></div>
-            <p class="login-footer">
-                <span class="login-footer-icon">🔒</span>
-                Sistema privado — acceso restringido al personal autorizado.
-            </p>
-
+            <div class="login-divider"></div>
+            <p class="login-footer">Sistema privado — acceso restringido al personal autorizado.</p>
         </div>
     </div>
 
@@ -3898,17 +3302,11 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
         function _computeDataHash() {
             // Solo hashea las colecciones que realmente importan para la nube.
             // JSON.stringify es determinista para el mismo objeto → suficiente como hash.
-            // BUG-1 FIX: incluir myAuditoriaConteo y myAuditoriaStatus para que
-            // cualquier guardado de conteo de auditoría dispare syncToCloud automáticamente.
-            // Antes, el hash omitía la auditoría y el sync nunca se activaba al guardar
-            // productos en modo auditoría → conteos podían perderse si la app se cerraba.
             try {
                 return JSON.stringify(products) +
                        JSON.stringify(orders) +
                        JSON.stringify(inventories) +
-                       JSON.stringify(inventarioConteo) +
-                       JSON.stringify(myAuditoriaConteo) +
-                       JSON.stringify(myAuditoriaStatus);
+                       JSON.stringify(inventarioConteo);
             } catch (_) { return ''; }
         }
 
@@ -4298,17 +3696,19 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 .collection('conteoMultiUsuario')
                 .doc(area);
             try {
-                // Recopilar solo los productos contados por este usuario en esta área
-                const productos = {}; // FIX-07
+                // BUG-1 FIX CRÍTICO: leer de myAuditoriaConteo (fuente canónica de verdad)
+                // auditoriaConteoPorUsuario es el sistema antiguo y ya no recibe escrituras.
+                // syncMyAuditoriaToFirestore (la función de finalización) ya usa myAuditoriaConteo
+                // correctamente. Esta función debe ser consistente.
+                const conteoFuenteUsuario = myAuditoriaConteo;
+                const productos = {};
                 products.forEach(function(p) {
-                    const byUser = auditoriaConteoPorUsuario[p.id] &&
-                                   auditoriaConteoPorUsuario[p.id][area] &&
-                                   auditoriaConteoPorUsuario[p.id][area][cu.userId];
-                    if (byUser) {
+                    const areaData = conteoFuenteUsuario[p.id] && conteoFuenteUsuario[p.id][area];
+                    if (areaData && (areaData.enteras > 0 || (areaData.abiertas || []).some(v => v > 0))) {
                         productos[p.id] = {
-                            enteras:  byUser.enteras,
-                            abiertas: byUser.abiertas,
-                            ts:       byUser.ts
+                            enteras:  areaData.enteras  || 0,
+                            abiertas: areaData.abiertas || [],
+                            ts:       areaData._ts || Date.now()
                         };
                     }
                 });
@@ -4395,7 +3795,10 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                         );
                     } catch (_) {}
                     renderTab();
-                    console.info('[MultiUser] Conteos de todos los dispositivos cargados ✓');
+                    console.info('[MultiUser] Conteos legacy cargados ✓ (conteoMultiUsuario → auditoriaConteoPorUsuario).');
+                    // NOTA: El sistema principal de conteo usa myAuditoriaConteo + userAuditoria/{uid}.
+                    // conteoMultiUsuario es el sistema legacy que solo queda activo en syncConteoPorUsuarioToFirestore
+                    // para compatibilidad con datos anteriores. BUG-1 FIX lo alineó para leer de myAuditoriaConteo.
                 }
             } catch (err) {
                 console.warn('[MultiUser] Error al cargar conteos desde Firestore:', err);
@@ -4474,22 +3877,16 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 try {
                     localStorage.setItem(key, value);
                 } catch (e) {
-                    // BUG-15 FIX: NO usar break — continuar guardando el resto de claves.
-                    // Antes, si una clave fallaba por cuota de localStorage llena, el loop
-                    // se detenía y todas las claves siguientes (myAuditoriaConteo, etc.)
-                    // quedaban sin actualizar. Al recargar, el conteo de auditoría
-                    // regresaba al estado anterior aunque otras colecciones sí se habían
-                    // actualizado, dejando el estado en inconsistencia.
-                    // Ahora: notificar el error específico y continuar con todas las claves.
                     console.error('Error al guardar "' + key + '":', e);
                     if (key === 'inventarioApp_inventories') {
                         showNotification('⚠️ Historial muy grande. Usa "Exportar datos" y elimina historiales antiguos.');
                     } else if (key === 'inventarioApp_inventarioConteo') {
                         showNotification('⚠️ Conteo de inventario no pudo guardarse. Exporta tus datos ahora.');
                     } else {
-                        showNotification('⚠️ Error al guardar "' + key.replace('inventarioApp_','') + '". Exporta un respaldo.');
+                        showNotification('⚠️ Error al guardar datos. Exporta un respaldo inmediatamente.');
                     }
-                    // continuar — NO break
+                    // Si falla una clave crítica, detener para no corromper el estado parcial
+                    break;
                 }
             }
 
@@ -4562,13 +3959,30 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
 
             // ── Restaurar auditoría aislada por usuario ────────────────────────
             const storedMyConteo = safeGet('inventarioApp_myAuditoriaConteo', {});
-            if (storedMyConteo && typeof storedMyConteo === 'object') myAuditoriaConteo = storedMyConteo;
+            if (storedMyConteo && typeof storedMyConteo === 'object') {
+                // BUG-7 FIX: migrar conteos viejos sin _ts para que BUG-5 FIX funcione
+                // con datos ya almacenados en localStorage antes de esta versión.
+                const fallbackTs = Date.now();
+                Object.keys(storedMyConteo).forEach(function(prodId) {
+                    Object.keys(storedMyConteo[prodId] || {}).forEach(function(area) {
+                        if (!storedMyConteo[prodId][area]._ts) {
+                            storedMyConteo[prodId][area]._ts = fallbackTs;
+                        }
+                    });
+                });
+                myAuditoriaConteo = storedMyConteo;
+            }
             const storedMyStatus = safeGet('inventarioApp_myAuditoriaStatus', { almacen: 'pendiente', barra1: 'pendiente', barra2: 'pendiente' });
             if (storedMyStatus && typeof storedMyStatus === 'object') myAuditoriaStatus = storedMyStatus;
             const storedMyUnlocks = safeGet('inventarioApp_myAuditoriaUnlocks', {});
             if (storedMyUnlocks && typeof storedMyUnlocks === 'object') myAuditoriaUnlocks = storedMyUnlocks;
             const storedSessionId = localStorage.getItem('inventarioApp_auditoriaSessionId');
-            if (storedSessionId) _auditoriaSessionId = storedSessionId || null;
+            // BUG-8 FIX: solo restaurar si es string real y no vacío.
+            // '' significa sin sesión previa → mantener null para que subscribeAllUsersAuditoria
+            // muestre todos los usuarios (primer arranque del admin).
+            if (storedSessionId && storedSessionId.trim().length > 0) {
+                _auditoriaSessionId = storedSessionId;
+            }
 
             const parsedConteo = safeGet('inventarioApp_inventarioConteo', {});
             const migrated = {};
@@ -4746,12 +4160,6 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 // ══════════════════════════════════════════════════════════════
 
                 // ── Preparar payload OPERATIVO (sin orders ni inventories) ─────
-                // BUG-9 FIX: calcular nowMs UNA sola vez y usarlo en todo el payload.
-                // Antes se llamaba Date.now() en dos lugares distintos (líneas separadas),
-                // generando timestamps _lastModified y _syncedAt potencialmente distintos.
-                // Si un segundo dispositivo leía la nube con un cloudTs > localTs podría
-                // descargar en lugar de subir sus cambios locales válidos.
-                const nowMs = Date.now();
                 const payload = {
                     products:          products,
                     cart:              cart,
@@ -4762,8 +4170,8 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                     activeTab:         activeTab,
                     selectedArea:      selectedArea,
                     auditoriaStatus:   auditoriaStatus,
-                    _lastModified:     nowMs,
-                    _syncedAt:         nowMs,
+                    _lastModified:     Date.now(), // FIX 10: timestamp actual, no el del LS
+                    _syncedAt:         Date.now(),
                     _ordersInChunks:      true,
                     _inventoriesInChunks: true,
                     _conteoInSubcol:      true,
@@ -4795,10 +4203,7 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 ]);
 
                 _cloudSyncPending = false;
-                _lastCloudSync    = nowMs; // BUG-9 FIX: mismo nowMs que el payload
-                // Actualizar localStorage con el mismo timestamp que se subió a la nube,
-                // para que la próxima comparación cloudTs > localTs sea consistente.
-                try { localStorage.setItem('inventarioApp_lastModified', String(nowMs)); } catch(_) {}
+                _lastCloudSync    = Date.now();
                 _syncInProgress   = false;
                 updateCloudSyncBadge('ok');
                 console.info('[Firebase] Sincronizado ✓ (' + new Date(_lastCloudSync).toLocaleTimeString() + ')');
@@ -4865,17 +4270,9 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 .doc(_deviceId);
 
             try {
-                // BUG-3 FIX: Leer SIEMPRE de myAuditoriaConteo (conteo propio del usuario),
-                // tanto para bartenders como para el admin.
-                // Antes: isAdmin() ? auditoriaConteo : myAuditoriaConteo
-                // El problema: auditoriaConteo es la VISTA AGREGADA calculada en memoria
-                // (_recalcAdminAggregatedConteo) — contiene el promedio/suma de TODOS los
-                // usuarios, no el conteo propio del admin. Subir eso a conteoAreas
-                // envenenaba la colección con datos duplicados que generarYPublicarReporte
-                // luego volvía a promediar, produciendo valores incorrectos.
-                // El admin, igual que cualquier bartender, tiene su propio conteo en
-                // myAuditoriaConteo y es eso lo que debe quedar en su documento de dispositivo.
-                const conteoFuente = myAuditoriaConteo;
+                // FIX 1 CRÍTICO: Leer de myAuditoriaConteo (conteo propio del usuario)
+                // y NO de auditoriaConteo (vista agregada del admin, calculada en memoria).
+                const conteoFuente = isAdmin() ? auditoriaConteo : myAuditoriaConteo;
                 const productosConDatos = products.filter(p =>
                     conteoFuente[p.id] && conteoFuente[p.id][area]
                 );
@@ -4898,8 +4295,9 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 productosConDatos.forEach(p => {
                     const localArea = conteoFuente[p.id][area];
                     payload[p.id] = {
-                        enteras:  typeof localArea.enteras  === 'number'  ? localArea.enteras  : 0,
-                        abiertas: Array.isArray(localArea.abiertas)       ? localArea.abiertas : [],
+                        enteras:   typeof localArea.enteras  === 'number'  ? localArea.enteras  : 0,
+                        abiertas:  Array.isArray(localArea.abiertas)       ? localArea.abiertas : [],
+                        _lastWrite: localArea._ts || txTimestamp, // BUG-3 FIX: timestamp por producto para last-write-wins correcto
                     };
                 });
 
@@ -5028,6 +4426,11 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                     );
                 }
 
+                // BUG-11 FIX: borrar los documentos individuales de conteoMultiUsuario/{area}
+                // (el borrado anterior solo borraba el doc padre, no sus contenidos).
+                // Nota: Firestore NO borra subcolecciones automáticamente al borrar el padre.
+                // Los datos de área en conteoMultiUsuario son documentos planos sin subcolección,
+                // así que el borrado del doc es suficiente — verificado.
                 await batch.commit();
                 console.info('[MultiDisp] conteoAreas/dispositivos + conteoMultiUsuario eliminados ✓');
 
@@ -5060,17 +4463,29 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 // por otros (en especial los 'unlocks' que el admin escribe para
                 // habilitar correcciones). merge:false sobreescribía el doc completo
                 // y eliminaba los unlocks en cada guardado del bartender.
+                // BUG-5 FIX: enriquecer cada entrada de conteo con _ts para
+                // que _recalcAdminAggregatedConteo use el timestamp correcto por producto
+                // (el campo _ts se escribe en saveInventarioModal, BUG-2 FIX).
+                // Si un producto no tiene _ts (conteos viejos), usar updatedAt como fallback.
+                const now = Date.now();
+                const conteoConTs = {};
+                Object.keys(myAuditoriaConteo).forEach(function(prodId) {
+                    conteoConTs[prodId] = {};
+                    Object.keys(myAuditoriaConteo[prodId] || {}).forEach(function(area) {
+                        const src = myAuditoriaConteo[prodId][area];
+                        conteoConTs[prodId][area] = Object.assign({}, src, {
+                            _ts: src._ts || now
+                        });
+                    });
+                });
+
                 await ref.set({
                     uid:        currentUserUid,
                     email:      (_auth && _auth.currentUser) ? _auth.currentUser.email : currentUserUid,
                     sessionId:  _auditoriaSessionId,
                     status:     myAuditoriaStatus,
-                    conteo:     myAuditoriaConteo,
-                    updatedAt:  Date.now(),
-                    // FIX ADMIN-MERGE: marcar si quien escribe es admin.
-                    // _recalcAdminAggregatedConteo usará esta bandera para dar
-                    // prioridad absoluta al conteo del admin (que ya incluye el
-                    // conteo del usuario como base, gracias al fix en openInventarioModal).
+                    conteo:     conteoConTs,   // BUG-5 FIX: conteo con _ts por producto
+                    updatedAt:  now,
                     isAdmin:    isAdmin()
                 }, { merge: true }); // merge:true → preserva 'unlocks' y otros campos del admin
                 _auditSyncPending = false;
@@ -5132,31 +4547,32 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 const data = snap.data();
 
                 // ─────────────────────────────────────────────────────────────
-                // Path B: Adoptar sessionId si es la primera vez que lo vemos.
+                // Path B: El doc existe y tiene sessionId.
                 //
-                // BUG-2 FIX: ELIMINADO el reset de conteo desde este listener.
+                // FIX (BUG 2): Diferenciar "primer arranque" de "nueva auditoría real".
                 //
-                // Antes se reseteaba myAuditoriaConteo aquí cuando el sessionId
-                // cambiaba, causando un DOBLE RESET: este listener Y _applyCloudData
-                // (via subscribeMainDoc) ejecutaban el reset en paralelo, borrando
-                // el conteo del bartender dos veces con dos notificaciones distintas.
+                // Si _auditoriaSessionId es null/vacío (localStorage limpio o primera
+                // visita), simplemente adoptamos el sessionId del servidor SIN resetear.
+                // Resetear aquí causaba pérdida de datos en usuarios que recargaban
+                // la página con localStorage vacío pero con datos ya contados en sesión.
                 //
-                // La fuente de verdad para el reset de sesión es ÚNICAMENTE
-                // subscribeMainDoc → _applyCloudData, que ya maneja correctamente
-                // el caso "primer arranque" vs "nueva auditoría real".
-                //
-                // Este listener SOLO adopta el sessionId en caso de primer arranque
-                // (para que subscribeAllUsersAuditoria pueda filtrar correctamente)
-                // y procesa desbloqueos del admin (Path C).
+                // Solo reseteamos si YA teníamos un sessionId anterior Y cambió —
+                // eso sí indica que el admin inició una nueva auditoría explícitamente.
                 // ─────────────────────────────────────────────────────────────
-                if (data.sessionId && !_auditoriaSessionId) {
-                    // Primer arranque sin sessionId local: adoptar del servidor sin resetear
-                    _auditoriaSessionId = data.sessionId;
-                    try { localStorage.setItem('inventarioApp_auditoriaSessionId', data.sessionId); } catch(_) {}
-                    console.info('[AuditUser] SessionId adoptado desde userAuditoria en primer arranque:', data.sessionId);
+                if (data.sessionId && data.sessionId !== _auditoriaSessionId) {
+                    if (!_auditoriaSessionId) {
+                        // Primer arranque: adoptar sessionId sin resetear
+                        _auditoriaSessionId = data.sessionId;
+                        try { localStorage.setItem('inventarioApp_auditoriaSessionId', data.sessionId); } catch(_) {}
+                        // No retornar: continuar para procesar desbloqueos (Path C)
+                    } else {
+                        // Sesión anterior diferente: nueva auditoría real del admin
+                        _auditoriaSessionId = data.sessionId;
+                        try { localStorage.setItem('inventarioApp_auditoriaSessionId', data.sessionId); } catch(_) {}
+                        _resetMiConteoLocal('🔄 Nueva auditoría iniciada por el administrador — tus conteos se reiniciaron');
+                        return;
+                    }
                 }
-                // Si sessionId cambió pero ya teníamos uno: el reset ya fue hecho
-                // por _applyCloudData → NO hacer nada aquí (evitar doble reset).
 
                 // Path C: Desbloqueos nuevos del admin
                 const serverUnlocks = data.unlocks || {};
@@ -5269,7 +4685,14 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                         return;
                     }
 
-                    entries.sort((a, b) => (b.u.updatedAt || 0) - (a.u.updatedAt || 0));
+                    // BUG-4 FIX: usar timestamp del conteo del PRODUCTO específico
+                    // (d._ts o d._lastWrite), no el updatedAt del documento de usuario
+                    // que refleja cualquier escritura del usuario (en cualquier área).
+                    entries.sort((a, b) => {
+                        const tsA = (a.d._ts || a.d._lastWrite || a.u.updatedAt || 0);
+                        const tsB = (b.d._ts || b.d._lastWrite || b.u.updatedAt || 0);
+                        return tsB - tsA;
+                    });
                     const winner = entries[0].d;
                     aggregated[prodId][area] = {
                         enteras:       winner.enteras  || 0,
@@ -5314,7 +4737,7 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 return;
             }
             if (!myAuditoriaConteo[prodId]) myAuditoriaConteo[prodId] = {};
-            myAuditoriaConteo[prodId][area] = { enteras, abiertas, _corregidoEn: Date.now() };
+            myAuditoriaConteo[prodId][area] = { enteras, abiertas, _corregidoEn: Date.now(), _ts: Date.now() }; // BUG-12 FIX
             // Marcar el unlock como usado (evitar correcciones múltiples sin nueva autorización)
             myAuditoriaUnlocks[key] = Object.assign({}, myAuditoriaUnlocks[key], { used: true });
             saveToLocalStorage();
@@ -5334,20 +4757,13 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 const colRef = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
                                    .collection('userAuditoria');
                 const snap = await colRef.get();
-
-                // BUG-14 FIX: Firestore limita a 500 operaciones por batch.
-                // Antes se metían todos los docs en un único batch.delete(), lo que
-                // lanzaba una excepción si había más de 500 documentos (p.ej. sesiones
-                // acumuladas sin limpiar), dejando la nueva sesión sin inicializar.
-                // Ahora se procesan en batches de 499 secuencialmente.
-                const BATCH_SIZE = 499;
-                const docs = snap.docs;
-                for (let i = 0; i < docs.length; i += BATCH_SIZE) {
-                    const batch = _db.batch();
-                    docs.slice(i, i + BATCH_SIZE).forEach(doc => batch.delete(doc.ref));
-                    await batch.commit();
-                }
-
+                const batch = _db.batch();
+                // BUG-6 FIX: excluir el doc del propio admin para no triggerar su propio
+                // onSnapshot con un delete que causaría un loop de reset.
+                snap.forEach(doc => {
+                    if (doc.id !== currentUserUid) batch.delete(doc.ref);
+                });
+                await batch.commit();
                 // Escribir la nueva sesión en el documento principal
                 await _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
                          .set({ _auditoriaSessionId: sessionId, _auditoriaStartedBy: currentUserUid,
@@ -5355,7 +4771,6 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 console.info('[AuditAdmin] Nueva sesión', sessionId, 'iniciada ✓');
             } catch (err) {
                 console.warn('[AuditAdmin] Error iniciando sesión en Firestore:', err);
-                throw err; // re-lanzar para que auditoriaResetear pueda notificar al admin
             }
         }
 
@@ -5368,21 +4783,6 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 .filter(a => myAuditoriaStatus[a] === 'completada');
             if (areasFinalizadas.length === 0) {
                 showNotification('⚠️ Finaliza al menos un área antes de exportar');
-                return;
-            }
-            // BUG-EXCEL-A FIX: verificar que haya datos reales en el conteo.
-            // Antes se exportaba aunque myAuditoriaConteo estuviera vacío, generando
-            // un Excel con solo encabezados y sin filas de productos contados.
-            const tieneProductosContados = products.some(p =>
-                myAuditoriaConteo[p.id] &&
-                areasFinalizadas.some(a =>
-                    myAuditoriaConteo[p.id][a] &&
-                    (myAuditoriaConteo[p.id][a].enteras > 0 ||
-                     (myAuditoriaConteo[p.id][a].abiertas || []).some(v => v > 0))
-                )
-            );
-            if (!tieneProductosContados) {
-                showNotification('⚠️ No hay productos contados en las áreas finalizadas');
                 return;
             }
             exportToExcelConDatos('AUDITORIA', myAuditoriaConteo, products,
@@ -5677,12 +5077,7 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
             if (!navigator.onLine) {
                 const bar = document.createElement('div');
                 bar.id = 'networkStatus';
-                // BUG-16 FIX: usar env(safe-area-inset-bottom) en lugar de bottom:80px fijo.
-                // En iPhone (home indicator) y Android ≥ API 29 la barra de navegación del
-                // sistema puede tener más de 80px, quedando el aviso debajo de los controles
-                // de la app. calc(env(safe-area-inset-bottom) + 64px) garantiza que la barra
-                // siempre quede por encima del nav bar del sistema Y del nav bar de la app.
-                bar.style.cssText = 'position:fixed;bottom:calc(env(safe-area-inset-bottom, 0px) + 64px);left:0;right:0;background:#f59e0b;color:#fff;text-align:center;padding:6px;font-size:13px;font-weight:600;z-index:9999;';
+                bar.style.cssText = 'position:fixed;bottom:80px;left:0;right:0;background:#f59e0b;color:#fff;text-align:center;padding:6px;font-size:13px;font-weight:600;z-index:9999;';
                 bar.textContent = '⚠️ Sin conexión — los datos están guardados localmente';
                 document.body.appendChild(bar);
                 updateCloudSyncBadge('offline');
@@ -5979,23 +5374,13 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
         // ── MÓDULO: AJUSTES ────────────────────────────────────────────────
         function subscribeAjustesPendientes() {
             if (!_db || _unsubAjustes) return;
-            // BUG-8 FIX: variable privada para rastrear el conteo previo de pendientes.
-            // Antes se notificaba en CADA snapshot (incluyendo cuando el admin resolvía
-            // un ajuste o cuando cualquier campo cambiaba), inundando al admin con la
-            // misma notificación repetidamente. Ahora solo se notifica si el número de
-            // pendientes aumentó respecto al snapshot anterior (= nuevo ajuste creado).
-            let _prevPendingAjustes = -1; // -1 = estado inicial sin datos
             _unsubAjustes = _db.collection('ajustes')
                 .orderBy('creadoEn', 'desc')
                 .limit(50)
                 .onSnapshot(function(snap) {
                     _ajustes = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
                     const pending = _ajustes.filter(function(a) { return a.estado === 'pendiente'; }).length;
-                    // Notificar solo si hay más pendientes que antes (nuevo ajuste)
-                    if (pending > _prevPendingAjustes && _prevPendingAjustes >= 0) {
-                        showNotification('🔔 ' + pending + ' ajuste(s) pendiente(s) de aprobar');
-                    }
-                    _prevPendingAjustes = pending;
+                    if (pending > 0) showNotification('🔔 ' + pending + ' ajuste(s) pendiente(s) de aprobar');
                     if (activeTab === 'ajustes') renderTab();
                 }, function(err) { console.warn('[Ajustes] Error listener:', err); });
         }
@@ -6186,12 +5571,9 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                     });
                 });
 
-                // BUG-EXCEL-D FIX: await para esperar a que el archivo sea generado
-                // y compartido antes de mostrar la notificación de éxito.
-                // Sin await, el mensaje aparecía antes de que el Excel existiera.
-                await exportToExcelConDatos('AUDITORIA', conteoReporte, productosConDatos,
+                exportToExcelConDatos('AUDITORIA', conteoReporte, productosConDatos,
                     'reporte_auditoria_' + rep.fechaTs + '.xlsx');
-                showNotification('✅ Reporte descargado — revisa el diálogo para guardarlo');
+                showNotification('✅ Reporte descargado con formato Auditoría');
             } catch (e) {
                 console.error('[Reporte] Error descargando:', e);
                 showNotification('❌ Error al descargar reporte');
@@ -6236,7 +5618,7 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
          * @param {Array}   productsList Lista de productos a exportar
          * @param {string}  [fileName]   Nombre del archivo de salida (opcional)
          */
-        async function exportToExcelConDatos(modo, conteoData, productsList, fileName) {
+        function exportToExcelConDatos(modo, conteoData, productsList, fileName) {
             if (!Array.isArray(productsList) || productsList.length === 0) {
                 showNotification('⚠️ No hay productos para exportar');
                 return;
@@ -6247,13 +5629,8 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
             inventarioConteo = conteoData;
             products         = productsList;
             try {
-                await exportToExcel(modo, fileName);
-            } catch (err) {
-                // BUG-EXCEL-B FIX: capturar error y notificar al usuario con detalle
-                console.error('[Excel] Error en exportToExcelConDatos:', err);
-                showNotification('❌ Error al generar Excel: ' + (err.message || String(err)));
+                exportToExcel(modo, fileName);
             } finally {
-                // Restaurar SIEMPRE — independientemente de éxito o error
                 inventarioConteo = _backupConteo;
                 products         = _backupProducts;
             }
@@ -6392,10 +5769,31 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
             initAuditUser();
 
             loadFromLocalStorage();
+
+            // BUG-15 FIX COMPLEMENT: restaurar flag de audit sync pendiente
+            // Si la sesión anterior cerró con un timer de sync activo, reintentar al reconectar.
+            try {
+                if (localStorage.getItem('inventarioApp_auditSyncPending') === '1') {
+                    _auditSyncPending = true;
+                    localStorage.removeItem('inventarioApp_auditSyncPending');
+                    console.info('[AuditUser] Sync de auditoría pendiente detectado — se reintentará al conectar.');
+                }
+            } catch(_) {}
             // FIX 1 — sincronizar stockByArea con inventarioConteo al arranque
             syncStockByAreaFromConteo();
 
-            window.addEventListener('beforeunload', () => saveToLocalStorage());
+            window.addEventListener('beforeunload', function() {
+                saveToLocalStorage();
+                // BUG-15 FIX: si hay un sync de auditoría debounced pendiente,
+                // marcarlo como pendiente para que se reintente al reconectar en la próxima sesión.
+                // clearTimeout cancela el timer para no disparar en pleno cierre.
+                if (saveInventarioModal._auditSyncTimer) {
+                    clearTimeout(saveInventarioModal._auditSyncTimer);
+                    saveInventarioModal._auditSyncTimer = null;
+                    _auditSyncPending = true;
+                    try { localStorage.setItem('inventarioApp_auditSyncPending', '1'); } catch(_) {}
+                }
+            });
 
             // BUG-FIX m3: updateNetworkStatus ahora es global (definida fuera de initializeApp)
             window.addEventListener('online',  updateNetworkStatus);
@@ -7222,7 +6620,7 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
             if (isAuditoriaMode && auditoriaAreaActiva) {
                 // ── Guardar en objeto propio del usuario ──────────────────────────────
                 if (!myAuditoriaConteo[inventarioModalProductId]) myAuditoriaConteo[inventarioModalProductId] = {};
-                myAuditoriaConteo[inventarioModalProductId][auditoriaAreaActiva] = { enteras, abiertas };
+                myAuditoriaConteo[inventarioModalProductId][auditoriaAreaActiva] = { enteras, abiertas, _ts: Date.now() }; // BUG-2 FIX: timestamp para last-write-wins
 
                 // ── Guardar en estructura multiusuario (sin sobreescribir otros) ──
                 // Cada usuario escribe SOLO su propia clave; los demás quedan intactos.
@@ -7239,31 +6637,6 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                     abiertas: abiertas.slice(),  // copia defensiva del array
                     ts:       Date.now()         // timestamp exacto del guardado
                 };
-
-                // BUG-5 FIX: Si el admin está contando, actualizar allUsersAuditoria con
-                // su propio conteo inmediatamente (en memoria) y recalcular auditoriaConteo.
-                // Antes, el admin solo veía su conteo al recibir el snapshot de Firestore
-                // (subscribeAllUsersAuditoria), lo que fallaba en offline o con latencia alta.
-                // Ahora se actualiza localmente de inmediato, igual que en el listener.
-                if (isAdmin() && currentUserUid) {
-                    if (!allUsersAuditoria[currentUserUid]) {
-                        allUsersAuditoria[currentUserUid] = {
-                            uid:       currentUserUid,
-                            email:     (_auth && _auth.currentUser) ? _auth.currentUser.email : currentUserUid,
-                            status:    myAuditoriaStatus,
-                            conteo:    myAuditoriaConteo,
-                            unlocks:   myAuditoriaUnlocks,
-                            updatedAt: Date.now(),
-                            isAdmin:   true
-                        };
-                    } else {
-                        allUsersAuditoria[currentUserUid].conteo    = myAuditoriaConteo;
-                        allUsersAuditoria[currentUserUid].status    = myAuditoriaStatus;
-                        allUsersAuditoria[currentUserUid].updatedAt = Date.now();
-                        allUsersAuditoria[currentUserUid].isAdmin   = true;
-                    }
-                    _recalcAdminAggregatedConteo();
-                }
 
                 saveToLocalStorage();
                 showNotification('Conteo guardado en ' + areasAuditoria[auditoriaAreaActiva]);
@@ -7398,7 +6771,7 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 showNotification('📴 Sin conexión — conecta a internet antes de iniciar nueva auditoría');
                 return;
             }
-            showConfirm('⚠️ ¿Iniciar nueva auditoría?\n\nSe borrarán todos los conteos actuales de TODOS los usuarios y áreas comenzando desde cero.\n\nEsta acción no se puede deshacer.', async function() {
+            showConfirm('⚠️ ¿Iniciar nueva auditoría?\n\nSe borrarán todos los conteos actuales de TODOS los usuarios y áreas comenzando desde cero.\n\nEsta acción no se puede deshacer.', function() {
                 const newSessionId = String(Date.now());
                 // Reiniciar estado del admin
                 _auditoriaSessionId       = newSessionId;
@@ -7414,27 +6787,15 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 auditoriaAreaActiva = null;
                 isAuditoriaMode    = false;
                 saveToLocalStorage();
+                // Borrar todos los conteos de usuarios en Firestore y escribir nuevo sessionId
+                _adminIniciarSesionFirestore(newSessionId).catch(err =>
+                    console.warn('[AuditAdmin] Error al reiniciar sesión en Firestore:', err)
+                );
+                resetConteoAtomicoEnFirestore().catch(err =>
+                    console.warn('[Atomico] No se pudo limpiar Firestore en reset:', err)
+                );
+                showNotification('✅ Nueva auditoría iniciada — todos los conteos en ceros');
                 renderTab();
-                showNotification('⏳ Iniciando nueva auditoría en la nube…');
-
-                // BUG-4 FIX: Ejecutar SECUENCIALMENTE con await.
-                // Antes se lanzaban las dos promesas en paralelo sin await, lo que
-                // creaba una race condition: si _adminIniciarSesionFirestore terminaba
-                // primero y propagaba el nuevo sessionId, los bartenders comenzaban a
-                // contar mientras conteoMultiUsuario aún tenía datos de la sesión anterior
-                // (resetConteoAtomicoEnFirestore todavía no había terminado).
-                // Al hacer las operaciones secuenciales, garantizamos que Firestore esté
-                // completamente limpio ANTES de que cualquier dispositivo reciba la señal.
-                try {
-                    // Paso 1: Limpiar documentos userAuditoria y escribir nuevo sessionId
-                    await _adminIniciarSesionFirestore(newSessionId);
-                    // Paso 2: Limpiar conteoAreas y conteoMultiUsuario (subcolecciones legacy)
-                    await resetConteoAtomicoEnFirestore();
-                    showNotification('✅ Nueva auditoría iniciada — todos los conteos en ceros');
-                } catch (err) {
-                    console.warn('[AuditAdmin] Error al reiniciar auditoría en Firestore:', err);
-                    showNotification('⚠️ Auditoría iniciada localmente — verifica la conexión');
-                }
             });
         }
 
@@ -7451,13 +6812,6 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
             const nombreArea = areasAuditoria[area] || area;
             showConfirm('¿Reabrir el área "' + nombreArea + '"?\n\nLos conteos existentes se conservan. Los bartenders podrán modificar sus datos.', function() {
                 auditoriaStatus[area] = 'pendiente';
-                // BUG-7 FIX: también resetear myAuditoriaStatus del admin para esa área.
-                // Antes solo se actualizaba auditoriaStatus (el estado global compartido),
-                // pero myAuditoriaStatus[area] permanecía 'completada'. Cuando el admin
-                // intentaba entrar al área que él mismo reabrió, auditoriaEntrarArea
-                // leía myAuditoriaStatus y mostraba "Área completada — solicita corrección",
-                // bloqueando al admin. Ahora ambos estados se sincronizan.
-                if (myAuditoriaStatus[area]) myAuditoriaStatus[area] = 'pendiente';
                 saveToLocalStorage();
                 // Sincronizar nuevo estado a Firestore si hay conexión
                 if (_db && navigator.onLine) {
@@ -7550,22 +6904,13 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
          * Soporta búsqueda multi-palabra: "tequila rep" resalta ambas palabras.
          */
         function highlightConteoMatch(name, query) {
-            // BUG-10 FIX: El regex debe operar en el mismo espacio de caracteres.
-            // Antes: escapeHtml(name) generaba "Tequila &amp; Co." y luego el regex
-            // buscaba la palabra cruda "Co" → matcheaba "Co" dentro de "&amp;amp;" en
-            // nombres con caracteres especiales, produciendo HTML roto.
-            // Solución: escapar TAMBIÉN cada palabra de búsqueda para HTML antes de
-            // construir el regex, de modo que ambos operen sobre el mismo string escapado.
             if (!name) return '';
             if (!query) return escapeHtml(name);
             const words = query.trim().split(/\s+/).filter(w => w.length >= 2);
             if (!words.length) return escapeHtml(name);
-            let result = escapeHtml(name); // base: nombre ya escapado para HTML
+            let result = escapeHtml(name);
             for (const word of words) {
-                // 1. Escapar la palabra para HTML (por si contiene & < > etc.)
-                const wordEscapedHtml = escapeHtml(word);
-                // 2. Escapar caracteres especiales de regex en la versión HTML-escaped
-                const esc = wordEscapedHtml.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const esc = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 try {
                     result = result.replace(new RegExp('(' + esc + ')', 'gi'),
                         '<mark class="csb-match">$1</mark>');
@@ -8283,11 +7628,16 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
             });
             const csvEscape = v => { const s = String(v == null ? '' : v); return (s.includes(',') || s.includes('"') || s.includes('\n')) ? '"' + s.replace(/"/g, '""') + '"' : s; };
             const csv = [headers].concat(rows).map(row => row.map(csvEscape).join(',')).join('\n');
-            const csvContent = '\uFEFF' + csv; // BOM para Excel en español
+            const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
             const safeDate = (inv.date || '').replace(/[/:,\s]/g, '-').replace(/-+/g, '-').replace(/-$/, '');
-            const csvFileName = inv.id + '_' + safeDate + '.csv';
-            // BUG-EXCEL-FIX-2: await para que Filesystem termine antes de Share
-            await _nativeDownload(csvFileName, csvContent, 'text/csv;charset=utf-8;');
+            a.download = inv.id + '_' + safeDate + '.csv';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => window.URL.revokeObjectURL(url), 1000);
             showNotification('Inventario descargado');
         }
 
@@ -8311,11 +7661,7 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
             message += '━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
             message += '📦 *Total Enteras:* ' + (inv.totalProducts || 0).toFixed(2) + '\n';
             const url = 'https://wa.me/?text=' + encodeURIComponent(message);
-            // CAP-FIX-5: usar _capacitorOpenUrl en lugar de window.open.
-            // En WebView de Android/iOS window.open está bloqueado por defecto
-            // y no abre WhatsApp. _capacitorOpenUrl usa el plugin Browser de
-            // Capacitor en entorno nativo y cae a window.open en el navegador.
-            _capacitorOpenUrl(url);
+            window.open(url, '_blank');
         }
 
         function generateProductId() {
@@ -8668,9 +8014,7 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
             message += '📦 *Total Productos:* ' + (order.total || 0).toFixed(2) + '\n';
             if (order.note) message += '\n💬 *Nota:*\n' + order.note + '\n';
             const url = 'https://wa.me/?text=' + encodeURIComponent(message);
-            // CAP-FIX-5: usar _capacitorOpenUrl en lugar de window.open.
-            // En WebView de Android/iOS window.open está bloqueado y no abre WhatsApp.
-            _capacitorOpenUrl(url);
+            window.open(url, '_blank');
         }
 
         function saveInventorySnapshot() {
@@ -8858,15 +8202,10 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
             reader.readAsArrayBuffer(file);
         }
 
-        async function exportToExcel(modo, fileNameOverride) { // FIX: async + parámetro fileNameOverride
+        function exportToExcel(modo, fileNameOverride) { // FIX: parámetro fileNameOverride para soporte de nombres personalizados
             // Guard: sin productos no hay nada que exportar
             if (!Array.isArray(products) || products.length === 0) {
                 showNotification('⚠️ No hay productos para exportar');
-                return;
-            }
-            // BUG-EXCEL-FIX-3: guard de XLSX disponible aquí también
-            if (typeof XLSX === 'undefined') {
-                showNotification('⏳ Cargando exportador Excel… intenta en 2 segundos');
                 return;
             }
             // ══════════════════════════════════════════════════════════════════
@@ -8987,15 +8326,7 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
             // ══════════════════════════════════════════════════════════════════
             //  FILAS: ordenadas por grupo con subtotales y gran total
             // ══════════════════════════════════════════════════════════════════
-            // BUG-EXCEL-E FIX: ordenar TODOS los productos del catálogo sin filtrar.
-            // Antes se podría perder productos si sorted o groups filtraban implícitamente.
-            // Ahora se garantiza que TODOS los productos aparecen en el Excel,
-            // incluso los que tienen conteo 0 en todas las áreas — para tener
-            // visibilidad completa del inventario, no solo de lo que se contó.
-            const sorted = [...products].sort((a, b) =>
-                (a.group || 'General').localeCompare(b.group || 'General') ||
-                (a.name  || '').localeCompare(b.name  || '')
-            );
+            const sorted = [...products].sort((a, b) => (a.group || '').localeCompare(b.group || ''));
             const groups = [...new Set(sorted.map(p => p.group || 'General'))];
             const wsRows = [];
 
@@ -9152,27 +8483,17 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
             });
 
             ws['!rows'] = rowHeights;
-            // BUG-EXCEL-C FIX: el rango de la hoja debe cubrir desde r:0 (header)
-            // hasta r:wsRows.length (última fila de datos/gran total).
-            // La fila 0 es el header, las filas 1..wsRows.length son los datos.
-            // Antes: e.r = wsRows.length → correcto (wsRows.length filas de datos + 1 header = wsRows.length+1 filas total, índice 0-based último = wsRows.length).
-            // Aseguramos también que c termina en totalCols-1 correctamente.
-            ws['!ref'] = XLSX.utils.encode_range({
-                s: { r: 0, c: 0 },
-                e: { r: wsRows.length, c: totalCols - 1 }
-            });
+            ws['!ref']  = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: wsRows.length, c: totalCols - 1 } });
             const sheetName = modo === 'AUDITORIA' ? 'Auditoría' : 'Inventario';
             XLSX.utils.book_append_sheet(wb, ws, sheetName);
 
             const prefix = modo === 'AUDITORIA' ? 'auditoria_consolidada_' : 'inventario_';
-            const fileName = fileNameOverride || (prefix + new Date().toISOString().split('T')[0] + '.xlsx');
-
-            // BUG-EXCEL-FIX-2: await _nativeDownload para que Filesystem termine
-            // de escribir el archivo ANTES de que Share intente abrirlo.
-            // Sin await, _nativeDownload retorna una Promise que se ignora y Share
-            // falla porque el archivo no existe todavía en el sistema de archivos.
-            const xlsxBinary = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-            await _nativeDownload(fileName, xlsxBinary, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            const fileName = fileNameOverride || (prefix + new Date().toISOString().split('T')[0] + '.xlsx'); // FIX: respetar nombre personalizado
+            XLSX.writeFile(wb, fileName);
+            const msg = modo === 'AUDITORIA'
+                ? '✅ Auditoría consolidada exportada a Excel'
+                : '✅ Excel exportado con conversión oz→puntos';
+            showNotification(msg);
         }
 
         // ==================== NUEVAS FUNCIONES PARA RESPALDO JSON ====================
@@ -9188,23 +8509,28 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 auditoriaStatus,             // Bug #3 fix: incluir estado por área
                 auditoriaView,               // Bug #3 fix: incluir vista activa
                 auditoriaAreaActiva,         // Bug #3 fix: incluir área activa
-                // BUG-6 FIX: incluir el conteo propio del usuario (aislado por UID).
-                // Antes estos campos no se exportaban, por lo que un backup tomado durante
-                // una auditoría activa perdía todo el conteo ya capturado por el bartender.
-                myAuditoriaConteo,
-                myAuditoriaStatus,
-                myAuditoriaUnlocks,
-                _auditoriaSessionId,
                 activeTab,
                 searchTerm,
                 selectedGroup,
                 selectedArea,
-                expandedInventories: Array.from(expandedInventories)
+                expandedInventories: Array.from(expandedInventories),
+                // BUG-9 FIX: incluir conteo propio del usuario — sin esto, un backup/restore
+                // borraba todo el conteo de auditoría personal del usuario.
+                myAuditoriaConteo,
+                myAuditoriaStatus,
+                myAuditoriaUnlocks,
+                _auditoriaSessionId
             };
             const json = JSON.stringify(data, null, 2);
-            const jsonFileName = 'inventario_backup_' + new Date().toISOString().slice(0,10) + '.json';
-            // BUG-EXCEL-FIX-2: await para que Filesystem termine antes de Share
-            await _nativeDownload(jsonFileName, json, 'application/json');
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'inventario_backup_' + new Date().toISOString().slice(0,10) + '.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
             showNotification('Datos exportados correctamente');
         }
 
@@ -9256,19 +8582,14 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                         auditoriaView       = data.auditoriaView       || 'selection';
                         auditoriaAreaActiva = data.auditoriaAreaActiva || null;
                         isAuditoriaMode     = (auditoriaView === 'counting' && !!auditoriaAreaActiva);
-
-                        // BUG-6 FIX: restaurar conteo propio del usuario desde backup.
-                        // Antes no se exportaban ni restauraban estos campos, por lo que
-                        // un backup tomado durante una auditoría activa perdía el conteo
-                        // ya capturado por el bartender al importar.
+                        // BUG-10 FIX: restaurar conteo propio del usuario desde backup
                         if (data.myAuditoriaConteo && typeof data.myAuditoriaConteo === 'object')
                             myAuditoriaConteo = data.myAuditoriaConteo;
                         if (data.myAuditoriaStatus && typeof data.myAuditoriaStatus === 'object')
                             myAuditoriaStatus = data.myAuditoriaStatus;
                         if (data.myAuditoriaUnlocks && typeof data.myAuditoriaUnlocks === 'object')
                             myAuditoriaUnlocks = data.myAuditoriaUnlocks;
-                        if (data._auditoriaSessionId)
-                            _auditoriaSessionId = data._auditoriaSessionId;
+                        if (data._auditoriaSessionId) _auditoriaSessionId = data._auditoriaSessionId;
 
                         activeTab = data.activeTab || 'inicio';
                         searchTerm = data.searchTerm || '';
@@ -9363,15 +8684,8 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
 
     <!-- ══════════════════════════════════════════════════════
          AUTH — Lógica de autenticación Firebase
-         FIX-1: Envuelto en DOMContentLoaded para garantizar que
-         loginScreen, appWrapper y appBootSpinner existen en el DOM
-         antes de que cualquier función de auth intente usarlos.
-         Sin este fix, el IIFE ejecutaba antes del body completo y
-         loginScreen/appWrapper eran null → TypeError silencioso →
-         spinner nunca desaparecía → app colgada indefinidamente.
          ══════════════════════════════════════════════════════ -->
     <script>
-    document.addEventListener('DOMContentLoaded', function() {
     (function() {
         'use strict';
 
@@ -9382,150 +8696,67 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
         const appWrapper        = $id('appWrapper');
 
         /* ── Mostrar/Ocultar pantallas ───────────────────────────── */
-        function _removeBootSpinner() {
-            var s = document.getElementById('appBootSpinner');
-            if (s) {
-                s.style.opacity = '0';
-                s.style.transition = 'opacity 0.25s ease';
-                setTimeout(function() { if (s.parentNode) s.parentNode.removeChild(s); }, 280);
-            }
-        }
-
-        // CAP-FIX-7: Ocultar el Splash Screen nativo de Capacitor.
-        // launchShowDuration=2000 en capacitor.config.json define el auto-hide del splash NATIVO.
-        // Pero cuando launchAutoHide no está explícitamente en true, algunos builds de Capacitor
-        // requieren llamada manual a SplashScreen.hide(). Sin esta llamada, el splash puede
-        // quedarse visible indefinidamente bloqueando la UI aunque la app ya haya cargado.
-        function _hideSplashScreen() {
-            try {
-                if (window.Capacitor &&
-                    window.Capacitor.Plugins &&
-                    window.Capacitor.Plugins.SplashScreen) {
-                    window.Capacitor.Plugins.SplashScreen.hide({ fadeOutDuration: 300 });
-                    console.info('[Splash] SplashScreen.hide() llamado.');
-                }
-            } catch (e) {
-                console.warn('[Splash] Error al ocultar splash:', e);
-            }
-        }
-
         function showLogin() {
-            _removeBootSpinner();
-            _hideSplashScreen();
-            if (authLoadingScreen) authLoadingScreen.classList.add('auth-hidden');
+            authLoadingScreen.classList.add('auth-hidden');
             loginScreen.classList.remove('auth-hidden');
             appWrapper.classList.remove('auth-visible');
-            // Auto-focus en email para facilitar el login
-            setTimeout(function() {
-                var emailEl = document.getElementById('loginEmail');
-                if (emailEl) emailEl.focus();
-            }, 350);
         }
 
         function showApp(user) {
-            _removeBootSpinner();
-            _hideSplashScreen();
-            if (authLoadingScreen) authLoadingScreen.classList.add('auth-hidden');
+            authLoadingScreen.classList.add('auth-hidden');
             loginScreen.classList.add('auth-hidden');
             appWrapper.classList.add('auth-visible');
+            // Actualizar email visible en el sidebar
             const emailEl = $id('sbUserEmail');
             if (emailEl && user) emailEl.textContent = user.email;
         }
 
         /* ── onAuthStateChanged — persistencia de sesión ─────────── */
-        // Timeout de seguridad de 10 segundos con restauración de sesión guardada.
-        var _authResolved = false;
-        var _authTimeoutId = null;
-
-        function _resolveAuth(fn) {
-            if (_authResolved) return;
-            _authResolved = true;
-            clearInterval(_spinnerTextTimer);
-            if (_authTimeoutId) { clearTimeout(_authTimeoutId); _authTimeoutId = null; }
-            fn();
-        }
-
-        // Actualizar texto del spinner cada 4s para mostrar progreso
-        var _spinnerMsgs = ['Verificando sesión…', 'Conectando con Firebase…', 'Cargando datos…'];
-        var _spinnerIdx  = 0;
-        var _spinnerTextTimer = setInterval(function() {
-            _spinnerIdx = (_spinnerIdx + 1) % _spinnerMsgs.length;
-            var el = document.getElementById('appBootSpinnerText');
-            if (el) el.textContent = _spinnerMsgs[_spinnerIdx];
-        }, 4000);
-
-        // FIX-2: Leer tokens guardados del login REST anterior
-        var _savedUid = null, _savedEmail = null;
-        try {
-            _savedUid   = localStorage.getItem('bi_uid');
-            _savedEmail = localStorage.getItem('bi_email');
-        } catch(_) {}
-
         if (_auth) {
-            _authTimeoutId = setTimeout(function() {
-                if (!_authResolved) {
-                    clearInterval(_spinnerTextTimer);
-                    // Si hay sesión guardada via REST, restaurar sin esperar al SDK
-                    if (_savedUid && _savedEmail) {
-                        console.warn('[Auth] Timeout — restaurando sesión guardada para:', _savedEmail);
-                        currentUserUid = _savedUid;
-                        _resolveAuth(function() {
-                            if (typeof loadUserRole === 'function') {
-                                loadUserRole(_savedUid).catch(function(e) {
-                                    console.warn('[Auth] Error rol restore:', e);
-                                });
-                            }
-                            showApp({ email: _savedEmail, uid: _savedUid });
-                        });
-                    } else {
-                        console.warn('[Auth] Timeout — mostrando login.');
-                        _resolveAuth(function() { showLogin(); });
-                    }
-                }
-            }, 10000);
-
             _auth.onAuthStateChanged(function(user) {
                 if (user) {
                     console.info('[Auth] Usuario autenticado:', user.email);
-                    _resolveAuth(function() {
-                        showApp(user);
-                        var _loadRole = window.loadUserRole || loadUserRole;
-                        if (typeof _loadRole === 'function') {
-                            _loadRole(user.uid).catch(function(e) {
-                                console.warn('[Auth] Error cargando rol:', e);
-                            });
-                        } else {
-                            console.error('[Auth] loadUserRole no disponible — revisa el orden de los scripts');
-                        }
-                    });
+                    showApp(user);
+                    // Cargar rol — usar window.loadUserRole para garantizar acceso cross-script
+                    var _loadRole = window.loadUserRole || loadUserRole;
+                    if (typeof _loadRole === 'function') {
+                        _loadRole(user.uid).catch(function(e) {
+                            console.warn('[Auth] Error cargando rol:', e);
+                        });
+                    } else {
+                        console.error('[Auth] loadUserRole no disponible — revisa el orden de los scripts');
+                    }
                 } else {
                     console.info('[Auth] Sin sesión — mostrando login.');
-                    _resolveAuth(function() {
-                        // Limpiar subscripciones activas
-                        if (typeof _unsubAjustes   === 'function') { _unsubAjustes();   _unsubAjustes   = null; }
-                        if (typeof _unsubCatalogo  === 'function') { _unsubCatalogo();  _unsubCatalogo  = null; }
-                        if (typeof _unsubNotifs    === 'function') { _unsubNotifs();    _unsubNotifs    = null; }
-                        if (typeof _unsubMainDoc   === 'function') { _unsubMainDoc();   _unsubMainDoc   = null; }
-                        if (typeof _unsubAllUsers  === 'function') { _unsubAllUsers();  _unsubAllUsers  = null; }
-                        if (typeof _unsubMyAuditoria === 'function') { _unsubMyAuditoria(); _unsubMyAuditoria = null; }
-                        allUsersAuditoria = {};
-                        currentUserRole = null;
-                        currentUserUid  = null;
-                        showLogin();
-                    });
+                    // Limpiar subscripciones activas
+                    if (typeof _unsubAjustes   === 'function') { _unsubAjustes();   _unsubAjustes   = null; }
+                    if (typeof _unsubCatalogo  === 'function') { _unsubCatalogo();  _unsubCatalogo  = null; }
+                    if (typeof _unsubNotifs    === 'function') { _unsubNotifs();    _unsubNotifs    = null; }
+                    if (typeof _unsubMainDoc   === 'function') { _unsubMainDoc();   _unsubMainDoc   = null; } // FIX SYNC-6
+                    if (typeof _unsubAllUsers  === 'function') { _unsubAllUsers();  _unsubAllUsers  = null; }
+                    if (typeof _unsubMyAuditoria === 'function') { _unsubMyAuditoria(); _unsubMyAuditoria = null; }
+                    allUsersAuditoria = {};
+                    currentUserRole = null;
+                    currentUserUid  = null;
+                    showLogin();
                 }
             });
         } else {
-            // Firebase Auth no disponible — mostrar login con aviso de error
-            console.error('[Auth] Firebase Auth no disponible — mostrando login con aviso.');
-            _resolveAuth(function() {
-                showLogin();
-                var loginError = $id('loginError');
-                if (loginError) {
-                    loginError.textContent = '⚠️ Error de conexión. Verifica tu acceso a internet e intenta de nuevo.';
-                    loginError.classList.add('visible');
-                }
-            });
+            // FIX #5 — Firebase Auth no disponible (fallo de red o configuración incorrecta).
+            // NUNCA mostrar la app sin autenticación — mostrar el login con mensaje de error.
+            // El fallback anterior (appWrapper.classList.add('auth-visible')) era un bypass
+            // de seguridad peligroso: cualquier fallo de SDK exponía la app sin login.
+            console.error('[Auth] Firebase Auth no disponible — mostrando pantalla de login con aviso.');
+            authLoadingScreen.classList.add('auth-hidden');
+            // Mostrar login — FIX-1: 'loginWrapper' no existe en el DOM.
+            // El elemento correcto es 'loginScreen'. showLogin() lo muestra correctamente.
+            showLogin();
+            // Mostrar aviso de error de configuración al usuario
+            const loginError = $id('loginError');
+            if (loginError) {
+                loginError.textContent = '⚠️ Error de conexión con el servidor. Verifica tu acceso a internet e intenta de nuevo.';
+                loginError.classList.add('visible');
+            }
         }
 
         /* ── Manejo del formulario de login ──────────────────────── */
@@ -9540,6 +8771,7 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
             const btn      = $id('loginBtn');
             const btnText  = $id('loginBtnText');
 
+            // Validaciones básicas
             errEl.classList.remove('visible');
             if (!email || !password) {
                 errEl.textContent = 'Por favor ingresa tu correo y contraseña.';
@@ -9547,94 +8779,25 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 return;
             }
 
+            // Estado de carga en el botón
             btn.disabled = true;
             btnText.textContent = 'Iniciando sesión…';
             btn.insertAdjacentHTML('beforeend', '<span class="login-spinner"></span>');
 
-            // ─────────────────────────────────────────────────────────────
-            // FIX DEFINITIVO: Usar Firebase Auth REST API directamente.
-            //
-            // CAUSA RAÍZ del "Error de conexión" después de 8 horas:
-            // _auth.signInWithEmailAndPassword() del SDK compat usa un
-            // iframe oculto al authDomain (firebaseapp.com) para manejar
-            // la persistencia de sesión. En el WebView de Capacitor ese
-            // iframe es bloqueado por la política de seguridad de Android,
-            // causando que la promesa nunca resuelva o lance
-            // auth/network-request-failed — aunque el internet funcione.
-            //
-            // La REST API de Firebase Identity Toolkit NO usa iframes.
-            // Solo hace un fetch directo a identitytoolkit.googleapis.com,
-            // que siempre funciona en WebView porque está en la CSP.
-            //
-            // Flujo:
-            // 1. REST API → obtener idToken + refreshToken
-            // 2. Guardar tokens en localStorage para persistencia manual
-            // 3. Llamar _auth.signInWithEmailAndPassword como fallback
-            //    para que onAuthStateChanged se dispare correctamente.
-            // ─────────────────────────────────────────────────────────────
-
-            const REST_URL = 'https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=' + firebaseConfig.apiKey;
-
             try {
-                // PASO 1: Autenticar via REST API (sin iframes, sin SDK auth flow)
-                const restResponse = await fetch(REST_URL, {
-                    method:  'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body:    JSON.stringify({
-                        email:             email,
-                        password:          password,
-                        returnSecureToken: true
-                    })
-                });
-
-                const restData = await restResponse.json();
-
-                if (!restResponse.ok) {
-                    // Mapear errores de la REST API a mensajes amigables
-                    const code = (restData.error && restData.error.message) || 'UNKNOWN';
-                    const msgs = {
-                        'EMAIL_NOT_FOUND':          'No existe una cuenta con ese correo.',
-                        'INVALID_PASSWORD':          'Contraseña incorrecta. Inténtalo de nuevo.',
-                        'INVALID_EMAIL':             'El formato del correo no es válido.',
-                        'TOO_MANY_ATTEMPTS_TRY_LATER': 'Demasiados intentos. Espera unos minutos.',
-                        'USER_DISABLED':             'Esta cuenta está deshabilitada.',
-                        'INVALID_LOGIN_CREDENTIALS': 'Correo o contraseña incorrectos.',
-                    };
-                    throw new Error(msgs[code] || 'Error de autenticación: ' + code);
-                }
-
-                // PASO 2: Guardar tokens para persistencia manual offline
-                const { idToken, refreshToken, localId } = restData;
-                try {
-                    localStorage.setItem('bi_idToken',      idToken);
-                    localStorage.setItem('bi_refreshToken', refreshToken);
-                    localStorage.setItem('bi_uid',          localId);
-                    localStorage.setItem('bi_email',        email);
-                } catch (_) {}
-
-                // PASO 3: Sincronizar con el SDK de Auth para que
-                // onAuthStateChanged se dispare y la app cargue normalmente.
-                // Si el SDK falla aquí (por el iframe), usamos flujo manual.
-                try {
-                    await _auth.signInWithEmailAndPassword(email, password);
-                    // onAuthStateChanged manejará showApp()
-                } catch (sdkErr) {
-                    // SDK falló pero la REST API funcionó — iniciar manualmente
-                    console.warn('[Auth] SDK signIn falló, usando flujo REST manual:', sdkErr.code);
-                    currentUserUid  = localId;
-                    currentUserRole = null;
-                    // Cargar rol y mostrar app directamente
-                    if (typeof loadUserRole === 'function') {
-                        loadUserRole(localId).catch(function(e) {
-                            console.warn('[Auth] Error cargando rol en flujo manual:', e);
-                        });
-                    }
-                    showApp({ email: email, uid: localId });
-                }
-
+                await _auth.signInWithEmailAndPassword(email, password);
+                // onAuthStateChanged se encarga de mostrar la app automáticamente
             } catch (err) {
-                console.warn('[Auth] Error al iniciar sesión:', err.message || err);
-                errEl.textContent = err.message || 'Error de conexión. Verifica tu internet e intenta de nuevo.';
+                console.warn('[Auth] Error al iniciar sesión:', err.code);
+                const msgs = {
+                    'auth/user-not-found':      'No existe una cuenta con ese correo.',
+                    'auth/wrong-password':      'Contraseña incorrecta. Inténtalo de nuevo.',
+                    'auth/invalid-email':       'El formato del correo no es válido.',
+                    'auth/too-many-requests':   'Demasiados intentos. Espera unos minutos.',
+                    'auth/network-request-failed': 'Sin conexión. Verifica tu internet.',
+                    'auth/invalid-credential':  'Correo o contraseña incorrectos.',
+                };
+                errEl.textContent = msgs[err.code] || ('Error: ' + (err.message || err.code));
                 errEl.classList.add('visible');
             } finally {
                 btn.disabled = false;
@@ -9649,14 +8812,8 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
             if (!_auth) return;
             try {
                 sbClose();
-                // Limpiar tokens guardados del flujo REST manual
-                try {
-                    localStorage.removeItem('bi_idToken');
-                    localStorage.removeItem('bi_refreshToken');
-                    localStorage.removeItem('bi_uid');
-                    localStorage.removeItem('bi_email');
-                } catch(_) {}
                 await _auth.signOut();
+                // onAuthStateChanged limpiará la UI automáticamente
                 showNotification('👋 Sesión cerrada correctamente.');
             } catch (err) {
                 console.error('[Auth] Error al cerrar sesión:', err);
@@ -9665,22 +8822,21 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
         };
 
         /* ── Enter en los campos del login ───────────────────────── */
-        // Ya estamos dentro del DOMContentLoaded exterior — acceso directo al DOM.
-        var emailInput    = $id('loginEmail');
-        var passwordInput = $id('loginPassword');
-        if (emailInput) {
-            emailInput.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') { e.preventDefault(); $id('loginPassword').focus(); }
-            });
-        }
-        if (passwordInput) {
-            passwordInput.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') { e.preventDefault(); window.handleLogin(); }
-            });
-        }
-
-    })(); // fin IIFE auth
-    }); // fin DOMContentLoaded — FIX-1: garantiza que todo el DOM existe antes de correr auth
+        document.addEventListener('DOMContentLoaded', function() {
+            const emailInput    = $id('loginEmail');
+            const passwordInput = $id('loginPassword');
+            if (emailInput) {
+                emailInput.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') { e.preventDefault(); $id('loginPassword').focus(); }
+                });
+            }
+            if (passwordInput) {
+                passwordInput.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') { e.preventDefault(); window.handleLogin(); }
+                });
+            }
+        });
+    })();
     </script>
 </body>
 </html>
