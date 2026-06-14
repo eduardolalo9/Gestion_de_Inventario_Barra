@@ -2,9 +2,11 @@
   "name": "BarInventory — Control de Inventario",
   "short_name": "BarInventory",
   "description": "Sistema de inventario para bar y restaurante. Conteo ciego, auditoría y sincronización en tiempo real.",
+  "id": "/",
   "start_url": "./?tab=inicio",
   "scope": "./",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "orientation": "portrait-primary",
   "background_color": "#0d1321",
   "theme_color": "#0d1321",
@@ -42,17 +44,20 @@
     {
       "name": "Nuevo Conteo",
       "short_name": "Conteo",
-      "url": "./?tab=inventario"
+      "url": "./?tab=inventario",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "Auditoría",
       "short_name": "Auditoría",
-      "url": "./?tab=auditoria"
+      "url": "./?tab=auditoria",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "Pedidos",
       "short_name": "Pedidos",
-      "url": "./?tab=pedidos"
+      "url": "./?tab=pedidos",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ]
 }
