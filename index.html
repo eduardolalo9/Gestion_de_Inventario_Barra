@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es-MX">
 <head>
     <meta charset="UTF-8">
     <!-- FIX #15: viewport como primer meta, antes de cualquier script, para que el
@@ -9,6 +9,10 @@
     <meta name="theme-color" content="#0f2040" media="(prefers-color-scheme: light)">
     <link rel="manifest" href="manifest.json">
     <meta name="mobile-web-app-capable" content="yes">
+    <!-- FIX-iOS1: apple-mobile-web-app-capable es obligatorio para que iOS Safari
+         active el modo standalone. Sin este meta, el ícono en la pantalla de inicio
+         abre Safari normal con barra de navegación en lugar de la app en pantalla completa. -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="BarInventory">
 
@@ -72,6 +76,37 @@
                     .then(function(registration) {
                         console.info('[SW] Registrado con scope:', registration.scope);
 
+                        // FIX-ICONS: Enviar los íconos generados por Canvas al SW para que los
+                        // cachée. El manifest.json apunta a icons/icon-192.png e icons/icon-512.png
+                        // que no existen como archivos físicos. Sin este paso, el browser GET
+                        // esas rutas y recibe 404, fallando la validación de instalabilidad PWA.
+                        // Solución: el SW intercepta esas rutas y devuelve el PNG del cache.
+                        navigator.serviceWorker.ready.then(function(reg) {
+                            if (!reg.active) return;
+                            try {
+                                function makeIconDataUrl(size) {
+                                    var c = document.createElement('canvas');
+                                    c.width = c.height = size;
+                                    var ctx = c.getContext('2d');
+                                    ctx.fillStyle = '#0A84FF';
+                                    try { ctx.roundRect(0, 0, size, size, size * 0.22); }
+                                    catch(_) { ctx.rect(0, 0, size, size); }
+                                    ctx.fill();
+                                    ctx.fillStyle = '#FFFFFF';
+                                    ctx.font = 'bold ' + Math.round(size * 0.52) + 'px system-ui,sans-serif';
+                                    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                                    ctx.fillText('B', size / 2, size / 2 + size * 0.03);
+                                    return c.toDataURL('image/png');
+                                }
+                                reg.active.postMessage({
+                                    type:   'CACHE_ICONS',
+                                    icon192: makeIconDataUrl(192),
+                                    icon512: makeIconDataUrl(512)
+                                });
+                                console.info('[SW] Íconos PWA enviados al caché del SW ✓');
+                            } catch(e) { console.warn('[SW] No se pudieron cachear íconos PWA:', e); }
+                        });
+
                         // Detectar actualizaciones del SW (nueva versión deployada)
                         registration.addEventListener('updatefound', function() {
                             var newWorker = registration.installing;
@@ -133,9 +168,12 @@
     <!-- ══════════════════════════════════════════════════════════
          FIREBASE SDK  —  compat v10 (módulos globales window.firebase)
          ══════════════════════════════════════════════════════════ -->
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <!-- FIX-SDK: actualizado a 10.14.1 (parches de seguridad y mejoras de rendimiento
+         en Firestore multiplexer; la versión 10.12.2 tenía problemas con la reconexión
+         de WebSocket en redes inestables). -->
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 
     <!-- ══════════════════════════════════════════════════════════
          CONFIGURACIÓN FIREBASE
@@ -233,8 +271,16 @@ const firebaseConfig = {
 
                 // FIX: Persistencia offline — settings() DEBE llamarse antes de enablePersistence()
                 // BUG-H7 FIX: mover settings() fuera del try interno para garantizar orden correcto.
+                // FIX-ANDROID: experimentalForceLongPolling:true es OBLIGATORIO para el APK de Capacitor.
+                // Android WebView bloquea WebSockets en ciertos contextos de seguridad y Firestore
+                // queda silenciosamente sin conexión sin este flag. ignoreUndefinedProperties:true
+                // previene errores en documentos que contienen campos undefined por migraciones.
                 try {
-                    _db.settings({ cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED });
+                    _db.settings({
+                        cacheSizeBytes:              firebase.firestore.CACHE_SIZE_UNLIMITED,
+                        experimentalForceLongPolling: true,   // FIX-ANDROID: WebSocket → Long-Polling en WebView
+                        ignoreUndefinedProperties:   true     // FIX-DATA: ignora campos undefined al guardar
+                    });
                 } catch (_) {}
                 _db.enablePersistence({ synchronizeTabs: true }).catch(err => {
                     if (err.code === 'failed-precondition') {
@@ -8766,7 +8812,10 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 return;
             }
             const email    = ($id('loginEmail').value   || '').trim();
-            const password = ($id('loginPassword').value || '').trim();
+            // FIX-AUTH: NO hacer trim() en passwords — las contraseñas pueden tener
+            // espacios intencionales al inicio/fin. Trimear causaría auth/wrong-password
+            // para usuarios que usan ese patrón (comportamiento silencioso e irreproducible).
+            const password = $id('loginPassword').value || '';
             const errEl    = $id('loginError');
             const btn      = $id('loginBtn');
             const btnText  = $id('loginBtnText');
