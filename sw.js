@@ -4,51 +4,51 @@
 //  Garantiza funcionamiento offline y actualizaciones automáticas al deployar.
 //
 //  CORRECCIONES v2.3 (heredadas):
-//  - SW1: OFFLINE_URL ahora usa ruta calculada desde el scope real del SW.
-//  - SW2: Separado 'googleapis.com' genérico del más específico 'fonts.googleapis.com'.
-//  - SW3: staleWhileRevalidate retorna la promesa de red correctamente.
-//  - SW4: Ambas estrategias de caché filtran respuestas opacas (type !== 'opaque').
-//  - SW5: notificationclick ahora usa la URL completa del evento cuando existe.
-//  - SW6: PRECACHE_URLS normalizada — solo una entrada por URL canónica.
-//  - SW7: install propaga el error con throw si addAll falla.
+//  ─ SW1: OFFLINE_URL usa ruta calculada desde el scope real (no '/index.html'
+//         absoluta que falla en despliegues en subdirectorio).
+//  ─ SW2: 'fonts.googleapis.com' separado de 'googleapis.com' genérico para
+//         que las fuentes Google se cacheen correctamente.
+//  ─ SW3: staleWhileRevalidate espera la promesa de red cuando no hay caché,
+//         sin posibilidad de retornar null silenciosamente.
+//  ─ SW4: Ambas estrategias filtran respuestas opacas (type === 'opaque')
+//         para no cachear errores 0 de CORS que bloquearían recursos críticos.
+//  ─ SW5: notificationclick usa la URL completa del payload cuando existe.
+//  ─ SW6: PRECACHE_URLS sin entradas duplicadas.
+//  ─ SW7: install relanza el error si addAll falla, forzando reintento.
 //
 //  CORRECCIONES v2.4 (nuevas):
-//  - SW8: OFFLINE_URL se calcula dinámicamente desde self.registration.scope
-//         para funcionar correctamente tanto en la raíz como en subdirectorios.
-//         La versión anterior ('/index.html') fallaba en despliegues en
-//         subdirectorios porque nunca coincidía con el cache key relativo.
-//  - SW9: Nuevo manejador CACHE_ICONS en el listener 'message'. El manifest.json
-//         apunta a icons/icon-192.png e icons/icon-512.png que no existen como
-//         archivos físicos en el repositorio. Sin este fix el browser recibe 404
-//         al validar los iconos del manifest y la instalación PWA falla silenciosamente.
-//         Solución: la página genera los íconos con Canvas y los envía al SW vía
-//         postMessage; el SW los guarda en caché como Responses con el Content-Type
-//         correcto. Cuando el browser pide los íconos del manifest, el SW los sirve
-//         desde caché. Incluye ruta de fetch (SW10) para interceptar esas URLs.
-//  - SW10: Nuevo handler fetch para las rutas de íconos PWA (icons/icon-*.png).
-//          Sirve desde caché si existe; si no, genera un PNG mínimo usando
-//          OffscreenCanvas (soportado en Chrome 69+ / Android 9+) como fallback
-//          para evitar un 404 aunque la página aún no haya enviado los íconos.
+//  ─ SW8: OFFLINE_URL calculado dinámicamente desde self.registration.scope
+//         en el evento 'activate'. Antes, '/index.html' no coincidía con la
+//         clave cacheada './index.html' cuando la app corría en subdirectorio,
+//         haciendo que el fallback offline nunca funcionara.
+//  ─ SW9: Manejador CACHE_ICONS en el listener 'message'. El manifest.json
+//         referencia icons/icon-192.png e icons/icon-512.png que no existen
+//         como archivos físicos. La página los genera via Canvas y los envía
+//         al SW; el SW los convierte en Response PNG y los cachea. Resultado:
+//         el browser valida los iconos del manifest → prompt de instalación OK.
+//  ─ SW10: Handler fetch para rutas icons/icon-*.png. Sirve desde caché si
+//         existen (puestos por SW9), o los genera con OffscreenCanvas como
+//         fallback (Chrome 69+/Android 9+), o devuelve un PNG 1×1 transparente
+//         como último recurso para evitar el 404 que bloquea la instalabilidad.
 // ════════════════════════════════════════════════════════════════════════════
 
 const CACHE_NAME = 'barinventory-v2.4';
 
-// SW8 FIX: OFFLINE_URL calculado desde el scope del SW en tiempo de ejecución.
-// self.registration.scope es la URL base del SW (ej. 'https://host/bar/').
-// Concatenando 'index.html' obtenemos la URL canónica exacta que fue cacheada
-// en PRECACHE_URLS con './index.html', evitando la desincronización entre
-// '/index.html' (absoluta) y './index.html' (relativa al scope).
-// Se inicializa en '' y se asigna en el evento 'activate' cuando el scope
-// ya está disponible. Para el fallback offline se usa el scope directamente.
+// SW8: OFFLINE_URL se calcula en 'activate' desde el scope real.
+// self.registration.scope termina en '/' → concatenar 'index.html' da la URL
+// canónica exacta que cache.addAll(['./index.html']) registró como clave.
+// Ejemplo raíz:        'https://host/'        → 'https://host/index.html'
+// Ejemplo subdir:      'https://host/bar/'    → 'https://host/bar/index.html'
 let OFFLINE_URL = '';
 
-// Assets que se cachean en la instalación (shell de la app)
+// Shell de la app: cacheada en install para disponibilidad offline inmediata.
 const PRECACHE_URLS = [
     './index.html',
     './manifest.json',
 ];
 
-// Dominios que NUNCA se cachean (siempre van a la red)
+// Dominios que van SIEMPRE a la red (tokens de auth, Firestore, tiempo real).
+// NUNCA cachear respuestas de estos dominios.
 const NETWORK_ONLY_ORIGINS = [
     'firestore.googleapis.com',
     'firebase.googleapis.com',
@@ -57,114 +57,110 @@ const NETWORK_ONLY_ORIGINS = [
     'firebaseio.com',
 ];
 
-// ── INSTALL ──────────────────────────────────────────────────────────────────
+// ── INSTALL ───────────────────────────────────────────────────────────────────
 self.addEventListener('install', function(event) {
-    console.info('[SW] Instalando v' + CACHE_NAME);
+    console.info('[SW] Instalando', CACHE_NAME);
     event.waitUntil(
         caches.open(CACHE_NAME)
-            .then(function(cache) {
-                return cache.addAll(PRECACHE_URLS);
-            })
-            .then(function() {
-                return self.skipWaiting();
-            })
+            .then(function(cache) { return cache.addAll(PRECACHE_URLS); })
+            .then(function() { return self.skipWaiting(); })
             .catch(function(err) {
-                console.error('[SW] Error crítico en precache — abortando instalación:', err);
+                // SW7: relanzar para que el navegador reintente la instalación.
+                console.error('[SW] Error crítico en precache — abortando:', err);
                 throw err;
             })
     );
 });
 
-// ── ACTIVATE ─────────────────────────────────────────────────────────────────
+// ── ACTIVATE ──────────────────────────────────────────────────────────────────
 self.addEventListener('activate', function(event) {
-    console.info('[SW] Activando — limpiando cachés viejos…');
+    console.info('[SW] Activando — limpiando cachés obsoletos…');
 
-    // SW8 FIX: Calcular OFFLINE_URL usando el scope real una vez que el SW está activo.
-    // self.registration.scope siempre termina en '/', por lo que concatenamos 'index.html'.
-    // Ejemplo raíz:        'https://example.com/'          → 'https://example.com/index.html'
-    // Ejemplo subdirectorio: 'https://example.com/bar/'    → 'https://example.com/bar/index.html'
+    // SW8: calcular OFFLINE_URL una vez que el scope está disponible.
     OFFLINE_URL = self.registration.scope + 'index.html';
-    console.info('[SW] OFFLINE_URL calculado:', OFFLINE_URL);
+    console.info('[SW] OFFLINE_URL =', OFFLINE_URL);
 
     event.waitUntil(
         caches.keys()
-            .then(function(cacheNames) {
+            .then(function(names) {
                 return Promise.all(
-                    cacheNames
-                        .filter(function(name) { return name !== CACHE_NAME; })
-                        .map(function(name) {
-                            console.info('[SW] Eliminando caché obsoleto:', name);
-                            return caches.delete(name);
+                    names
+                        .filter(function(n) { return n !== CACHE_NAME; })
+                        .map(function(n) {
+                            console.info('[SW] Eliminando caché obsoleto:', n);
+                            return caches.delete(n);
                         })
                 );
             })
-            .then(function() {
-                return self.clients.claim();
-            })
+            .then(function() { return self.clients.claim(); })
     );
 });
 
-// ── FETCH ────────────────────────────────────────────────────────────────────
+// ── FETCH ─────────────────────────────────────────────────────────────────────
 self.addEventListener('fetch', function(event) {
-    const url = new URL(event.request.url);
+    var url = new URL(event.request.url);
 
-    // 1. Ignorar peticiones que no son GET
+    // 1. Solo interceptar GET.
     if (event.request.method !== 'GET') return;
 
-    // 2. Ignorar extensiones de Chrome y protocolos especiales
+    // 2. Solo interceptar HTTP/HTTPS.
     if (!event.request.url.startsWith('http')) return;
 
-    // 3. Firebase / APIs de auth → SIEMPRE red (nunca cachear tokens ni datos Firestore)
-    if (NETWORK_ONLY_ORIGINS.some(function(origin) { return url.hostname.includes(origin); })) {
-        return;
+    // 3. Firebase / Auth APIs → siempre red, nunca cachear.
+    if (NETWORK_ONLY_ORIGINS.some(function(o) { return url.hostname.includes(o); })) {
+        return; // dejar pasar al navegador sin intervenir
     }
 
-    // SW10 FIX: Interceptar rutas de íconos PWA del manifest.
-    // icons/icon-192.png e icons/icon-512.png no existen como archivos físicos;
-    // el SW los sirve desde el caché donde la página los guardó via CACHE_ICONS.
-    // Si todavía no están en caché (primera carga antes de que la página los envíe),
-    // intentamos generarlos con OffscreenCanvas o devolvemos un PNG mínimo hardcoded.
+    // 4. SW10: Rutas de íconos PWA → servir desde caché o generar dinámicamente.
+    //    icons/icon-192.png e icons/icon-512.png no existen como archivos físicos;
+    //    el SW los sirve desde el caché donde la página los guardó (SW9) o los
+    //    genera con OffscreenCanvas para evitar un 404 que bloquea la instalabilidad.
     if (url.pathname.endsWith('/icon-192.png') || url.pathname.endsWith('/icon-512.png')) {
         event.respondWith(serveIcon(event.request, url));
         return;
     }
 
-    // 4. CDNs de terceros → Cache-First con fallback a red
-    if (url.hostname.includes('cdn.tailwindcss.com') ||
-        url.hostname.includes('cdnjs.cloudflare.com') ||
-        url.hostname.includes('fonts.googleapis.com') ||
-        url.hostname.includes('fonts.gstatic.com') ||
-        url.hostname.includes('kit.fontawesome.com') ||
-        url.hostname.includes('use.fontawesome.com') ||
-        url.hostname.includes('www.gstatic.com')) {
+    // 5. CDNs de terceros → Cache-First con fallback a red.
+    //    SW2: fonts.googleapis.com ahora entra aquí (fue removido de NETWORK_ONLY).
+    if (
+        url.hostname.includes('cdn.tailwindcss.com')   ||
+        url.hostname.includes('cdnjs.cloudflare.com')  ||
+        url.hostname.includes('fonts.googleapis.com')  ||
+        url.hostname.includes('fonts.gstatic.com')     ||
+        url.hostname.includes('kit.fontawesome.com')   ||
+        url.hostname.includes('use.fontawesome.com')   ||
+        url.hostname.includes('www.gstatic.com')
+    ) {
         event.respondWith(cacheFirst(event.request));
         return;
     }
 
-    // 5. Assets propios de la app → Stale-While-Revalidate
+    // 6. Assets propios → Stale-While-Revalidate (sirve caché, actualiza en fondo).
     if (url.origin === self.location.origin) {
         event.respondWith(staleWhileRevalidate(event.request));
         return;
     }
 });
 
-// ── ESTRATEGIAS DE CACHÉ ─────────────────────────────────────────────────────
+// ── ESTRATEGIAS DE CACHÉ ──────────────────────────────────────────────────────
 
+/**
+ * SW4: Solo cachear respuestas 200 no opacas.
+ * Una respuesta 'opaque' (status 0, type 'opaque') puede encubrir un error
+ * real de CORS — cachearla serviría ese error como si fuera un recurso válido.
+ */
 function isCacheable(response) {
-    return response &&
-           response.status === 200 &&
-           response.type !== 'opaque';
+    return response && response.status === 200 && response.type !== 'opaque';
 }
 
+/** Cache-First: sirve caché si existe; si no, va a la red y cachea el resultado. */
 function cacheFirst(request) {
     return caches.match(request).then(function(cached) {
         if (cached) return cached;
         return fetch(request).then(function(response) {
             if (isCacheable(response)) {
                 var clone = response.clone();
-                caches.open(CACHE_NAME).then(function(cache) {
-                    cache.put(request, clone);
-                });
+                caches.open(CACHE_NAME).then(function(cache) { cache.put(request, clone); });
             }
             return response;
         }).catch(function() {
@@ -173,87 +169,88 @@ function cacheFirst(request) {
     });
 }
 
+/**
+ * SW3: Stale-While-Revalidate corregido.
+ * Lanza la petición de red inmediatamente (actualiza caché en segundo plano).
+ * Devuelve la caché si existe (rápido), o espera la red si no hay caché.
+ * Si red y caché fallan, devuelve la página offline.
+ */
 function staleWhileRevalidate(request) {
     var networkPromise = fetch(request).then(function(response) {
         if (isCacheable(response)) {
             var clone = response.clone();
-            caches.open(CACHE_NAME).then(function(cache) {
-                cache.put(request, clone);
-            });
+            caches.open(CACHE_NAME).then(function(cache) { cache.put(request, clone); });
         }
         return response;
     });
-
     return caches.match(request).then(function(cached) {
         if (cached) return cached;
-        return networkPromise.catch(function() {
-            // SW8 FIX: OFFLINE_URL ya tiene la URL absoluta correcta en todos los entornos.
-            return caches.match(OFFLINE_URL);
-        });
+        // SW8: OFFLINE_URL tiene la URL canónica correcta en cualquier entorno.
+        return networkPromise.catch(function() { return caches.match(OFFLINE_URL); });
     });
 }
 
-// ── MANEJO DE ÍCONOS PWA (SW9 / SW10) ───────────────────────────────────────
+// ── ÍCONOS PWA DINÁMICOS (SW9 / SW10) ────────────────────────────────────────
 
 /**
- * Sirve un ícono PWA para las rutas icons/icon-192.png e icons/icon-512.png.
- * Orden de prioridad:
- *   1. Cache (colocado por CACHE_ICONS desde la página principal)
- *   2. OffscreenCanvas generado en el SW (fallback, Chrome 69+)
- *   3. PNG 1×1 transparente como último recurso (evita el 404)
+ * SW10: Sirve un ícono PWA para icons/icon-192.png o icons/icon-512.png.
+ * Prioridad:
+ *   1. Caché (puesto por CACHE_ICONS desde la página).
+ *   2. OffscreenCanvas generado en el SW (Chrome 69+ / Android 9+).
+ *   3. PNG 1×1 transparente como último recurso (evita 404 fatal).
  */
 function serveIcon(request, url) {
     return caches.match(request).then(function(cached) {
-        if (cached) {
-            console.info('[SW] Ícono servido desde caché:', url.pathname);
-            return cached;
-        }
-        // Fallback: intentar generar el ícono con OffscreenCanvas
+        if (cached) return cached;
         var size = url.pathname.includes('192') ? 192 : 512;
-        return generateIconResponse(size).catch(function() {
-            // Último recurso: PNG 1×1 transparente (evita 404 rompiendo instalabilidad)
-            var tiny1x1PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
-            return new Response(
-                Uint8Array.from(atob(tiny1x1PNG), function(c) { return c.charCodeAt(0); }),
-                { status: 200, headers: { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' } }
-            );
+        return generateIconPNG(size).catch(function() {
+            // Último recurso: PNG 1×1 transparente para evitar 404
+            var b64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+            var bytes = Uint8Array.from(atob(b64), function(c) { return c.charCodeAt(0); });
+            return new Response(bytes, {
+                status: 200,
+                headers: { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' }
+            });
         });
     });
 }
 
 /**
- * Genera un PNG de `size`×`size` con OffscreenCanvas (Chrome 69+ / Android 9+).
- * Mismo diseño que la función makeIcon() de la página principal.
+ * Genera un PNG cuadrado de `size`×`size` con OffscreenCanvas.
+ * Diseño: fondo azul redondeado con letra "B" blanca (idéntico a generatePWAIcons() en page).
  * @param {number} size
  * @returns {Promise<Response>}
  */
-function generateIconResponse(size) {
+function generateIconPNG(size) {
     return new Promise(function(resolve, reject) {
         try {
             var canvas = new OffscreenCanvas(size, size);
-            var ctx = canvas.getContext('2d');
+            var ctx    = canvas.getContext('2d');
+            // Fondo azul con bordes redondeados
             ctx.fillStyle = '#0A84FF';
-            try { ctx.roundRect(0, 0, size, size, size * 0.22); }
-            catch(_) { ctx.rect(0, 0, size, size); }
+            try { ctx.roundRect(0, 0, size, size, Math.round(size * 0.22)); }
+            catch (_) { ctx.rect(0, 0, size, size); }
             ctx.fill();
-            ctx.fillStyle = '#FFFFFF';
-            ctx.font = 'bold ' + Math.round(size * 0.52) + 'px system-ui,sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('B', size / 2, size / 2 + size * 0.03);
+            // Letra "B" centrada
+            ctx.fillStyle     = '#FFFFFF';
+            ctx.font          = 'bold ' + Math.round(size * 0.52) + 'px system-ui, sans-serif';
+            ctx.textAlign     = 'center';
+            ctx.textBaseline  = 'middle';
+            ctx.fillText('B', size / 2, size / 2 + Math.round(size * 0.03));
             canvas.convertToBlob({ type: 'image/png' }).then(function(blob) {
                 resolve(new Response(blob, {
                     status: 200,
-                    headers: { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' }
+                    headers: {
+                        'Content-Type':  'image/png',
+                        'Cache-Control': 'public, max-age=86400'
+                    }
                 }));
             }).catch(reject);
-        } catch(e) {
-            reject(e);
-        }
+        } catch (e) { reject(e); }
     });
 }
 
-// ── BACKGROUND SYNC ──────────────────────────────────────────────────────────
+// ── BACKGROUND SYNC ───────────────────────────────────────────────────────────
 self.addEventListener('sync', function(event) {
     if (event.tag === 'sync-inventario') {
         event.waitUntil(notifyClientsToSync());
@@ -269,11 +266,12 @@ function notifyClientsToSync() {
         });
 }
 
-// ── PUSH NOTIFICATIONS ───────────────────────────────────────────────────────
+// ── PUSH NOTIFICATIONS ────────────────────────────────────────────────────────
 self.addEventListener('push', function(event) {
     if (!event.data) return;
     var data = {};
-    try { data = event.data.json(); } catch(e) { data = { title: 'BarInventory', body: event.data.text() }; }
+    try { data = event.data.json(); }
+    catch (e) { data = { title: 'BarInventory', body: event.data.text() }; }
 
     event.waitUntil(
         self.registration.showNotification(data.title || 'BarInventory', {
@@ -286,6 +284,7 @@ self.addEventListener('push', function(event) {
     );
 });
 
+// SW5: usar URL completa del payload cuando existe; fallback al scope.
 self.addEventListener('notificationclick', function(event) {
     event.notification.close();
     var targetUrl = (event.notification.data && event.notification.data.url)
@@ -299,21 +298,21 @@ self.addEventListener('notificationclick', function(event) {
                     return clients[i].focus();
                 }
             }
-            if (self.clients.openWindow) {
-                return self.clients.openWindow(targetUrl);
-            }
+            if (self.clients.openWindow) return self.clients.openWindow(targetUrl);
         })
     );
 });
 
-// ── MENSAJE DESDE LA APP ─────────────────────────────────────────────────────
+// ── MENSAJES DESDE LA APP ─────────────────────────────────────────────────────
 self.addEventListener('message', function(event) {
     if (!event.data) return;
 
+    // Forzar activación inmediata de nueva versión del SW.
     if (event.data.type === 'SKIP_WAITING') {
         self.skipWaiting();
     }
 
+    // Cachear URLs adicionales enviadas desde la app (por ejemplo, assets dinámicos).
     if (event.data.type === 'CACHE_URLS' && Array.isArray(event.data.urls)) {
         caches.open(CACHE_NAME).then(function(cache) {
             cache.addAll(event.data.urls).catch(function(e) {
@@ -322,21 +321,30 @@ self.addEventListener('message', function(event) {
         });
     }
 
-    // SW9 FIX: Recibir íconos PWA generados por Canvas en la página principal
-    // y almacenarlos en caché con las URLs exactas del manifest.json.
-    // La página genera los PNG via Canvas (que sí existe en el DOM) y los envía
-    // como data URLs; el SW los convierte en Responses con Content-Type correcto
-    // y los guarda bajo las rutas que el browser va a pedir al validar el manifest.
+    /**
+     * SW9: CACHE_ICONS — Recibe los PNGs generados por Canvas en la página
+     * y los almacena en caché bajo las URLs exactas que el manifest.json declara.
+     *
+     * Flujo:
+     *   1. page genera icon-192.png e icon-512.png via <canvas>.toDataURL()
+     *   2. page envía { type:'CACHE_ICONS', icon192: 'data:image/png;base64,...', icon512: '...' }
+     *   3. SW convierte cada data-URL → Uint8Array → Response con Content-Type correcto
+     *   4. SW guarda en caché bajo scope + 'icons/icon-192.png'
+     *   5. Cuando el browser fetcha el ícono para validar el manifest, SW lo sirve (SW10)
+     */
     if (event.data.type === 'CACHE_ICONS') {
-        var scope   = self.registration.scope;
-        var icons   = [
+        var scope = self.registration.scope;
+        var icons = [
             { key: scope + 'icons/icon-192.png', dataUrl: event.data.icon192 },
             { key: scope + 'icons/icon-512.png', dataUrl: event.data.icon512 },
         ];
 
         caches.open(CACHE_NAME).then(function(cache) {
             icons.forEach(function(icon) {
-                if (!icon.dataUrl || !icon.dataUrl.startsWith('data:image/png;base64,')) return;
+                if (!icon.dataUrl || !icon.dataUrl.startsWith('data:image/png;base64,')) {
+                    console.warn('[SW] CACHE_ICONS: data URL inválida para', icon.key);
+                    return;
+                }
                 try {
                     var base64 = icon.dataUrl.split(',')[1];
                     var binary = atob(base64);
@@ -351,11 +359,10 @@ self.addEventListener('message', function(event) {
                             'Cache-Control': 'public, max-age=86400'
                         }
                     });
-                    cache.put(icon.key, response)
-                        .then(function() {
-                            console.info('[SW] Ícono PWA cacheado:', icon.key);
-                        });
-                } catch(e) {
+                    cache.put(icon.key, response).then(function() {
+                        console.info('[SW] Ícono PWA cacheado ✓', icon.key);
+                    });
+                } catch (e) {
                     console.warn('[SW] Error convirtiendo ícono a Response:', icon.key, e);
                 }
             });
