@@ -4987,9 +4987,22 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                          }); // set sin merge → limpia el doc del admin completamente
 
                 // Escribir la nueva sesión en el documento principal
+                // FIX-PROPAGATE (BUG CRÍTICO): _lastModified DEBE incluirse para que
+                // subscribeMainDoc en los dispositivos de todos los usuarios supere la
+                // guarda (cloudTs > localTs) y llame a _applyCloudData con el nuevo
+                // sessionId. Sin este campo, el snapshot llegaba pero se descartaba
+                // silenciosamente y los usuarios NUNCA recibían la nueva auditoría.
+                // _lastWrittenBy = admin UID → evita que el admin se auto-aplique el reset
+                // (subscribeMainDoc tiene la guarda writerUid === currentUserUid → skip).
                 await _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
-                         .set({ _auditoriaSessionId: sessionId, _auditoriaStartedBy: currentUserUid,
-                                _auditoriaStartedAt: Date.now() }, { merge: true });
+                         .set({
+                             _auditoriaSessionId: sessionId,
+                             _auditoriaStartedBy: currentUserUid,
+                             _auditoriaStartedAt: Date.now(),
+                             _lastModified:       Date.now(),     // FIX-PROPAGATE: activa subscribeMainDoc en usuarios
+                             _lastWrittenBy:      currentUserUid, // FIX-ECHO: admin no re-procesa su propio reset
+                             _lastWrittenRole:    'admin'
+                         }, { merge: true });
                 console.info('[AuditAdmin] Nueva sesión', sessionId, 'iniciada ✓');
             } catch (err) {
                 console.warn('[AuditAdmin] Error iniciando sesión en Firestore:', err);
@@ -5406,9 +5419,20 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                                  '— aplicando datos de admin/red…');
                     updateCloudSyncBadge('syncing');
 
+                    // FIX-DEDUP-NOTIF: capturar sessionId ANTES de _applyCloudData.
+                    // Si la nube trae un nuevo _auditoriaSessionId, _applyCloudData ya
+                    // programa su propia notificación descriptiva ("Nueva auditoría iniciada…").
+                    // En ese caso NO mostrar la genérica para evitar dos notificaciones
+                    // solapadas que confunden al usuario.
+                    const _preApplySessionId = _auditoriaSessionId;
+
                     _applyCloudData(data).then(function() {
-                        const quien = data._lastWrittenRole === 'admin' ? '👑 Admin' : '👤 Usuario';
-                        showNotification('🔄 Inventario actualizado por ' + quien);
+                        const esResetAudit = data._auditoriaSessionId &&
+                                             data._auditoriaSessionId !== _preApplySessionId;
+                        if (!esResetAudit) {
+                            const quien = data._lastWrittenRole === 'admin' ? '👑 Admin' : '👤 Usuario';
+                            showNotification('🔄 Inventario actualizado por ' + quien);
+                        }
                     }).catch(function(err) {
                         console.error('[RT-Sync] Error aplicando datos externos:', err);
                         updateCloudSyncBadge('error');
