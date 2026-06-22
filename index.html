@@ -3776,10 +3776,6 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
          * Solo se renderiza si hay al menos un conteo registrado.
          */
         function renderAuditComparePanel() {
-            // FIX-ISOLATION-1: Este panel revela cuántos usuarios contaron y si hay
-            // diferencias — información que rompe el conteo ciego de los bartenders.
-            // Solo el admin necesita ver comparativas; los usuarios ven sus propios datos.
-            if (!isAdmin()) return '';
             const areasList = ['almacen', 'barra1', 'barra2']; // FIX-07
             const areaInfo  = areasList.map(function(area) {
                 const userIds   = new Set();
@@ -4156,16 +4152,6 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 }
             });
             inventarioConteo = migrated;
-
-            // FIX-ROLE-PERSIST: restaurar rol desde localStorage como hint de renderizado.
-            // Permite que el admin vea su vista correcta de inmediato al recargar, sin
-            // esperar a que loadUserRole() complete la consulta a Firestore (evita flash
-            // de vista-usuario). Este valor es solo para la UI; la autorización real
-            // proviene de Firestore Security Rules y de loadUserRole() en cada sesión.
-            const storedRole = localStorage.getItem('inventarioApp_userRole');
-            if (storedRole === 'admin' || storedRole === 'user') {
-                currentUserRole = storedRole;
-            }
         }
 
         // ══════════════════════════════════════════════════════════════════════
@@ -5001,22 +4987,9 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                          }); // set sin merge → limpia el doc del admin completamente
 
                 // Escribir la nueva sesión en el documento principal
-                // FIX-PROPAGATE (BUG CRÍTICO): _lastModified DEBE incluirse para que
-                // subscribeMainDoc en los dispositivos de todos los usuarios supere la
-                // guarda (cloudTs > localTs) y llame a _applyCloudData con el nuevo
-                // sessionId. Sin este campo, el snapshot llegaba pero se descartaba
-                // silenciosamente y los usuarios NUNCA recibían la nueva auditoría.
-                // _lastWrittenBy = admin UID → evita que el admin se auto-aplique el reset
-                // (subscribeMainDoc tiene la guarda writerUid === currentUserUid → skip).
                 await _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
-                         .set({
-                             _auditoriaSessionId: sessionId,
-                             _auditoriaStartedBy: currentUserUid,
-                             _auditoriaStartedAt: Date.now(),
-                             _lastModified:       Date.now(),     // FIX-PROPAGATE: activa subscribeMainDoc en usuarios
-                             _lastWrittenBy:      currentUserUid, // FIX-ECHO: admin no re-procesa su propio reset
-                             _lastWrittenRole:    'admin'
-                         }, { merge: true });
+                         .set({ _auditoriaSessionId: sessionId, _auditoriaStartedBy: currentUserUid,
+                                _auditoriaStartedAt: Date.now() }, { merge: true });
                 console.info('[AuditAdmin] Nueva sesión', sessionId, 'iniciada ✓');
             } catch (err) {
                 console.warn('[AuditAdmin] Error iniciando sesión en Firestore:', err);
@@ -5349,19 +5322,15 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 // y LUEGO subir los pendientes locales si aplica.
                 if (_db) {
                     console.info('[Firebase] Reconectado — verificando cambios en la nube…');
+                    // FIX BUG 2: resubir conteo de auditoría si quedó pendiente
+                    if (_auditSyncPending) {
+                        console.info('[AuditUser] Reintentando sync de conteo pendiente…');
+                        syncMyAuditoriaToFirestore().catch(e =>
+                            console.warn('[AuditUser] Reintento fallido:', e)
+                        );
+                    }
                     loadFromCloud().then(function() {
-                        // FIX-RACE-RECONECT: Primero cargar la nube (aplica reset si admin lo inició
-                        // mientras estábamos offline), LUEGO sincronizar el conteo propio.
-                        // Antes el orden era inverso: se subía el conteo viejo (sesión anterior)
-                        // antes de que loadFromCloud lo detectara y limpiara localmente.
-                        // Ahora _auditSyncPending se comprueba después de que la data local
-                        // ya refleje el estado correcto (myAuditoriaConteo = {} si hubo reset).
-                        if (_auditSyncPending) {
-                            console.info('[AuditUser] Reintentando sync de conteo pendiente (post-carga nube)…');
-                            syncMyAuditoriaToFirestore().catch(e =>
-                                console.warn('[AuditUser] Reintento fallido:', e)
-                            );
-                        }
+                        // loadFromCloud ya llama syncToCloud() si local es más reciente
                         updateCloudSyncBadge(_cloudSyncPending ? 'pending' : 'ok');
                     }).catch(function(e) {
                         console.warn('[Firebase] Error en loadFromCloud tras reconexión:', e);
@@ -5437,20 +5406,9 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                                  '— aplicando datos de admin/red…');
                     updateCloudSyncBadge('syncing');
 
-                    // FIX-DEDUP-NOTIF: capturar sessionId ANTES de _applyCloudData.
-                    // Si la nube trae un nuevo _auditoriaSessionId, _applyCloudData ya
-                    // programa su propia notificación descriptiva ("Nueva auditoría iniciada…").
-                    // En ese caso NO mostrar la genérica para evitar dos notificaciones
-                    // solapadas que confunden al usuario.
-                    const _preApplySessionId = _auditoriaSessionId;
-
                     _applyCloudData(data).then(function() {
-                        const esResetAudit = data._auditoriaSessionId &&
-                                             data._auditoriaSessionId !== _preApplySessionId;
-                        if (!esResetAudit) {
-                            const quien = data._lastWrittenRole === 'admin' ? '👑 Admin' : '👤 Usuario';
-                            showNotification('🔄 Inventario actualizado por ' + quien);
-                        }
+                        const quien = data._lastWrittenRole === 'admin' ? '👑 Admin' : '👤 Usuario';
+                        showNotification('🔄 Inventario actualizado por ' + quien);
                     }).catch(function(err) {
                         console.error('[RT-Sync] Error aplicando datos externos:', err);
                         updateCloudSyncBadge('error');
@@ -5499,22 +5457,11 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 subscribeAjustesPendientes();
                 subscribeCatalogoAdmin();
                 subscribeAllUsersAuditoria(); // Admin ve todos los conteos en tiempo real
-                // FIX-ISOLATION-3: cargar datos legacy de conteos multiusuario SOLO para admin.
-                // Los bartenders no deben ver datos de otros usuarios (conteo ciego).
-                loadConteoPorUsuarioFromFirestore().catch(err =>
-                    console.warn('[MultiUser] loadConteoPorUsuarioFromFirestore silenciado:', err)
-                );
             } else {
                 subscribeCatalogoUsuario();
                 subscribeNotificacionesUsuario();
                 subscribeMyAuditoria(); // Usuario escucha sus propios desbloqueos
             }
-
-            // FIX-ROLE-PERSIST: guardar rol en localStorage para que al recargar la página
-            // el admin vea su vista correcta de forma inmediata, sin flash de "vista usuario".
-            // El rol se vuelve a verificar en Firestore en cada sesión (este valor es solo
-            // un hint de renderizado; la autorización real la aplican las Security Rules).
-            try { localStorage.setItem('inventarioApp_userRole', currentUserRole || ''); } catch(_) {}
         }
 
         function applyRoleUI() {
@@ -6118,12 +6065,10 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 loadFromCloud().catch(err => console.warn('[Firebase] loadFromCloud silenciado:', err));
                 // Cargar conflictos de abiertas previos desde conteoAreas
                 loadConflictosDesdeFirestore().catch(() => {});
-                // FIX-ISOLATION-3: loadConteoPorUsuarioFromFirestore() descarga datos de
-                // TODOS los usuarios (sistema legacy conteoMultiUsuario). Llamarla aquí para
-                // cualquier rol llenaba auditoriaConteoPorUsuario con conteos ajenos,
-                // habilitando la fuga de información hacia bartenders.
-                // Ahora se llama solo para admin, desde loadUserRole() una vez que el rol
-                // está confirmado por Firestore. Los usuarios no-admin nunca cargan esos datos.
+                // ── Cargar conteos de TODOS los dispositivos (multiusuario) ────
+                loadConteoPorUsuarioFromFirestore().catch(err =>
+                    console.warn('[MultiUser] loadConteoPorUsuarioFromFirestore silenciado:', err)
+                );
             }
 
             // ── Sync periódico de recuperación: cada 3 min, solo si hay pendientes ──
@@ -7662,13 +7607,9 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
 
             html += '<p class="text-xs text-gray-400 mb-3 px-1">Conteo ciego — toca cada producto para ingresar la cantidad física</p>';
 
-            // ── Barra de estado multiusuario para el área actual (SOLO ADMIN) ─────
-            // FIX-ISOLATION-2: La barra "N dispositivos contaron / Sin diferencias / N diferencias"
-            // usaba calcAuditStats() → auditoriaConteoPorUsuario (datos de TODOS los usuarios).
-            // Mostrarla a un bartender activo viola el conteo ciego: sabe cuántos otros contaron
-            // y si sus totales coinciden, lo que puede influir en su propio registro.
-            // Se restringe exclusivamente al admin, que sí necesita esa visión agregada.
-            if (isAdmin()) {
+            // ── Barra de estado multiusuario para el área actual ─────────────────
+            // FIX-06: bloque { } limpio en lugar de IIFE innecesario
+            {
                 const auditUniqUsers = new Set();
                 let   auditNConf     = 0;
                 products.forEach(p => {
@@ -9052,9 +8993,6 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                     allUsersAuditoria = {};
                     currentUserRole = null;
                     currentUserUid  = null;
-                    // FIX-ROLE-PERSIST-LOGOUT: limpiar el hint de rol para que el próximo
-                    // usuario que abra la app en este dispositivo no herede la vista de admin.
-                    try { localStorage.removeItem('inventarioApp_userRole'); } catch(_) {}
                     showLogin();
                 }
             });
