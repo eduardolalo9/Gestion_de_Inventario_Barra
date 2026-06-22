@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es-MX">
 <head>
     <meta charset="UTF-8">
     <!-- FIX #15: viewport como primer meta, antes de cualquier script, para que el
@@ -9,6 +9,8 @@
     <meta name="theme-color" content="#0f2040" media="(prefers-color-scheme: light)">
     <link rel="manifest" href="manifest.json">
     <meta name="mobile-web-app-capable" content="yes">
+    <!-- FIX-iOS: apple-mobile-web-app-capable activa modo standalone en iPhone/iPad -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="BarInventory">
 
@@ -72,6 +74,35 @@
                     .then(function(registration) {
                         console.info('[SW] Registrado con scope:', registration.scope);
 
+                        // FIX-ICONS: Los iconos del manifest (icons/icon-192.png y icon-512.png)
+                        // no existen como archivos físicos. Los generamos aquí via Canvas y los
+                        // enviamos al SW para que los cachée y los sirva cuando el navegador los
+                        // solicite al validar la instalabilidad de la PWA.
+                        navigator.serviceWorker.ready.then(function(reg) {
+                            if (!reg.active) return;
+                            try {
+                                function _makeIconPng(size) {
+                                    var c = document.createElement('canvas');
+                                    c.width = c.height = size;
+                                    var ctx = c.getContext('2d');
+                                    ctx.fillStyle = '#0A84FF';
+                                    try { ctx.roundRect(0, 0, size, size, size * 0.22); }
+                                    catch(_) { ctx.rect(0, 0, size, size); }
+                                    ctx.fill();
+                                    ctx.fillStyle = '#FFFFFF';
+                                    ctx.font = 'bold ' + Math.round(size * 0.52) + 'px system-ui,sans-serif';
+                                    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                                    ctx.fillText('B', size / 2, size / 2 + size * 0.03);
+                                    return c.toDataURL('image/png');
+                                }
+                                reg.active.postMessage({
+                                    type:    'CACHE_ICONS',
+                                    icon192: _makeIconPng(192),
+                                    icon512: _makeIconPng(512)
+                                });
+                            } catch(e) { console.warn('[SW] No se pudieron cachear íconos PWA:', e); }
+                        });
+
                         // Detectar actualizaciones del SW (nueva versión deployada)
                         registration.addEventListener('updatefound', function() {
                             var newWorker = registration.installing;
@@ -133,9 +164,9 @@
     <!-- ══════════════════════════════════════════════════════════
          FIREBASE SDK  —  compat v10 (módulos globales window.firebase)
          ══════════════════════════════════════════════════════════ -->
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 
     <!-- ══════════════════════════════════════════════════════════
          CONFIGURACIÓN FIREBASE
@@ -233,8 +264,15 @@ const firebaseConfig = {
 
                 // FIX: Persistencia offline — settings() DEBE llamarse antes de enablePersistence()
                 // BUG-H7 FIX: mover settings() fuera del try interno para garantizar orden correcto.
+                // FIX-ANDROID: experimentalForceLongPolling:true es OBLIGATORIO para el APK de Capacitor —
+                // Android WebView bloquea WebSockets y sin este flag Firestore queda sin conexión en silencio.
+                // FIX-DATA: ignoreUndefinedProperties evita crash al serializar campos undefined en migraciones.
                 try {
-                    _db.settings({ cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED });
+                    _db.settings({
+                        cacheSizeBytes:               firebase.firestore.CACHE_SIZE_UNLIMITED,
+                        experimentalForceLongPolling: true,
+                        ignoreUndefinedProperties:    true
+                    });
                 } catch (_) {}
                 _db.enablePersistence({ synchronizeTabs: true }).catch(err => {
                     if (err.code === 'failed-precondition') {
@@ -2188,45 +2226,121 @@ html[data-theme="light"] .inicio-btn.primary { color: #ffffff; }
     position: fixed; inset: 0;
     background: var(--bg);
     display: flex; align-items: center; justify-content: center;
-    z-index: 9999;
-    padding: 16px;
+    z-index: 9999; padding: 16px;
     animation: fadeIn 0.22s var(--ease-out) both;
 }
 #loginScreen.auth-hidden { display: none !important; }
 
+/* ── Login Card — M3 Extra Large surface ──────────────────── */
 .login-card {
-    background: var(--card);                /* M3 Surface Container */
-    border: none;
-    border-radius: 28px;                   /* M3 shape Extra Large */
-    padding: 28px 24px 24px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 28px;
+    padding: 0;
     box-shadow: var(--shadow-elev3);
     max-width: 400px; width: 100%;
-    position: relative; overflow: hidden;
-}
-/* Subtle tonal tint on top edge (M3 elevation tint) */
-.login-card::before {
-    content: '';
-    position: absolute; top: 0; left: 0; right: 0;
-    height: 1px;
-    background: linear-gradient(90deg,
-        transparent 5%,
-        rgba(168,199,250,0.22) 50%,
-        transparent 95%);
-    pointer-events: none;
+    overflow: hidden;
 }
 html[data-theme="light"] .login-card {
     background: #fffbfe;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.12), 0 1px 4px rgba(0,0,0,0.08);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.06);
 }
 
-/* M3 Filled Button — login */
+/* ── Brand header con gradiente azul ──────────────────────── */
+.login-brand-header {
+    background: linear-gradient(145deg,
+        rgba(10,132,255,0.13) 0%,
+        rgba(10,132,255,0.04) 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 26px 26px 20px;
+    display: flex; flex-direction: column;
+}
+html[data-theme="light"] .login-brand-header {
+    background: linear-gradient(145deg,
+        rgba(10,132,255,0.08) 0%,
+        rgba(10,132,255,0.01) 100%);
+}
+.login-brand-row {
+    display: flex; align-items: center; gap: 15px;
+}
+.login-brand-icon {
+    width: 56px; height: 56px; flex-shrink: 0;
+    background: linear-gradient(135deg, #0A84FF 0%, #3b82f6 100%);
+    border-radius: 15px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 27px;
+    box-shadow: 0 6px 18px rgba(10,132,255,0.32);
+    user-select: none;
+}
+.login-brand-text { flex: 1; min-width: 0; }
+.login-brand-name {
+    font-size: 1.35rem; font-weight: 700;
+    color: var(--txt-primary); letter-spacing: -0.015em; line-height: 1.2;
+}
+.login-brand-sub {
+    font-size: 0.71rem; color: var(--txt-muted);
+    font-weight: 400; margin-top: 3px;
+}
+/* ── Pill de estado del sistema ───────────────────────────── */
+.login-status-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px 4px 8px; margin-top: 14px; align-self: flex-start;
+    border-radius: 999px;
+    background: rgba(6,214,160,0.10);
+    border: 1px solid rgba(6,214,160,0.28);
+    color: #06d6a0;
+    font-size: 0.67rem; font-weight: 600; letter-spacing: 0.02em;
+}
+html[data-theme="light"] .login-status-pill {
+    color: #059669; background: rgba(5,150,105,0.08);
+    border-color: rgba(5,150,105,0.25);
+}
+.login-status-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: currentColor;
+    animation: statusPulse 2.4s ease-in-out infinite;
+}
+@keyframes statusPulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
+
+/* ── Cuerpo del formulario ────────────────────────────────── */
+.login-body { padding: 22px 26px 24px; }
+.login-subtitle-text {
+    font-size: 0.8rem; color: var(--txt-secondary);
+    margin: 0 0 18px; line-height: 1.45;
+}
+.login-field { margin-bottom: 14px; }
+.login-label {
+    display: block; font-size: 0.74rem; font-weight: 500;
+    color: var(--txt-secondary); margin-bottom: 6px; letter-spacing: 0.01em;
+}
+.login-input {
+    width: 100%; box-sizing: border-box; height: 46px;
+    background: var(--surface);
+    border: 1px solid var(--border-mid);
+    border-radius: var(--r-md);
+    padding: 0 14px;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.9rem; color: var(--txt-primary);
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
+    outline: none; -webkit-appearance: none;
+}
+.login-input::placeholder { color: var(--txt-muted); }
+.login-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(10,132,255,0.14);
+}
+html[data-theme="light"] .login-input {
+    background: #f5f7ff; border-color: #c5ccdf; color: #1a1c2e;
+}
+html[data-theme="light"] .login-input:focus {
+    border-color: #0A84FF; box-shadow: 0 0 0 3px rgba(10,132,255,0.11);
+}
+
+/* ── Botón de login ───────────────────────────────────────── */
 .login-btn {
-    width: 100%;
-    height: 48px;
-    padding: 0 24px;
+    width: 100%; height: 48px; padding: 0 24px;
     border-radius: var(--r-full);
-    background: var(--accent);
-    color: var(--accent-on, #003063);
+    background: var(--accent); color: var(--accent-on, #003063);
     border: none;
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 0.875rem; font-weight: 500; letter-spacing: 0.005em;
@@ -2237,8 +2351,7 @@ html[data-theme="light"] .login-card {
     -webkit-tap-highlight-color: transparent;
 }
 .login-btn::after {
-    content: '';
-    position: absolute; inset: 0;
+    content: ''; position: absolute; inset: 0;
     background: #fff; opacity: 0;
     transition: opacity 0.15s ease; pointer-events: none;
 }
@@ -2254,28 +2367,22 @@ html[data-theme="light"] .login-card {
     border-radius: var(--r-md);
     color: var(--red-text);
     font-size: 0.775rem; font-weight: 500;
-    display: none;
-    animation: fadeIn 0.16s ease both;
+    display: none; animation: fadeIn 0.16s ease both;
 }
 .login-error.visible { display: block; }
-.login-divider {
-    height: 1px; background: var(--border);
-    margin: 20px 0;
-}
+.login-divider { height: 1px; background: var(--border); margin: 16px 0 12px; }
 .login-footer {
-    text-align: center;
-    font-size: 0.68rem; color: var(--txt-muted);
+    text-align: center; font-size: 0.65rem;
+    color: var(--txt-muted); line-height: 1.5;
 }
 
-/* Spinner para el botón de login */
+/* ── Spinner del botón ────────────────────────────────────── */
 @keyframes spin { to { transform: rotate(360deg); } }
 .login-spinner {
     width: 15px; height: 15px;
     border: 2px solid rgba(255,255,255,0.3);
-    border-top-color: #fff;
-    border-radius: 50%;
-    animation: spin 0.7s linear infinite;
-    flex-shrink: 0;
+    border-top-color: #fff; border-radius: 50%;
+    animation: spin 0.7s linear infinite; flex-shrink: 0;
 }
 
 /* Loading auth — pantalla intermedia */
@@ -2768,33 +2875,50 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
          ══════════════════════════════════════════════════════ -->
     <div id="loginScreen" class="auth-hidden">
         <div class="login-card">
-            <div class="login-logo">
-                <div class="login-logo-icon">📦</div>
-                <div>
-                    <div class="login-logo-text">BarInventory</div>
-                    <div class="login-logo-sub">Control de Inventario</div>
+            <!-- ── Brand header ── -->
+            <div class="login-brand-header">
+                <div class="login-brand-row">
+                    <div class="login-brand-icon" role="img" aria-label="BarInventory">🍸</div>
+                    <div class="login-brand-text">
+                        <div class="login-brand-name">BarInventory</div>
+                        <div class="login-brand-sub">Sistema de Control de Inventario</div>
+                    </div>
+                </div>
+                <!-- Pill de estado — indica que el sistema está operativo -->
+                <div class="login-status-pill" role="status" aria-live="polite">
+                    <span class="login-status-dot"></span>
+                    Sistema operativo
                 </div>
             </div>
-            <p class="login-title">Bienvenido de vuelta</p>
-            <p class="login-subtitle">Ingresa tus credenciales para acceder al sistema de inventario.</p>
 
-            <div class="login-field">
-                <label class="login-label" for="loginEmail">Correo electrónico</label>
-                <input type="email" id="loginEmail" class="login-input" placeholder="tu@correo.com" autocomplete="email">
+            <!-- ── Formulario ── -->
+            <div class="login-body">
+                <p class="login-subtitle-text">Ingresa tus credenciales para continuar</p>
+
+                <div class="login-field">
+                    <label class="login-label" for="loginEmail">Correo electrónico</label>
+                    <input type="email" id="loginEmail" class="login-input"
+                           placeholder="tu@correo.com" autocomplete="email"
+                           inputmode="email" spellcheck="false" autocapitalize="none">
+                </div>
+                <div class="login-field">
+                    <label class="login-label" for="loginPassword">Contraseña</label>
+                    <input type="password" id="loginPassword" class="login-input"
+                           placeholder="••••••••" autocomplete="current-password">
+                </div>
+
+                <div id="loginError" class="login-error" role="alert" aria-live="assertive"></div>
+
+                <button type="button" id="loginBtn" class="login-btn" onclick="handleLogin()">
+                    <span id="loginBtnText">Iniciar sesión</span>
+                </button>
+
+                <div class="login-divider"></div>
+                <p class="login-footer">
+                    Acceso restringido al personal autorizado<br>
+                    <span style="opacity:.7;">BarInventory v2.4 · Instituto ULinks</span>
+                </p>
             </div>
-            <div class="login-field">
-                <label class="login-label" for="loginPassword">Contraseña</label>
-                <input type="password" id="loginPassword" class="login-input" placeholder="••••••••" autocomplete="current-password">
-            </div>
-
-            <div id="loginError" class="login-error"></div>
-
-            <button type="button" id="loginBtn" class="login-btn" onclick="handleLogin()">
-                <span id="loginBtnText">Iniciar sesión</span>
-            </button>
-
-            <div class="login-divider"></div>
-            <p class="login-footer">Sistema privado — acceso restringido al personal autorizado.</p>
         </div>
     </div>
 
@@ -4764,10 +4888,38 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                     if (doc.id !== currentUserUid) batch.delete(doc.ref);
                 });
                 await batch.commit();
-                // Escribir la nueva sesión en el documento principal
+                // Escribir la nueva sesión en el documento principal.
+                // FIX-G1: también limpiar auditoriaStatus y auditoriaConteo del ciclo anterior
+                // en el doc principal. Sin esto, _applyCloudData en otros dispositivos podría
+                // leer el auditoriaConteo del ciclo anterior y restaurarlo incorrectamente.
                 await _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
-                         .set({ _auditoriaSessionId: sessionId, _auditoriaStartedBy: currentUserUid,
-                                _auditoriaStartedAt: Date.now() }, { merge: true });
+                         .set({
+                             _auditoriaSessionId:  sessionId,
+                             _auditoriaStartedBy:  currentUserUid,
+                             _auditoriaStartedAt:  Date.now(),
+                             // FIX-G1: resetear campos de auditoría del ciclo anterior
+                             auditoriaStatus:  { almacen: 'pendiente', barra1: 'pendiente', barra2: 'pendiente' },
+                             auditoriaConteo:  {}
+                         }, { merge: true });
+
+                // FIX-G2: limpiar el doc userAuditoria del propio admin.
+                // Antes se excluía de la limpieza para evitar un loop en subscribeMyAuditoria,
+                // pero eso dejaba datos obsoletos del ciclo anterior que podían volver a aparecer
+                // si subscribeAllUsersAuditoria los leía antes de que _auditoriaSessionId cambiara.
+                // Solución: sobrescribir (sin merge) el doc del admin con la nueva sesión y conteo vacío.
+                await _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
+                         .collection('userAuditoria').doc(currentUserUid)
+                         .set({
+                             uid:       currentUserUid,
+                             email:     (_auth && _auth.currentUser) ? _auth.currentUser.email : currentUserUid,
+                             sessionId: sessionId,
+                             status:    { almacen: 'pendiente', barra1: 'pendiente', barra2: 'pendiente' },
+                             conteo:    {},
+                             unlocks:   {},
+                             updatedAt: Date.now(),
+                             isAdmin:   true
+                         }); // sin merge: false = sobrescribe todo, elimina conteos y unlocks del ciclo anterior
+
                 console.info('[AuditAdmin] Nueva sesión', sessionId, 'iniciada ✓');
             } catch (err) {
                 console.warn('[AuditAdmin] Error iniciando sesión en Firestore:', err);
@@ -4937,6 +5089,14 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                     const teniaSesionAnterior = !!_auditoriaSessionId; // null/'' = primer arranque
                     _auditoriaSessionId = data._auditoriaSessionId;
                     if (!isOwnReset && teniaSesionAnterior) {
+                        // FIX-I: Limpiar también auditoriaConteo y auditoriaStatus cuando
+                        // detectamos una nueva sesión del admin. Sin esto, el conteo AGREGADO
+                        // del ciclo anterior quedaría visible en los dispositivos secundarios
+                        // aunque el admin hubiera iniciado una nueva auditoría, porque el doc
+                        // principal puede tener auditoriaConteo del ciclo viejo hasta que
+                        // subscribeAllUsersAuditoria recompute con los nuevos datos.
+                        auditoriaConteo = {};
+                        auditoriaStatus = { almacen: 'pendiente', barra1: 'pendiente', barra2: 'pendiente' };
                         // FIX: Solo resetear si ya teníamos una sesión previa Y el admin
                         // inició una nueva. Si _auditoriaSessionId era null (primer arranque
                         // o localStorage vacío), no hay datos previos que perder y el reset
@@ -6771,7 +6931,7 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 showNotification('📴 Sin conexión — conecta a internet antes de iniciar nueva auditoría');
                 return;
             }
-            showConfirm('⚠️ ¿Iniciar nueva auditoría?\n\nSe borrarán todos los conteos actuales de TODOS los usuarios y áreas comenzando desde cero.\n\nEsta acción no se puede deshacer.', function() {
+            showConfirm('⚠️ ¿Iniciar nueva auditoría?\n\nSe borrarán todos los conteos actuales de TODOS los usuarios y áreas comenzando desde cero.\n\nEsta acción no se puede deshacer.', async function() {
                 const newSessionId = String(Date.now());
                 // Reiniciar estado del admin
                 _auditoriaSessionId       = newSessionId;
@@ -6787,15 +6947,21 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 auditoriaAreaActiva = null;
                 isAuditoriaMode    = false;
                 saveToLocalStorage();
-                // Borrar todos los conteos de usuarios en Firestore y escribir nuevo sessionId
-                _adminIniciarSesionFirestore(newSessionId).catch(err =>
-                    console.warn('[AuditAdmin] Error al reiniciar sesión en Firestore:', err)
-                );
-                resetConteoAtomicoEnFirestore().catch(err =>
-                    console.warn('[Atomico] No se pudo limpiar Firestore en reset:', err)
-                );
-                showNotification('✅ Nueva auditoría iniciada — todos los conteos en ceros');
                 renderTab();
+
+                // FIX-H: Esperar a que las operaciones Firestore completen ANTES de notificar.
+                // Antes eran fire-and-forget: si fallaban, otros dispositivos nunca recibían
+                // el nuevo sessionId y sus conteos no se reseteaban — la nueva auditoría
+                // solo existía localmente en el admin.
+                showNotification('⏳ Iniciando nueva auditoría…');
+                try {
+                    await _adminIniciarSesionFirestore(newSessionId);
+                    await resetConteoAtomicoEnFirestore();
+                    showNotification('✅ Nueva auditoría iniciada — todos los conteos en ceros');
+                } catch (err) {
+                    console.error('[AuditReset] Error crítico al iniciar sesión en Firestore:', err);
+                    showNotification('❌ Error al iniciar auditoría — revisa la conexión y vuelve a intentarlo');
+                }
             });
         }
 
@@ -8766,7 +8932,9 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 return;
             }
             const email    = ($id('loginEmail').value   || '').trim();
-            const password = ($id('loginPassword').value || '').trim();
+            // FIX-AUTH: NO hacer trim() en passwords. Las contraseñas pueden tener espacios
+            // intencionales al inicio/fin. Trimear causaría auth/wrong-password silencioso.
+            const password = $id('loginPassword').value || '';
             const errEl    = $id('loginError');
             const btn      = $id('loginBtn');
             const btnText  = $id('loginBtnText');
