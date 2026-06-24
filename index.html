@@ -9,9 +9,7 @@
     <meta name="theme-color" content="#0f2040" media="(prefers-color-scheme: light)">
     <link rel="manifest" href="manifest.json">
     <meta name="mobile-web-app-capable" content="yes">
-    <!-- FIX-iOS1: apple-mobile-web-app-capable es obligatorio para que iOS Safari
-         active el modo standalone. Sin este meta, el ícono en la pantalla de inicio
-         abre Safari normal con barra de navegación en lugar de la app en pantalla completa. -->
+    <!-- FIX-iOS: apple-mobile-web-app-capable activa modo standalone en iPhone/iPad -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="BarInventory">
@@ -36,16 +34,11 @@
             var c = document.createElement('canvas');
             c.width = c.height = size;
             var ctx = c.getContext('2d');
-            // Gradiente oscuro (tema BarInventory navy→black)
-            var grad = ctx.createLinearGradient(0, 0, size, size);
-            grad.addColorStop(0, '#1a2744');
-            grad.addColorStop(1, '#0f0f13');
-            ctx.fillStyle = grad;
+            ctx.fillStyle = '#0A84FF';
             try { ctx.roundRect(0, 0, size, size, size * 0.22); }
             catch(_) { ctx.rect(0, 0, size, size); } // fallback: sin roundRect
             ctx.fill();
-            // Letra "B" en amber — identidad BarInventory
-            ctx.fillStyle = '#F97316';
+            ctx.fillStyle = '#FFFFFF';
             ctx.font = 'bold ' + Math.round(size * 0.52) + 'px system-ui,sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
@@ -81,39 +74,32 @@
                     .then(function(registration) {
                         console.info('[SW] Registrado con scope:', registration.scope);
 
-                        // FIX-ICONS: Enviar los íconos generados por Canvas al SW para que los
-                        // cachée. El manifest.json apunta a icons/icon-192.png e icons/icon-512.png
-                        // que no existen como archivos físicos. Sin este paso, el browser GET
-                        // esas rutas y recibe 404, fallando la validación de instalabilidad PWA.
-                        // Solución: el SW intercepta esas rutas y devuelve el PNG del cache.
+                        // FIX-ICONS: Los iconos del manifest (icons/icon-192.png y icon-512.png)
+                        // no existen como archivos físicos. Los generamos aquí via Canvas y los
+                        // enviamos al SW para que los cachée y los sirva cuando el navegador los
+                        // solicite al validar la instalabilidad de la PWA.
                         navigator.serviceWorker.ready.then(function(reg) {
                             if (!reg.active) return;
                             try {
-                                function makeIconDataUrl(size) {
+                                function _makeIconPng(size) {
                                     var c = document.createElement('canvas');
                                     c.width = c.height = size;
                                     var ctx = c.getContext('2d');
-                                    // Gradiente oscuro — tema BarInventory
-                                    var grad = ctx.createLinearGradient(0, 0, size, size);
-                                    grad.addColorStop(0, '#1a2744');
-                                    grad.addColorStop(1, '#0f0f13');
-                                    ctx.fillStyle = grad;
+                                    ctx.fillStyle = '#0A84FF';
                                     try { ctx.roundRect(0, 0, size, size, size * 0.22); }
                                     catch(_) { ctx.rect(0, 0, size, size); }
                                     ctx.fill();
-                                    // Letra "B" en amber
-                                    ctx.fillStyle = '#F97316';
+                                    ctx.fillStyle = '#FFFFFF';
                                     ctx.font = 'bold ' + Math.round(size * 0.52) + 'px system-ui,sans-serif';
                                     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                                     ctx.fillText('B', size / 2, size / 2 + size * 0.03);
                                     return c.toDataURL('image/png');
                                 }
-                        reg.active.postMessage({
-                                    type:   'CACHE_ICONS',
-                                    icon192: makeIconDataUrl(192),
-                                    icon512: makeIconDataUrl(512)
+                                reg.active.postMessage({
+                                    type:    'CACHE_ICONS',
+                                    icon192: _makeIconPng(192),
+                                    icon512: _makeIconPng(512)
                                 });
-                                console.info('[SW] Íconos PWA enviados al caché del SW ✓');
                             } catch(e) { console.warn('[SW] No se pudieron cachear íconos PWA:', e); }
                         });
 
@@ -122,14 +108,11 @@
                             var newWorker = registration.installing;
                             newWorker.addEventListener('statechange', function() {
                                 if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                    // Nueva versión disponible — notificar al usuario con botón de recarga
+                                    // Nueva versión disponible — notificar al usuario
                                     console.info('[SW] Nueva versión disponible. Recarga para actualizar.');
                                     if (typeof showNotification === "function") {
-                                        showNotification('🔄 Nueva versión disponible — recarga la página para actualizar');
+                                        showNotification('🔄 Nueva versión disponible — recarga la página');
                                     }
-                                    // Enviar SKIP_WAITING al SW nuevo para que tome el control
-                                    // El usuario deberá recargar manualmente o en la próxima carga
-                                    newWorker.postMessage({ type: 'SKIP_WAITING' });
                                 }
                             });
                         });
@@ -181,9 +164,6 @@
     <!-- ══════════════════════════════════════════════════════════
          FIREBASE SDK  —  compat v10 (módulos globales window.firebase)
          ══════════════════════════════════════════════════════════ -->
-    <!-- FIX-SDK: actualizado a 10.14.1 (parches de seguridad y mejoras de rendimiento
-         en Firestore multiplexer; la versión 10.12.2 tenía problemas con la reconexión
-         de WebSocket en redes inestables). -->
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
@@ -284,15 +264,14 @@ const firebaseConfig = {
 
                 // FIX: Persistencia offline — settings() DEBE llamarse antes de enablePersistence()
                 // BUG-H7 FIX: mover settings() fuera del try interno para garantizar orden correcto.
-                // FIX-ANDROID: experimentalForceLongPolling:true es OBLIGATORIO para el APK de Capacitor.
-                // Android WebView bloquea WebSockets en ciertos contextos de seguridad y Firestore
-                // queda silenciosamente sin conexión sin este flag. ignoreUndefinedProperties:true
-                // previene errores en documentos que contienen campos undefined por migraciones.
+                // FIX-ANDROID: experimentalForceLongPolling:true es OBLIGATORIO para el APK de Capacitor —
+                // Android WebView bloquea WebSockets y sin este flag Firestore queda sin conexión en silencio.
+                // FIX-DATA: ignoreUndefinedProperties evita crash al serializar campos undefined en migraciones.
                 try {
                     _db.settings({
-                        cacheSizeBytes:              firebase.firestore.CACHE_SIZE_UNLIMITED,
-                        experimentalForceLongPolling: true,   // FIX-ANDROID: WebSocket → Long-Polling en WebView
-                        ignoreUndefinedProperties:   true     // FIX-DATA: ignora campos undefined al guardar
+                        cacheSizeBytes:               firebase.firestore.CACHE_SIZE_UNLIMITED,
+                        experimentalForceLongPolling: true,
+                        ignoreUndefinedProperties:    true
                     });
                 } catch (_) {}
                 _db.enablePersistence({ synchronizeTabs: true }).catch(err => {
@@ -2247,145 +2226,132 @@ html[data-theme="light"] .inicio-btn.primary { color: #ffffff; }
     position: fixed; inset: 0;
     background: var(--bg);
     display: flex; align-items: center; justify-content: center;
-    z-index: 9999;
-    padding: 16px;
+    z-index: 9999; padding: 16px;
     animation: fadeIn 0.22s var(--ease-out) both;
 }
 #loginScreen.auth-hidden { display: none !important; }
 
+/* ── Login Card — M3 Extra Large surface ──────────────────── */
 .login-card {
     background: var(--card);
-    border: 1px solid var(--border-mid);
+    border: 1px solid var(--border);
     border-radius: 28px;
-    padding: 0;                            /* FIX-UI: padding manejado por secciones */
-    box-shadow: var(--shadow-elev3), 0 0 0 1px rgba(168,199,250,0.06);
+    padding: 0;
+    box-shadow: var(--shadow-elev3);
     max-width: 400px; width: 100%;
-    position: relative; overflow: hidden;
+    overflow: hidden;
 }
 html[data-theme="light"] .login-card {
     background: #fffbfe;
-    border-color: rgba(73,69,79,0.12);
-    box-shadow: 0 8px 32px rgba(0,0,0,0.12), 0 1px 4px rgba(0,0,0,0.08);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.06);
 }
 
-/* ── Header de la tarjeta de login — gradiente de marca ─────── */
-.login-header {
-    background: linear-gradient(135deg, #161b2e 0%, #0f0f13 60%, #1a1210 100%);
-    padding: 28px 28px 24px;
-    border-bottom: 1px solid rgba(168,199,250,0.10);
-    position: relative; overflow: hidden;
+/* ── Brand header con gradiente azul ──────────────────────── */
+.login-brand-header {
+    background: linear-gradient(145deg,
+        rgba(10,132,255,0.13) 0%,
+        rgba(10,132,255,0.04) 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 26px 26px 20px;
+    display: flex; flex-direction: column;
 }
-.login-header::before {
-    /* Glow decorativo amber en esquina inferior derecha */
-    content: '';
-    position: absolute; bottom: -20px; right: -20px;
-    width: 100px; height: 100px;
-    background: radial-gradient(circle, rgba(249,115,22,0.22) 0%, transparent 70%);
-    pointer-events: none;
+html[data-theme="light"] .login-brand-header {
+    background: linear-gradient(145deg,
+        rgba(10,132,255,0.08) 0%,
+        rgba(10,132,255,0.01) 100%);
 }
-html[data-theme="light"] .login-header {
-    background: linear-gradient(135deg, #1e3a5f 0%, #0d2444 100%);
+.login-brand-row {
+    display: flex; align-items: center; gap: 15px;
 }
-
-.login-header-icon {
-    width: 52px; height: 52px;
-    background: rgba(249,115,22,0.15);
-    border: 1.5px solid rgba(249,115,22,0.35);
-    border-radius: 16px;
+.login-brand-icon {
+    width: 56px; height: 56px; flex-shrink: 0;
+    background: linear-gradient(135deg, #0A84FF 0%, #3b82f6 100%);
+    border-radius: 15px;
     display: flex; align-items: center; justify-content: center;
-    margin-bottom: 14px;
-    position: relative; z-index: 1;
+    font-size: 27px;
+    box-shadow: 0 6px 18px rgba(10,132,255,0.32);
+    user-select: none;
 }
-.login-header-icon svg { color: #F97316; }
-
-.login-logo-text {
-    font-family: 'IBM Plex Sans', sans-serif;
+.login-brand-text { flex: 1; min-width: 0; }
+.login-brand-name {
     font-size: 1.35rem; font-weight: 700;
-    color: #e6e1e5; letter-spacing: -0.01em;
-    line-height: 1.1;
-    position: relative; z-index: 1;
+    color: var(--txt-primary); letter-spacing: -0.015em; line-height: 1.2;
 }
-.login-logo-sub {
-    font-size: 0.72rem; color: rgba(202,196,208,0.55);
-    font-weight: 400; letter-spacing: 0.05em;
-    text-transform: uppercase; margin-top: 3px;
-    position: relative; z-index: 1;
+.login-brand-sub {
+    font-size: 0.71rem; color: var(--txt-muted);
+    font-weight: 400; margin-top: 3px;
 }
+/* ── Pill de estado del sistema ───────────────────────────── */
+.login-status-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px 4px 8px; margin-top: 14px; align-self: flex-start;
+    border-radius: 999px;
+    background: rgba(6,214,160,0.10);
+    border: 1px solid rgba(6,214,160,0.28);
+    color: #06d6a0;
+    font-size: 0.67rem; font-weight: 600; letter-spacing: 0.02em;
+}
+html[data-theme="light"] .login-status-pill {
+    color: #059669; background: rgba(5,150,105,0.08);
+    border-color: rgba(5,150,105,0.25);
+}
+.login-status-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: currentColor;
+    animation: statusPulse 2.4s ease-in-out infinite;
+}
+@keyframes statusPulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
 
-/* ── Cuerpo de la tarjeta — campos + botón ─────────────────── */
-.login-body {
-    padding: 24px 28px 28px;
+/* ── Cuerpo del formulario ────────────────────────────────── */
+.login-body { padding: 22px 26px 24px; }
+.login-subtitle-text {
+    font-size: 0.8rem; color: var(--txt-secondary);
+    margin: 0 0 18px; line-height: 1.45;
 }
-
-.login-welcome {
-    font-size: 0.95rem; font-weight: 600;
-    color: var(--txt-primary); margin-bottom: 4px;
-}
-.login-subtitle {
-    font-size: 0.75rem; color: var(--txt-muted);
-    margin-bottom: 20px; line-height: 1.5;
-}
-
-/* ── Campos del formulario ─────────────────────────────────── */
-.login-field {
-    margin-bottom: 14px;
-}
+.login-field { margin-bottom: 14px; }
 .login-label {
-    display: block;
-    font-size: 0.72rem; font-weight: 600;
-    letter-spacing: 0.04em; text-transform: uppercase;
-    color: var(--txt-muted); margin-bottom: 6px;
+    display: block; font-size: 0.74rem; font-weight: 500;
+    color: var(--txt-secondary); margin-bottom: 6px; letter-spacing: 0.01em;
 }
 .login-input {
-    width: 100%;
-    height: 46px;
-    padding: 0 14px;
+    width: 100%; box-sizing: border-box; height: 46px;
     background: var(--surface);
-    border: 1.5px solid var(--border-mid);
+    border: 1px solid var(--border-mid);
     border-radius: var(--r-md);
-    color: var(--txt-primary);
+    padding: 0 14px;
     font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 0.9rem;
-    outline: none;
-    transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
-    -webkit-appearance: none; appearance: none;
+    font-size: 0.9rem; color: var(--txt-primary);
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
+    outline: none; -webkit-appearance: none;
 }
+.login-input::placeholder { color: var(--txt-muted); }
 .login-input:focus {
     border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-dim);
-    background: var(--card);
+    box-shadow: 0 0 0 3px rgba(10,132,255,0.14);
 }
-.login-input::placeholder { color: var(--txt-muted); opacity: 0.65; }
 html[data-theme="light"] .login-input {
-    background: #f7f2fa;
-    border-color: rgba(73,69,79,0.20);
+    background: #f5f7ff; border-color: #c5ccdf; color: #1a1c2e;
 }
 html[data-theme="light"] .login-input:focus {
-    background: #fff;
-    border-color: var(--accent);
+    border-color: #0A84FF; box-shadow: 0 0 0 3px rgba(10,132,255,0.11);
 }
 
+/* ── Botón de login ───────────────────────────────────────── */
 .login-btn {
-    width: 100%;
-    height: 48px;
-    padding: 0 24px;
+    width: 100%; height: 48px; padding: 0 24px;
     border-radius: var(--r-full);
-    background: var(--accent);
-    color: var(--accent-on, #003063);
+    background: var(--accent); color: var(--accent-on, #003063);
     border: none;
     font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 0.875rem; font-weight: 600; letter-spacing: 0.01em;
+    font-size: 0.875rem; font-weight: 500; letter-spacing: 0.005em;
     cursor: pointer;
-    display: flex; align-items: center; justify-content: center; gap: 8px;
-    transition: box-shadow 0.2s var(--ease-std), transform 0.15s var(--ease-out), opacity 0.15s;
+    display: flex; align-items: center; justify-content: center;
+    transition: box-shadow 0.2s var(--ease-std), transform 0.15s var(--ease-out);
     position: relative; overflow: hidden;
     -webkit-tap-highlight-color: transparent;
-    margin-top: 4px;
 }
-html[data-theme="light"] .login-btn { color: #ffffff; }
 .login-btn::after {
-    content: '';
-    position: absolute; inset: 0;
+    content: ''; position: absolute; inset: 0;
     background: #fff; opacity: 0;
     transition: opacity 0.15s ease; pointer-events: none;
 }
@@ -2401,28 +2367,22 @@ html[data-theme="light"] .login-btn { color: #ffffff; }
     border-radius: var(--r-md);
     color: var(--red-text);
     font-size: 0.775rem; font-weight: 500;
-    display: none;
-    animation: fadeIn 0.16s ease both;
+    display: none; animation: fadeIn 0.16s ease both;
 }
 .login-error.visible { display: block; }
-.login-divider {
-    height: 1px; background: var(--border);
-    margin: 20px 0;
-}
+.login-divider { height: 1px; background: var(--border); margin: 16px 0 12px; }
 .login-footer {
-    text-align: center;
-    font-size: 0.68rem; color: var(--txt-muted);
+    text-align: center; font-size: 0.65rem;
+    color: var(--txt-muted); line-height: 1.5;
 }
 
-/* Spinner para el botón de login */
+/* ── Spinner del botón ────────────────────────────────────── */
 @keyframes spin { to { transform: rotate(360deg); } }
 .login-spinner {
     width: 15px; height: 15px;
     border: 2px solid rgba(255,255,255,0.3);
-    border-top-color: #fff;
-    border-radius: 50%;
-    animation: spin 0.7s linear infinite;
-    flex-shrink: 0;
+    border-top-color: #fff; border-radius: 50%;
+    animation: spin 0.7s linear infinite; flex-shrink: 0;
 }
 
 /* Loading auth — pantalla intermedia */
@@ -2915,41 +2875,49 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
          ══════════════════════════════════════════════════════ -->
     <div id="loginScreen" class="auth-hidden">
         <div class="login-card">
-
-            <!-- ── Cabecera branded ─────────────────────────────────────── -->
-            <div class="login-header">
-                <div class="login-header-icon">
-                    <!-- Cocktail glass SVG — identidad de bar -->
-                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M8 22h8M12 22V11M4 4l8 7 8-7H4zM4 4h16"/>
-                    </svg>
+            <!-- ── Brand header ── -->
+            <div class="login-brand-header">
+                <div class="login-brand-row">
+                    <div class="login-brand-icon" role="img" aria-label="BarInventory">🍸</div>
+                    <div class="login-brand-text">
+                        <div class="login-brand-name">BarInventory</div>
+                        <div class="login-brand-sub">Sistema de Control de Inventario</div>
+                    </div>
                 </div>
-                <div class="login-logo-text">BarInventory</div>
-                <div class="login-logo-sub">Control de inventario · Sistema privado</div>
+                <!-- Pill de estado — indica que el sistema está operativo -->
+                <div class="login-status-pill" role="status" aria-live="polite">
+                    <span class="login-status-dot"></span>
+                    Sistema operativo
+                </div>
             </div>
 
-            <!-- ── Cuerpo: campos y botón ───────────────────────────────── -->
+            <!-- ── Formulario ── -->
             <div class="login-body">
-                <p class="login-welcome">Bienvenido de vuelta 👋</p>
-                <p class="login-subtitle">Ingresa tus credenciales para acceder al sistema de auditoría.</p>
+                <p class="login-subtitle-text">Ingresa tus credenciales para continuar</p>
 
                 <div class="login-field">
                     <label class="login-label" for="loginEmail">Correo electrónico</label>
-                    <input type="email" id="loginEmail" class="login-input" placeholder="tu@correo.com" autocomplete="email">
+                    <input type="email" id="loginEmail" class="login-input"
+                           placeholder="tu@correo.com" autocomplete="email"
+                           inputmode="email" spellcheck="false" autocapitalize="none">
                 </div>
                 <div class="login-field">
                     <label class="login-label" for="loginPassword">Contraseña</label>
-                    <input type="password" id="loginPassword" class="login-input" placeholder="••••••••" autocomplete="current-password">
+                    <input type="password" id="loginPassword" class="login-input"
+                           placeholder="••••••••" autocomplete="current-password">
                 </div>
 
-                <div id="loginError" class="login-error"></div>
+                <div id="loginError" class="login-error" role="alert" aria-live="assertive"></div>
 
-                <button type="button" id="loginBtn" class="login-btn" onclick="handleLogin()" style="margin-top:6px;">
+                <button type="button" id="loginBtn" class="login-btn" onclick="handleLogin()">
                     <span id="loginBtnText">Iniciar sesión</span>
                 </button>
 
                 <div class="login-divider"></div>
-                <p class="login-footer">🔒 Acceso restringido al personal autorizado · Cifrado con Firebase Auth</p>
+                <p class="login-footer">
+                    Acceso restringido al personal autorizado<br>
+                    <span style="opacity:.7;">BarInventory v2.4 · Instituto ULinks</span>
+                </p>
             </div>
         </div>
     </div>
@@ -4334,12 +4302,6 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                     _lastWrittenBy:    currentUserUid || 'anonymous',
                     _lastWrittenRole:  currentUserRole || 'user'
                 };
-                // FIX-SYNC: incluir _auditoriaSessionId si existe — merge:true lo preserva
-                // si otro dispositivo lo escribió, pero si este dispositivo es el admin
-                // que lo estableció, es correcto sobreescribir con el mismo valor.
-                if (_auditoriaSessionId) {
-                    payload._auditoriaSessionId = _auditoriaSessionId;
-                }
 
                 // Construir escrituras por área (merge:true = solo toca el área modificada)
                 // Cada dispositivo escribe SOLO su área → no hay colisión entre dispositivos
@@ -4550,42 +4512,37 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
          * ───────────────────────────────
          * Elimina los documentos de conteoAreas en Firestore al iniciar nueva auditoría.
          * Así los increment() del siguiente ciclo parten de cero.
-         *
-         * FIX-BATCH: Los docs se acumulan en un array y se procesan en chunks de 450
-         * operaciones para no superar el límite de 500 ops/batch de Firestore.
-         * Antes era un único batch que podía fallar silenciosamente con muchos bartenders.
-         * Ahora re-lanza el error para que auditoriaResetear() pueda mostrar advertencia.
          */
         async function resetConteoAtomicoEnFirestore() {
             if (!_db || !navigator.onLine) return;
             try {
                 const AREAS = ['almacen', 'barra1', 'barra2'];
-                const MAX_BATCH_OPS = 450; // Margen de seguridad bajo el límite de 500
-
-                // ── Recolectar TODOS los refs a borrar ──────────────────────
-                const allRefs = [];
+                const batch = _db.batch();
 
                 for (const area of AREAS) {
-                    // Subcolección dispositivos (un doc por bartender)
-                    const dispositivosSnap = await _db
+                    const dispositivosRef = _db
                         .collection('inventarioApp')
                         .doc(FIRESTORE_DOC_ID)
                         .collection('conteoAreas')
                         .doc(area)
-                        .collection('dispositivos')
-                        .get();
-                    dispositivosSnap.docs.forEach(doc => allRefs.push(doc.ref));
+                        .collection('dispositivos');
 
-                    // Doc padre del área (conteoAreas/{area})
-                    allRefs.push(_db
+                    // Listar y borrar todos los documentos de dispositivos para esta área
+                    const snap = await dispositivosRef.get();
+                    snap.docs.forEach(doc => batch.delete(doc.ref));
+
+                    // También borrar el documento padre del área por compatibilidad
+                    batch.delete(_db
                         .collection('inventarioApp')
                         .doc(FIRESTORE_DOC_ID)
                         .collection('conteoAreas')
                         .doc(area)
                     );
+                }
 
-                    // Doc de conteoMultiUsuario (sistema legacy)
-                    allRefs.push(_db
+                // FIX-03 (preservado): borrar también conteoMultiUsuario
+                for (const area of AREAS) {
+                    batch.delete(_db
                         .collection('inventarioApp')
                         .doc(FIRESTORE_DOC_ID)
                         .collection('conteoMultiUsuario')
@@ -4593,22 +4550,16 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                     );
                 }
 
-                // ── Procesar en chunks ──────────────────────────────────────
-                // FIX-BATCH: evitar el límite de 500 ops/batch con múltiples commits
-                let processedCount = 0;
-                for (let i = 0; i < allRefs.length; i += MAX_BATCH_OPS) {
-                    const chunk = allRefs.slice(i, i + MAX_BATCH_OPS);
-                    const batch = _db.batch();
-                    chunk.forEach(ref => batch.delete(ref));
-                    await batch.commit();
-                    processedCount += chunk.length;
-                }
-
-                console.info('[MultiDisp] Reset conteoAreas + conteoMultiUsuario: ' + processedCount + ' docs eliminados ✓');
+                // BUG-11 FIX: borrar los documentos individuales de conteoMultiUsuario/{area}
+                // (el borrado anterior solo borraba el doc padre, no sus contenidos).
+                // Nota: Firestore NO borra subcolecciones automáticamente al borrar el padre.
+                // Los datos de área en conteoMultiUsuario son documentos planos sin subcolección,
+                // así que el borrado del doc es suficiente — verificado.
+                await batch.commit();
+                console.info('[MultiDisp] conteoAreas/dispositivos + conteoMultiUsuario eliminados ✓');
 
             } catch (err) {
                 console.warn('[MultiDisp] Error al resetear conteos en Firestore:', err);
-                throw err; // Re-throw para que auditoriaResetear() muestre advertencia
             }
         }
 
@@ -4624,15 +4575,9 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
 
         /** Guarda el conteo propio del usuario en Firestore (solo escribe su UID) */
         async function syncMyAuditoriaToFirestore() {
-            if (!_db || !currentUserUid) {
-                // Sin Firebase disponible — marcar pendiente
-                _auditSyncPending = true;
-                return;
-            }
-            if (!navigator.onLine) {
+            if (!_db || !currentUserUid || !navigator.onLine) {
                 // Offline: marcar pendiente para reintento al reconectar
                 _auditSyncPending = true;
-                try { localStorage.setItem('inventarioApp_auditSyncPending', '1'); } catch(_) {}
                 return;
             }
             try {
@@ -4658,21 +4603,13 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                     });
                 });
 
-                // FIX-TIMESTAMP: updatedAt usa serverTimestamp() cuando está disponible
-                // para evitar diferencias de reloj entre dispositivos que causen race conditions
-                // en _recalcAdminAggregatedConteo (Last-Write-Wins por timestamp).
-                const serverTs = (_db && firebase && firebase.firestore && firebase.firestore.FieldValue)
-                    ? firebase.firestore.FieldValue.serverTimestamp()
-                    : now;
-
                 await ref.set({
                     uid:        currentUserUid,
                     email:      (_auth && _auth.currentUser) ? _auth.currentUser.email : currentUserUid,
                     sessionId:  _auditoriaSessionId,
                     status:     myAuditoriaStatus,
                     conteo:     conteoConTs,   // BUG-5 FIX: conteo con _ts por producto
-                    updatedAt:  serverTs,      // FIX-TIMESTAMP: serverTimestamp para ordenamiento confiable
-                    _clientTs:  now,           // Timestamp local como respaldo para debugging
+                    updatedAt:  now,
                     isAdmin:    isAdmin()
                 }, { merge: true }); // merge:true → preserva 'unlocks' y otros campos del admin
                 _auditSyncPending = false;
@@ -4700,12 +4637,6 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
             isAuditoriaMode    = false;
             saveToLocalStorage({ skipSyncTrigger: true });
             if (msg) showNotification(msg);
-            // FIX-RESET-MYCONTEO: subir estado limpio a Firestore para que el admin
-            // vea inmediatamente que este usuario reinició (y no conteos viejos).
-            // No bloquear: fire-and-forget con log de error.
-            syncMyAuditoriaToFirestore().catch(function(e) {
-                console.warn('[AuditUser] No se pudo subir reset de conteo:', e);
-            });
             renderTab();
         }
 
@@ -4759,14 +4690,7 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                         try { localStorage.setItem('inventarioApp_auditoriaSessionId', data.sessionId); } catch(_) {}
                         // No retornar: continuar para procesar desbloqueos (Path C)
                     } else {
-                        // Sesión anterior diferente: nueva auditoría real del admin.
-                        // FIX-DEDUP: Actualizar _auditoriaSessionId ANTES de llamar _resetMiConteoLocal
-                        // para que si _applyCloudData ya actualizó la variable en memoria,
-                        // la comparación aquí no vuelva a detectar un "cambio" y ejecute
-                        // un segundo reset. El orden es: _applyCloudData actualiza primero
-                        // (vía subscribeMainDoc), y subscribeMyAuditoria llega después;
-                        // en ese caso _auditoriaSessionId ya será igual a data.sessionId y
-                        // esta rama NO se ejecutará. Doble seguro.
+                        // Sesión anterior diferente: nueva auditoría real del admin
                         _auditoriaSessionId = data.sessionId;
                         try { localStorage.setItem('inventarioApp_auditoriaSessionId', data.sessionId); } catch(_) {}
                         _resetMiConteoLocal('🔄 Nueva auditoría iniciada por el administrador — tus conteos se reiniciaron');
@@ -4804,7 +4728,7 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 allUsersAuditoria = {};
                 snap.forEach(function(doc) {
                     const data = doc.data();
-                    // FIX 3 CRÍTICO (preservado): Solo filtrar por sessionId si AMBOS lados tienen
+                    // FIX 3 CRÍTICO: Solo filtrar por sessionId si AMBOS lados tienen
                     // sessionId definido. Si _auditoriaSessionId es null (primera carga),
                     // mostrar todos los usuarios de la sesión más reciente.
                     if (data.sessionId && _auditoriaSessionId && data.sessionId !== _auditoriaSessionId) return;
@@ -4814,14 +4738,15 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                         status:    data.status || { almacen: 'pendiente', barra1: 'pendiente', barra2: 'pendiente' },
                         conteo:    data.conteo || {},
                         unlocks:   data.unlocks || {},
-                        updatedAt: (data.updatedAt && typeof data.updatedAt.toMillis === 'function')
-                                   ? data.updatedAt.toMillis()   // FIX: convertir Timestamp de Firestore a ms
-                                   : (data.updatedAt || data._clientTs || 0),
+                        updatedAt: data.updatedAt || 0,
+                        // FIX ADMIN-MERGE: preservar bandera para priorización en agregación
                         isAdmin:   data.isAdmin || false
                     };
                 });
                 // Reconstruir auditoriaConteo agregado (suma/promedio de todos los usuarios)
                 _recalcAdminAggregatedConteo();
+                // FIX: incluir 'inicio' para que los chips de auditoría se actualicen
+                // en tiempo real aunque el admin esté en esa pestaña (antes solo 'inventario')
                 if (activeTab === 'inventario' || activeTab === 'inicio') renderTab();
             }, function(err) { console.warn('[AuditAdmin] Error listener usuarios:', err); });
         }
@@ -4948,10 +4873,6 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
         /**
          * Admin: reiniciar sesión de auditoría.
          * Escribe nuevo sessionId en Firestore → todos los usuarios lo detectan y reinician.
-         *
-         * FIX-RESET-2: Ahora también actualiza el propio doc del admin en userAuditoria/{uid}
-         * con el nuevo sessionId y conteo vacío. Antes se excluía del batch sin actualizar,
-         * lo que dejaba datos viejos en su doc que contaminaban subscribeAllUsersAuditoria.
          */
         async function _adminIniciarSesionFirestore(sessionId) {
             if (!_db || !isAdmin() || !navigator.onLine) return;
@@ -4961,18 +4882,31 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                                    .collection('userAuditoria');
                 const snap = await colRef.get();
                 const batch = _db.batch();
-                // BUG-6 FIX (preservado): excluir el doc del admin del batch de borrado
-                // para no triggear su propio onSnapshot con un delete → loop de reset.
-                // FIX-RESET-2: En cambio, lo actualizamos DESPUÉS del commit con set() explícito.
+                // BUG-6 FIX: excluir el doc del propio admin para no triggerar su propio
+                // onSnapshot con un delete que causaría un loop de reset.
                 snap.forEach(doc => {
                     if (doc.id !== currentUserUid) batch.delete(doc.ref);
                 });
                 await batch.commit();
+                // Escribir la nueva sesión en el documento principal.
+                // FIX-G1: también limpiar auditoriaStatus y auditoriaConteo del ciclo anterior
+                // en el doc principal. Sin esto, _applyCloudData en otros dispositivos podría
+                // leer el auditoriaConteo del ciclo anterior y restaurarlo incorrectamente.
+                await _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
+                         .set({
+                             _auditoriaSessionId:  sessionId,
+                             _auditoriaStartedBy:  currentUserUid,
+                             _auditoriaStartedAt:  Date.now(),
+                             // FIX-G1: resetear campos de auditoría del ciclo anterior
+                             auditoriaStatus:  { almacen: 'pendiente', barra1: 'pendiente', barra2: 'pendiente' },
+                             auditoriaConteo:  {}
+                         }, { merge: true });
 
-                // FIX-RESET-2: Actualizar el doc del PROPIO ADMIN con nuevo sessionId + estado limpio.
-                // Se hace DESPUÉS del commit del batch para evitar que el propio onSnapshot
-                // del admin detecte el cambio como "nueva auditoría" antes de tiempo.
-                // NO se usa merge:true → queremos limpiar el doc completamente.
+                // FIX-G2: limpiar el doc userAuditoria del propio admin.
+                // Antes se excluía de la limpieza para evitar un loop en subscribeMyAuditoria,
+                // pero eso dejaba datos obsoletos del ciclo anterior que podían volver a aparecer
+                // si subscribeAllUsersAuditoria los leía antes de que _auditoriaSessionId cambiara.
+                // Solución: sobrescribir (sin merge) el doc del admin con la nueva sesión y conteo vacío.
                 await _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
                          .collection('userAuditoria').doc(currentUserUid)
                          .set({
@@ -4984,16 +4918,11 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                              unlocks:   {},
                              updatedAt: Date.now(),
                              isAdmin:   true
-                         }); // set sin merge → limpia el doc del admin completamente
+                         }); // sin merge: false = sobrescribe todo, elimina conteos y unlocks del ciclo anterior
 
-                // Escribir la nueva sesión en el documento principal
-                await _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
-                         .set({ _auditoriaSessionId: sessionId, _auditoriaStartedBy: currentUserUid,
-                                _auditoriaStartedAt: Date.now() }, { merge: true });
                 console.info('[AuditAdmin] Nueva sesión', sessionId, 'iniciada ✓');
             } catch (err) {
                 console.warn('[AuditAdmin] Error iniciando sesión en Firestore:', err);
-                throw err; // Re-throw para que auditoriaResetear() lo capture
             }
         }
 
@@ -5152,10 +5081,7 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 activeTab   = data.activeTab   || 'inicio';
                 selectedArea = data.selectedArea || 'almacen';
                 if (data.auditoriaStatus && typeof data.auditoriaStatus === 'object') auditoriaStatus = data.auditoriaStatus;
-                // FIX-GUARD: auditoriaConteo es CALCULADO en memoria por _recalcAdminAggregatedConteo.
-                // NO se aplica desde el cloud — hacerlo sobreescribiría el agregado con datos
-                // posiblemente obsoletos del documento principal (que ya no lo incluye en el payload).
-                // Se eliminó la línea: if (data.auditoriaConteo ...) auditoriaConteo = data.auditoriaConteo;
+                if (data.auditoriaConteo && typeof data.auditoriaConteo === 'object') auditoriaConteo = data.auditoriaConteo;
 
                 // Detectar cambio de sesión de auditoría (admin inició nueva auditoría)
                 if (data._auditoriaSessionId && data._auditoriaSessionId !== _auditoriaSessionId) {
@@ -5163,6 +5089,14 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                     const teniaSesionAnterior = !!_auditoriaSessionId; // null/'' = primer arranque
                     _auditoriaSessionId = data._auditoriaSessionId;
                     if (!isOwnReset && teniaSesionAnterior) {
+                        // FIX-I: Limpiar también auditoriaConteo y auditoriaStatus cuando
+                        // detectamos una nueva sesión del admin. Sin esto, el conteo AGREGADO
+                        // del ciclo anterior quedaría visible en los dispositivos secundarios
+                        // aunque el admin hubiera iniciado una nueva auditoría, porque el doc
+                        // principal puede tener auditoriaConteo del ciclo viejo hasta que
+                        // subscribeAllUsersAuditoria recompute con los nuevos datos.
+                        auditoriaConteo = {};
+                        auditoriaStatus = { almacen: 'pendiente', barra1: 'pendiente', barra2: 'pendiente' };
                         // FIX: Solo resetear si ya teníamos una sesión previa Y el admin
                         // inició una nueva. Si _auditoriaSessionId era null (primer arranque
                         // o localStorage vacío), no hay datos previos que perder y el reset
@@ -5240,15 +5174,6 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                     localStorage.setItem('inventarioApp_lastModified', String(data._lastModified));
                 }
                 if (data._auditoriaSessionId) {
-                    // FIX-APPLY: actualizar la variable en memoria ADEMÁS del localStorage.
-                    // Antes solo se escribía en localStorage, por lo que subscribeMyAuditoria
-                    // podía comparar _auditoriaSessionId (en memoria, desactualizado) con el
-                    // sessionId del server y disparar un reset doble.
-                    if (data._auditoriaSessionId !== _auditoriaSessionId) {
-                        // Solo actualizamos si cambió — si es igual, no hace nada.
-                        // La lógica de reset ya fue ejecutada en el bloque anterior.
-                        _auditoriaSessionId = data._auditoriaSessionId;
-                    }
                     localStorage.setItem('inventarioApp_auditoriaSessionId', data._auditoriaSessionId);
                 }
 
@@ -5525,6 +5450,10 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                     const localVersion  = parseInt(localStorage.getItem('inventarioApp_catalogVersion') || '0', 10);
                     if (serverVersion <= localVersion) return;
                     products = data.productos;
+                    // FIX: recalcular stockByArea desde inventarioConteo local después de recibir
+                    // el catálogo del admin. Sin esto, el stockByArea que venía del admin
+                    // sobreescribe el conteo local aunque el usuario ya había contado ese producto.
+                    syncStockByAreaFromConteo();
                     localStorage.setItem('inventarioApp_catalogVersion', String(serverVersion));
                     saveToLocalStorage();
                     renderTab();
@@ -6396,6 +6325,12 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
             const conteoFuente = isAdmin() ? auditoriaConteo : myAuditoriaConteo;
             const AREAS        = ['almacen', 'barra1', 'barra2'];
             var result         = { _hayDatos: false };
+            // FIX: buscar el producto para aplicar conversión oz→puntos si corresponde.
+            // Sin esto, sumaAbiertas era la suma cruda de oz (ej. 33.45) en lugar de
+            // la fracción de botella (ej. 0.86), haciendo que el total en el chip
+            // mostrara valores absurdos como "2 + 33 = 35" en vez de "2.86 botellas".
+            const product = products.find(function(p) { return p.id === prodId; });
+            const usaConv = product ? tieneConversion(product) : false;
 
             AREAS.forEach(function(area) {
                 var d = conteoFuente[prodId] && conteoFuente[prodId][area];
@@ -6403,8 +6338,18 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
 
                 var enteras     = d.enteras || 0;
                 var abiertasArr = d.abiertas || [];
-                var suma        = abiertasArr.reduce(function(s, v) { return s + (v || 0); }, 0);
-                var hayValor    = enteras > 0 || abiertasArr.some(function(v) { return v > 0; });
+                // FIX: aplicar conversión oz→puntos si el producto la soporta.
+                // Para productos sin conversión, sumamos directo (fracciones ya normalizadas).
+                var suma = 0;
+                if (usaConv) {
+                    abiertasArr.forEach(function(oz) {
+                        suma += convertirOzAPuntos(oz || 0, product.capacidadMl, product.pesoBotellaLlenaOz);
+                    });
+                    suma = Math.round(suma * 10000) / 10000;
+                } else {
+                    suma = abiertasArr.reduce(function(s, v) { return s + (v || 0); }, 0);
+                }
+                var hayValor = enteras > 0 || abiertasArr.some(function(v) { return v > 0; });
 
                 if (hayValor) {
                     result[area]     = { enteras: enteras, numAbiertas: abiertasArr.length, sumaAbiertas: suma };
@@ -7006,51 +6951,37 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 showNotification('📴 Sin conexión — conecta a internet antes de iniciar nueva auditoría');
                 return;
             }
-            showConfirm('⚠️ ¿Iniciar nueva auditoría?\n\nSe borrarán todos los conteos actuales de TODOS los usuarios y áreas comenzando desde cero.\n\nEsta acción no se puede deshacer.', function() {
+            showConfirm('⚠️ ¿Iniciar nueva auditoría?\n\nSe borrarán todos los conteos actuales de TODOS los usuarios y áreas comenzando desde cero.\n\nEsta acción no se puede deshacer.', async function() {
                 const newSessionId = String(Date.now());
-
-                // ── 1. Reiniciar estado LOCAL del admin de forma inmediata ──
+                // Reiniciar estado del admin
                 _auditoriaSessionId       = newSessionId;
                 auditoriaStatus           = { almacen: 'pendiente', barra1: 'pendiente', barra2: 'pendiente' };
                 auditoriaConteo           = {};
                 auditoriaConteoPorUsuario = {};
                 allUsersAuditoria         = {};
+                // Reiniciar estado propio del admin (él también cuenta)
                 myAuditoriaConteo  = {};
                 myAuditoriaStatus  = { almacen: 'pendiente', barra1: 'pendiente', barra2: 'pendiente' };
                 myAuditoriaUnlocks = {};
                 auditoriaView      = 'selection';
                 auditoriaAreaActiva = null;
                 isAuditoriaMode    = false;
-
-                // FIX-RESET-1: skipSyncTrigger:true — no disparar syncToCloud todavía
-                // porque las variables de auditoría ya se limpiarán vía Firebase.
-                saveToLocalStorage({ skipSyncTrigger: true });
-
-                // Feedback inmediato al admin (operación en curso)
-                showNotification('⏳ Reiniciando auditoría en Firestore…');
+                saveToLocalStorage();
                 renderTab();
 
-                // ── 2. Ops async en secuencia + manejo de error ──────────────
-                // FIX-RESET-2: Promise.all para correr borrado de colecciones y
-                //              escritura de nueva sesión en paralelo, luego subir
-                //              el estado limpio del propio admin (FIX-RESET-4).
-                Promise.all([
-                    _adminIniciarSesionFirestore(newSessionId),
-                    resetConteoAtomicoEnFirestore()
-                ])
-                .then(function() {
-                    // FIX-RESET-4: Subir el estado limpio del admin a userAuditoria
-                    // (la función fue llamada DESPUÉS del batch que borró los demás
-                    //  docs, así que ya tiene el sessionId nuevo correcto).
-                    return syncMyAuditoriaToFirestore();
-                })
-                .then(function() {
+                // FIX-H: Esperar a que las operaciones Firestore completen ANTES de notificar.
+                // Antes eran fire-and-forget: si fallaban, otros dispositivos nunca recibían
+                // el nuevo sessionId y sus conteos no se reseteaban — la nueva auditoría
+                // solo existía localmente en el admin.
+                showNotification('⏳ Iniciando nueva auditoría…');
+                try {
+                    await _adminIniciarSesionFirestore(newSessionId);
+                    await resetConteoAtomicoEnFirestore();
                     showNotification('✅ Nueva auditoría iniciada — todos los conteos en ceros');
-                })
-                .catch(function(err) {
-                    console.error('[AuditAdmin] Error al reiniciar sesión en Firestore:', err);
-                    showNotification('⚠️ Reset local OK — error en la nube. Reintenta con conexión estable.');
-                });
+                } catch (err) {
+                    console.error('[AuditReset] Error crítico al iniciar sesión en Firestore:', err);
+                    showNotification('❌ Error al iniciar auditoría — revisa la conexión y vuelve a intentarlo');
+                }
             });
         }
 
@@ -7230,7 +7161,7 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 : 'Cuenta tu área y finaliza. Solo tú ves tu conteo; el admin lo revisa al final.') + '</p>';
             html += '</div>';
             if (isAdmin()) {
-                html += '<button onclick="auditoriaResetear()" id="btnNuevaAuditoria" title="Iniciar nueva auditoría (solo admin)" style="flex-shrink:0;padding:6px 10px;border-radius:var(--r-md);background:var(--red-dim);border:1px solid rgba(239,68,68,0.18);color:var(--red-text);font-size:0.7rem;font-weight:600;cursor:pointer;white-space:nowrap;" class="flex items-center gap-1">';
+                html += '<button onclick="auditoriaResetear()" title="Iniciar nueva auditoría (solo admin)" style="flex-shrink:0;padding:6px 10px;border-radius:var(--r-md);background:var(--red-dim);border:1px solid rgba(239,68,68,0.18);color:var(--red-text);font-size:0.7rem;font-weight:600;cursor:pointer;white-space:nowrap;" class="flex items-center gap-1">';
                 html += '<svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>';
                 html += ' Nueva auditoría</button>';
             }
@@ -7922,6 +7853,9 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
         function generateProductId() {
             let maxNum = 0;
             products.forEach(p => {
+                // FIX: guardia — p.id podría ser undefined/null en datos corruptos,
+                // y .match() sobre undefined lanza TypeError bloqueando la apertura del modal.
+                if (!p.id || typeof p.id !== 'string') return;
                 const match = p.id.match(/^PRD-(\d+)$/);
                 if (match) maxNum = Math.max(maxNum, parseInt(match[1], 10));
             });
@@ -8021,26 +7955,49 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
 
             if (editingProductId) {
                 const product = products.find(p => p.id === editingProductId);
-                if (product) {
-                    // Si cambia el ID, actualizar también en inventarioConteo
-                    if (editingProductId !== productId) {
-                        if (inventarioConteo[editingProductId]) {
-                            inventarioConteo[productId] = inventarioConteo[editingProductId];
-                            delete inventarioConteo[editingProductId];
-                        }
-                    }
-                    product.id = productId;
-                    product.name = name;
-                    product.unit = unit;
-                    product.group = group;
-                    // Actualizar campos de conversión (quitar si se borraron)
-                    if (capacidadMl !== undefined) product.capacidadMl = capacidadMl;
-                    else delete product.capacidadMl;
-                    if (pesoBotellaLlenaOz !== undefined) product.pesoBotellaLlenaOz = pesoBotellaLlenaOz;
-                    else delete product.pesoBotellaLlenaOz;
-                    // stockByArea se recalcula
-                    syncStockByAreaFromConteo();
+                if (!product) {
+                    // FIX: el producto ya no existe (borrado desde otro dispositivo mientras el modal estaba abierto).
+                    // Notificar y salir sin guardar ni cerrar — el usuario debe refrescar.
+                    showNotification('⚠️ Producto no encontrado — puede haber sido eliminado por otro usuario');
+                    return;
                 }
+                // Si cambia el ID, migrar TODOS los objetos de conteo que usan el ID como clave
+                if (editingProductId !== productId) {
+                    // inventarioConteo (conteo regular de áreas)
+                    if (inventarioConteo[editingProductId]) {
+                        inventarioConteo[productId] = inventarioConteo[editingProductId];
+                        delete inventarioConteo[editingProductId];
+                    }
+                    // FIX: auditoriaConteo (vista agregada del admin) — sin migrar, el producto
+                    // mostraba 0 en el panel de auditoría tras cambiar el ID.
+                    if (auditoriaConteo[editingProductId]) {
+                        auditoriaConteo[productId] = auditoriaConteo[editingProductId];
+                        delete auditoriaConteo[editingProductId];
+                    }
+                    // FIX: myAuditoriaConteo (conteo propio del usuario) — sin migrar, el usuario
+                    // perdía su propio conteo al renombrarse el producto.
+                    if (myAuditoriaConteo[editingProductId]) {
+                        myAuditoriaConteo[productId] = myAuditoriaConteo[editingProductId];
+                        delete myAuditoriaConteo[editingProductId];
+                    }
+                    // FIX: auditoriaConteoPorUsuario (conteos multi-usuario) — sin migrar, todos
+                    // los conteos de bartenders quedaban huérfanos bajo el ID antiguo.
+                    if (auditoriaConteoPorUsuario[editingProductId]) {
+                        auditoriaConteoPorUsuario[productId] = auditoriaConteoPorUsuario[editingProductId];
+                        delete auditoriaConteoPorUsuario[editingProductId];
+                    }
+                }
+                product.id = productId;
+                product.name = name;
+                product.unit = unit;
+                product.group = group;
+                // Actualizar campos de conversión (quitar si se borraron)
+                if (capacidadMl !== undefined) product.capacidadMl = capacidadMl;
+                else delete product.capacidadMl;
+                if (pesoBotellaLlenaOz !== undefined) product.pesoBotellaLlenaOz = pesoBotellaLlenaOz;
+                else delete product.pesoBotellaLlenaOz;
+                // stockByArea se recalcula
+                syncStockByAreaFromConteo();
                 showNotification('Producto actualizado');
             } else {
                 const newProduct = {
@@ -8201,7 +8158,12 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
             const deliveryDate = document.getElementById('orderDeliveryDate').value;
             const note = document.getElementById('orderNote').value.trim();
             let maxOrderNum = 0;
-            orders.forEach(o => { const m = o.id.match(/^PED-(\d+)$/); if (m) maxOrderNum = Math.max(maxOrderNum, parseInt(m[1], 10)); });
+            orders.forEach(o => {
+                // FIX: guardia — o.id podría ser undefined en datos corruptos
+                if (!o.id || typeof o.id !== 'string') return;
+                const m = o.id.match(/^PED-(\d+)$/);
+                if (m) maxOrderNum = Math.max(maxOrderNum, parseInt(m[1], 10));
+            });
             const order = {
                 id: 'PED-' + String(maxOrderNum + 1).padStart(3, '0'),
                 date: new Date().toLocaleString(),
@@ -9021,9 +8983,8 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 return;
             }
             const email    = ($id('loginEmail').value   || '').trim();
-            // FIX-AUTH: NO hacer trim() en passwords — las contraseñas pueden tener
-            // espacios intencionales al inicio/fin. Trimear causaría auth/wrong-password
-            // para usuarios que usan ese patrón (comportamiento silencioso e irreproducible).
+            // FIX-AUTH: NO hacer trim() en passwords. Las contraseñas pueden tener espacios
+            // intencionales al inicio/fin. Trimear causaría auth/wrong-password silencioso.
             const password = $id('loginPassword').value || '';
             const errEl    = $id('loginError');
             const btn      = $id('loginBtn');
