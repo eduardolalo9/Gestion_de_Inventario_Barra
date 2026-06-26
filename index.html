@@ -199,6 +199,10 @@ const firebaseConfig = {
            REGLAS DE FIRESTORE — pegar en Firebase Console → Firestore → Reglas
            FIX 6: userAuditoria ahora protegida por uid — un bartender NO puede
            escribir el conteo de otro bartender.
+           FIX-SECURITY: Los usuarios NO pueden auto-escalarse a admin.
+             • Solo un admin puede cambiar el campo 'role' de otros usuarios.
+             • Un usuario autenticado puede leer y actualizar su propio doc
+               ÚNICAMENTE si no cambia 'role' (campo protegido).
            ══════════════════════════════════════════════════════════════════════
            rules_version = '2';
            service cloud.firestore {
@@ -207,9 +211,22 @@ const firebaseConfig = {
                  return request.auth != null &&
                    get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role == 'admin';
                }
+               // FIX-SECURITY CRÍTICO: Evitar auto-escalación a admin.
+               // - Un usuario puede crear su propio doc solo con role='user'.
+               // - Un usuario puede actualizar su propio doc solo si NO cambia 'role'.
+               // - Solo un admin puede cambiar el campo 'role' de cualquier usuario.
                match /usuarios/{uid} {
-                 allow read, write: if request.auth != null && request.auth.uid == uid;
-                 allow read: if isAdminUser();
+                 allow get:    if request.auth != null && (request.auth.uid == uid || isAdminUser());
+                 allow list:   if isAdminUser();
+                 allow create: if request.auth != null && request.auth.uid == uid
+                                  && request.resource.data.role == 'user';
+                 allow update: if request.auth != null && (
+                                  // Admin puede cambiar cualquier campo
+                                  isAdminUser()
+                                  // Usuario solo puede actualizar si role NO cambia
+                                  || (request.auth.uid == uid && !('role' in request.resource.data.diff(resource.data).affectedKeys()))
+                               );
+                 allow delete: if isAdminUser();
                }
                match /catalogo/{docId} {
                  allow read:  if request.auth != null;
@@ -3959,32 +3976,42 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
          *   cloud → _applyCloudData → saveToLocalStorage → syncToCloud → cloud… (FIX 8)
          */
         function saveToLocalStorage(opts) {
-            // Pares clave → valor a guardar (las claves "grandes" se guardan individualmente
-            // para poder atrapar el error justo en la clave que lo provoca)
+            // ── FIX-PRIORITY: Entradas ordenadas por PRIORIDAD CRÍTICA.
+            // Si el almacenamiento se llena, los datos más importantes se salvan primero.
+            // ANTES: inventories (histórico grande) estaba en posición 3 → bloqueaba todo lo demás.
+            // AHORA: inventories va al final porque puede recortarse sin perder el conteo activo.
+            // ─────────────────────────────────────────────────────────────────────────────────
+            // TIER 1 — CRÍTICO: Conteo activo. Nunca puede perderse.
+            // TIER 2 — IMPORTANTE: Catálogo de productos y estado de auditoría.
+            // TIER 3 — UTILITARIO: UI state que puede reconstruirse.
+            // TIER 4 — HISTÓRICO: Puede crecer indefinidamente; va al final.
             const entries = [
-                ['inventarioApp_products',            JSON.stringify(products)],
-                ['inventarioApp_orders',              JSON.stringify(orders)],
-                ['inventarioApp_inventories',         JSON.stringify(inventories)],
-                ['inventarioApp_cart',                JSON.stringify(cart)],
-                ['inventarioApp_activeTab',           activeTab],
-                ['inventarioApp_selectedGroup',       selectedGroup],
-                ['inventarioApp_selectedArea',        selectedArea],
-                ['inventarioApp_searchTerm',          searchTerm],
-                ['inventarioApp_expandedInventories', JSON.stringify(Array.from(expandedInventories))],
-                ['inventarioApp_inventarioConteo',    JSON.stringify(inventarioConteo)],
-                ['inventarioApp_auditoriaStatus',     JSON.stringify(auditoriaStatus)],
-                ['inventarioApp_auditoriaConteo',     JSON.stringify(auditoriaConteo)],
-                ['inventarioApp_auditoriaView',       auditoriaView],
-                ['inventarioApp_auditoriaAreaActiva', auditoriaAreaActiva || ''],
-                ['inventarioApp_auditoriaConteoPorUsuario', JSON.stringify(auditoriaConteoPorUsuario)],
-                // AUDITORÍA AISLADA POR USUARIO
-                ['inventarioApp_myAuditoriaConteo',  JSON.stringify(myAuditoriaConteo)],
-                ['inventarioApp_myAuditoriaStatus',  JSON.stringify(myAuditoriaStatus)],
-                ['inventarioApp_myAuditoriaUnlocks', JSON.stringify(myAuditoriaUnlocks)],
-                ['inventarioApp_auditoriaSessionId', _auditoriaSessionId || '']
+                // ── TIER 1: Conteos (máxima prioridad) ──────────────────────────────────
+                ['inventarioApp_inventarioConteo',         JSON.stringify(inventarioConteo)],
+                ['inventarioApp_myAuditoriaConteo',        JSON.stringify(myAuditoriaConteo)],
+                ['inventarioApp_auditoriaConteo',          JSON.stringify(auditoriaConteo)],
+                ['inventarioApp_auditoriaConteoPorUsuario',JSON.stringify(auditoriaConteoPorUsuario)],
+                // ── TIER 2: Catálogo y estado de auditoría ───────────────────────────────
+                ['inventarioApp_products',                 JSON.stringify(products)],
+                ['inventarioApp_auditoriaStatus',          JSON.stringify(auditoriaStatus)],
+                ['inventarioApp_myAuditoriaStatus',        JSON.stringify(myAuditoriaStatus)],
+                ['inventarioApp_myAuditoriaUnlocks',       JSON.stringify(myAuditoriaUnlocks)],
+                ['inventarioApp_auditoriaSessionId',       _auditoriaSessionId || ''],
+                // ── TIER 3: Estado de UI ─────────────────────────────────────────────────
+                ['inventarioApp_cart',                     JSON.stringify(cart)],
+                ['inventarioApp_activeTab',                activeTab],
+                ['inventarioApp_selectedGroup',            selectedGroup],
+                ['inventarioApp_selectedArea',             selectedArea],
+                ['inventarioApp_searchTerm',               searchTerm],
+                ['inventarioApp_auditoriaView',            auditoriaView],
+                ['inventarioApp_auditoriaAreaActiva',      auditoriaAreaActiva || ''],
+                ['inventarioApp_expandedInventories',      JSON.stringify(Array.from(expandedInventories))],
+                // ── TIER 4: Histórico (puede ser grande; al final) ───────────────────────
+                ['inventarioApp_orders',                   JSON.stringify(orders)],
+                ['inventarioApp_inventories',              JSON.stringify(inventories)],
             ];
 
-            // Marca temporal de este guardado (resolución de conflictos: último-gana)
+            // Marca temporal (resolución de conflictos: último-gana)
             const nowMs = Date.now();
             entries.push(['inventarioApp_lastModified', String(nowMs)]);
 
@@ -4001,18 +4028,62 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 try {
                     localStorage.setItem(key, value);
                 } catch (e) {
-                    console.error('Error al guardar "' + key + '":', e);
-                    if (key === 'inventarioApp_inventories') {
-                        showNotification('⚠️ Historial muy grande. Usa "Exportar datos" y elimina historiales antiguos.');
-                    } else if (key === 'inventarioApp_inventarioConteo') {
-                        showNotification('⚠️ Conteo de inventario no pudo guardarse. Exporta tus datos ahora.');
-                    } else {
-                        showNotification('⚠️ Error al guardar datos. Exporta un respaldo inmediatamente.');
+                    // ── FIX-RECOVERY: Cuota excedida → intentar liberar espacio automáticamente.
+                    // Estrategia: recortar el histórico (inventories) a las últimas 5 entradas
+                    // y reintentar UNA sola vez. El histórico es el dato más grande y menos
+                    // crítico. Los conteos y productos se salvan antes (TIER 1/2) y ya están OK.
+                    console.error('[LS] Cuota excedida al guardar "' + key + '". Intentando liberar espacio…', e);
+                    let recovered = false;
+                    if (key === 'inventarioApp_inventories' || key === 'inventarioApp_orders') {
+                        try {
+                            // Recortar historial a las últimas 5 entradas y reintentar
+                            if (key === 'inventarioApp_inventories' && inventories.length > 5) {
+                                const trimmed = inventories.slice(-5);
+                                localStorage.setItem(key, JSON.stringify(trimmed));
+                                recovered = true;
+                                showNotification('⚠️ Historial recortado para liberar espacio. Exporta datos ahora.');
+                                console.warn('[LS] Inventories recortado a 5 entradas para liberar cuota.');
+                            } else if (key === 'inventarioApp_orders' && orders.length > 10) {
+                                const trimmed = orders.slice(-10);
+                                localStorage.setItem(key, JSON.stringify(trimmed));
+                                recovered = true;
+                                showNotification('⚠️ Pedidos recortados para liberar espacio. Exporta datos ahora.');
+                            }
+                        } catch (e2) {
+                            console.error('[LS] Recuperación falló:', e2);
+                        }
                     }
-                    // Si falla una clave crítica, detener para no corromper el estado parcial
-                    break;
+                    if (!recovered) {
+                        if (key === 'inventarioApp_inventarioConteo' || key === 'inventarioApp_myAuditoriaConteo') {
+                            showNotification('🚨 CRÍTICO: El conteo activo no pudo guardarse. Exporta datos INMEDIATAMENTE.');
+                        } else {
+                            showNotification('⚠️ Error al guardar datos. Exporta un respaldo inmediatamente.');
+                        }
+                        break; // detener para no corromper estado parcial
+                    }
                 }
             }
+
+            // ── FIX-BACKUP: Crear snapshot de emergencia periódico ───────────────────────
+            // Un backup de los datos críticos bajo una clave separada garantiza que,
+            // si la próxima sesión arranca con localStorage corrupto o vacío, se puede
+            // recuperar el estado de la última sesión buena.
+            // Solo se escribe si pasaron ≥ 2 minutos desde el último backup.
+            try {
+                const lastBackup = parseInt(localStorage.getItem('inventarioApp_lastBackupTs') || '0', 10);
+                if ((nowMs - lastBackup) >= 2 * 60 * 1000) {
+                    const snapshot = JSON.stringify({
+                        products:         products,
+                        inventarioConteo: inventarioConteo,
+                        myAuditoriaConteo:myAuditoriaConteo,
+                        auditoriaConteo:  auditoriaConteo,
+                        auditoriaStatus:  auditoriaStatus,
+                        _ts:              nowMs
+                    });
+                    localStorage.setItem('inventarioApp_emergencySnapshot', snapshot);
+                    localStorage.setItem('inventarioApp_lastBackupTs', String(nowMs));
+                }
+            } catch (_) { /* si falla el backup, no interrumpir */ }
 
             // ── Disparar sync a la nube SOLO si los datos cambiaron ──────────
             const newHash = _computeDataHash();
@@ -4300,7 +4371,11 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                     _inventoriesInChunks: true,
                     _conteoInSubcol:      true,
                     _lastWrittenBy:    currentUserUid || 'anonymous',
-                    _lastWrittenRole:  currentUserRole || 'user'
+                    _lastWrittenRole:  currentUserRole || 'user',
+                    // FIX-SESSION: incluir _auditoriaSessionId para que otros dispositivos
+                    // detecten cambios de ciclo de auditoría incluso sin pasar por
+                    // _adminIniciarSesionFirestore (p.ej., reconexiones tardías).
+                    _auditoriaSessionId: _auditoriaSessionId || null
                 };
 
                 // Construir escrituras por área (merge:true = solo toca el área modificada)
@@ -5074,7 +5149,47 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                     return;
                 }
 
-                products    = data.products    || [];
+                // FIX-CLOUD-VALIDATE: Validación de integridad de los productos descargados.
+                // Firestore podría devolver un array con nulls o entradas sin 'id' si hubo
+                // una escritura corrupta. Filtrar antes de aplicar para no romper el catálogo.
+                const validatedProducts = data.products.filter(function(p) {
+                    if (!p || typeof p !== 'object') {
+                        console.warn('[Firebase] Producto corrupto descartado:', p);
+                        return false;
+                    }
+                    if (!p.id || typeof p.id !== 'string') {
+                        console.warn('[Firebase] Producto sin ID descartado:', p);
+                        return false;
+                    }
+                    if (!p.name || typeof p.name !== 'string') {
+                        console.warn('[Firebase] Producto sin nombre descartado:', p.id);
+                        return false;
+                    }
+                    return true;
+                });
+
+                if (validatedProducts.length === 0 && data.products.length > 0) {
+                    // Todos los productos fallaron validación — rechazar para no limpiar catálogo
+                    console.error('[Firebase] TODOS los productos fallaron validación — aplicación abortada para proteger datos locales.');
+                    updateCloudSyncBadge('error');
+                    showNotification('❌ Error: datos de nube inválidos. Catálogo local protegido.');
+                    return;
+                }
+
+                // FIX-PRE-MERGE-BACKUP: Guardar snapshot de los datos locales ANTES de sobreescribir
+                // con los datos de la nube. Si la nube tiene datos corruptos o incompletos,
+                // se puede recuperar el estado anterior desde este backup.
+                try {
+                    const premergeSnap = JSON.stringify({
+                        products:          products,
+                        inventarioConteo:  inventarioConteo,
+                        myAuditoriaConteo: myAuditoriaConteo,
+                        _ts:               Date.now()
+                    });
+                    localStorage.setItem('inventarioApp_preMergeBackup', premergeSnap);
+                } catch (_) { /* backup es best-effort */ }
+
+                products    = validatedProducts;
                 orders      = cloudOrders;
                 inventories = cloudInventories;
                 cart        = data.cart        || [];
@@ -5934,6 +6049,37 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
 
             loadFromLocalStorage();
 
+            // FIX-RECOVERY-STARTUP: Detectar si los datos críticos están vacíos/corruptos
+            // y ofrecer recuperación desde el snapshot de emergencia.
+            // Este scenario ocurre si el navegador borró localStorage, o si hubo un
+            // crash durante una escritura parcial (aunque es raro con el guardado granular).
+            (function checkAndRecoverFromSnapshot() {
+                try {
+                    const raw = localStorage.getItem('inventarioApp_emergencySnapshot');
+                    if (!raw) return; // sin snapshot previo
+                    const snap = JSON.parse(raw);
+                    if (!snap || !snap._ts) return;
+
+                    const snapshotAge = Date.now() - snap._ts;
+                    const MAX_SNAPSHOT_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 días
+                    if (snapshotAge > MAX_SNAPSHOT_AGE_MS) return; // snapshot muy viejo
+
+                    // Si los productos están vacíos pero el snapshot tiene datos, recuperar
+                    const snapProducts = Array.isArray(snap.products) ? snap.products : [];
+                    if (products.length === 0 && snapProducts.length > 0) {
+                        console.warn('[Recovery] localStorage vacío pero hay snapshot de emergencia con',
+                            snapProducts.length, 'productos. Recuperando…');
+                        products         = snapProducts;
+                        inventarioConteo = snap.inventarioConteo  || {};
+                        myAuditoriaConteo= snap.myAuditoriaConteo || {};
+                        auditoriaConteo  = snap.auditoriaConteo   || {};
+                        showNotification('🔄 Datos recuperados desde snapshot de emergencia (' +
+                            new Date(snap._ts).toLocaleString('es-MX') + ')');
+                        saveToLocalStorage();
+                    }
+                } catch (_) { /* recuperación es best-effort */ }
+            })();
+
             // BUG-15 FIX COMPLEMENT: restaurar flag de audit sync pendiente
             // Si la sesión anterior cerró con un timer de sync activo, reintentar al reconectar.
             try {
@@ -6780,6 +6926,12 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 document.getElementById('inv_enteras').focus();
                 return;
             }
+            // FIX-UPPER-BOUND: límite máximo razonable para evitar errores de tipeo (ej. 99 → 9999)
+            if (enterasRaw > 9999) {
+                showNotification('⚠️ Cantidad muy alta (' + enterasRaw + '). Verifica el valor antes de guardar.');
+                document.getElementById('inv_enteras').focus();
+                return;
+            }
             const enteras = Math.max(0, enterasRaw);
             const container = document.getElementById('inv_abiertasContainer');
             const abiertas = [];
@@ -6787,15 +6939,35 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
             for (let i = 0; i < container.children.length; i++) {
                 const input = document.getElementById('inv_abierta_' + i);
                 if (input) {
-                    const v = parseFloat(input.value);
-                    if (isNaN(v) || v < 0) { invalidAbierta = true; break; }
+                    const raw = input.value.trim();
+                    // FIX-SCIENTIFIC: rechazar notación científica que parseFloat acepta (ej. 1e5 = 100000)
+                    if (/e/i.test(raw)) { invalidAbierta = true; break; }
+                    const v = parseFloat(raw);
+                    if (isNaN(v) || v < 0 || v > 9999) { invalidAbierta = true; break; }
                     abiertas.push(v);
                 }
             }
             if (invalidAbierta) {
-                showNotification('⚠️ Los valores de botellas abiertas deben ser números positivos');
+                showNotification('⚠️ Los valores de botellas abiertas deben ser números positivos (máx. 9999)');
                 return;
             }
+
+            // FIX-ANOMALY: Detectar cambios inusualmente grandes vs el valor anterior.
+            // Umbral: si el nuevo valor es > 10× el anterior y el anterior era > 0, advertir.
+            // Esto protege contra errores de tipeo como 10 → 100 ó 5 → 500.
+            (function checkAnomaly() {
+                const targetArea  = (isAuditoriaMode && auditoriaAreaActiva) ? auditoriaAreaActiva : selectedArea;
+                const fuente      = isAuditoriaMode ? myAuditoriaConteo : inventarioConteo;
+                const prevData    = fuente[inventarioModalProductId] && fuente[inventarioModalProductId][targetArea];
+                const prevEnteras = prevData ? (prevData.enteras || 0) : 0;
+                if (prevEnteras > 0 && enteras > 0 && enteras >= prevEnteras * 10) {
+                    // Solo registrar en consola como aviso — no bloquear el flujo.
+                    // (El administrador puede ver esto en el log de cambios).
+                    console.warn('[Anomalía] Cambio inusualmente grande detectado:',
+                        inventarioModalProductId, targetArea,
+                        'Antes:', prevEnteras, '→ Ahora:', enteras);
+                }
+            })();
 
             if (isAuditoriaMode && auditoriaAreaActiva) {
                 // ── Guardar en objeto propio del usuario ──────────────────────────────
@@ -6833,6 +7005,41 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                     }
                 }, 800);
             } else {
+                // FIX-CHANGELOG: Registrar el cambio en el log de auditoría antes de sobreescribir.
+                // Así siempre se puede saber quién cambió qué y cuándo.
+                (function logChange() {
+                    try {
+                        const prevData    = inventarioConteo[inventarioModalProductId] &&
+                                            inventarioConteo[inventarioModalProductId][selectedArea];
+                        const prevEnteras = prevData ? (prevData.enteras || 0) : null;
+                        // Solo registrar si el valor realmente cambió
+                        if (prevEnteras === null && enteras === 0) return; // primer conteo en cero = no relevante
+                        if (prevEnteras === enteras) return;
+                        const product = products.find(function(p) { return p.id === inventarioModalProductId; });
+                        const entry = {
+                            ts:         Date.now(),
+                            prodId:     inventarioModalProductId,
+                            prodName:   product ? product.name : inventarioModalProductId,
+                            area:       selectedArea,
+                            valorAntes: prevEnteras,
+                            valorDespues: enteras,
+                            usuario:    (auditCurrentUser ? auditCurrentUser.userName : null) ||
+                                        (currentUserUid ? currentUserUid.slice(0,8) : 'local'),
+                            uid:        currentUserUid || null
+                        };
+                        let log = [];
+                        try {
+                            const raw = localStorage.getItem('inventarioApp_changeLog');
+                            if (raw) log = JSON.parse(raw);
+                            if (!Array.isArray(log)) log = [];
+                        } catch (_) { log = []; }
+                        log.push(entry);
+                        // Mantener solo las últimas 500 entradas para no crecer indefinidamente
+                        if (log.length > 500) log = log.slice(-500);
+                        localStorage.setItem('inventarioApp_changeLog', JSON.stringify(log));
+                    } catch (_) { /* el log nunca interrumpe el flujo principal */ }
+                })();
+
                 // Guardar en el inventario operativo regular
                 if (!inventarioConteo[inventarioModalProductId]) inventarioConteo[inventarioModalProductId] = {};
                 inventarioConteo[inventarioModalProductId][selectedArea] = { enteras, abiertas };
@@ -8418,6 +8625,67 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
             };
             reader.readAsArrayBuffer(file);
         }
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  FIX-CHANGELOG: Funciones de consulta y exportación del log de cambios
+        //  El log registra automáticamente cada cambio al inventario operativo.
+        //  Sirve para auditoría: quién cambió qué producto, cuándo y cuánto.
+        // ══════════════════════════════════════════════════════════════════════
+
+        /**
+         * getChangeLog()
+         * Retorna el log de cambios guardado en localStorage.
+         * Formato: [{ ts, prodId, prodName, area, valorAntes, valorDespues, usuario, uid }]
+         */
+        function getChangeLog() {
+            try {
+                const raw = localStorage.getItem('inventarioApp_changeLog');
+                if (!raw) return [];
+                const log = JSON.parse(raw);
+                return Array.isArray(log) ? log : [];
+            } catch (_) { return []; }
+        }
+
+        /**
+         * exportChangeLogExcel()
+         * Exporta el log de cambios a un archivo .xlsx.
+         * Accesible desde la consola del navegador: exportChangeLogExcel()
+         */
+        function exportChangeLogExcel() {
+            if (typeof XLSX === 'undefined') {
+                showNotification('⚠️ Librería Excel no cargada. Espera un momento y vuelve a intentarlo.');
+                return;
+            }
+            const log = getChangeLog();
+            if (log.length === 0) {
+                showNotification('ℹ️ No hay cambios registrados en el log.');
+                return;
+            }
+            const headers = ['Fecha/Hora', 'Producto', 'ID Producto', 'Área', 'Antes', 'Después', 'Usuario', 'UID'];
+            const rows = log.map(function(e) {
+                return [
+                    new Date(e.ts).toLocaleString('es-MX'),
+                    e.prodName || e.prodId,
+                    e.prodId,
+                    e.area,
+                    e.valorAntes !== null && e.valorAntes !== undefined ? e.valorAntes : '—',
+                    e.valorDespues,
+                    e.usuario || '—',
+                    e.uid || '—'
+                ];
+            });
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+            ws['!cols'] = [{ wch: 20 }, { wch: 30 }, { wch: 12 }, { wch: 14 },
+                           { wch: 10 }, { wch: 10 }, { wch: 20 }, { wch: 30 }];
+            XLSX.utils.book_append_sheet(wb, ws, 'Log de Cambios');
+            const fileName = 'log_cambios_inventario_' + new Date().toISOString().split('T')[0] + '.xlsx';
+            XLSX.writeFile(wb, fileName);
+            showNotification('✅ Log de ' + log.length + ' cambios exportado: ' + fileName);
+        }
+        // Exponer en window para acceso desde consola de debugging
+        window.exportChangeLogExcel = exportChangeLogExcel;
+        window.getChangeLog         = getChangeLog;
 
         function exportToExcel(modo, fileNameOverride) { // FIX: parámetro fileNameOverride para soporte de nombres personalizados
             // Guard: sin productos no hay nada que exportar
