@@ -3951,6 +3951,486 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
         const LS_WARN_BYTES = 4 * 1024 * 1024; // advertir al superar 4 MB de los ~5 MB totales
         let _lsQuotaWarned = false;
 
+        // ══════════════════════════════════════════════════════════════════════
+        //  VERSIONING — Control de versión de la app y la estructura de datos
+        // ══════════════════════════════════════════════════════════════════════
+        /**
+         * APP_VERSION : versión de la aplicación (semver). Se muestra en el pie y
+         *               en los respaldos exportados. Incrementar en cada deploy.
+         * DB_VERSION  : número de versión del esquema de localStorage/IndexedDB.
+         *               Incrementar solo cuando cambia la estructura de los datos
+         *               (no en cambios visuales). Se usa para ejecutar migraciones.
+         */
+        const APP_VERSION = '1.0.99';
+        const DB_VERSION  = 2;     // v1: esquema original  v2: IDB + sync queue + ciclo
+
+        /**
+         * _runMigrations()
+         * ─────────────────
+         * Detecta si la versión guardada en localStorage es menor a DB_VERSION
+         * y ejecuta las migraciones necesarias EN ORDEN, sin perder datos.
+         * Las migraciones son idempotentes: se pueden correr varias veces sin daño.
+         */
+        function _runMigrations() {
+            const storedVersion = parseInt(localStorage.getItem('inventarioApp_dbVersion') || '1', 10);
+            if (storedVersion >= DB_VERSION) return; // ya en la versión más reciente
+
+            console.info('[Migration] Esquema v' + storedVersion + ' → v' + DB_VERSION + '. Ejecutando migraciones…');
+
+            // ── Migración v1 → v2 ──────────────────────────────────────────────
+            // Cambios: inventarioCicloEstado, syncQueue, IDB como capa principal.
+            // En v1, inventarioConteo se guardaba directamente en LS. Lo preservamos.
+            if (storedVersion < 2) {
+                try {
+                    // Asegurar que inventarioCicloEstado existe con valor válido
+                    if (!localStorage.getItem('inventarioApp_cicloEstado')) {
+                        localStorage.setItem('inventarioApp_cicloEstado', 'ABIERTO');
+                    }
+                    // Inicializar cola de sync si no existe
+                    if (!localStorage.getItem('inventarioApp_syncQueue')) {
+                        localStorage.setItem('inventarioApp_syncQueue', '[]');
+                    }
+                    console.info('[Migration] v1→v2: cicloEstado y syncQueue inicializados ✓');
+                } catch (e) {
+                    console.warn('[Migration] v1→v2 parcialmente fallida:', e);
+                }
+            }
+
+            // Guardar nueva versión
+            try {
+                localStorage.setItem('inventarioApp_dbVersion', String(DB_VERSION));
+                console.info('[Migration] Completada → v' + DB_VERSION + ' ✓');
+            } catch(_) {}
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  CICLO DE INVENTARIO — Estados del ciclo de conteo físico
+        // ══════════════════════════════════════════════════════════════════════
+        /**
+         * Estados del ciclo:
+         *   ABIERTO     — En operación normal, sin auditoría activa.
+         *   EN_CAPTURA  — Auditoría en progreso (bartenders contando).
+         *   FINALIZADO  — Todos los áreas completadas; admin puede revisar.
+         *   CERRADO     — Ciclo sellado. Ningún usuario puede modificar datos.
+         *                 Solo el admin puede reabrir → ABIERTO.
+         *
+         * Transiciones válidas:
+         *   ABIERTO → EN_CAPTURA  (admin inicia auditoría)
+         *   EN_CAPTURA → FINALIZADO (todas las áreas completadas)
+         *   FINALIZADO → CERRADO  (admin cierra el ciclo)
+         *   CERRADO → ABIERTO     (admin reabre → nuevo ciclo)
+         */
+        let inventarioCicloEstado = 'ABIERTO'; // 'ABIERTO'|'EN_CAPTURA'|'FINALIZADO'|'CERRADO'
+        let inventarioCicloInfo = {
+            estado:      'ABIERTO',
+            abiertoPor:  null,
+            abiertoTs:   null,
+            capturaTs:   null,
+            finalizadoTs: null,
+            cerradoPor:  null,
+            cerradoTs:   null,
+            version:     1       // incrementa con cada ciclo cerrado
+        };
+
+        /**
+         * isCicloBloqueado()
+         * Retorna true si el ciclo está CERRADO → bloquea escrituras de conteo.
+         */
+        function isCicloBloqueado() {
+            return inventarioCicloEstado === 'CERRADO';
+        }
+
+        /**
+         * setCicloEstado(nuevoEstado)
+         * Transiciona el ciclo y guarda en localStorage.
+         * Solo el admin puede cerrar/reabrir; bartenders no llaman esta función.
+         */
+        function setCicloEstado(nuevoEstado) {
+            const ESTADOS_VALIDOS = ['ABIERTO', 'EN_CAPTURA', 'FINALIZADO', 'CERRADO'];
+            if (!ESTADOS_VALIDOS.includes(nuevoEstado)) {
+                console.warn('[Ciclo] Estado inválido:', nuevoEstado);
+                return;
+            }
+            const ts = Date.now();
+            inventarioCicloEstado = nuevoEstado;
+            inventarioCicloInfo.estado = nuevoEstado;
+
+            if (nuevoEstado === 'EN_CAPTURA') {
+                inventarioCicloInfo.capturaTs = ts;
+            } else if (nuevoEstado === 'FINALIZADO') {
+                inventarioCicloInfo.finalizadoTs = ts;
+            } else if (nuevoEstado === 'CERRADO') {
+                inventarioCicloInfo.cerradoPor = currentUserUid || 'admin';
+                inventarioCicloInfo.cerradoTs  = ts;
+                // Crear respaldo automático al cerrar ciclo
+                _crearBackupNombrado('ciclo_cerrado_' + new Date(ts).toISOString().split('T')[0]);
+            } else if (nuevoEstado === 'ABIERTO') {
+                // Nuevo ciclo: incrementar versión
+                inventarioCicloInfo.version = (inventarioCicloInfo.version || 1) + 1;
+                inventarioCicloInfo.abiertoPor = currentUserUid || 'admin';
+                inventarioCicloInfo.abiertoTs  = ts;
+                inventarioCicloInfo.cerradoPor = null;
+                inventarioCicloInfo.cerradoTs  = null;
+                inventarioCicloInfo.finalizadoTs = null;
+                inventarioCicloInfo.capturaTs  = null;
+            }
+
+            try {
+                localStorage.setItem('inventarioApp_cicloEstado', nuevoEstado);
+                localStorage.setItem('inventarioApp_cicloInfo',   JSON.stringify(inventarioCicloInfo));
+            } catch(_) {}
+
+            // Registrar en auditoría
+            _registrarEnSyncQueue({
+                tipo:     'ciclo_estado',
+                detalle:  nuevoEstado,
+                usuario:  (auditCurrentUser ? auditCurrentUser.userName : null) || currentUserUid || 'admin',
+                uid:      currentUserUid || null
+            });
+
+            showNotification('📋 Ciclo de inventario: ' + nuevoEstado);
+            renderTab();
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  SISTEMA DE RESPALDOS NOMBRADOS — Hasta 10 respaldos rotativos
+        // ══════════════════════════════════════════════════════════════════════
+        const MAX_BACKUPS = 10;
+
+        /**
+         * _crearBackupNombrado(etiqueta)
+         * Crea un snapshot nombrado de los datos críticos.
+         * Los respaldos rotan: si hay más de MAX_BACKUPS, el más viejo se elimina.
+         * @param {string} etiqueta — nombre descriptivo (ej. 'antes_importacion')
+         */
+        function _crearBackupNombrado(etiqueta) {
+            try {
+                const key = 'inventarioApp_backup_' + (etiqueta || Date.now());
+                const snapshot = {
+                    etiqueta:         etiqueta || 'manual',
+                    ts:               Date.now(),
+                    appVersion:       APP_VERSION,
+                    dbVersion:        DB_VERSION,
+                    cicloEstado:      inventarioCicloEstado,
+                    products:         products,
+                    inventarioConteo: inventarioConteo,
+                    myAuditoriaConteo:myAuditoriaConteo,
+                    auditoriaConteo:  auditoriaConteo,
+                    auditoriaStatus:  auditoriaStatus
+                };
+                localStorage.setItem(key, JSON.stringify(snapshot));
+
+                // Rotar: mantener solo los últimos MAX_BACKUPS
+                const allKeys = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    const k = localStorage.key(i);
+                    if (k && k.startsWith('inventarioApp_backup_')) allKeys.push(k);
+                }
+                if (allKeys.length > MAX_BACKUPS) {
+                    // Ordenar por timestamp de la key (el más viejo primero)
+                    allKeys.sort();
+                    for (let i = 0; i < allKeys.length - MAX_BACKUPS; i++) {
+                        localStorage.removeItem(allKeys[i]);
+                    }
+                }
+                console.info('[Backup] Respaldo creado:', key, '(' + allKeys.length + ' total)');
+                return key;
+            } catch (e) {
+                console.warn('[Backup] No se pudo crear respaldo:', e);
+                return null;
+            }
+        }
+
+        /**
+         * listarBackups()
+         * Retorna array de objetos { key, etiqueta, ts, fecha } ordenados por fecha desc.
+         */
+        function listarBackups() {
+            const backups = [];
+            try {
+                for (let i = 0; i < localStorage.length; i++) {
+                    const k = localStorage.key(i);
+                    if (!k || !k.startsWith('inventarioApp_backup_')) continue;
+                    try {
+                        const raw = localStorage.getItem(k);
+                        const data = JSON.parse(raw);
+                        backups.push({
+                            key:     k,
+                            etiqueta: data.etiqueta || k,
+                            ts:      data.ts || 0,
+                            fecha:   data.ts ? new Date(data.ts).toLocaleString('es-MX') : '—',
+                            productos: Array.isArray(data.products) ? data.products.length : 0
+                        });
+                    } catch(_) {}
+                }
+            } catch(_) {}
+            return backups.sort(function(a,b) { return b.ts - a.ts; });
+        }
+
+        /**
+         * restaurarBackup(key)
+         * Restaura los datos críticos desde un respaldo nombrado.
+         * Solo admin puede llamar esta función.
+         */
+        function restaurarBackup(key) {
+            if (!isAdmin()) { showNotification('⚠️ Solo el administrador puede restaurar respaldos'); return; }
+            try {
+                const raw = localStorage.getItem(key);
+                if (!raw) { showNotification('❌ Respaldo no encontrado'); return; }
+                const data = JSON.parse(raw);
+                showConfirm(
+                    '¿Restaurar el respaldo "' + (data.etiqueta || key) + '" del ' + (data.ts ? new Date(data.ts).toLocaleString('es-MX') : '?') + '?\n\n' +
+                    'Se restaurarán ' + (Array.isArray(data.products) ? data.products.length : '?') + ' productos.\n' +
+                    'El estado actual se guardará como respaldo antes de restaurar.',
+                    function() {
+                        // Crear backup del estado actual antes de sobreescribir
+                        _crearBackupNombrado('pre_restauracion_' + Date.now());
+                        if (Array.isArray(data.products))         products          = data.products;
+                        if (data.inventarioConteo)                inventarioConteo  = data.inventarioConteo;
+                        if (data.myAuditoriaConteo)               myAuditoriaConteo = data.myAuditoriaConteo;
+                        if (data.auditoriaConteo)                 auditoriaConteo   = data.auditoriaConteo;
+                        if (data.auditoriaStatus)                 auditoriaStatus   = data.auditoriaStatus;
+                        saveToLocalStorage();
+                        renderTab();
+                        showNotification('✅ Respaldo restaurado: ' + (data.etiqueta || key));
+                        _registrarEnSyncQueue({ tipo: 'restauracion_backup', detalle: key, uid: currentUserUid || null });
+                    }
+                );
+            } catch(e) {
+                showNotification('❌ Error al restaurar respaldo: ' + e.message);
+            }
+        }
+        window.listarBackups  = listarBackups;
+        window.restaurarBackup = restaurarBackup;
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  COLA DE SINCRONIZACIÓN — Registro de cambios con ID único
+        // ══════════════════════════════════════════════════════════════════════
+        /**
+         * Cada cambio al inventario genera un evento en la cola:
+         * {
+         *   id:          'chg_1718000000_abc1'      — ID único global
+         *   ts:          1718000000000              — Unix ms
+         *   tipo:        'inventario'|'auditoria'|'producto'|'ciclo_estado'|...
+         *   prodId:      'PRD-001'
+         *   prodName:    'Tequila Reposado'
+         *   area:        'almacen'
+         *   valorAntes:  10
+         *   valorDespues:8
+         *   motivo:      'Reconteo'                — capturado en el modal
+         *   usuario:     'Carlos'
+         *   uid:         'firebase-uid'
+         *   deviceId:    'dev-xxx'
+         *   estado:      'pendiente'|'sincronizado'|'error'
+         * }
+         *
+         * La cola persiste en localStorage['inventarioApp_syncQueue'].
+         * Máximo 1000 entradas (rota automáticamente).
+         * Se sincroniza a Firestore en la colección 'cambios/{FIRESTORE_DOC_ID}/eventos'.
+         */
+        const SYNC_QUEUE_MAX = 1000;
+        let _syncQueue = []; // cargado en loadFromLocalStorage
+
+        function _registrarEnSyncQueue(evento) {
+            try {
+                const entry = Object.assign({
+                    id:          'chg_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
+                    ts:          Date.now(),
+                    deviceId:    _deviceId,
+                    estado:      'pendiente',
+                    usuario:     (auditCurrentUser ? auditCurrentUser.userName : null) ||
+                                 (currentUserUid ? currentUserUid.slice(0,8) : 'local'),
+                    uid:         currentUserUid || null
+                }, evento);
+
+                _syncQueue.push(entry);
+                if (_syncQueue.length > SYNC_QUEUE_MAX) {
+                    _syncQueue = _syncQueue.slice(-SYNC_QUEUE_MAX);
+                }
+                try {
+                    localStorage.setItem('inventarioApp_syncQueue', JSON.stringify(_syncQueue));
+                } catch(_) {}
+                return entry;
+            } catch(_) { return null; }
+        }
+
+        function _getPendingSyncCount() {
+            return _syncQueue.filter(function(e) { return e.estado === 'pendiente'; }).length;
+        }
+
+        /**
+         * _flushSyncQueueToFirestore()
+         * Sube los eventos pendientes a Firestore en lote.
+         * Se llama después de una sincronización exitosa.
+         */
+        async function _flushSyncQueueToFirestore() {
+            if (!_db || !navigator.onLine) return;
+            const pending = _syncQueue.filter(function(e) { return e.estado === 'pendiente'; });
+            if (pending.length === 0) return;
+
+            try {
+                const colRef = _db
+                    .collection('inventarioApp')
+                    .doc(FIRESTORE_DOC_ID)
+                    .collection('cambios');
+
+                // Subir en lotes de 20 (límite de Firestore por batch)
+                const BATCH_SIZE = 20;
+                for (let i = 0; i < pending.length; i += BATCH_SIZE) {
+                    const lote = pending.slice(i, i + BATCH_SIZE);
+                    const batch = _db.batch();
+                    lote.forEach(function(e) {
+                        const ref = colRef.doc(e.id);
+                        batch.set(ref, e);
+                    });
+                    await batch.commit();
+                    // Marcar como sincronizados
+                    lote.forEach(function(e) { e.estado = 'sincronizado'; });
+                }
+                localStorage.setItem('inventarioApp_syncQueue', JSON.stringify(_syncQueue));
+                console.info('[SyncQueue] ' + pending.length + ' evento(s) subidos a Firestore ✓');
+            } catch(e) {
+                console.warn('[SyncQueue] Error al subir eventos:', e);
+                // Los eventos quedan como 'pendiente' y se reintentarán
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  IndexedDB — Capa de persistencia secundaria para datos críticos
+        // ══════════════════════════════════════════════════════════════════════
+        /**
+         * IndexedDB se usa como capa secundaria de respaldo para:
+         *   - inventarioConteo     (conteo operativo de áreas)
+         *   - myAuditoriaConteo    (conteo de auditoría del usuario)
+         *
+         * localStorage sigue siendo la fuente primaria (más rápido, síncrono).
+         * IndexedDB es el respaldo: si localStorage falla o se borra,
+         * IDB tiene una copia reciente de los datos críticos.
+         *
+         * Sin IndexedDB disponible, la app funciona exactamente igual que antes.
+         */
+        let _idb = null; // referencia a la BD IDB abierta
+
+        function _initIndexedDB() {
+            return new Promise(function(resolve) {
+                if (!window.indexedDB) { resolve(null); return; }
+                try {
+                    const req = indexedDB.open('BarInventoryDB', 1);
+                    req.onupgradeneeded = function(e) {
+                        const db = e.target.result;
+                        // Store principal: datos críticos por clave string
+                        if (!db.objectStoreNames.contains('criticalData')) {
+                            db.createObjectStore('criticalData');
+                        }
+                    };
+                    req.onsuccess = function(e) {
+                        _idb = e.target.result;
+                        console.info('[IDB] IndexedDB abierto correctamente ✓');
+                        resolve(_idb);
+                    };
+                    req.onerror = function(e) {
+                        console.warn('[IDB] No se pudo abrir IndexedDB:', e.target.error);
+                        resolve(null);
+                    };
+                } catch(e) {
+                    console.warn('[IDB] IndexedDB no disponible:', e);
+                    resolve(null);
+                }
+            });
+        }
+
+        /**
+         * _idbSet(key, value) / _idbGet(key)
+         * Wrappers async de IDB. Silencian errores para no romper el flujo principal.
+         */
+        function _idbSet(key, value) {
+            if (!_idb) return Promise.resolve();
+            return new Promise(function(resolve) {
+                try {
+                    const tx  = _idb.transaction('criticalData', 'readwrite');
+                    const req = tx.objectStore('criticalData').put(value, key);
+                    req.onsuccess = function() { resolve(); };
+                    req.onerror   = function(e) { console.warn('[IDB] set error:', e); resolve(); };
+                } catch(e) { resolve(); }
+            });
+        }
+
+        function _idbGet(key) {
+            if (!_idb) return Promise.resolve(null);
+            return new Promise(function(resolve) {
+                try {
+                    const tx  = _idb.transaction('criticalData', 'readonly');
+                    const req = tx.objectStore('criticalData').get(key);
+                    req.onsuccess = function() { resolve(req.result !== undefined ? req.result : null); };
+                    req.onerror   = function()  { resolve(null); };
+                } catch(e) { resolve(null); }
+            });
+        }
+
+        /**
+         * _saveConteoToIDB()
+         * Persiste los conteos críticos en IndexedDB como capa secundaria.
+         * Se llama de forma asíncrona después de saveToLocalStorage, sin bloquear.
+         */
+        function _saveConteoToIDB() {
+            if (!_idb) return;
+            // Fire-and-forget: no bloqueamos el hilo principal
+            Promise.all([
+                _idbSet('inventarioConteo',  inventarioConteo),
+                _idbSet('myAuditoriaConteo', myAuditoriaConteo),
+                _idbSet('products',          products),
+                _idbSet('_savedAt',          Date.now())
+            ]).catch(function(e) { console.warn('[IDB] Error en _saveConteoToIDB:', e); });
+        }
+
+        /**
+         * _tryRecoverFromIDB()
+         * Intenta recuperar conteos desde IDB si localStorage está vacío.
+         * Se llama al arranque, después de loadFromLocalStorage.
+         */
+        async function _tryRecoverFromIDB() {
+            if (!_idb) return false;
+            try {
+                const savedAt = await _idbGet('_savedAt');
+                if (!savedAt) return false;
+
+                const idbAge = Date.now() - savedAt;
+                if (idbAge > 30 * 24 * 60 * 60 * 1000) return false; // IDB > 30 días, ignorar
+
+                const idbProducts  = await _idbGet('products');
+                const idbConteo    = await _idbGet('inventarioConteo');
+                const idbAuditoria = await _idbGet('myAuditoriaConteo');
+
+                const hayProductos   = Array.isArray(idbProducts) && idbProducts.length > 0;
+                const hayConteo      = idbConteo && Object.keys(idbConteo).length > 0;
+                const localVacio     = products.length === 0;
+                const conteoVacio    = Object.keys(inventarioConteo).length === 0;
+
+                if (localVacio && hayProductos) {
+                    console.warn('[IDB] localStorage vacío, recuperando desde IndexedDB…');
+                    products          = idbProducts;
+                    if (hayConteo)     inventarioConteo  = idbConteo;
+                    if (idbAuditoria)  myAuditoriaConteo = idbAuditoria;
+                    showNotification('🔄 Datos recuperados desde IndexedDB (' +
+                        new Date(savedAt).toLocaleString('es-MX') + ')');
+                    saveToLocalStorage();
+                    return true;
+                }
+
+                // Caso: localStorage tiene productos pero conteo está vacío
+                if (!localVacio && conteoVacio && hayConteo) {
+                    console.warn('[IDB] Conteo vacío en LS, recuperando desde IDB…');
+                    inventarioConteo = idbConteo;
+                    if (idbAuditoria) myAuditoriaConteo = idbAuditoria;
+                    saveToLocalStorage();
+                    return true;
+                }
+            } catch(e) {
+                console.warn('[IDB] Error en recuperación desde IDB:', e);
+            }
+            return false;
+        }
+
         function estimateStorageUsed() {
             let total = 0;
             try {
@@ -4099,6 +4579,10 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                     saveToLocalStorage._syncTimer = setTimeout(() => syncToCloud(), 900);
                 }
             }
+
+            // ── IDB: persistir datos críticos de forma asíncrona ─────────────
+            // No bloquea el hilo principal. Si IDB no está disponible, es no-op.
+            _saveConteoToIDB();
         }
         saveToLocalStorage._syncTimer = null;
 
@@ -4191,6 +4675,20 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 }
             });
             inventarioConteo = migrated;
+
+            // ── Cargar cola de sincronización ────────────────────────────────
+            const rawQueue = safeGet('inventarioApp_syncQueue', []);
+            _syncQueue = Array.isArray(rawQueue) ? rawQueue : [];
+
+            // ── Cargar estado del ciclo de inventario ────────────────────────
+            const storedCiclo = localStorage.getItem('inventarioApp_cicloEstado');
+            if (storedCiclo && ['ABIERTO','EN_CAPTURA','FINALIZADO','CERRADO'].includes(storedCiclo)) {
+                inventarioCicloEstado = storedCiclo;
+            }
+            const storedCicloInfo = safeGet('inventarioApp_cicloInfo', null);
+            if (storedCicloInfo && typeof storedCicloInfo === 'object') {
+                inventarioCicloInfo = storedCicloInfo;
+            }
         }
 
         // ══════════════════════════════════════════════════════════════════════
@@ -4406,6 +4904,11 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 _syncInProgress   = false;
                 updateCloudSyncBadge('ok');
                 console.info('[Firebase] Sincronizado ✓ (' + new Date(_lastCloudSync).toLocaleTimeString() + ')');
+
+                // Subir eventos pendientes de la cola de sincronización a Firestore
+                _flushSyncQueueToFirestore().catch(function(e) {
+                    console.warn('[SyncQueue] Error al subir cola:', e);
+                });
 
             } catch (err) {
                 _syncInProgress = false;
@@ -5328,19 +5831,38 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
             if (!_db) { status = 'none'; }
             const c = cfg[status] || cfg.none;
 
+            // ── Conteo de cambios pendientes en la cola ──────────────────────
+            const pendingCount = _getPendingSyncCount();
+            let textLabel = c.text;
+            if (status === 'pending' && pendingCount > 0) {
+                textLabel = pendingCount + ' cambio' + (pendingCount !== 1 ? 's' : '') + ' pendiente' + (pendingCount !== 1 ? 's' : '');
+            }
+
+            // ── Tiempo de última sincronización exitosa ───────────────────────
+            let lastSyncStr = '';
+            if (status === 'ok' && _lastCloudSync > 0) {
+                lastSyncStr = ' · ' + new Date(_lastCloudSync).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+            }
+
             // ── Badge del sidebar ────────────────────────────────────────
             if (badge) {
                 badge.style.background   = c.bg + '22';
                 badge.style.borderColor  = c.bg + '66';
                 badge.style.color        = c.bg;
-                badge.innerHTML          = '<span style="margin-right:4px">' + c.icon + '</span>' + c.text;
+                badge.innerHTML = '<span style="margin-right:4px">' + c.icon + '</span>' +
+                    textLabel + lastSyncStr +
+                    (status !== 'none' && status !== 'syncing' ?
+                        ' <button onclick="syncToCloud()" title="Sincronizar ahora" style="margin-left:6px;background:transparent;border:1px solid currentColor;border-radius:4px;padding:1px 5px;cursor:pointer;font-size:0.7rem;color:inherit;opacity:0.75" aria-label="Sincronizar ahora">↑</button>' : '');
                 badge.style.animation    = c.pulse ? 'pulse 1.5s ease-in-out infinite' : 'none';
             }
 
             // ── Semáforo en el header (círculo verde/amarillo/rojo) ──────
             if (dot) {
                 dot.setAttribute('data-state', c.dotState);
-                dot.setAttribute('title', c.dotTitle);
+                dot.setAttribute('title',
+                    c.dotTitle +
+                    (pendingCount > 0 ? ' — ' + pendingCount + ' pendiente(s)' : '') +
+                    (_lastCloudSync > 0 ? ' — Última sync: ' + new Date(_lastCloudSync).toLocaleTimeString('es-MX') : ''));
                 dot.setAttribute('aria-label', 'Sync: ' + c.dotTitle);
             }
         }
@@ -6043,28 +6565,37 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
 
         function initializeApp() {
             // ── Inicializar identidad del dispositivo (multiusuario) ──────────
-            // Se llama ANTES de loadFromLocalStorage para que auditCurrentUser esté
-            // disponible cuando se restauren los conteos del localStorage.
             initAuditUser();
+
+            // ── Ejecutar migraciones de esquema si es necesario ───────────────
+            // _runMigrations() es idempotente y muy rápida: solo escribe en LS.
+            _runMigrations();
 
             loadFromLocalStorage();
 
+            // ── Inicializar IndexedDB (asíncrono, no bloquea la UI) ──────────
+            // Una vez abierta, _idb quedará disponible para _saveConteoToIDB y
+            // _tryRecoverFromIDB. Si falla, la app funciona igual con solo LS.
+            _initIndexedDB().then(async function() {
+                // Intentar recuperación desde IDB si LS está vacío
+                const recovered = await _tryRecoverFromIDB();
+                if (recovered) {
+                    syncStockByAreaFromConteo();
+                    renderTab();
+                }
+            });
+
             // FIX-RECOVERY-STARTUP: Detectar si los datos críticos están vacíos/corruptos
             // y ofrecer recuperación desde el snapshot de emergencia.
-            // Este scenario ocurre si el navegador borró localStorage, o si hubo un
-            // crash durante una escritura parcial (aunque es raro con el guardado granular).
             (function checkAndRecoverFromSnapshot() {
                 try {
                     const raw = localStorage.getItem('inventarioApp_emergencySnapshot');
-                    if (!raw) return; // sin snapshot previo
+                    if (!raw) return;
                     const snap = JSON.parse(raw);
                     if (!snap || !snap._ts) return;
-
                     const snapshotAge = Date.now() - snap._ts;
-                    const MAX_SNAPSHOT_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 días
-                    if (snapshotAge > MAX_SNAPSHOT_AGE_MS) return; // snapshot muy viejo
-
-                    // Si los productos están vacíos pero el snapshot tiene datos, recuperar
+                    const MAX_SNAPSHOT_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+                    if (snapshotAge > MAX_SNAPSHOT_AGE_MS) return;
                     const snapProducts = Array.isArray(snap.products) ? snap.products : [];
                     if (products.length === 0 && snapProducts.length > 0) {
                         console.warn('[Recovery] localStorage vacío pero hay snapshot de emergencia con',
@@ -6077,11 +6608,10 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                             new Date(snap._ts).toLocaleString('es-MX') + ')');
                         saveToLocalStorage();
                     }
-                } catch (_) { /* recuperación es best-effort */ }
+                } catch (_) {}
             })();
 
             // BUG-15 FIX COMPLEMENT: restaurar flag de audit sync pendiente
-            // Si la sesión anterior cerró con un timer de sync activo, reintentar al reconectar.
             try {
                 if (localStorage.getItem('inventarioApp_auditSyncPending') === '1') {
                     _auditSyncPending = true;
@@ -6089,14 +6619,20 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                     console.info('[AuditUser] Sync de auditoría pendiente detectado — se reintentará al conectar.');
                 }
             } catch(_) {}
+
             // FIX 1 — sincronizar stockByArea con inventarioConteo al arranque
             syncStockByAreaFromConteo();
 
+            // ── Detectar si el ciclo estaba en captura al cerrar la app ──────
+            // Si el ciclo era EN_CAPTURA, mantenerlo. El admin debe cerrarlo manualmente.
+            if (inventarioCicloEstado === 'EN_CAPTURA') {
+                console.info('[Ciclo] Ciclo EN_CAPTURA restaurado al arranque.');
+            }
+
             window.addEventListener('beforeunload', function() {
                 saveToLocalStorage();
-                // BUG-15 FIX: si hay un sync de auditoría debounced pendiente,
-                // marcarlo como pendiente para que se reintente al reconectar en la próxima sesión.
-                // clearTimeout cancela el timer para no disparar en pleno cierre.
+                // Persistir conteo en IDB sincrónicamente (best-effort)
+                _saveConteoToIDB();
                 if (saveInventarioModal._auditSyncTimer) {
                     clearTimeout(saveInventarioModal._auditSyncTimer);
                     saveInventarioModal._auditSyncTimer = null;
@@ -6105,7 +6641,6 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 }
             });
 
-            // BUG-FIX m3: updateNetworkStatus ahora es global (definida fuera de initializeApp)
             window.addEventListener('online',  updateNetworkStatus);
             window.addEventListener('offline', updateNetworkStatus);
             updateNetworkStatus();
@@ -6913,6 +7448,16 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
 
         function saveInventarioModal() {
             if (!inventarioModalProductId) return;
+
+            // ── CICLO CERRADO: bloquear cualquier modificación ───────────────
+            // El administrador cierra el ciclo cuando el inventario está listo;
+            // después de eso nadie puede modificar conteos hasta que se reabra.
+            if (isCicloBloqueado()) {
+                showNotification('🔒 El inventario está CERRADO. Solo el administrador puede reabrir el ciclo.');
+                closeInventarioModal();
+                return;
+            }
+
             // Validación: solo números positivos
             const enterasRaw = parseFloat(document.getElementById('inv_enteras').value);
             if (isNaN(enterasRaw) || enterasRaw < 0) {
@@ -7037,6 +7582,16 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                         // Mantener solo las últimas 500 entradas para no crecer indefinidamente
                         if (log.length > 500) log = log.slice(-500);
                         localStorage.setItem('inventarioApp_changeLog', JSON.stringify(log));
+
+                        // Registrar también en la cola de sincronización (incluye deviceId, motivo, uid)
+                        _registrarEnSyncQueue({
+                            tipo:         'inventario',
+                            prodId:       inventarioModalProductId,
+                            prodName:     product ? product.name : inventarioModalProductId,
+                            area:         selectedArea,
+                            valorAntes:   prevEnteras,
+                            valorDespues: enteras
+                        });
                     } catch (_) { /* el log nunca interrumpe el flujo principal */ }
                 })();
 
@@ -8228,33 +8783,82 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
 
         function deleteProduct(id) {
             if (!isAdmin()) { showNotification('⚠️ Solo el administrador puede eliminar productos'); return; }
-            showConfirm('¿Está seguro de eliminar este producto?', function() {
-                products = products.filter(p => p.id !== id);
-                cart = cart.filter(item => item.id !== id);
-                delete inventarioConteo[id];
-                delete auditoriaConteo[id];  // Bug #5 fix: evitar entradas huérfanas que rompen exportToExcel
-                if (myAuditoriaConteo) delete myAuditoriaConteo[id]; // FIX-5: limpiar conteo propio del usuario
-                if (auditoriaConteoPorUsuario) delete auditoriaConteoPorUsuario[id]; // FIX-5: limpiar conteos multiusuario
-                saveToLocalStorage();
-                showNotification('Producto eliminado');
-                renderTab();
-            });
+            if (isCicloBloqueado()) { showNotification('🔒 No se puede eliminar: el inventario está CERRADO.'); return; }
+            const product = products.find(function(p) { return p.id === id; });
+            const prodName = product ? product.name : id;
+            // PROTECCIÓN: confirmación doble para eliminación de producto
+            showConfirm(
+                '⚠️ ¿Eliminar el producto "' + prodName + '"?\n\n' +
+                'Se borrarán también sus conteos en todas las áreas.\n' +
+                'Esta acción NO se puede deshacer.',
+                function() {
+                    // Segunda confirmación para mayor seguridad
+                    showConfirm(
+                        '🗑️ CONFIRMAR ELIMINACIÓN\n\n"' + prodName + '" será eliminado permanentemente.\n\n¿Estás seguro?',
+                        function() {
+                            // Crear respaldo antes de eliminar
+                            _crearBackupNombrado('pre_eliminacion_' + id + '_' + Date.now());
+
+                            products = products.filter(p => p.id !== id);
+                            cart = cart.filter(item => item.id !== id);
+                            delete inventarioConteo[id];
+                            delete auditoriaConteo[id];
+                            if (myAuditoriaConteo) delete myAuditoriaConteo[id];
+                            if (auditoriaConteoPorUsuario) delete auditoriaConteoPorUsuario[id];
+
+                            // Registrar en auditoría
+                            _registrarEnSyncQueue({
+                                tipo:     'eliminacion_producto',
+                                prodId:   id,
+                                prodName: prodName,
+                                detalle:  'Producto eliminado por administrador',
+                                usuario:  (auditCurrentUser ? auditCurrentUser.userName : null) || currentUserUid || 'admin',
+                                uid:      currentUserUid || null
+                            });
+
+                            saveToLocalStorage();
+                            showNotification('Producto eliminado: ' + prodName);
+                            renderTab();
+                        }
+                    );
+                }
+            );
         }
 
         function deleteAllProducts() {
             if (!isAdmin()) { showNotification('⚠️ Solo el administrador puede eliminar productos'); return; }
             if (products.length === 0) { showNotification('No hay productos para eliminar'); return; }
-            showConfirm('¿Está seguro de que desea eliminar TODOS los productos? Esta acción no se puede deshacer.', function() {
-                products = []; cart = []; inventarioConteo = {};
-                // FIX-6: limpiar conteos de auditoría huérfanos al eliminar todos los productos
-                auditoriaConteo = {}; myAuditoriaConteo = {}; auditoriaConteoPorUsuario = {};
-                // CORRECCIÓN BUG 2: los pedidos son registros históricos inmutables.
-                // Solo se vacía el carrito activo; los productos de pedidos ya creados
-                // se conservan tal como estaban al momento de generarlos.
-                saveToLocalStorage();
-                showNotification('Todos los productos han sido eliminados');
-                renderTab();
-            });
+            if (isCicloBloqueado()) { showNotification('🔒 No se puede eliminar: el inventario está CERRADO.'); return; }
+            // PROTECCIÓN: doble confirmación para eliminación masiva del catálogo
+            showConfirm(
+                '🚨 ¿Eliminar TODOS los ' + products.length + ' productos?\n\n' +
+                'Se borrarán el catálogo completo y todos los conteos.\n' +
+                'Esta acción NO se puede deshacer.',
+                function() {
+                    showConfirm(
+                        '🗑️ CONFIRMACIÓN FINAL\n\nSe eliminará TODO el catálogo (' + products.length + ' productos).\n\n' +
+                        'Se creará un respaldo automático antes de continuar.\n\n¿Confirmar eliminación total?',
+                        function() {
+                            // Backup automático antes de eliminar todo
+                            _crearBackupNombrado('pre_eliminacion_total_' + Date.now());
+
+                            // Registrar en auditoría ANTES de borrar
+                            _registrarEnSyncQueue({
+                                tipo:     'eliminacion_catalogo',
+                                detalle:  'Catálogo completo eliminado (' + products.length + ' productos)',
+                                usuario:  (auditCurrentUser ? auditCurrentUser.userName : null) || currentUserUid || 'admin',
+                                uid:      currentUserUid || null
+                            });
+
+                            products = []; cart = []; inventarioConteo = {};
+                            auditoriaConteo = {}; myAuditoriaConteo = {}; auditoriaConteoPorUsuario = {};
+                            saveToLocalStorage();
+                            showNotification('Todos los productos han sido eliminados. Respaldo guardado.');
+                            renderTab();
+                        }
+                    );
+                }
+            );
         }
 
         function filterByGroup() {
@@ -8505,6 +9109,16 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
             const file = event.target.files[0];
             if (!file) return;
             const fileInput = event.target;
+            // ── RESPALDO AUTOMÁTICO antes de importar ────────────────────────
+            // Si la importación falla o trae datos incorrectos, el usuario puede
+            // restaurar el estado anterior desde el panel de respaldos.
+            _crearBackupNombrado('pre_importacion_' + Date.now());
+            _registrarEnSyncQueue({
+                tipo:    'importacion_excel',
+                detalle: 'Importación desde archivo: ' + (file.name || 'desconocido'),
+                usuario: (auditCurrentUser ? auditCurrentUser.userName : null) || currentUserUid || 'local',
+                uid:     currentUserUid || null
+            });
             const reader = new FileReader();
             reader.onload = function(e) {
                 try {
@@ -8625,6 +9239,63 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
             };
             reader.readAsArrayBuffer(file);
         }
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  GESTIÓN DEL CICLO DE INVENTARIO — Funciones públicas para el admin
+        // ══════════════════════════════════════════════════════════════════════
+
+        function iniciarCapturaInventario() {
+            if (!isAdmin()) { showNotification('⚠️ Solo el administrador puede iniciar la captura'); return; }
+            if (inventarioCicloEstado === 'EN_CAPTURA') { showNotification('ℹ️ La captura ya está en progreso'); return; }
+            if (inventarioCicloEstado === 'CERRADO') { showNotification('🔒 El inventario está cerrado. Reabre el ciclo primero.'); return; }
+            showConfirm('¿Iniciar captura de inventario?\n\nTodos los usuarios podrán registrar conteos.', function() {
+                setCicloEstado('EN_CAPTURA');
+            });
+        }
+
+        function finalizarCapturaInventario() {
+            if (!isAdmin()) { showNotification('⚠️ Solo el administrador puede finalizar la captura'); return; }
+            if (inventarioCicloEstado !== 'EN_CAPTURA') { showNotification('ℹ️ La captura no está activa'); return; }
+            showConfirm('¿Finalizar la captura?\n\nPodrás revisar los resultados antes de cerrar el ciclo.', function() {
+                setCicloEstado('FINALIZADO');
+            });
+        }
+
+        function cerrarCicloInventario() {
+            if (!isAdmin()) { showNotification('⚠️ Solo el administrador puede cerrar el ciclo'); return; }
+            if (inventarioCicloEstado !== 'FINALIZADO') { showNotification('ℹ️ El ciclo debe estar FINALIZADO para cerrarlo'); return; }
+            showConfirm(
+                '🔒 ¿CERRAR el ciclo de inventario?\n\nSe bloqueará cualquier modificación.\nSolo el administrador podrá reabrir.\nSe exportará un respaldo automático.',
+                function() {
+                    try { if (typeof exportToExcel === 'function') exportToExcel('admin'); } catch(_) {}
+                    setCicloEstado('CERRADO');
+                    showNotification('🔒 Ciclo cerrado. Respaldo creado y exportado.');
+                }
+            );
+        }
+
+        function reabrirCicloInventario() {
+            if (!isAdmin()) { showNotification('⚠️ Solo el administrador puede reabrir el ciclo'); return; }
+            if (inventarioCicloEstado !== 'CERRADO') { showNotification('ℹ️ El ciclo debe estar CERRADO para reabrir'); return; }
+            showConfirm(
+                '🔓 ¿Reabrir el ciclo de inventario?\n\nSe iniciará un nuevo ciclo (v' + ((inventarioCicloInfo.version || 1) + 1) + ').\nLos datos anteriores se conservan en los respaldos.',
+                function() {
+                    setCicloEstado('ABIERTO');
+                    showNotification('✅ Ciclo reabierto — v' + inventarioCicloInfo.version + ' iniciado.');
+                }
+            );
+        }
+
+        window.iniciarCapturaInventario   = iniciarCapturaInventario;
+        window.finalizarCapturaInventario = finalizarCapturaInventario;
+        window.cerrarCicloInventario      = cerrarCicloInventario;
+        window.reabrirCicloInventario     = reabrirCicloInventario;
+        window.setCicloEstado             = setCicloEstado;
+        window.isCicloBloqueado           = isCicloBloqueado;
+        window.getInventarioCicloEstado   = function() { return inventarioCicloEstado; };
+        window._getPendingSyncCount       = _getPendingSyncCount;
+        window.APP_VERSION                = APP_VERSION;
+        window.DB_VERSION                 = DB_VERSION;
 
         // ══════════════════════════════════════════════════════════════════════
         //  FIX-CHANGELOG: Funciones de consulta y exportación del log de cambios
