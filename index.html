@@ -234,12 +234,37 @@ const firebaseConfig = {
                }
                match /inventarioApp/{docId} {
                  allow read, write: if request.auth != null;
-                 match /{subcoll}/{subId} {
+                 // CORRECCIÓN-6 SEGURIDAD (FIX-WILDCARD-LEAK): ANTES había aquí un wildcard
+                 // genérico `match /{subcoll}/{subId} { allow read, write: if auth != null }`.
+                 // En Firestore, si CUALQUIER regla que coincide con una ruta permite el
+                 // acceso, el acceso se permite — no aplica "la más específica gana".
+                 // Ese wildcard también coincidía con la ruta userAuditoria/{uid} (subcoll
+                 // = "userAuditoria"), así que un usuario cualquiera podía leer/escribir el
+                 // conteo de auditoría de OTRO usuario saltándose por completo la regla
+                 // específica de abajo. Se reemplaza por un allow-list explícito de las
+                 // subcolecciones que SÍ deben ser de acceso abierto a cualquier autenticado.
+                 match /stockAreas/{areaId} {
                    allow read, write: if request.auth != null;
-                   match /{deep}/{deepId} { allow read, write: if request.auth != null; }
+                 }
+                 match /cambios/{cambioId} {
+                   allow read, write: if request.auth != null;
+                 }
+                 match /conteoAreas/{areaId} {
+                   allow read, write: if request.auth != null;
+                 }
+                 match /conflictos/{conflictoId} {
+                   allow read, write: if request.auth != null;
+                 }
+                 match /ordersChunks/{chunkId} {
+                   allow read, write: if request.auth != null;
+                 }
+                 match /inventoriesChunks/{chunkId} {
+                   allow read, write: if request.auth != null;
                  }
                  // FIX 6 SEGURIDAD: cada usuario solo escribe SU propio doc de auditoría.
                  // El admin puede leer/escribir todos (para ver conteos y otorgar unlocks).
+                 // Al quitar el wildcard genérico de arriba, esta regla ya NO puede ser
+                 // anulada por una regla más permisiva que coincida con la misma ruta.
                  match /userAuditoria/{uid} {
                    allow read:  if request.auth != null && (request.auth.uid == uid || isAdminUser());
                    allow write: if request.auth != null && (request.auth.uid == uid || isAdminUser());
@@ -257,6 +282,16 @@ const firebaseConfig = {
                match /reportes/{reporteId} {
                  allow read:  if request.auth != null;
                  allow write: if isAdminUser();
+               }
+               // FIX-SECURITY: Historial permanente de cambios de inventario.
+               // Sin esta regla, _flushSyncQueueToFirestore() falla con permission-denied
+               // en todos sus writes a historialCambios, dejando los eventos en estado
+               // "pendiente" indefinidamente y nunca sincronizando el historial a la nube.
+               // Escritura: cualquier usuario autenticado (cada uno solo sube sus propios cambios).
+               // Lectura: solo administrador (datos sensibles de inventario).
+               match /historialCambios/{docId} {
+                 allow read:  if isAdminUser();
+                 allow write: if request.auth != null;
                }
              }
            }
@@ -4604,18 +4639,17 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
         }
 
         // ══════════════════════════════════════════════════════════════════════
-        //  IndexedDB — Capa de persistencia secundaria para datos críticos
+        //  IndexedDB — Capa de persistencia
         // ══════════════════════════════════════════════════════════════════════
         /**
-         * IndexedDB se usa como capa secundaria de respaldo para:
-         *   - inventarioConteo     (conteo operativo de áreas)
-         *   - myAuditoriaConteo    (conteo de auditoría del usuario)
+         * NOTA (actualizado, ver bloque "CORRECCIÓN 1" más abajo, junto a _idbSaveAll):
+         * IndexedDB es ahora la fuente PRIMARIA de almacenamiento local; localStorage
+         * quedó como capa secundaria de compatibilidad (más lenta pero síncrona).
+         * Este comentario antes decía lo contrario y quedó desactualizado tras la
+         * migración a IDB-como-principal — se corrige aquí para evitar confusión.
          *
-         * localStorage sigue siendo la fuente primaria (más rápido, síncrono).
-         * IndexedDB es el respaldo: si localStorage falla o se borra,
-         * IDB tiene una copia reciente de los datos críticos.
-         *
-         * Sin IndexedDB disponible, la app funciona exactamente igual que antes.
+         * Sin IndexedDB disponible, la app funciona exactamente igual que antes
+         * (localStorage solo, sin la capa primaria de IDB).
          */
         let _idb = null; // referencia a la BD IDB abierta
 
@@ -6639,6 +6673,17 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                             console.warn('[AuditUser] Reintento fallido:', e)
                         );
                     }
+                    // FIX 3: Reintentar syncs de área que fallaron en auditoriaFinalizarConteo
+                    if (window._pendingAreaSyncs && window._pendingAreaSyncs.size > 0) {
+                        console.info('[Atomico] Reintentando ' + window._pendingAreaSyncs.size + ' área(s) pendiente(s)…');
+                        window._pendingAreaSyncs.forEach(function(area) {
+                            syncConteoAtomicoPorArea(area)
+                                .then(function() { window._pendingAreaSyncs.delete(area); })
+                                .catch(function(e) { console.warn('[Atomico] Reintento fallido para ' + area + ':', e); });
+                            syncConteoPorUsuarioToFirestore(area)
+                                .catch(function(e) { console.warn('[MultiUser] Reintento fallido para ' + area + ':', e); });
+                        });
+                    }
                     loadFromCloud().then(function() {
                         // loadFromCloud ya llama syncToCloud() si local es más reciente
                         updateCloudSyncBadge(_cloudSyncPending ? 'pending' : 'ok');
@@ -8452,7 +8497,11 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
 
                 // Guardar en el inventario operativo regular
                 if (!inventarioConteo[inventarioModalProductId]) inventarioConteo[inventarioModalProductId] = {};
-                inventarioConteo[inventarioModalProductId][selectedArea] = { enteras, abiertas };
+                // CORRECCIÓN-3: agregar _ts también en el conteo regular (antes solo la
+                // rama de auditoría lo tenía). Sin esto, este flujo no podía participar
+                // de forma consistente en la detección de conflictos basada en timestamp
+                // que ya usan syncToCloud/_applyCloudData para el resto de los datos.
+                inventarioConteo[inventarioModalProductId][selectedArea] = { enteras, abiertas, _ts: Date.now() };
                 syncStockByAreaFromConteo();
                 saveToLocalStorage();
                 showNotification('Conteo guardado en ' + areas[selectedArea]);
@@ -8501,18 +8550,39 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 isAuditoriaMode     = false;
                 saveToLocalStorage();
 
-                // Subir conteo propio a Firestore (bajo mi UID, aislado)
-                syncMyAuditoriaToFirestore().catch(err =>
-                    console.warn('[AuditUser] Error sync al finalizar:', err)
-                );
+                // ── SINCRONIZACIÓN A FIREBASE ──────────────────────────────────
+                // Estas llamadas son fire-and-forget pero con mecanismos de retry:
+                //  • syncMyAuditoriaToFirestore tiene su propio retry vía _auditSyncPending
+                //  • syncConteoAtomicoPorArea y syncConteoPorUsuarioToFirestore se marcan
+                //    en _pendingAreaSyncs para reintento en el próximo sync periódico.
+                // El dato está seguro en localStorage; Firebase es la capa de distribución.
 
-                // Mantener también el sync atómico por área (para reportes admin)
-                syncConteoAtomicoPorArea(area).catch(err =>
-                    console.warn('[Atomico] Error en sync final:', err)
-                );
-                syncConteoPorUsuarioToFirestore(area).catch(err =>
-                    console.warn('[MultiUser] Error en sync multiusuario:', err)
-                );
+                // Subir conteo propio a Firestore (bajo mi UID, aislado)
+                // syncMyAuditoriaToFirestore tiene retry automático vía _auditSyncPending.
+                syncMyAuditoriaToFirestore().catch(err => {
+                    console.warn('[AuditUser] Error sync al finalizar:', err);
+                    // _auditSyncPending ya se setea internamente en syncMyAuditoriaToFirestore
+                });
+
+                // FIX 2: Registrar áreas pendientes de sync para retry en caso de fallo.
+                // Si el dispositivo está offline o Firebase falla en este momento,
+                // _pendingAreaSyncs garantiza que el conteo llega al admin en el próximo
+                // ciclo de sincronización (updateNetworkStatus → online → reintento).
+                if (!window._pendingAreaSyncs) window._pendingAreaSyncs = new Set();
+                window._pendingAreaSyncs.add(area);
+
+                syncConteoAtomicoPorArea(area)
+                    .then(function() { window._pendingAreaSyncs.delete(area); })
+                    .catch(err => {
+                        console.warn('[Atomico] Error en sync final — reintento pendiente:', err);
+                        // El área queda en _pendingAreaSyncs para reintento
+                        _cloudSyncPending = true; // activa sync periódico de 3 min
+                    });
+                syncConteoPorUsuarioToFirestore(area)
+                    .catch(err => {
+                        console.warn('[MultiUser] Error en sync multiusuario — reintento pendiente:', err);
+                        _cloudSyncPending = true;
+                    });
 
                 showNotification('✅ Conteo de ' + nombreArea + ' guardado y bloqueado');
                 renderTab();
