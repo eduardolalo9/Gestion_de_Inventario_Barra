@@ -5161,6 +5161,13 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 ['inventarioApp_auditoriaView',            auditoriaView],
                 ['inventarioApp_auditoriaAreaActiva',      auditoriaAreaActiva || ''],
                 ['inventarioApp_expandedInventories',      JSON.stringify(Array.from(expandedInventories))],
+                // BUG-3 FIX: cicloEstado y cicloInfo nunca estaban en este array.
+                // Antes solo se guardaban vía setCicloEstado() directamente.
+                // Si algo fallaba en setCicloEstado (ej. cuota llena en ese momento),
+                // el estado del ciclo se perdía entre sesiones.
+                // Ahora se guardan aquí como respaldo adicional.
+                ['inventarioApp_cicloEstado',              inventarioCicloEstado || 'ABIERTO'],
+                ['inventarioApp_cicloInfo',                JSON.stringify(inventarioCicloInfo || {})],
                 // ── TIER 4: Histórico (puede ser grande; al final) ───────────────────────
                 ['inventarioApp_orders',                   JSON.stringify(orders)],
                 ['inventarioApp_inventories',              JSON.stringify(inventories)],
@@ -5246,18 +5253,15 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 _lastDataHash = newHash;
                 _cloudSyncPending = true;
                 updateCloudSyncBadge('pending');
-                // FIX 8: No disparar sync cuando saveToLocalStorage viene de _applyCloudData.
-                // Sin este guard se crea el loop: cloud→applyCloud→save→syncToCloud→cloud→...
                 const skipSync = opts && opts.skipSyncTrigger;
                 if (!skipSync && navigator.onLine && _db) {
                     clearTimeout(saveToLocalStorage._syncTimer);
                     saveToLocalStorage._syncTimer = setTimeout(() => syncToCloud(), 900);
                 }
             }
-
-            // ── IDB: persistir datos críticos de forma asíncrona ─────────────
-            // No bloquea el hilo principal. Si IDB no está disponible, es no-op.
-            _saveConteoToIDB();
+            // BUG-4 FIX: eliminada llamada redundante a _saveConteoToIDB() que
+            // existía aquí. _idbSaveAll() al inicio de esta función ya cubre
+            // todos los datos (incluyendo conteos). Doble escritura innecesaria.
         }
         saveToLocalStorage._syncTimer = null;
 
@@ -7314,25 +7318,40 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
             // ── Ejecutar migraciones de esquema si es necesario ───────────────
             _runMigrations();
 
-            // CORRECCIÓN 1: Intentar leer de IDB primero (primario),
-            // luego LS como fallback (secundario).
-            // IDB es más durable y tiene mayor cuota que LS.
+            // ══════════════════════════════════════════════════════════════════
+            // BUG-1 + BUG-2 FIX: RACE CONDITION EN ARRANQUE
+            // ─────────────────────────────────────────────────────────────────
+            // PROBLEMA ORIGINAL:
+            //   _initIndexedDB().then(async () => { cargar IDB/LS }) es ASÍNCRONO.
+            //   Pero el código de abajo (if products.length===0, switchTab, loadFromCloud)
+            //   corría SÍNCRONO antes de que el .then() terminara.
+            //
+            //   Consecuencia 1: products.length SIEMPRE es 0 en el if-guard →
+            //     los 14 productos demo se cargaban en CADA arranque, sobreescribiendo
+            //     el catálogo real del usuario antes de que IDB/LS restaurara sus datos.
+            //
+            //   Consecuencia 2: switchTab() y loadFromCloud() renderizaban con
+            //     datos vacíos (flash de contenido vacío), y loadFromCloud podía
+            //     descargar datos de Firebase y aplicarlos ANTES de que IDB
+            //     hubiera restaurado el estado local, creando conflictos espurios.
+            //
+            // SOLUCIÓN: Todo el código de inicialización post-carga va DENTRO
+            //   del callback .then() para garantizar orden de ejecución correcto:
+            //   IDB/LS se carga → luego UI → luego Firebase.
+            // ══════════════════════════════════════════════════════════════════
             _initIndexedDB().then(async function() {
                 // ── FASE 1: Intentar carga desde IDB (fuente primaria) ────────
                 const idbData = await _idbLoadAll();
                 if (idbData && Array.isArray(idbData.products) && idbData.products.length > 0) {
-                    // IDB tiene datos — usarlo como fuente principal
                     const lsTs  = parseInt(localStorage.getItem('inventarioApp_lastModified') || '0', 10);
                     const idbTs = idbData._savedAt || 0;
                     if (idbTs >= lsTs) {
-                        // IDB más reciente o igual → usar IDB como fuente
                         _applyIDBData(idbData);
                         console.info('[Init] Datos cargados desde IDB (primario). LS queda como backup.');
                     } else {
-                        // LS más reciente → usar LS pero también sincronizar a IDB
                         loadFromLocalStorage();
                         console.info('[Init] LS más reciente que IDB. Cargando LS y sincronizando a IDB.');
-                        _idbSaveAll(); // actualizar IDB con los datos de LS
+                        _idbSaveAll();
                     }
                 } else {
                     // ── FASE 2: IDB vacío → cargar desde LS (secundario) ─────
@@ -7341,7 +7360,6 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
 
                     // ── FASE 3: LS también vacío → intentar recuperación ──────
                     if (products.length === 0) {
-                        // 3a: snapshot de emergencia
                         (function checkSnapshot() {
                             try {
                                 const raw = localStorage.getItem('inventarioApp_emergencySnapshot');
@@ -7363,7 +7381,7 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                         })();
                     }
 
-                    // 3b: si todo local está vacío → Firebase como último recurso
+                    // 3b: Firebase como último recurso
                     if (products.length === 0) {
                         setTimeout(async function() {
                             const recoveredFromCloud = await _tryRecoverFromFirebase();
@@ -7376,9 +7394,37 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 }
 
                 syncStockByAreaFromConteo();
-                // CORRECCIÓN 9: verificar integridad al arranque (silencioso)
                 setTimeout(function() { _checkDataIntegrity(); }, 1500);
-                renderTab();
+
+                // ── BUG-1 FIX: Guard de productos demo DENTRO del .then() ─────
+                // Ahora products.length refleja los datos REALES ya cargados de IDB/LS.
+                // Solo se insertan los productos demo si genuinamente no hay catálogo.
+                if (products.length === 0) {
+                    const initialProducts = [
+                        { id: 'PRD-001', name: 'Vodka Premium', stockByArea: { almacen: 12, barra1: 5, barra2: 3 }, unit: 'Botellas', group: 'Premium' },
+                        { id: 'PRD-002', name: 'Ron Añejo', stockByArea: { almacen: 8, barra1: 4, barra2: 2 }, unit: 'Botellas', group: 'Premium' },
+                        { id: 'PRD-003', name: 'Whisky Escocés', stockByArea: { almacen: 4, barra1: 2, barra2: 1 }, unit: 'Botellas', group: 'Premium' },
+                        { id: 'PRD-004', name: 'Gin London Dry', stockByArea: { almacen: 10, barra1: 3, barra2: 2 }, unit: 'Botellas', group: 'Premium' },
+                        { id: 'PRD-005', name: 'Tequila Reposado', stockByArea: { almacen: 3, barra1: 2, barra2: 1 }, unit: 'Botellas', group: 'Premium' },
+                        { id: 'PRD-006', name: 'Cerveza Nacional', stockByArea: { almacen: 48, barra1: 24, barra2: 18 }, unit: 'Unidad', group: 'Bebidas' },
+                        { id: 'PRD-007', name: 'Cerveza Importada', stockByArea: { almacen: 18, barra1: 12, barra2: 6 }, unit: 'Unidad', group: 'Bebidas' },
+                        { id: 'PRD-008', name: 'Vino Tinto Reserva', stockByArea: { almacen: 15, barra1: 6, barra2: 4 }, unit: 'Botellas', group: 'Vinos' },
+                        { id: 'PRD-009', name: 'Vino Blanco', stockByArea: { almacen: 12, barra1: 5, barra2: 3 }, unit: 'Botellas', group: 'Vinos' },
+                        { id: 'PRD-010', name: 'Coca Cola', stockByArea: { almacen: 36, barra1: 20, barra2: 15 }, unit: 'Unidad', group: 'Bebidas' },
+                        { id: 'PRD-011', name: 'Agua Mineral', stockByArea: { almacen: 42, barra1: 25, barra2: 18 }, unit: 'Unidad', group: 'Bebidas' },
+                        { id: 'PRD-012', name: 'Jugo de Naranja', stockByArea: { almacen: 8, barra1: 4, barra2: 3 }, unit: 'Litros', group: 'Bebidas' },
+                        { id: 'PRD-013', name: 'Limones', stockByArea: { almacen: 5, barra1: 2, barra2: 1.5 }, unit: 'Kilos', group: 'Frutas' },
+                        { id: 'PRD-014', name: 'Hielo', stockByArea: { almacen: 20, barra1: 10, barra2: 8 }, unit: 'Kilos', group: 'Insumos' }
+                    ];
+                    products = initialProducts;
+                    saveToLocalStorage();
+                    console.info('[Init] Catálogo vacío — cargados ' + initialProducts.length + ' productos de demostración.');
+                }
+
+                // ── BUG-2 FIX: switchTab() DENTRO del .then() ────────────────
+                // Antes corría con products=[] → UI vacía + re-render posterior con flash.
+                // Ahora corre con los datos ya cargados → render correcto desde el primer frame.
+                switchTab(activeTab);
 
                 // Restaurar flag de sync pendiente
                 try {
@@ -7391,6 +7437,18 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
 
                 if (inventarioCicloEstado === 'EN_CAPTURA') {
                     console.info('[Ciclo] Ciclo EN_CAPTURA restaurado al arranque.');
+                }
+
+                // ── BUG-2 FIX: Firebase DESPUÉS de cargar datos locales ───────
+                // Antes: loadFromCloud() corría sin datos locales → conflictos espurios.
+                // Ahora: Firebase se consulta después de tener el estado local completo,
+                //   así _applyCloudData puede comparar correctamente local vs nube.
+                if (_db) {
+                    loadFromCloud().catch(err => console.warn('[Firebase] loadFromCloud silenciado:', err));
+                    loadConflictosDesdeFirestore().catch(() => {});
+                    loadConteoPorUsuarioFromFirestore().catch(err =>
+                        console.warn('[MultiUser] loadConteoPorUsuarioFromFirestore silenciado:', err)
+                    );
                 }
             });
 
@@ -7409,45 +7467,7 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
             window.addEventListener('offline', updateNetworkStatus);
             updateNetworkStatus();
 
-            if (products.length === 0) {
-                const initialProducts = [
-                    { id: 'PRD-001', name: 'Vodka Premium', stockByArea: { almacen: 12, barra1: 5, barra2: 3 }, unit: 'Botellas', group: 'Premium' },
-                    { id: 'PRD-002', name: 'Ron Añejo', stockByArea: { almacen: 8, barra1: 4, barra2: 2 }, unit: 'Botellas', group: 'Premium' },
-                    { id: 'PRD-003', name: 'Whisky Escocés', stockByArea: { almacen: 4, barra1: 2, barra2: 1 }, unit: 'Botellas', group: 'Premium' },
-                    { id: 'PRD-004', name: 'Gin London Dry', stockByArea: { almacen: 10, barra1: 3, barra2: 2 }, unit: 'Botellas', group: 'Premium' },
-                    { id: 'PRD-005', name: 'Tequila Reposado', stockByArea: { almacen: 3, barra1: 2, barra2: 1 }, unit: 'Botellas', group: 'Premium' },
-                    { id: 'PRD-006', name: 'Cerveza Nacional', stockByArea: { almacen: 48, barra1: 24, barra2: 18 }, unit: 'Unidad', group: 'Bebidas' },
-                    { id: 'PRD-007', name: 'Cerveza Importada', stockByArea: { almacen: 18, barra1: 12, barra2: 6 }, unit: 'Unidad', group: 'Bebidas' },
-                    { id: 'PRD-008', name: 'Vino Tinto Reserva', stockByArea: { almacen: 15, barra1: 6, barra2: 4 }, unit: 'Botellas', group: 'Vinos' },
-                    { id: 'PRD-009', name: 'Vino Blanco', stockByArea: { almacen: 12, barra1: 5, barra2: 3 }, unit: 'Botellas', group: 'Vinos' },
-                    { id: 'PRD-010', name: 'Coca Cola', stockByArea: { almacen: 36, barra1: 20, barra2: 15 }, unit: 'Unidad', group: 'Bebidas' },
-                    { id: 'PRD-011', name: 'Agua Mineral', stockByArea: { almacen: 42, barra1: 25, barra2: 18 }, unit: 'Unidad', group: 'Bebidas' },
-                    { id: 'PRD-012', name: 'Jugo de Naranja', stockByArea: { almacen: 8, barra1: 4, barra2: 3 }, unit: 'Litros', group: 'Bebidas' },
-                    { id: 'PRD-013', name: 'Limones', stockByArea: { almacen: 5, barra1: 2, barra2: 1.5 }, unit: 'Kilos', group: 'Frutas' },
-                    { id: 'PRD-014', name: 'Hielo', stockByArea: { almacen: 20, barra1: 10, barra2: 8 }, unit: 'Kilos', group: 'Insumos' }
-                ];
-                products = initialProducts;
-                saveToLocalStorage();
-            }
-
-            switchTab(activeTab);
-
-            // ── Carga desde Firebase (asíncrona, no bloquea la UI) ───────────
-            // Si la nube tiene datos más recientes, se aplicarán silenciosamente
-            // y la UI se re-renderizará.
-            if (_db) {
-                loadFromCloud().catch(err => console.warn('[Firebase] loadFromCloud silenciado:', err));
-                // Cargar conflictos de abiertas previos desde conteoAreas
-                loadConflictosDesdeFirestore().catch(() => {});
-                // ── Cargar conteos de TODOS los dispositivos (multiusuario) ────
-                loadConteoPorUsuarioFromFirestore().catch(err =>
-                    console.warn('[MultiUser] loadConteoPorUsuarioFromFirestore silenciado:', err)
-                );
-            }
-
             // ── Sync periódico de recuperación: cada 3 min, solo si hay pendientes ──
-            // No sincroniza si no hay cambios reales (_cloudSyncPending = false).
-            // Actúa como red de seguridad para cambios que fallaron antes.
             setInterval(() => {
                 if (navigator.onLine && _db && !_syncInProgress && _cloudSyncPending) {
                     console.info('[Firebase] Sync periódico — había cambios pendientes.');
