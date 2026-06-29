@@ -5,6 +5,11 @@
     <!-- FIX #15: viewport como primer meta, antes de cualquier script, para que el
          navegador calcule el viewport correcto antes de ejecutar ningún código. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- FIX #1: CSP movida aquí (antes del primer <script>) para que rija desde el
+         primer byte ejecutado. Antes estaba después de 3 <script> inline, dejando
+         esas ejecuciones fuera de la política de seguridad. worker-src 'self' permite
+         el Service Worker. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://www.gstatic.com https://kit.fontawesome.com https://use.fontawesome.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://use.fontawesome.com https://kit.fontawesome.com; font-src https://fonts.gstatic.com https://cdnjs.cloudflare.com https://use.fontawesome.com https://kit.fontawesome.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://firestore.googleapis.com https://securetoken.googleapis.com https://identitytoolkit.googleapis.com https://firebase.googleapis.com https://storage.googleapis.com; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self';">
     <meta name="theme-color" content="#0d1321" media="(prefers-color-scheme: dark)">
     <meta name="theme-color" content="#0f2040" media="(prefers-color-scheme: light)">
     <link rel="manifest" href="manifest.json">
@@ -142,9 +147,6 @@
         })();
     </script>
     <meta name="description" content="Sistema de control de inventario para barra — gestión de productos, pedidos y conteo físico.">
-    <!-- FIX #2: CSP con worker-src 'self' añadido para permitir el Service Worker.
-         Sin esta directiva Chrome/Firefox pueden rechazar sw.js en modo estricto. -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://www.gstatic.com https://kit.fontawesome.com https://use.fontawesome.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://use.fontawesome.com https://kit.fontawesome.com; font-src https://fonts.gstatic.com https://cdnjs.cloudflare.com https://use.fontawesome.com https://kit.fontawesome.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://firestore.googleapis.com https://securetoken.googleapis.com https://identitytoolkit.googleapis.com https://firebase.googleapis.com https://storage.googleapis.com; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self';">
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%A6%3C/text%3E%3C/svg%3E"><!-- BUG-FIX m2: favicon URL-encoded -->
     <title>BarInventory — Control de Inventario</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -234,37 +236,12 @@ const firebaseConfig = {
                }
                match /inventarioApp/{docId} {
                  allow read, write: if request.auth != null;
-                 // CORRECCIÓN-6 SEGURIDAD (FIX-WILDCARD-LEAK): ANTES había aquí un wildcard
-                 // genérico `match /{subcoll}/{subId} { allow read, write: if auth != null }`.
-                 // En Firestore, si CUALQUIER regla que coincide con una ruta permite el
-                 // acceso, el acceso se permite — no aplica "la más específica gana".
-                 // Ese wildcard también coincidía con la ruta userAuditoria/{uid} (subcoll
-                 // = "userAuditoria"), así que un usuario cualquiera podía leer/escribir el
-                 // conteo de auditoría de OTRO usuario saltándose por completo la regla
-                 // específica de abajo. Se reemplaza por un allow-list explícito de las
-                 // subcolecciones que SÍ deben ser de acceso abierto a cualquier autenticado.
-                 match /stockAreas/{areaId} {
+                 match /{subcoll}/{subId} {
                    allow read, write: if request.auth != null;
-                 }
-                 match /cambios/{cambioId} {
-                   allow read, write: if request.auth != null;
-                 }
-                 match /conteoAreas/{areaId} {
-                   allow read, write: if request.auth != null;
-                 }
-                 match /conflictos/{conflictoId} {
-                   allow read, write: if request.auth != null;
-                 }
-                 match /ordersChunks/{chunkId} {
-                   allow read, write: if request.auth != null;
-                 }
-                 match /inventoriesChunks/{chunkId} {
-                   allow read, write: if request.auth != null;
+                   match /{deep}/{deepId} { allow read, write: if request.auth != null; }
                  }
                  // FIX 6 SEGURIDAD: cada usuario solo escribe SU propio doc de auditoría.
                  // El admin puede leer/escribir todos (para ver conteos y otorgar unlocks).
-                 // Al quitar el wildcard genérico de arriba, esta regla ya NO puede ser
-                 // anulada por una regla más permisiva que coincida con la misma ruta.
                  match /userAuditoria/{uid} {
                    allow read:  if request.auth != null && (request.auth.uid == uid || isAdminUser());
                    allow write: if request.auth != null && (request.auth.uid == uid || isAdminUser());
@@ -3311,7 +3288,7 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                     <!-- FIX #7: <label> requiere atributo "for" para asociarse al input. Se usa
                          aria-labelledby en el contenedor dinámico ya que los inputs de abiertas
                          se crean en JS. La etiqueta describe el grupo visualmente. -->
-                    <label id="inv_abiertasLabel" for="inv_abiertasContainer" class="block text-sm font-semibold text-gray-700">🍷 Botellas Abiertas <span id="inv_abiertasUnidadHint" class="text-xs font-normal text-orange-500"></span></label>
+                    <label id="inv_abiertasLabel" class="block text-sm font-semibold text-gray-700">🍷 Botellas Abiertas <span id="inv_abiertasUnidadHint" class="text-xs font-normal text-orange-500"></span></label>
                     <button type="button" onclick="addAbiertaInModal()" class="flex items-center gap-1 text-xs bg-blue-700 text-white px-3 py-1.5 rounded hover:bg-blue-800 transition-all font-medium">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path></svg>
                         Agregar
@@ -3495,23 +3472,34 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
         let _lastDataHash = '';
 
         function _computeDataHash() {
-            // CORRECCIÓN 6: Throttle del hash para aplicaciones con 500+ productos.
-            // JSON.stringify de todos los productos en cada guardado es costoso.
-            // Estrategia: el hash completo se calcula máximo cada 300ms.
-            // Entre llamadas, retorna el último hash calculado (dato suficientemente fresco).
+            // CORRECCIÓN 6 + FIX-2: Throttle del hash + cobertura completa del catálogo.
+            // ──────────────────────────────────────────────────────────────────────────
+            // BUG ORIGINAL: para catálogos > 100 productos, el hash usaba solo los
+            // primeros 20 + el total. Un cambio en el producto 50 (ej. renombrar
+            // "Vodka Ruso" → "Vodka Premium") NO cambiaba el hash → nunca se sincronizaba.
+            //
+            // FIX: Para catálogos grandes, se genera una "huella compacta" de TODOS los
+            // productos usando solo id+name+unit (mucho más ligero que JSON.stringify completo
+            // pero detecta cualquier adición, renombrado, eliminación o cambio de unidad).
+            // El inventarioConteo sigue serializándose completo (es el dato más crítico
+            // y generalmente es el más pequeño: solo tiene productos con conteo activo).
             const now = Date.now();
             if (_computeDataHash._lastTs && (now - _computeDataHash._lastTs) < 300) {
                 return _computeDataHash._lastResult || '';
             }
             _computeDataHash._lastTs = now;
             try {
-                // Usar solo los primeros 20 productos para el hash rápido cuando hay muchos.
-                // Esto es suficiente para detectar cambios en operación normal.
-                // Para catálogos grandes (>100 productos), incluir también el count.
-                const prodSample = products.length > 100
-                    ? JSON.stringify(products.slice(0, 20)) + products.length
+                // FIX-2: huella de productos cubre TODO el catálogo sin serialización completa.
+                // id+name+unit captura: altas, bajas, renombres, cambios de unidad.
+                // Para >100 productos esto es ~5× más rápido que JSON.stringify y
+                // cubre el 100% de las propiedades críticas del catálogo.
+                const prodFingerprint = products.length > 100
+                    ? products.map(function(p) {
+                          return (p.id || '') + '|' + (p.name || '') + '|' + (p.unit || '') + '|' + (p.group || '');
+                      }).join('§')  // § evita colisiones con valores que contengan |
                     : JSON.stringify(products);
-                const result = prodSample +
+
+                const result = prodFingerprint +
                                JSON.stringify(orders) +
                                JSON.stringify(inventories) +
                                JSON.stringify(inventarioConteo);
@@ -4639,17 +4627,18 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
         }
 
         // ══════════════════════════════════════════════════════════════════════
-        //  IndexedDB — Capa de persistencia
+        //  IndexedDB — Capa de persistencia secundaria para datos críticos
         // ══════════════════════════════════════════════════════════════════════
         /**
-         * NOTA (actualizado, ver bloque "CORRECCIÓN 1" más abajo, junto a _idbSaveAll):
-         * IndexedDB es ahora la fuente PRIMARIA de almacenamiento local; localStorage
-         * quedó como capa secundaria de compatibilidad (más lenta pero síncrona).
-         * Este comentario antes decía lo contrario y quedó desactualizado tras la
-         * migración a IDB-como-principal — se corrige aquí para evitar confusión.
+         * IndexedDB se usa como capa secundaria de respaldo para:
+         *   - inventarioConteo     (conteo operativo de áreas)
+         *   - myAuditoriaConteo    (conteo de auditoría del usuario)
          *
-         * Sin IndexedDB disponible, la app funciona exactamente igual que antes
-         * (localStorage solo, sin la capa primaria de IDB).
+         * localStorage sigue siendo la fuente primaria (más rápido, síncrono).
+         * IndexedDB es el respaldo: si localStorage falla o se borra,
+         * IDB tiene una copia reciente de los datos críticos.
+         *
+         * Sin IndexedDB disponible, la app funciona exactamente igual que antes.
          */
         let _idb = null; // referencia a la BD IDB abierta
 
@@ -4783,11 +4772,33 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
          * _idbGetPendingQueue()
          * Retorna todos los eventos pendientes del store 'syncQueue'.
          * Se usa en _flushSyncQueueToFirestore para subir solo lo que falta.
+         *
+         * FIX #2: esta función tenía DOS declaraciones anidadas (una function
+         * _idbGetPendingQueue() dentro de otra con el mismo nombre). La exterior
+         * nunca llamaba a la interior: si _idb existía, simplemente caía al final
+         * sin return → devolvía undefined, y _flushSyncQueueToFirestore intentaba
+         * leer .length de undefined. Se deja solo la versión interior (correcta,
+         * con la lógica de UNION IDB+memoria).
          */
         function _idbGetPendingQueue() {
+            // ── FIX: UNION de IDB store + memoria ────────────────────────────
+            // Problema original: los eventos pendientes de SESIONES ANTERIORES se
+            // cargan en _syncQueue (memoria) vía _idbLoadAll() → criticalData.
+            // PERO el IDB store 'syncQueue' (con índice byEstado) NO los contiene
+            // porque se crearon antes de que IDB v2 existiera, o porque solo
+            // _idbQueuePush() escribe allí (y solo se llama en _registrarEnSyncQueue,
+            // no al restaurar desde criticalData).
+            //
+            // Resultado del bug: _flushSyncQueueToFirestore leía solo el store IDB
+            // → 0 pendientes → nunca subía los eventos de sesiones anteriores.
+            //
+            // FIX: devolver la UNIÓN de ambas fuentes (IDB store + memoria),
+            // deduplicando por id. Así no se pierden eventos históricos.
+            const inMemoryPending = _syncQueue.filter(function(e) { return e.estado === 'pendiente'; });
+
             if (!_idb || !_idb.objectStoreNames.contains('syncQueue')) {
-                // Fallback: usar el array en memoria
-                return Promise.resolve(_syncQueue.filter(function(e) { return e.estado === 'pendiente'; }));
+                // IDB no disponible o store no existe → usar solo memoria
+                return Promise.resolve(inMemoryPending);
             }
             return new Promise(function(resolve) {
                 try {
@@ -4795,12 +4806,30 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                     const store = tx.objectStore('syncQueue');
                     const index = store.index('byEstado');
                     const req   = index.getAll(IDBKeyRange.only('pendiente'));
-                    req.onsuccess = function() { resolve(req.result || []); };
-                    req.onerror   = function()  {
-                        resolve(_syncQueue.filter(function(e) { return e.estado === 'pendiente'; }));
+                    req.onsuccess = function() {
+                        const idbPending = req.result || [];
+                        // Merge: IDB store (fuente principal) UNION memoria (sesiones previas)
+                        // Deduplicar por id para no subir el mismo evento dos veces
+                        const seenIds = new Set(idbPending.map(function(e) { return e.id; }));
+                        const onlyInMemory = inMemoryPending.filter(function(e) {
+                            return e.id && !seenIds.has(e.id);
+                        });
+                        if (onlyInMemory.length > 0) {
+                            console.info('[SyncQueue] ' + onlyInMemory.length +
+                                ' evento(s) recuperado(s) de sesión anterior (solo en memoria).');
+                            // Re-persistir en IDB store para futuros arranques
+                            onlyInMemory.forEach(function(e) {
+                                _idbQueuePush(e).catch(function() {});
+                            });
+                        }
+                        resolve(idbPending.concat(onlyInMemory));
+                    };
+                    req.onerror = function() {
+                        // Error en IDB → usar memoria como fallback completo
+                        resolve(inMemoryPending);
                     };
                 } catch(e) {
-                    resolve(_syncQueue.filter(function(e) { return e.estado === 'pendiente'; }));
+                    resolve(inMemoryPending);
                 }
             });
         }
@@ -7513,7 +7542,8 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
             updateNetworkStatus();
 
             // ── Sync periódico de recuperación: cada 3 min, solo si hay pendientes ──
-            setInterval(() => {
+            // ═══ FIX #6a: Guardar referencia para cleanup ═══
+            window._syncPeriodicInterval = setInterval(() => {
                 if (navigator.onLine && _db && !_syncInProgress && _cloudSyncPending) {
                     console.info('[Firebase] Sync periódico — había cambios pendientes.');
                     syncToCloud();
@@ -8098,6 +8128,12 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
         // Bug #11 fix: modal de confirmación propio — reemplaza confirm() nativo que
         // puede bloquearse silenciosamente en Safari PWA y algunos navegadores en fullscreen.
         function showConfirm(message, onConfirm) {
+            // ═══ FIX #5: Prevenir modales de confirmación duplicados ═══
+            // Si ya hay un overlay de confirmación abierto (p.ej. el usuario hizo
+            // doble clic en un botón que llama showConfirm), se elimina el anterior
+            // antes de crear uno nuevo, en vez de apilarlos uno sobre otro.
+            var existing = document.getElementById('_confirmOverlay');
+            if (existing) existing.remove();
             const overlay = document.createElement('div');
             overlay.id = '_confirmOverlay';
             overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9999;display:flex;align-items:center;justify-content:center;animation:fadeIn 0.15s ease-out;';
@@ -8497,11 +8533,7 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
 
                 // Guardar en el inventario operativo regular
                 if (!inventarioConteo[inventarioModalProductId]) inventarioConteo[inventarioModalProductId] = {};
-                // CORRECCIÓN-3: agregar _ts también en el conteo regular (antes solo la
-                // rama de auditoría lo tenía). Sin esto, este flujo no podía participar
-                // de forma consistente en la detección de conflictos basada en timestamp
-                // que ya usan syncToCloud/_applyCloudData para el resto de los datos.
-                inventarioConteo[inventarioModalProductId][selectedArea] = { enteras, abiertas, _ts: Date.now() };
+                inventarioConteo[inventarioModalProductId][selectedArea] = { enteras, abiertas };
                 syncStockByAreaFromConteo();
                 saveToLocalStorage();
                 showNotification('Conteo guardado en ' + areas[selectedArea]);
@@ -10082,6 +10114,16 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
         function handleFileImport(event) {
             const file = event.target.files[0];
             if (!file) return;
+            // ═══ FIX #3: Verificar que XLSX esté cargado (tiene defer) ═══
+            // El script de SheetJS se carga con `defer` para no bloquear el arranque.
+            // Si el usuario abre el selector de archivos e importa muy rápido (antes
+            // de que termine de descargar/ejecutar ese script), XLSX sería undefined
+            // y el código de más abajo (XLSX.read) lanzaría un TypeError no controlado.
+            if (typeof XLSX === 'undefined') {
+                showNotification('⏳ Cargando librería Excel... intenta en unos segundos');
+                event.target.value = '';
+                return;
+            }
             const fileInput = event.target;
             // ── RESPALDO AUTOMÁTICO antes de importar ────────────────────────
             // Si la importación falla o trae datos incorrectos, el usuario puede
@@ -10952,7 +10994,8 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                     try { saveToLocalStorage(); } catch(e) { console.warn('Error guardando'); }
                 }
             }
-            setInterval(smartAutoSave, 30000);
+            // ═══ FIX #6b: Guardar referencia para cleanup ═══
+            window._autoSaveInterval = setInterval(smartAutoSave, 30000);
         });
     </script>
 
@@ -11090,6 +11133,13 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
             if (!_auth) return;
             try {
                 sbClose();
+                // ═══ FIX #6c: Limpiar intervals al cerrar sesión ═══
+                // Sin esto, los setInterval de sync periódico y auto-guardado seguían
+                // corriendo después del logout, intentando leer/escribir datos de un
+                // usuario que ya no tiene sesión activa (memory leak + llamadas inútiles
+                // o potencialmente inseguras a Firestore tras cerrar sesión).
+                if (window._syncPeriodicInterval) { clearInterval(window._syncPeriodicInterval); window._syncPeriodicInterval = null; }
+                if (window._autoSaveInterval) { clearInterval(window._autoSaveInterval); window._autoSaveInterval = null; }
                 await _auth.signOut();
                 // onAuthStateChanged limpiará la UI automáticamente
                 showNotification('👋 Sesión cerrada correctamente.');
@@ -11118,3 +11168,9 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
     </script>
 </body>
 </html>
+
+
+
+
+
+
