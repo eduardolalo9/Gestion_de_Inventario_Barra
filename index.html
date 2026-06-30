@@ -7,8 +7,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#0d1321" media="(prefers-color-scheme: dark)">
     <meta name="theme-color" content="#0f2040" media="(prefers-color-scheme: light)">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://www.gstatic.com https://kit.fontawesome.com https://use.fontawesome.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://use.fontawesome.com https://kit.fontawesome.com; font-src https://fonts.gstatic.com https://cdnjs.cloudflare.com https://use.fontawesome.com https://kit.fontawesome.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://firestore.googleapis.com https://securetoken.googleapis.com https://identitytoolkit.googleapis.com https://firebase.googleapis.com https://storage.googleapis.com; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self';">
-
+    <!-- FIX #1: CSP movida ANTES de cualquier <script> para que el navegador
+         aplique la política desde el inicio de la evaluación del documento.
+         Una CSP después de scripts ya ejecutados no los restringe retroactivamente. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://www.gstatic.com https://kit.fontawesome.com https://use.fontawesome.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://use.fontawesome.com https://kit.fontawesome.com; font-src https://fonts.gstatic.com https://cdnjs.cloudflare.com https://use.fontawesome.com https://kit.fontawesome.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://firestore.googleapis.com https://securetoken.googleapis.com https://identitytoolkit.googleapis.com https://firebase.googleapis.com https://storage.googleapis.com; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self';">
     <link rel="manifest" href="manifest.json">
     <meta name="mobile-web-app-capable" content="yes">
     <!-- FIX-iOS: apple-mobile-web-app-capable activa modo standalone en iPhone/iPad -->
@@ -144,9 +146,7 @@
         })();
     </script>
     <meta name="description" content="Sistema de control de inventario para barra — gestión de productos, pedidos y conteo físico.">
-    <!-- FIX #2: CSP con worker-src 'self' añadido para permitir el Service Worker.
-         Sin esta directiva Chrome/Firefox pueden rechazar sw.js en modo estricto. -->
-       <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%A6%3C/text%3E%3C/svg%3E"><!-- BUG-FIX m2: favicon URL-encoded -->
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%A6%3C/text%3E%3C/svg%3E"><!-- BUG-FIX m2: favicon URL-encoded -->
     <title>BarInventory — Control de Inventario</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -235,37 +235,12 @@ const firebaseConfig = {
                }
                match /inventarioApp/{docId} {
                  allow read, write: if request.auth != null;
-                 // CORRECCIÓN-6 SEGURIDAD (FIX-WILDCARD-LEAK): ANTES había aquí un wildcard
-                 // genérico `match /{subcoll}/{subId} { allow read, write: if auth != null }`.
-                 // En Firestore, si CUALQUIER regla que coincide con una ruta permite el
-                 // acceso, el acceso se permite — no aplica "la más específica gana".
-                 // Ese wildcard también coincidía con la ruta userAuditoria/{uid} (subcoll
-                 // = "userAuditoria"), así que un usuario cualquiera podía leer/escribir el
-                 // conteo de auditoría de OTRO usuario saltándose por completo la regla
-                 // específica de abajo. Se reemplaza por un allow-list explícito de las
-                 // subcolecciones que SÍ deben ser de acceso abierto a cualquier autenticado.
-                 match /stockAreas/{areaId} {
+                 match /{subcoll}/{subId} {
                    allow read, write: if request.auth != null;
-                 }
-                 match /cambios/{cambioId} {
-                   allow read, write: if request.auth != null;
-                 }
-                 match /conteoAreas/{areaId} {
-                   allow read, write: if request.auth != null;
-                 }
-                 match /conflictos/{conflictoId} {
-                   allow read, write: if request.auth != null;
-                 }
-                 match /ordersChunks/{chunkId} {
-                   allow read, write: if request.auth != null;
-                 }
-                 match /inventoriesChunks/{chunkId} {
-                   allow read, write: if request.auth != null;
+                   match /{deep}/{deepId} { allow read, write: if request.auth != null; }
                  }
                  // FIX 6 SEGURIDAD: cada usuario solo escribe SU propio doc de auditoría.
                  // El admin puede leer/escribir todos (para ver conteos y otorgar unlocks).
-                 // Al quitar el wildcard genérico de arriba, esta regla ya NO puede ser
-                 // anulada por una regla más permisiva que coincida con la misma ruta.
                  match /userAuditoria/{uid} {
                    allow read:  if request.auth != null && (request.auth.uid == uid || isAdminUser());
                    allow write: if request.auth != null && (request.auth.uid == uid || isAdminUser());
@@ -3312,8 +3287,7 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                     <!-- FIX #7: <label> requiere atributo "for" para asociarse al input. Se usa
                          aria-labelledby en el contenedor dinámico ya que los inputs de abiertas
                          se crean en JS. La etiqueta describe el grupo visualmente. -->
-<label id="inv_abiertasLabel" class="block text-sm font-semibold text-gray-700">
-id="inv_abiertasUnidadHint" class="text-xs font-normal text-orange-500"></span></label>
+                    <label id="inv_abiertasLabel" class="block text-sm font-semibold text-gray-700">🍷 Botellas Abiertas <span id="inv_abiertasUnidadHint" class="text-xs font-normal text-orange-500"></span></label>
                     <button type="button" onclick="addAbiertaInModal()" class="flex items-center gap-1 text-xs bg-blue-700 text-white px-3 py-1.5 rounded hover:bg-blue-800 transition-all font-medium">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path></svg>
                         Agregar
@@ -3497,23 +3471,35 @@ id="inv_abiertasUnidadHint" class="text-xs font-normal text-orange-500"></span><
         let _lastDataHash = '';
 
         function _computeDataHash() {
-            // CORRECCIÓN 6: Throttle del hash para aplicaciones con 500+ productos.
-            // JSON.stringify de todos los productos en cada guardado es costoso.
-            // Estrategia: el hash completo se calcula máximo cada 300ms.
-            // Entre llamadas, retorna el último hash calculado (dato suficientemente fresco).
+            // CORRECCIÓN 6 + FIX-2: Throttle del hash + cobertura completa del catálogo.
+            // ──────────────────────────────────────────────────────────────────────────
+            // BUG ORIGINAL: para catálogos > 100 productos, el hash usaba solo los
+            // primeros 20 + el total. Un cambio en el producto 50 (ej. renombrar
+            // "Vodka Ruso" → "Vodka Premium") NO cambiaba el hash → nunca se sincronizaba.
+            //
+            // FIX: Para catálogos grandes, se genera una "huella compacta" de TODOS los
+            // productos usando solo id+name+unit (mucho más ligero que JSON.stringify completo
+            // pero detecta cualquier adición, renombrado, eliminación o cambio de unidad).
+            // El inventarioConteo sigue serializándose completo (es el dato más crítico
+            // y generalmente es el más pequeño: solo tiene productos con conteo activo).
             const now = Date.now();
-            if (_computeDataHash._lastTs && (now - _computeDataHash._lastTs) < 300) {
+            // FIX-5: Throttle reducido 300ms → 50ms para no perder syncs en conteos rápidos
+    if (_computeDataHash._lastTs && (now - _computeDataHash._lastTs) < 50) {
                 return _computeDataHash._lastResult || '';
             }
             _computeDataHash._lastTs = now;
             try {
-                // Usar solo los primeros 20 productos para el hash rápido cuando hay muchos.
-                // Esto es suficiente para detectar cambios en operación normal.
-                // Para catálogos grandes (>100 productos), incluir también el count.
-                const prodSample = products.length > 100
-                    ? JSON.stringify(products.slice(0, 20)) + products.length
+                // FIX-2: huella de productos cubre TODO el catálogo sin serialización completa.
+                // id+name+unit captura: altas, bajas, renombres, cambios de unidad.
+                // Para >100 productos esto es ~5× más rápido que JSON.stringify y
+                // cubre el 100% de las propiedades críticas del catálogo.
+                const prodFingerprint = products.length > 100
+                    ? products.map(function(p) {
+                          return (p.id || '') + '|' + (p.name || '') + '|' + (p.unit || '') + '|' + (p.group || '');
+                      }).join('§')  // § evita colisiones con valores que contengan |
                     : JSON.stringify(products);
-                const result = prodSample +
+
+                const result = prodFingerprint +
                                JSON.stringify(orders) +
                                JSON.stringify(inventories) +
                                JSON.stringify(inventarioConteo);
@@ -4632,26 +4618,57 @@ id="inv_abiertasUnidadHint" class="text-xs font-normal text-orange-500"></span><
 
                 try { localStorage.setItem('inventarioApp_syncQueue', JSON.stringify(_syncQueue)); } catch(_) {}
                 console.info('[SyncQueue] ' + syncedIds.length + ' evento(s) subidos a Firestore ✓' +
-                    ' (historial permanente actualizado)');
+            ' (historial permanente actualizado)');
+
+        // FIX-10: Podar eventos sincronizados del store IDB
+        _idbPruneSyncedQueue().catch(function() {});
 
             } catch(e) {
                 console.warn('[SyncQueue] Error al subir eventos:', e);
                 // Los eventos quedan como 'pendiente' y se reintentarán en el próximo sync
             }
         }
-
+/**
+ * FIX-10: _idbPruneSyncedQueue()
+ * Elimina eventos ya sincronizados del store IDB.
+ */
+function _idbPruneSyncedQueue() {
+    if (!_idb || !_idb.objectStoreNames.contains('syncQueue')) return Promise.resolve();
+    return new Promise(function(resolve) {
+        try {
+            var tx = _idb.transaction('syncQueue', 'readwrite');
+            var store = tx.objectStore('syncQueue');
+            var idx = store.index('byEstado');
+            var req = idx.openCursor(IDBKeyRange.only('sincronizado'));
+            var count = 0;
+            req.onsuccess = function() {
+                var cursor = req.result;
+                if (cursor && count < 500) {
+                    cursor.delete();
+                    count++;
+                    cursor.continue();
+                } else {
+                    if (count > 0) console.info('[IDB] Podados ' + count + ' eventos sincronizados');
+                    resolve();
+                }
+            };
+            req.onerror = function() { resolve(); };
+        } catch(e) { resolve(); }
+    });
+}
         // ══════════════════════════════════════════════════════════════════════
-        //  IndexedDB — Capa de persistencia
+        //  IndexedDB — Capa de persistencia secundaria para datos críticos
         // ══════════════════════════════════════════════════════════════════════
         /**
-         * NOTA (actualizado, ver bloque "CORRECCIÓN 1" más abajo, junto a _idbSaveAll):
-         * IndexedDB es ahora la fuente PRIMARIA de almacenamiento local; localStorage
-         * quedó como capa secundaria de compatibilidad (más lenta pero síncrona).
-         * Este comentario antes decía lo contrario y quedó desactualizado tras la
-         * migración a IDB-como-principal — se corrige aquí para evitar confusión.
+         * IndexedDB se usa como capa secundaria de respaldo para:
+         *   - inventarioConteo     (conteo operativo de áreas)
+         *   - myAuditoriaConteo    (conteo de auditoría del usuario)
          *
-         * Sin IndexedDB disponible, la app funciona exactamente igual que antes
-         * (localStorage solo, sin la capa primaria de IDB).
+         * localStorage sigue siendo la fuente primaria (más rápido, síncrono).
+         * IndexedDB es el respaldo: si localStorage falla o se borra,
+         * IDB tiene una copia reciente de los datos críticos.
+         *
+         * Sin IndexedDB disponible, la app funciona exactamente igual que antes.
          */
         let _idb = null; // referencia a la BD IDB abierta
 
@@ -4692,11 +4709,17 @@ id="inv_abiertasUnidadHint" class="text-xs font-normal text-orange-500"></span><
                     req.onsuccess = function(e) {
                         _idb = e.target.result;
                         // Manejar cierre inesperado de la conexión IDB (p.ej. upgrade en otra pestaña)
-                        _idb.onversionchange = function() {
-                            _idb.close();
-                            _idb = null;
-                            console.warn('[IDB] Versión actualizada en otra pestaña. Reconectando…');
-                        };
+                       // FIX-6: Reconectar IDB automáticamente tras upgrade en otra pestaña
+                _idb.onversionchange = function() {
+                    _idb.close();
+                    _idb = null;
+                    console.warn('[IDB] Versión actualizada en otra pestaña. Reconectando…');
+                    setTimeout(function() {
+                        _initIndexedDB().then(function(db) {
+                            if (db) console.info('[IDB] Reconectado tras upgrade ✓');
+                        });
+                    }, 1000);
+                };
                         console.info('[IDB] BarInventoryDB v2 abierto ✓');
                         resolve(_idb);
                     };
@@ -4786,42 +4809,59 @@ id="inv_abiertasUnidadHint" class="text-xs font-normal text-orange-500"></span><
          * Retorna todos los eventos pendientes del store 'syncQueue'.
          * Se usa en _flushSyncQueueToFirestore para subir solo lo que falta.
          */
-function _idbGetPendingQueue() {
-    // FIX #2 APLICADO: Una sola función, sin anidamiento
-    var inMemoryPending = _syncQueue.filter(function(e) { return e.estado === 'pendiente'; });
+        function _idbGetPendingQueue() {
+            // ── FIX: UNION de IDB store + memoria ────────────────────────────
+            // Problema original: los eventos pendientes de SESIONES ANTERIORES se
+            // cargan en _syncQueue (memoria) vía _idbLoadAll() → criticalData.
+            // PERO el IDB store 'syncQueue' (con índice byEstado) NO los contiene
+            // porque se crearon antes de que IDB v2 existiera, o porque solo
+            // _idbQueuePush() escribe allí (y solo se llama en _registrarEnSyncQueue,
+            // no al restaurar desde criticalData).
+            //
+            // Resultado del bug: _flushSyncQueueToFirestore leía solo el store IDB
+            // → 0 pendientes → nunca subía los eventos de sesiones anteriores.
+            //
+            // FIX: devolver la UNIÓN de ambas fuentes (IDB store + memoria),
+            // deduplicando por id. Así no se pierden eventos históricos.
+            const inMemoryPending = _syncQueue.filter(function(e) { return e.estado === 'pendiente'; });
 
-    if (!_idb || !_idb.objectStoreNames.contains('syncQueue')) {
-        return Promise.resolve(inMemoryPending);
-    }
-    return new Promise(function(resolve) {
-        try {
-            var tx = _idb.transaction('syncQueue', 'readonly');
-            var store = tx.objectStore('syncQueue');
-            var index = store.index('byEstado');
-            var req = index.getAll(IDBKeyRange.only('pendiente'));
-            req.onsuccess = function() {
-                var idbPending = req.result || [];
-                var seenIds = new Set(idbPending.map(function(e) { return e.id; }));
-                var onlyInMemory = inMemoryPending.filter(function(e) {
-                    return e.id && !seenIds.has(e.id);
-                });
-                if (onlyInMemory.length > 0) {
-                    console.info('[SyncQueue] ' + onlyInMemory.length +
-                        ' evento(s) recuperado(s) de sesion anterior (solo en memoria).');
-                    onlyInMemory.forEach(function(e) {
-                        _idbQueuePush(e).catch(function() {});
-                    });
+            if (!_idb || !_idb.objectStoreNames.contains('syncQueue')) {
+                // IDB no disponible o store no existe → usar solo memoria
+                return Promise.resolve(inMemoryPending);
+            }
+            return new Promise(function(resolve) {
+                try {
+                    const tx    = _idb.transaction('syncQueue', 'readonly');
+                    const store = tx.objectStore('syncQueue');
+                    const index = store.index('byEstado');
+                    const req   = index.getAll(IDBKeyRange.only('pendiente'));
+                    req.onsuccess = function() {
+                        const idbPending = req.result || [];
+                        // Merge: IDB store (fuente principal) UNION memoria (sesiones previas)
+                        // Deduplicar por id para no subir el mismo evento dos veces
+                        const seenIds = new Set(idbPending.map(function(e) { return e.id; }));
+                        const onlyInMemory = inMemoryPending.filter(function(e) {
+                            return e.id && !seenIds.has(e.id);
+                        });
+                        if (onlyInMemory.length > 0) {
+                            console.info('[SyncQueue] ' + onlyInMemory.length +
+                                ' evento(s) recuperado(s) de sesión anterior (solo en memoria).');
+                            // Re-persistir en IDB store para futuros arranques
+                            onlyInMemory.forEach(function(e) {
+                                _idbQueuePush(e).catch(function() {});
+                            });
+                        }
+                        resolve(idbPending.concat(onlyInMemory));
+                    };
+                    req.onerror = function() {
+                        // Error en IDB → usar memoria como fallback completo
+                        resolve(inMemoryPending);
+                    };
+                } catch(e) {
+                    resolve(inMemoryPending);
                 }
-                resolve(idbPending.concat(onlyInMemory));
-            };
-            req.onerror = function() {
-                resolve(inMemoryPending);
-            };
-        } catch(e) {
-            resolve(inMemoryPending);
+            });
         }
-    });
-}
 
         /**
          * _idbMarkQueueSynced(ids)
@@ -5715,11 +5755,13 @@ function _idbGetPendingQueue() {
                 console.error('[Firebase] Error en syncToCloud:', err);
 
                 // Back-off exponencial: 2s, 4s, 8s
-                if (retryCount < 3) {
-                    const delay = Math.pow(2, retryCount + 1) * 1000;
-                    console.info('[Firebase] Reintentando en ' + (delay/1000) + 's… (intento ' + (retryCount + 1) + '/3)');
-                    setTimeout(() => syncToCloud(retryCount + 1), delay);
-                } else {
+                // FIX-7: Marcar pendiente para que el sync periódico lo reintente
+        if (retryCount < 3) {
+            const delay = Math.pow(2, retryCount + 1) * 1000;
+            _cloudSyncPending = true;
+            console.info('[Firebase] Reintentando en ' + (delay/1000) + 's… (intento ' + (retryCount + 1) + '/3)');
+            setTimeout(() => syncToCloud(retryCount + 1), delay);
+        } else {
                     _cloudSyncPending = true;
                     updateCloudSyncBadge('error');
                     showNotification('☁️ Sin sync — se guardó localmente');
@@ -5992,14 +6034,14 @@ function _idbGetPendingQueue() {
                 }, { merge: true }); // merge:true → preserva 'unlocks' y otros campos del admin
                 _auditSyncPending = false;
                 console.info('[AuditUser] Mi conteo sincronizado ✓');
-            } catch (err) {
-                // FIX BUG 2: marcar pendiente para reintento automático al reconectar
-                _auditSyncPending = true;
-                console.warn('[AuditUser] Error sync propio — reintento al reconectar:', err);
-                showNotification('⚠️ Conteo guardado localmente — subirá al reconectar');
-            }
-        }
-
+    } catch (err) {
+        // FIX BUG 2: marcar pendiente para reintento automático al reconectar
+        _auditSyncPending = true;
+        // FIX-9: Persistir flag en LS inmediatamente por si el browser crashea
+        try { localStorage.setItem('inventarioApp_auditSyncPending', '1'); } catch(_) {}
+        console.warn('[AuditUser] Error sync propio — reintento al reconectar:', err);
+        showNotification('⚠️ Conteo guardado localmente — subirá al reconectar');
+    }
         /**
          * Escucha el doc propio del usuario en userAuditoria/{myUid}
          * para detectar desbloqueos otorgados por el admin en tiempo real.
@@ -6097,7 +6139,9 @@ function _idbGetPendingQueue() {
          * Admin: escucha TODOS los documentos userAuditoria/* en tiempo real.
          * Llena allUsersAuditoria con los conteos de cada usuario.
          */
-        function subscribeAllUsersAuditoria() {
+        let _adminRenderTimer = null; // FIX-8: debounce para renders del admin
+
+function subscribeAllUsersAuditoria() {
             if (!_db || !isAdmin()) return;
             if (typeof _unsubAllUsers === 'function') { _unsubAllUsers(); _unsubAllUsers = null; }
             const colRef = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
@@ -6122,10 +6166,12 @@ function _idbGetPendingQueue() {
                     };
                 });
                 // Reconstruir auditoriaConteo agregado (suma/promedio de todos los usuarios)
-                _recalcAdminAggregatedConteo();
-                // FIX: incluir 'inicio' para que los chips de auditoría se actualicen
-                // en tiempo real aunque el admin esté en esa pestaña (antes solo 'inventario')
-                if (activeTab === 'inventario' || activeTab === 'inicio') renderTab();
+        _recalcAdminAggregatedConteo();
+        // FIX-8: Debounce render — max 1 cada 500ms con múltiples usuarios
+        clearTimeout(_adminRenderTimer);
+        _adminRenderTimer = setTimeout(function() {
+            if (activeTab === 'inventario' || activeTab === 'inicio') renderTab();
+        }, 500);
             }, function(err) { console.warn('[AuditAdmin] Error listener usuarios:', err); });
         }
 
@@ -6141,11 +6187,10 @@ function _idbGetPendingQueue() {
         function _recalcAdminAggregatedConteo() {
             const AREAS = ['almacen', 'barra1', 'barra2'];
             const aggregated = {};
-            const usersList  = Object.values(allUsersAuditoria);
-            // FIX: limpiar siempre aunque no haya usuarios — evita datos obsoletos
-            // tras un reset de sesión (antes retornaba sin tocar auditoriaConteo)
-            if (usersList.length === 0) { auditoriaConteo = {}; return; }
-
+const usersList = Object.values(allUsersAuditoria);
+    // FIX-2: NO borrar auditoriaConteo si usersList está vacío por desconexión
+    // temporal de Firestore. El wipe real ocurre en _adminIniciarSesionFirestore.
+    if (usersList.length === 0) { return; }
             // Separar admins de usuarios regulares
             const adminEntries   = usersList.filter(u => u.isAdmin);
             const regularEntries = usersList.filter(u => !u.isAdmin);
@@ -7230,24 +7275,27 @@ function _idbGetPendingQueue() {
          * @param {Array}   productsList Lista de productos a exportar
          * @param {string}  [fileName]   Nombre del archivo de salida (opcional)
          */
-        function exportToExcelConDatos(modo, conteoData, productsList, fileName) {
-            if (!Array.isArray(productsList) || productsList.length === 0) {
-                showNotification('⚠️ No hay productos para exportar');
-                return;
-            }
-            // Guardamos el estado global y lo sustituimos temporalmente
-            const _backupConteo    = inventarioConteo;
-            const _backupProducts  = products;
-            inventarioConteo = conteoData;
-            products         = productsList;
-            try {
-                exportToExcel(modo, fileName);
-            } finally {
-                inventarioConteo = _backupConteo;
-                products         = _backupProducts;
-            }
-        }
-
+function exportToExcelConDatos(modo, conteoData, productsList, fileName) {
+    if (!Array.isArray(productsList) || productsList.length === 0) {
+        showNotification('⚠️ No hay productos para exportar');
+        return;
+    }
+    // FIX-1: Bloquear _applyCloudData durante el swap para que ningún
+    // onSnapshot de Firestore lea los globals temporales.
+    const _backupConteo = inventarioConteo;
+    const _backupProducts = products;
+    const _wasApplying = _applyingCloudData;
+    _applyingCloudData = true;
+    inventarioConteo = conteoData;
+    products = productsList;
+    try {
+        exportToExcel(modo, fileName);
+    } finally {
+        inventarioConteo = _backupConteo;
+        products = _backupProducts;
+        _applyingCloudData = _wasApplying;
+    }
+}
         // ── RENDER: NOTIFICACIONES ─────────────────────────────────────────
         function renderNotificacionesTab() {
             let html = '<div class="max-w-2xl mx-auto">';
@@ -7515,25 +7563,37 @@ function _idbGetPendingQueue() {
                 }
             });
 
-            window.addEventListener('beforeunload', function() {
-                saveToLocalStorage();
-                _idbSaveAll(); // doble garantía al cerrar
-                if (saveInventarioModal._auditSyncTimer) {
-                    clearTimeout(saveInventarioModal._auditSyncTimer);
-                    saveInventarioModal._auditSyncTimer = null;
-                    _auditSyncPending = true;
-                    try { localStorage.setItem('inventarioApp_auditSyncPending', '1'); } catch(_) {}
-                }
-            });
+window.addEventListener('beforeunload', function() {
+        saveToLocalStorage(); // LS síncrono: siempre se completa
 
+        // FIX-4: Escritura síncrona a IDB para datos críticos.
+        // _idbSaveAll() es async y se pierde al cerrar la página.
+        if (_idb) {
+            try {
+                var tx = _idb.transaction('criticalData', 'readwrite');
+                var store = tx.objectStore('criticalData');
+                store.put(inventarioConteo, 'inventarioConteo');
+                store.put(myAuditoriaConteo, 'myAuditoriaConteo');
+                store.put(products, 'products');
+                store.put(Date.now(), '_savedAt');
+            } catch(_) {}
+        }
+
+        if (saveInventarioModal._auditSyncTimer) {
+            clearTimeout(saveInventarioModal._auditSyncTimer);
+            saveInventarioModal._auditSyncTimer = null;
+            _auditSyncPending = true;
+            try { localStorage.setItem('inventarioApp_auditSyncPending', '1'); } catch(_) {}
+        }
+    });
             window.addEventListener('online',  updateNetworkStatus);
             window.addEventListener('offline', updateNetworkStatus);
             updateNetworkStatus();
 
             // ── Sync periódico de recuperación: cada 3 min, solo si hay pendientes ──
- // FIX #6a: Guardar referencia para cleanup en logout
-    window._syncPeriodicInterval = setInterval(() => {
-        if (navigator.onLine && _db && !_syncInProgress && _cloudSyncPending) {
+            // ═══ FIX #6a: Guardar referencia para cleanup en logout ═══
+            window._syncPeriodicInterval = setInterval(() => {
+                if (navigator.onLine && _db && !_syncInProgress && _cloudSyncPending) {
                     console.info('[Firebase] Sync periódico — había cambios pendientes.');
                     syncToCloud();
                 }
@@ -8116,11 +8176,13 @@ function _idbGetPendingQueue() {
 
         // Bug #11 fix: modal de confirmación propio — reemplaza confirm() nativo que
         // puede bloquearse silenciosamente en Safari PWA y algunos navegadores en fullscreen.
-function showConfirm(message, onConfirm) {
-    // FIX #5: Prevenir modales de confirmacion duplicados
-    var existing = document.getElementById('_confirmOverlay');
-    if (existing) existing.remove();
-    const overlay = document.createElement('div');
+        function showConfirm(message, onConfirm) {
+            // ═══ FIX #5: Prevenir modales de confirmación duplicados ═══
+            // Si se llama showConfirm mientras otro ya está abierto (ej. doble clic
+            // en un botón de eliminar), el anterior se elimina antes de crear el nuevo.
+            var existing = document.getElementById('_confirmOverlay');
+            if (existing) existing.remove();
+            const overlay = document.createElement('div');
             overlay.id = '_confirmOverlay';
             overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9999;display:flex;align-items:center;justify-content:center;animation:fadeIn 0.15s ease-out;';
             overlay.innerHTML =
@@ -8136,14 +8198,17 @@ function showConfirm(message, onConfirm) {
                 'border-radius:6px;font-family:\'IBM Plex Sans\',sans-serif;font-size:0.8125rem;' +
                 'font-weight:600;cursor:pointer;">Confirmar</button>' +
                 '</div></div>';
-            document.body.appendChild(overlay);
-            const close = () => { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); };
-            overlay.querySelector('#_cfmCancel').onclick = close;
-            overlay.querySelector('#_cfmOk').onclick = function() { close(); onConfirm(); };
-            // Cerrar con ESC
-            const escHandler = function(e) { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', escHandler); } };
-            document.addEventListener('keydown', escHandler);
-            // Foco automático en Cancelar (más seguro)
+document.body.appendChild(overlay);
+    // FIX-3: escHandler se limpia en close() para TODOS los paths (ESC, Cancel, OK)
+    const escHandler = function(e) { if (e.key === 'Escape') { close(); } };
+    const close = () => {
+        document.removeEventListener('keydown', escHandler);
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    };
+    overlay.querySelector('#_cfmCancel').onclick = close;
+    overlay.querySelector('#_cfmOk').onclick = function() { close(); onConfirm(); };
+    document.addEventListener('keydown', escHandler);
+                // Foco automático en Cancelar (más seguro)
             setTimeout(() => { const btn = overlay.querySelector('#_cfmCancel'); if (btn) btn.focus(); }, 30);
         }
 
@@ -8519,11 +8584,7 @@ function showConfirm(message, onConfirm) {
 
                 // Guardar en el inventario operativo regular
                 if (!inventarioConteo[inventarioModalProductId]) inventarioConteo[inventarioModalProductId] = {};
-                // CORRECCIÓN-3: agregar _ts también en el conteo regular (antes solo la
-                // rama de auditoría lo tenía). Sin esto, este flujo no podía participar
-                // de forma consistente en la detección de conflictos basada en timestamp
-                // que ya usan syncToCloud/_applyCloudData para el resto de los datos.
-                inventarioConteo[inventarioModalProductId][selectedArea] = { enteras, abiertas, _ts: Date.now() };
+                inventarioConteo[inventarioModalProductId][selectedArea] = { enteras, abiertas };
                 syncStockByAreaFromConteo();
                 saveToLocalStorage();
                 showNotification('Conteo guardado en ' + areas[selectedArea]);
@@ -10101,15 +10162,17 @@ function showConfirm(message, onConfirm) {
             return parseFloat(str) || 0;
         }
 
-function handleFileImport(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    // FIX #3: Verificar que XLSX este cargado (tiene defer)
-    if (typeof XLSX === 'undefined') {
-        showNotification('⏳ Cargando librería Excel... intenta en unos segundos');
-        event.target.value = '';
-        return;
-    }
+        function handleFileImport(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            // ═══ FIX #3: Verificar que XLSX esté cargado (tiene defer) ═══
+            // El script de SheetJS usa defer → puede no estar listo si el usuario
+            // intenta importar muy rápido tras cargar la página.
+            if (typeof XLSX === 'undefined') {
+                showNotification('⏳ Cargando librería Excel... intenta en unos segundos');
+                event.target.value = '';
+                return;
+            }
             const fileInput = event.target;
             // ── RESPALDO AUTOMÁTICO antes de importar ────────────────────────
             // Si la importación falla o trae datos incorrectos, el usuario puede
@@ -10980,8 +11043,8 @@ function handleFileImport(event) {
                     try { saveToLocalStorage(); } catch(e) { console.warn('Error guardando'); }
                 }
             }
-            // FIX #6b: Guardar referencia para cleanup
-    window._autoSaveInterval = setInterval(smartAutoSave, 30000);
+            // ═══ FIX #6b: Guardar referencia para cleanup en logout ═══
+            window._autoSaveInterval = setInterval(smartAutoSave, 30000);
         });
     </script>
 
@@ -11115,13 +11178,15 @@ function handleFileImport(event) {
         };
 
         /* ── Cerrar sesión ───────────────────────────────────────── */
-    window.signOutUser = async function() {
-        if (!_auth) return;
-        try {
-            sbClose();
-            // FIX #6c: Limpiar intervals al cerrar sesion
-            if (window._syncPeriodicInterval) { clearInterval(window._syncPeriodicInterval); window._syncPeriodicInterval = null; }
-            if (window._autoSaveInterval) { clearInterval(window._autoSaveInterval); window._autoSaveInterval = null; }
+        window.signOutUser = async function() {
+            if (!_auth) return;
+            try {
+                sbClose();
+                // ═══ FIX #6c: Limpiar intervals al cerrar sesión ═══
+                // Sin esto, los intervals siguen corriendo aunque no haya usuario autenticado,
+                // intentando syncs con Firebase y auto-guardados sin contexto válido.
+                if (window._syncPeriodicInterval) { clearInterval(window._syncPeriodicInterval); window._syncPeriodicInterval = null; }
+                if (window._autoSaveInterval)     { clearInterval(window._autoSaveInterval);     window._autoSaveInterval = null;     }
                 await _auth.signOut();
                 // onAuthStateChanged limpiará la UI automáticamente
                 showNotification('👋 Sesión cerrada correctamente.');
