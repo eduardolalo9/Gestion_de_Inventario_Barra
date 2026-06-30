@@ -56,7 +56,7 @@ self.addEventListener('install', function(event) {
                 return cache.addAll(PRECACHE_URLS);
             }),
             new Promise(function(_, reject) {
-                setTimeout(function() { reject(new Error('[SW] Timeout precache (8s)'); }, 8000);
+               setTimeout(function() { reject(new Error('[SW] Timeout precache (8s)')); }, 8000);
             })
         ])
         .then(function() { return self.skipWaiting(); })
