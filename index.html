@@ -7796,18 +7796,18 @@ window.addEventListener('beforeunload', function() {
         function updateSearchTerm(value) {
             searchTerm = value;
             clearTimeout(_searchDebounceTimer);
-            _searchDebounceTimer = setTimeout(() => {
-                saveToLocalStorage();
-                renderTab();
-                // CORRECCIÓN BUG 1: restaurar foco y cursor al final del input de búsqueda
-                // tras el re-render que destruye y recrea el DOM
-                const searchInput = document.querySelector('#tabContent input[type="text"]');
-                if (searchInput) {
-                    searchInput.focus();
-                    const len = searchInput.value.length;
-                    searchInput.setSelectionRange(len, len);
-                }
-            }, 300);
+    _searchDebounceTimer = setTimeout(() => {
+        saveToLocalStorage();
+        renderTab();
+        // CORRECCIÓN BUG 1: restaurar foco y cursor al final del input de búsqueda
+        // tras el re-render que destruye y recrea el DOM
+        const searchInput = document.querySelector('#tabContent input[type="text"]');
+        if (searchInput) {
+            searchInput.focus();
+            const len = searchInput.value.length;
+            searchInput.setSelectionRange(len, len);
+        }
+    }, 300);
         }
 
         function updateSelectedGroup(value) {
@@ -7982,9 +7982,18 @@ window.addEventListener('beforeunload', function() {
             html += '</div>';
 
             // ── Búsqueda + filtro de grupo ─────────────────────────────────────
-            html += '<div class="inicio-search-row">';
-            html += '<input type="text" placeholder="Buscar producto..." value="' + escapeHtml(searchTerm) + '" oninput="updateSearchTerm(this.value);">';
-            html += '</div>';
+             // Buscador inteligente con clear button y feedback visual
+    html += '<div class="csb-wrap' + (searchTerm ? ' csb-wrap--active' : '') + '">';
+    html += '<svg class="csb-icon" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">'
+        + '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>';
+    html += '<input id="inicio-search-input" type="search" class="csb-input"'
+        + ' placeholder="Buscar por nombre, código o grupo\u2026"'
+        + ' value="' + escapeHtml(searchTerm) + '"'
+        + ' oninput="updateSearchTerm(this.value)"'
+        + ' onkeydown="if(event.key===\'Escape\'){event.preventDefault();this.value=\'\';updateSearchTerm(\'\');}"'
+        + ' autocomplete="off" autocorrect="off" spellcheck="false">';
+    html += '<button class="csb-clear" onclick="document.getElementById(\'inicio-search-input\').value=\'\';updateSearchTerm(\'\');" title="Limpiar (Esc)" aria-label="Limpiar búsqueda">✕</button>';
+    html += '</div>';
 
             // ── Pill-rail de grupos (horizontal, sin select) ───────────────────
             html += '<div class="grp-rail-wrap"><div class="grp-rail">';
@@ -9921,14 +9930,18 @@ document.body.appendChild(overlay);
         }
 
         function filterByGroup() {
-            let filtered = products;
-            if (selectedGroup !== 'Todos') filtered = filtered.filter(p => p.group === selectedGroup);
-            if (searchTerm) {
-                const term = searchTerm.toLowerCase();
-                filtered = filtered.filter(p => (p.name || '').toLowerCase().includes(term) || (p.id || '').toLowerCase().includes(term));
-            }
-            return filtered;
-        }
+    let filtered = products;
+    if (selectedGroup !== 'Todos') filtered = filtered.filter(p => p.group === selectedGroup);
+    if (searchTerm) {
+        // Usar _csFuzzyMatch: tolera typos, acentos, multi-palabra, ordena por relevancia
+        const scored = filtered
+            .map(function(p) { return { p: p, score: _csFuzzyMatch(p, searchTerm) }; })
+            .filter(function(x) { return x.score > 0; });
+        scored.sort(function(a, b) { return b.score - a.score; });
+        filtered = scored.map(function(x) { return x.p; });
+    }
+    return filtered;
+}
 
         function addToCart(productId) {
             const product = products.find(p => p.id === productId);
