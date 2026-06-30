@@ -6042,8 +6042,10 @@ function _idbPruneSyncedQueue() {
         console.warn('[AuditUser] Error sync propio — reintento al reconectar:', err);
         showNotification('⚠️ Conteo guardado localmente — subirá al reconectar');
     }
-        /**
-         * Escucha el doc propio del usuario en userAuditoria/{myUid}
+}
+
+    /**
+     * Escucha el doc propio del usuario en userAuditoria/{myUid}
          * para detectar desbloqueos otorgados por el admin en tiempo real.
          */
 
