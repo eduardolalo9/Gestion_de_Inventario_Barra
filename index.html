@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es-MX">
 <head>
@@ -8167,7 +8168,9 @@ window.addEventListener('beforeunload', function() {
                 return headerHtml + '<div class="bg-white rounded-2xl shadow-md" style="padding:50px 20px;text-align:center;"><div style="font-size:3rem;margin-bottom:12px;">🛒</div><p style="font-size:.95rem;font-weight:600;color:var(--txt-secondary);margin-bottom:6px;">No hay pedidos todavía</p><p style="font-size:.78rem;color:var(--txt-muted);">Ve a Inicio, agrega productos con 🛒 y genera un pedido</p></div>';
             }
             let html = headerHtml + '<div class="mb-6">';
+            if (isAdmin()) {
             html += '<button onclick="deleteAllOrders()" class="bg-gradient-to-r from-red-500 to-orange-600 text-white px-6 py-3 rounded-xl flex items-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200" title="Eliminar todos los pedidos"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg><span class="font-medium">Eliminar todos los pedidos</span></button>';
+            }
             html += '</div><div class="space-y-4">';
             orders.forEach((order, idx) => {
                 const delay = Math.min(idx * 50, 400);
@@ -9532,7 +9535,9 @@ document.body.appendChild(overlay);
             } else {
                 html += '<div class="flex justify-between items-center mb-4">';
                 html += '<h3 style="font-size:.85rem;font-weight:600;color:var(--txt-primary);">📋 Historial de conteos</h3>';
+                if (isAdmin()) {
                 html += '<button onclick="deleteAllInventories()" class="bg-gradient-to-r from-red-500 to-orange-600 text-white px-4 py-2 rounded-xl flex items-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs" title="Eliminar todo el historial"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg><span class="font-medium">Eliminar historial</span></button>';
+                }
                 html += '</div>';
                 html += '<div class="space-y-4">';
                 inventories.forEach((inv, idx) => {
@@ -10076,6 +10081,12 @@ document.body.appendChild(overlay);
         }
 
         function deleteAllOrders() {
+            // FIX-AUDIT (BarInventory): deleteAllOrders() no validaba isAdmin().
+            // 'orders' se sincroniza a Firestore (ordersChunks) vía syncToCloud(), así que
+            // cualquier usuario no-admin podía vaciar el historial de pedidos de TODOS
+            // los dispositivos con un solo confirm(). Se alinea con deleteAllProducts(),
+            // que sí exige isAdmin(), sin tocar el resto de la lógica de la función.
+            if (!isAdmin()) { showNotification('⚠️ Solo el administrador puede eliminar todos los pedidos'); return; }
             if (orders.length === 0) { showNotification('No hay pedidos para eliminar'); return; }
             showConfirm('¿Está seguro de que desea eliminar TODOS los pedidos? Esta acción no se puede deshacer.', function() {
                 orders = [];
@@ -10086,6 +10097,9 @@ document.body.appendChild(overlay);
         }
 
         function deleteAllInventories() {
+            // FIX-AUDIT (BarInventory): mismo problema que deleteAllOrders() — sin
+            // isAdmin(), cualquier usuario podía borrar el historial de inventarios.
+            if (!isAdmin()) { showNotification('⚠️ Solo el administrador puede eliminar el historial de inventarios'); return; }
             if (inventories.length === 0) { showNotification('No hay historial de inventarios para eliminar'); return; }
             showConfirm('¿Está seguro de que desea eliminar TODO el historial de inventarios? Esta acción no se puede deshacer.', function() {
                 inventories = [];
