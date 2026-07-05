@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es-MX">
 <head>
@@ -4973,94 +4974,36 @@ function _idbPruneSyncedQueue() {
          * Estructura paralela a saveToLocalStorage pero en IDB.
          * Fire-and-forget: no bloquea el hilo principal.
          */
-        // FIX-IDB-ATOMIC (BarInventory): _idbSaveAll() antes escribía cada campo
-        // en su PROPIA transacción IDB independiente (20 transacciones paralelas
-        // por llamada, vía Promise.all de _idbSet()). Si dos guardados ocurrían
-        // muy seguidos (ej. el usuario guardando el conteo de dos productos casi
-        // al mismo tiempo durante una auditoría), las transacciones de ambas
-        // llamadas podían intercalarse entre sí: el campo '_savedAt' de la
-        // llamada más reciente podía terminar escrito ANTES que el campo
-        // 'myAuditoriaConteo' de esa misma llamada, dejando en IDB una
-        // combinación inconsistente (timestamp nuevo + conteo viejo/incompleto).
-        // Al recargar, _initIndexedDB confiaba en IDB por tener el timestamp más
-        // reciente aunque su contenido real fuera más viejo que localStorage.
-        //
-        // SOLUCIÓN: una sola transacción atómica para todos los campos. Todas
-        // las escrituras comparten el mismo objeto de transacción, así que dos
-        // llamadas a _idbSaveAll() quedan estrictamente serializadas en el
-        // orden en que se invocaron — ya no pueden intercalar campos entre sí.
         function _idbSaveAll() {
             if (!_idb) return Promise.resolve();
             const nowMs = Date.now();
-            return new Promise(function(resolve) {
-                try {
-                    const tx    = _idb.transaction('criticalData', 'readwrite');
-                    const store = tx.objectStore('criticalData');
-                    // TIER 1 — Conteos críticos
-                    store.put(inventarioConteo,          'inventarioConteo');
-                    store.put(myAuditoriaConteo,         'myAuditoriaConteo');
-                    store.put(auditoriaConteo,           'auditoriaConteo');
-                    store.put(auditoriaConteoPorUsuario, 'auditoriaConteoPorUsuario');
-                    // TIER 2 — Catálogo y auditoría
-                    store.put(products,                  'products');
-                    store.put(auditoriaStatus,           'auditoriaStatus');
-                    store.put(myAuditoriaStatus,         'myAuditoriaStatus');
-                    store.put(myAuditoriaUnlocks,        'myAuditoriaUnlocks');
-                    store.put(_auditoriaSessionId || '', 'auditoriaSessionId');
-                    store.put(inventarioCicloEstado,     'cicloEstado');
-                    store.put(inventarioCicloInfo,       'cicloInfo');
-                    store.put(_syncQueue,                'syncQueue');
-                    // TIER 3 — Estado UI
-                    store.put(cart,                      'cart');
-                    store.put(activeTab,                 'activeTab');
-                    store.put(selectedArea,              'selectedArea');
-                    store.put(selectedGroup,             'selectedGroup');
-                    // Metadata — _savedAt va en la MISMA transacción que el resto,
-                    // así que si el conteo no se alcanzó a escribir, tampoco se
-                    // actualiza el timestamp (ambos viven o mueren juntos).
-                    store.put(nowMs,                     '_savedAt');
-                    store.put(APP_VERSION,                '_appVersion');
-                    store.put(DB_VERSION,                 '_dbVersion');
-
-                    tx.oncomplete = function() { resolve(); };
-                    tx.onerror = function() {
-                        console.warn('[IDB] Error en _idbSaveAll (transacción atómica):', tx.error);
-                        resolve();
-                    };
-                    tx.onabort = function() {
-                        console.warn('[IDB] _idbSaveAll abortada:', tx.error);
-                        resolve();
-                    };
-                } catch(e) {
-                    console.warn('[IDB] Error en _idbSaveAll:', e);
-                    resolve();
-                }
+            return Promise.all([
+                // TIER 1 — Conteos críticos
+                _idbSet('inventarioConteo',          inventarioConteo),
+                _idbSet('myAuditoriaConteo',         myAuditoriaConteo),
+                _idbSet('auditoriaConteo',           auditoriaConteo),
+                _idbSet('auditoriaConteoPorUsuario', auditoriaConteoPorUsuario),
+                // TIER 2 — Catálogo y auditoría
+                _idbSet('products',                  products),
+                _idbSet('auditoriaStatus',           auditoriaStatus),
+                _idbSet('myAuditoriaStatus',         myAuditoriaStatus),
+                _idbSet('myAuditoriaUnlocks',        myAuditoriaUnlocks),
+                _idbSet('auditoriaSessionId',        _auditoriaSessionId || ''),
+                _idbSet('cicloEstado',               inventarioCicloEstado),
+                _idbSet('cicloInfo',                 inventarioCicloInfo),
+                _idbSet('syncQueue',                 _syncQueue),
+                // TIER 3 — Estado UI
+                _idbSet('cart',                      cart),
+                _idbSet('activeTab',                 activeTab),
+                _idbSet('selectedArea',              selectedArea),
+                _idbSet('selectedGroup',             selectedGroup),
+                // Metadata
+                _idbSet('_savedAt',                  nowMs),
+                _idbSet('_appVersion',               APP_VERSION),
+                _idbSet('_dbVersion',                DB_VERSION)
+            ]).catch(function(e) {
+                console.warn('[IDB] Error en _idbSaveAll:', e);
             });
-        }
-
-        /**
-         * _contarEntradasConteo(conteo)
-         * FIX-IDB-GUARD (BarInventory): cuenta cuántas entradas producto×área
-         * tiene un objeto de conteo (myAuditoriaConteo / inventarioConteo).
-         * Se usa para detectar si una fuente de datos (IDB) está incompleta
-         * respecto a otra (localStorage) aunque su timestamp parezca más nuevo.
-         */
-        function _contarEntradasConteo(conteo) {
-            if (!conteo || typeof conteo !== 'object') return 0;
-            let n = 0;
-            Object.keys(conteo).forEach(function(prodId) {
-                const areas = conteo[prodId];
-                if (areas && typeof areas === 'object') n += Object.keys(areas).length;
-            });
-            return n;
-        }
-
-        /** Lee y parsea una clave JSON de localStorage de forma segura (sin lanzar). */
-        function _leerJsonLS(key) {
-            try {
-                const raw = localStorage.getItem(key);
-                return raw ? JSON.parse(raw) : null;
-            } catch(e) { return null; }
         }
 
         /**
@@ -6081,22 +6024,6 @@ function _idbPruneSyncedQueue() {
                     });
                 });
 
-                // FIX-SYNC-GUARD (BarInventory): si el conteo que estamos por
-                // subir tiene muchas MENOS entradas que la última versión que sí
-                // se confirmó sincronizada, es señal de que el estado local pudo
-                // restaurarse incompleto (ver FIX-IDB-GUARD más arriba). No
-                // bloqueamos la sincronización — podría ser una corrección
-                // legítima del usuario — pero avisamos de inmediato para que se
-                // note en el momento, en vez de descubrirlo después de que ya
-                // se sobreescribió lo que había en la nube.
-                const entradasActuales  = _contarEntradasConteo(conteoConTs);
-                const ultimoConfirmado  = parseInt(localStorage.getItem('inventarioApp_lastSyncedConteoSize') || '0', 10);
-                if (ultimoConfirmado > 0 && entradasActuales < ultimoConfirmado * 0.5) {
-                    console.warn('[AuditUser] El conteo a sincronizar (' + entradasActuales +
-                        ' entradas) es mucho menor que el último confirmado (' + ultimoConfirmado + ').');
-                    showNotification('⚠️ Tu conteo bajó de ' + ultimoConfirmado + ' a ' + entradasActuales + ' productos contados — revisa antes de seguir');
-                }
-
                 await ref.set({
                     uid:        currentUserUid,
                     email:      (_auth && _auth.currentUser) ? _auth.currentUser.email : currentUserUid,
@@ -6107,7 +6034,6 @@ function _idbPruneSyncedQueue() {
                     isAdmin:    isAdmin()
                 }, { merge: true }); // merge:true → preserva 'unlocks' y otros campos del admin
                 _auditSyncPending = false;
-                try { localStorage.setItem('inventarioApp_lastSyncedConteoSize', String(entradasActuales)); } catch(_) {}
                 console.info('[AuditUser] Mi conteo sincronizado ✓');
     } catch (err) {
         // FIX BUG 2: marcar pendiente para reintento automático al reconectar
@@ -6922,13 +6848,6 @@ const usersList = Object.values(allUsersAuditoria);
         let _ajustes        = [];
         let _conteoSearchTerm = '';   // búsqueda dentro del conteo de inventario
         let _csSearchTimer    = null;  // debounce handle del buscador inteligente
-        // FIX-BUSCADOR-PEDIDOS-HISTORIA (BarInventario): estado del buscador en
-        // las pestañas de Pedidos e Historia — transitorio, no se persiste
-        // (igual que _conteoSearchTerm), se reinicia en cada carga de la app.
-        let _pedidosSearchTerm  = '';
-        let _historiaSearchTerm = '';
-        let _pedSearchTimer     = null;
-        let _histSearchTimer    = null;
 
         function isAdmin() { return currentUserRole === 'admin'; }
 
@@ -7540,29 +7459,12 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName) {
                 if (idbData && Array.isArray(idbData.products) && idbData.products.length > 0) {
                     const lsTs  = parseInt(localStorage.getItem('inventarioApp_lastModified') || '0', 10);
                     const idbTs = idbData._savedAt || 0;
-
-                    // FIX-IDB-GUARD (BarInventory): un timestamp de IDB más nuevo
-                    // NO garantiza que su contenido esté más completo — ver el
-                    // comentario en _idbSaveAll(). Como defensa adicional,
-                    // comparamos cuántas entradas de conteo propio tiene cada
-                    // fuente. localStorage se escribe de forma síncrona en cada
-                    // guardado, así que nunca debería tener MENOS entradas que
-                    // una versión "más nueva" salvo que IDB esté incompleto.
-                    const idbConteoSize = _contarEntradasConteo(idbData.myAuditoriaConteo);
-                    const lsConteoSize  = _contarEntradasConteo(_leerJsonLS('inventarioApp_myAuditoriaConteo'));
-                    const idbLuceIncompleto = (idbTs >= lsTs) && (idbConteoSize < lsConteoSize);
-
-                    if (idbTs >= lsTs && !idbLuceIncompleto) {
+                    if (idbTs >= lsTs) {
                         _applyIDBData(idbData);
                         console.info('[Init] Datos cargados desde IDB (primario). LS queda como backup.');
                     } else {
                         loadFromLocalStorage();
-                        if (idbLuceIncompleto) {
-                            console.warn('[Init] IDB parecía más reciente pero tenía menos conteo propio (' +
-                                idbConteoSize + ' < ' + lsConteoSize + ' entradas) que LS — se prefirió LS para evitar pérdida de datos.');
-                        } else {
-                            console.info('[Init] LS más reciente que IDB. Cargando LS y sincronizando a IDB.');
-                        }
+                        console.info('[Init] LS más reciente que IDB. Cargando LS y sincronizando a IDB.');
                         _idbSaveAll();
                     }
                 } else {
@@ -8265,30 +8167,12 @@ window.addEventListener('beforeunload', function() {
             if (orders.length === 0) {
                 return headerHtml + '<div class="bg-white rounded-2xl shadow-md" style="padding:50px 20px;text-align:center;"><div style="font-size:3rem;margin-bottom:12px;">🛒</div><p style="font-size:.95rem;font-weight:600;color:var(--txt-secondary);margin-bottom:6px;">No hay pedidos todavía</p><p style="font-size:.78rem;color:var(--txt-muted);">Ve a Inicio, agrega productos con 🛒 y genera un pedido</p></div>';
             }
-            // FIX-BUSCADOR-PEDIDOS (BarInventario): buscador fuzzy — mismo motor
-            // que Inicio (_csBigrams) — sobre folio, proveedor, nota y productos.
-            let html = headerHtml;
-            html += '<div class="csb-wrap' + (_pedidosSearchTerm ? ' csb-wrap--active' : '') + '" id="pedidos-csb-wrap">'
-                + '<svg class="csb-icon" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">'
-                + '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>'
-                + '<input id="pedidos-search-input" type="search" class="csb-input"'
-                + ' placeholder="Buscar por folio, proveedor o producto\u2026"'
-                + ' value="' + escapeHtml(_pedidosSearchTerm) + '"'
-                + ' oninput="updatePedidosSearch(this.value)"'
-                + ' onkeydown="if(event.key===\'Escape\'){event.preventDefault();clearPedidosSearch();}"'
-                + ' autocomplete="off" autocorrect="off" spellcheck="false">'
-                + '<button class="csb-clear" onclick="clearPedidosSearch()" title="Limpiar (Esc)" aria-label="Limpiar búsqueda">✕</button>'
-                + '</div>';
-            html += '<div class="mb-6">';
+            let html = headerHtml + '<div class="mb-6">';
             if (isAdmin()) {
             html += '<button onclick="deleteAllOrders()" class="bg-gradient-to-r from-red-500 to-orange-600 text-white px-6 py-3 rounded-xl flex items-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200" title="Eliminar todos los pedidos"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg><span class="font-medium">Eliminar todos los pedidos</span></button>';
             }
             html += '</div><div class="space-y-4">';
-            const filteredOrders = _filtrarPedidos();
-            if (_pedidosSearchTerm && filteredOrders.length === 0) {
-                html += '<div class="bg-white rounded-2xl shadow-md" style="padding:40px 20px;text-align:center;"><p style="font-size:.85rem;color:var(--txt-muted);">Sin resultados para "' + escapeHtml(_pedidosSearchTerm) + '"</p></div>';
-            }
-            filteredOrders.forEach((order, idx) => {
+            orders.forEach((order, idx) => {
                 const delay = Math.min(idx * 50, 400);
                 html += '<div class="bg-white rounded-2xl p-6 shadow-md" style="animation: tabContentIn 0.3s ease-out both; animation-delay:' + delay + 'ms"><div class="flex justify-between items-start mb-4"><div><h3 class="text-xl font-bold text-gray-900">' + escapeHtml(order.id) + '</h3><p class="text-gray-600">Proveedor: ' + escapeHtml(order.supplier) + '</p><p class="text-sm text-gray-600">Fecha: ' + escapeHtml(order.date) + '</p>';
                 if (order.deliveryDate) html += '<p class="text-sm text-gray-600">Entrega: ' + escapeHtml(order.deliveryDate) + '</p>';
@@ -9062,161 +8946,6 @@ document.body.appendChild(overlay);
             renderTab();
         }
 
-        // ═════════════════════════════════════════════════════════════════
-        // FIX-BUSCADOR-PEDIDOS-HISTORIA (BarInventario)
-        // Buscador fuzzy para las pestañas de Pedidos e Historia, con el
-        // mismo comportamiento (tolerancia a typos/acentos, multi-palabra,
-        // orden por relevancia) que el buscador de Inicio y el del conteo.
-        // Se duplica la puntuación (en vez de reusar _csFuzzyMatch) a
-        // propósito: así el buscador de productos existente queda
-        // completamente intacto, sin ningún riesgo de romperlo.
-        // ═════════════════════════════════════════════════════════════════
-
-        function _csFuzzyMatchOrder(order, query) {
-            if (!query) return 1;
-            const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-            const words = norm(query.trim()).split(/\s+/).filter(Boolean);
-            if (!words.length) return 1;
-
-            const productNames = (order.products || []).map(p => p.name || '').join(' ');
-            const fields = [norm(order.id), norm(order.supplier), norm(order.note || ''), norm(productNames)];
-            const haystack = fields.join(' ');
-            const tokens   = haystack.split(/\s+/).filter(Boolean);
-
-            let totalScore = 0;
-            for (const word of words) {
-                let wordScore = 0;
-                if (haystack.includes(word)) {
-                    wordScore = 10;
-                } else if (tokens.some(t => t.startsWith(word))) {
-                    wordScore = 7;
-                } else if (word.length >= 3) {
-                    const qBig = _csBigrams(word);
-                    let bestSim = 0;
-                    for (const token of tokens) {
-                        if (Math.abs(token.length - word.length) > 3) continue;
-                        const tBig   = _csBigrams(token);
-                        const common = qBig.filter(b => tBig.includes(b)).length;
-                        if (common === 0) continue;
-                        const sim = (2 * common) / (qBig.length + tBig.length);
-                        if (sim > bestSim) bestSim = sim;
-                    }
-                    if (bestSim >= 0.45) wordScore = Math.max(1, Math.round(bestSim * 6));
-                }
-                if (wordScore === 0) return 0;
-                totalScore += wordScore;
-            }
-            return totalScore;
-        }
-
-        function _csFuzzyMatchInventario(inv, query) {
-            if (!query) return 1;
-            const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-            const words = norm(query.trim()).split(/\s+/).filter(Boolean);
-            if (!words.length) return 1;
-
-            const productNames = (inv.products || []).map(p => p.name || '').join(' ');
-            const areaLabel = (typeof areas !== 'undefined' && areas[inv.area]) ? areas[inv.area] : (inv.area || '');
-            const fields = [norm(inv.id), norm(areaLabel), norm(inv.date || ''), norm(productNames)];
-            const haystack = fields.join(' ');
-            const tokens   = haystack.split(/\s+/).filter(Boolean);
-
-            let totalScore = 0;
-            for (const word of words) {
-                let wordScore = 0;
-                if (haystack.includes(word)) {
-                    wordScore = 10;
-                } else if (tokens.some(t => t.startsWith(word))) {
-                    wordScore = 7;
-                } else if (word.length >= 3) {
-                    const qBig = _csBigrams(word);
-                    let bestSim = 0;
-                    for (const token of tokens) {
-                        if (Math.abs(token.length - word.length) > 3) continue;
-                        const tBig   = _csBigrams(token);
-                        const common = qBig.filter(b => tBig.includes(b)).length;
-                        if (common === 0) continue;
-                        const sim = (2 * common) / (qBig.length + tBig.length);
-                        if (sim > bestSim) bestSim = sim;
-                    }
-                    if (bestSim >= 0.45) wordScore = Math.max(1, Math.round(bestSim * 6));
-                }
-                if (wordScore === 0) return 0;
-                totalScore += wordScore;
-            }
-            return totalScore;
-        }
-
-        function _filtrarPedidos() {
-            let filtered = orders;
-            if (_pedidosSearchTerm) {
-                const scored = filtered
-                    .map(function(o) { return { o: o, score: _csFuzzyMatchOrder(o, _pedidosSearchTerm) }; })
-                    .filter(function(x) { return x.score > 0; });
-                scored.sort(function(a, b) { return b.score - a.score; });
-                filtered = scored.map(function(x) { return x.o; });
-            }
-            return filtered;
-        }
-
-        function _filtrarHistoriaInventarios() {
-            let filtered = inventories;
-            if (_historiaSearchTerm) {
-                const scored = filtered
-                    .map(function(inv) { return { inv: inv, score: _csFuzzyMatchInventario(inv, _historiaSearchTerm) }; })
-                    .filter(function(x) { return x.score > 0; });
-                scored.sort(function(a, b) { return b.score - a.score; });
-                filtered = scored.map(function(x) { return x.inv; });
-            }
-            return filtered;
-        }
-
-        function updatePedidosSearch(val) {
-            const next = (val || '').trimStart();
-            clearTimeout(_pedSearchTimer);
-            _pedSearchTimer = setTimeout(function() {
-                const trimmed = next.trimEnd();
-                if (trimmed === _pedidosSearchTerm) return;
-                _pedidosSearchTerm = trimmed;
-                const wrap = document.getElementById('pedidos-csb-wrap');
-                if (wrap) wrap.classList.toggle('csb-wrap--active', !!_pedidosSearchTerm);
-                renderTab();
-            }, 180);
-        }
-
-        function clearPedidosSearch() {
-            clearTimeout(_pedSearchTimer);
-            _pedidosSearchTerm = '';
-            const inp  = document.getElementById('pedidos-search-input');
-            const wrap = document.getElementById('pedidos-csb-wrap');
-            if (inp)  { inp.value = ''; inp.focus(); }
-            if (wrap) wrap.classList.remove('csb-wrap--active');
-            renderTab();
-        }
-
-        function updateHistoriaSearch(val) {
-            const next = (val || '').trimStart();
-            clearTimeout(_histSearchTimer);
-            _histSearchTimer = setTimeout(function() {
-                const trimmed = next.trimEnd();
-                if (trimmed === _historiaSearchTerm) return;
-                _historiaSearchTerm = trimmed;
-                const wrap = document.getElementById('historia-csb-wrap');
-                if (wrap) wrap.classList.toggle('csb-wrap--active', !!_historiaSearchTerm);
-                renderTab();
-            }, 180);
-        }
-
-        function clearHistoriaSearch() {
-            clearTimeout(_histSearchTimer);
-            _historiaSearchTerm = '';
-            const inp  = document.getElementById('historia-search-input');
-            const wrap = document.getElementById('historia-csb-wrap');
-            if (inp)  { inp.value = ''; inp.focus(); }
-            if (wrap) wrap.classList.remove('csb-wrap--active');
-            renderTab();
-        }
-
         function renderInventarioTab() {
             // ── PANTALLA DE CONTEO ─────────────────────────────────────────────
             if (auditoriaView === 'counting' && auditoriaAreaActiva) {
@@ -9810,26 +9539,8 @@ document.body.appendChild(overlay);
                 html += '<button onclick="deleteAllInventories()" class="bg-gradient-to-r from-red-500 to-orange-600 text-white px-4 py-2 rounded-xl flex items-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs" title="Eliminar todo el historial"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg><span class="font-medium">Eliminar historial</span></button>';
                 }
                 html += '</div>';
-                // FIX-BUSCADOR-PEDIDOS-HISTORIA (BarInventario): buscador fuzzy —
-                // mismo motor que Inicio (_csBigrams) — sobre folio, área, fecha
-                // y productos contados en cada registro del historial.
-                html += '<div class="csb-wrap' + (_historiaSearchTerm ? ' csb-wrap--active' : '') + '" id="historia-csb-wrap">'
-                    + '<svg class="csb-icon" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">'
-                    + '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>'
-                    + '<input id="historia-search-input" type="search" class="csb-input"'
-                    + ' placeholder="Buscar por folio, área o producto\u2026"'
-                    + ' value="' + escapeHtml(_historiaSearchTerm) + '"'
-                    + ' oninput="updateHistoriaSearch(this.value)"'
-                    + ' onkeydown="if(event.key===\'Escape\'){event.preventDefault();clearHistoriaSearch();}"'
-                    + ' autocomplete="off" autocorrect="off" spellcheck="false">'
-                    + '<button class="csb-clear" onclick="clearHistoriaSearch()" title="Limpiar (Esc)" aria-label="Limpiar búsqueda">✕</button>'
-                    + '</div>';
                 html += '<div class="space-y-4">';
-                const filteredInventories = _filtrarHistoriaInventarios();
-                if (_historiaSearchTerm && filteredInventories.length === 0) {
-                    html += '<div class="bg-white rounded-2xl shadow-md" style="padding:40px 20px;text-align:center;"><p style="font-size:.85rem;color:var(--txt-muted);">Sin resultados para "' + escapeHtml(_historiaSearchTerm) + '"</p></div>';
-                }
-                filteredInventories.forEach((inv, idx) => {
+                inventories.forEach((inv, idx) => {
                     const isExpanded = expandedInventories.has(inv.id);
                     const delay = Math.min(idx * 50, 400);
                     html += '<div class="bg-white rounded-2xl shadow-md overflow-hidden" style="animation: tabContentIn 0.3s ease-out both; animation-delay:' + delay + 'ms">';
