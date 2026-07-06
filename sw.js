@@ -110,7 +110,7 @@ self.addEventListener('fetch', function(event) {
  url.hostname.includes('cdnjs.cloudflare.com') ||
  url.hostname.includes('fonts.googleapis.com') ||
  url.hostname.includes('fonts.gstatic.com') ||
- url.hostname.includes('kit.fontawesome.com') ||
+ url.hostname.includes('kit.fontawesome.com') ||	
  url.hostname.includes('use.fontawesome.com') ||
  url.hostname.includes('www.gstatic.com')) {
  event.respondWith(cacheFirst(event.request));
