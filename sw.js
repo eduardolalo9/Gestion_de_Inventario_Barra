@@ -25,7 +25,7 @@
 //          capturar sub-dominios nuevos de Firebase que no estaban listados.
 // ════════════════════════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'barinventory-v2.5';
+const  CACHE_NAME = 'barinventory-v2.6' ;
 
 // SW8 FIX: OFFLINE_URL calculado desde el scope del SW en tiempo de ejecución.
 let OFFLINE_URL = '';
@@ -37,13 +37,13 @@ const PRECACHE_URLS = [
 ];
 
 // Dominios que NUNCA se cachean (siempre van a la red)
-const NETWORK_ONLY_ORIGINS = [
-    'firestore.googleapis.com',
-    'firebase.googleapis.com',
-    'securetoken.googleapis.com',
-    'identitytoolkit.googleapis.com',
-    'firebaseio.com',
-    'googleapis.com',         // SW16 FIX: captura subdominos nuevos de Firebase
+const  NETWORK_ONLY_ORIGINS = [
+  'firestore.googleapis.com' ,
+  'firebase.googleapis.com' ,
+  'firebaseinstallations.googleapis.com' ,
+  'securetoken.googleapis.com' ,
+  'identitytoolkit.googleapis.com' ,
+  'firebaseio.com' ,
 ];
 
 // ── INSTALL ──────────────────────────────────────────────────────────────────
@@ -104,28 +104,29 @@ self.addEventListener('fetch', function(event) {
     // 2. Ignorar extensiones de Chrome y protocolos especiales
     if (!event.request.url.startsWith('http')) return;
 
-    // 3. Firebase / APIs de auth → SIEMPRE red (nunca cachear tokens ni datos Firestore)
-    if (NETWORK_ONLY_ORIGINS.some(function(origin) { return url.hostname.includes(origin); })) {
-        return; // dejar pasar a la red sin interceptar
-    }
+ // FIX: CDNs y fuentes PRIMERO, antes del filtro network-only.
+ // Si no, 'fonts.googleapis.com' caía en el filtro de Firebase y nunca se cacheaba.
+ if (url.hostname.includes('cdn.tailwindcss.com') ||
+ url.hostname.includes('cdnjs.cloudflare.com') ||
+ url.hostname.includes('fonts.googleapis.com') ||
+ url.hostname.includes('fonts.gstatic.com') ||
+ url.hostname.includes('kit.fontawesome.com') ||
+ url.hostname.includes('use.fontawesome.com') ||
+ url.hostname.includes('www.gstatic.com')) {
+ event.respondWith(cacheFirst(event.request));
+ return;
+ }
 
-    // SW10 FIX: Interceptar rutas de íconos PWA del manifest.
-    if (url.pathname.endsWith('/icon-192.png') || url.pathname.endsWith('/icon-512.png')) {
-        event.respondWith(serveIcon(event.request, url));
-        return;
-    }
+ // Firebase / APIs de auth → SIEMPRE red (nunca cachear tokens ni datos Firestore)
+ if (NETWORK_ONLY_ORIGINS.some(function(origin) { return url.hostname.includes(origin); })) {
+ return; // dejar pasar a la red sin interceptar
+ }
 
-    // 4. CDNs de terceros → Cache-First con fallback a red
-    if (url.hostname.includes('cdn.tailwindcss.com') ||
-        url.hostname.includes('cdnjs.cloudflare.com') ||
-        url.hostname.includes('fonts.googleapis.com') ||
-        url.hostname.includes('fonts.gstatic.com') ||
-        url.hostname.includes('kit.fontawesome.com') ||
-        url.hostname.includes('use.fontawesome.com') ||
-        url.hostname.includes('www.gstatic.com')) {
-        event.respondWith(cacheFirst(event.request));
-        return;
-    }
+ // Interceptar rutas de íconos PWA del manifest.
+ if (url.pathname.endsWith('/icon-192.png') || url.pathname.endsWith('/icon-512.png')) {
+ event.respondWith(serveIcon(event.request, url));
+ return;
+ }
 
     // 5. Assets propios de la app → Stale-While-Revalidate
     if (url.origin === self.location.origin) {
