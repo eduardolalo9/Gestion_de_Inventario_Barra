@@ -260,16 +260,17 @@ function generateIconResponse(size) {
         try {
             var canvas = new OffscreenCanvas(size, size);
             var ctx = canvas.getContext('2d');
-            // Fondo gradiente oscuro (tema BarInventory)
-            var grad = ctx.createLinearGradient(0, 0, size, size);
-            grad.addColorStop(0, '#1a2744');
-            grad.addColorStop(1, '#0f0f13');
-            ctx.fillStyle = grad;
+            // FIX-ICON-CONSISTENCIA (BarInventory): antes este respaldo usaba un
+            // degradado oscuro con letra ámbar, distinto del ícono real que genera
+            // index.html (azul sólido #0A84FF con letra blanca). Se alinean los
+            // colores para que, si alguna vez se usa este respaldo, no se vea como
+            // un ícono de otra app.
+            ctx.fillStyle = '#0A84FF';
             try { ctx.roundRect(0, 0, size, size, size * 0.22); }
             catch(_) { ctx.rect(0, 0, size, size); }
             ctx.fill();
-            // Letra "B" en amber
-            ctx.fillStyle = '#F97316';
+            // Letra "B" en blanco (igual que el ícono generado por la página)
+            ctx.fillStyle = '#FFFFFF';
             ctx.font = 'bold ' + Math.round(size * 0.52) + 'px system-ui,sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';

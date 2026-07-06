@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es-MX">
 <head>
@@ -4440,6 +4439,92 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
          */
         const SYNC_QUEUE_MAX = 1000;
         let _syncQueue = []; // cargado en loadFromLocalStorage
+
+        // ═════════════════════════════════════════════════════════════════
+        // FIX-CONCURRENCIA (BarInventory)
+        // products/orders/inventories se escribían como array completo en
+        // cada sync (ver syncToCloud) y se aplicaban igual desde la nube
+        // (ver _applyCloudData) — a diferencia de inventarioConteo, que ya
+        // está protegido por área. Si dos dispositivos agregaban un producto
+        // o creaban un pedido casi al mismo tiempo, el que sincronizaba
+        // último borraba por completo lo que había agregado el otro.
+        //
+        // SOLUCIÓN: antes de escribir, fusionar por id con la versión más
+        // reciente de la nube (gana lo local en conflicto de mismo id, se
+        // conserva lo que solo existe en la nube). Los "tombstones" evitan
+        // que un elemento recién borrado en este dispositivo "resucite" si
+        // la nube todavía no se entera del borrado.
+        // ═════════════════════════════════════════════════════════════════
+        let _deletedProductIds    = [];
+        let _deletedOrderIds      = [];
+        let _deletedInventoryIds  = [];
+        const _TOMBSTONE_MAX = 300;
+
+        function _marcarComoBorrado(listName, id) {
+            if (!id) return;
+            const list = ({
+                producto:   _deletedProductIds,
+                pedido:     _deletedOrderIds,
+                inventario: _deletedInventoryIds
+            })[listName];
+            if (!list) return;
+            if (!list.includes(id)) list.push(id);
+            const trimmed = list.length > _TOMBSTONE_MAX ? list.slice(-_TOMBSTONE_MAX) : list;
+            if (listName === 'producto')   _deletedProductIds   = trimmed;
+            if (listName === 'pedido')     _deletedOrderIds     = trimmed;
+            if (listName === 'inventario') _deletedInventoryIds = trimmed;
+            try {
+                localStorage.setItem('inventarioApp_deletedProductIds',   JSON.stringify(_deletedProductIds));
+                localStorage.setItem('inventarioApp_deletedOrderIds',     JSON.stringify(_deletedOrderIds));
+                localStorage.setItem('inventarioApp_deletedInventoryIds', JSON.stringify(_deletedInventoryIds));
+            } catch(_) {}
+        }
+
+        /**
+         * _mergeArrayByIdPreferLocal(localArr, cloudArr, deletedIds)
+         * Fusiona dos arrays de objetos {id,...} sin perder altas concurrentes:
+         *   - Id en ambos          → gana la versión LOCAL (la que se acaba de tocar aquí).
+         *   - Id solo en la nube   → se conserva, salvo que esté en deletedIds (tombstone).
+         *   - Id solo en local     → se conserva (es lo que este dispositivo acaba de crear).
+         */
+        function _mergeArrayByIdPreferLocal(localArr, cloudArr, deletedIds) {
+            localArr  = Array.isArray(localArr) ? localArr : [];
+            cloudArr  = Array.isArray(cloudArr) ? cloudArr : [];
+            const deletedSet = new Set(Array.isArray(deletedIds) ? deletedIds : []);
+            const localIds   = new Set(localArr.filter(function(x){return x && x.id;}).map(function(x){return x.id;}));
+            const merged = localArr.slice();
+            cloudArr.forEach(function(item) {
+                if (!item || !item.id) return;
+                if (deletedSet.has(item.id)) return;   // tombstone: no resucitar
+                if (localIds.has(item.id)) return;      // ya presente localmente (gana local)
+                merged.push(item);                      // solo existe en la nube → conservar
+            });
+            return merged;
+        }
+
+        /**
+         * _mergeArrayByIdPreferCloud(localArr, cloudArr)
+         * Contraparte de _mergeArrayByIdPreferLocal, para el sentido de DESCARGA
+         * (onSnapshot → _applyCloudData). Aquí la nube debe ganar en conflictos
+         * de mismo id (puede traer una EDICIÓN hecha por otro dispositivo, no
+         * solo altas), pero se conservan los ids que solo existen localmente
+         * (alta muy reciente de este dispositivo que aún no llegó a la nube).
+         * No necesita tombstones: si este dispositivo borró algo, ya no está
+         * en localArr, así que no hay nada que "resucitar" desde acá.
+         */
+        function _mergeArrayByIdPreferCloud(localArr, cloudArr) {
+            localArr = Array.isArray(localArr) ? localArr : [];
+            cloudArr = Array.isArray(cloudArr) ? cloudArr : [];
+            const cloudIds = new Set(cloudArr.filter(function(x){return x && x.id;}).map(function(x){return x.id;}));
+            const merged = cloudArr.slice();
+            localArr.forEach(function(item) {
+                if (!item || !item.id) return;
+                if (cloudIds.has(item.id)) return; // la nube ya tiene este id → prevalece la nube
+                merged.push(item);                  // solo existe localmente (alta aún no sincronizada)
+            });
+            return merged;
+        }
+
         let _anomalyWarningPending = null; // CORRECCIÓN 8: advertencia de cambio anómalo pendiente
 
         function _registrarEnSyncQueue(evento) {
@@ -4974,36 +5059,94 @@ function _idbPruneSyncedQueue() {
          * Estructura paralela a saveToLocalStorage pero en IDB.
          * Fire-and-forget: no bloquea el hilo principal.
          */
+        // FIX-IDB-ATOMIC (BarInventory): _idbSaveAll() antes escribía cada campo
+        // en su PROPIA transacción IDB independiente (20 transacciones paralelas
+        // por llamada, vía Promise.all de _idbSet()). Si dos guardados ocurrían
+        // muy seguidos (ej. el usuario guardando el conteo de dos productos casi
+        // al mismo tiempo durante una auditoría), las transacciones de ambas
+        // llamadas podían intercalarse entre sí: el campo '_savedAt' de la
+        // llamada más reciente podía terminar escrito ANTES que el campo
+        // 'myAuditoriaConteo' de esa misma llamada, dejando en IDB una
+        // combinación inconsistente (timestamp nuevo + conteo viejo/incompleto).
+        // Al recargar, _initIndexedDB confiaba en IDB por tener el timestamp más
+        // reciente aunque su contenido real fuera más viejo que localStorage.
+        //
+        // SOLUCIÓN: una sola transacción atómica para todos los campos. Todas
+        // las escrituras comparten el mismo objeto de transacción, así que dos
+        // llamadas a _idbSaveAll() quedan estrictamente serializadas en el
+        // orden en que se invocaron — ya no pueden intercalar campos entre sí.
         function _idbSaveAll() {
             if (!_idb) return Promise.resolve();
             const nowMs = Date.now();
-            return Promise.all([
-                // TIER 1 — Conteos críticos
-                _idbSet('inventarioConteo',          inventarioConteo),
-                _idbSet('myAuditoriaConteo',         myAuditoriaConteo),
-                _idbSet('auditoriaConteo',           auditoriaConteo),
-                _idbSet('auditoriaConteoPorUsuario', auditoriaConteoPorUsuario),
-                // TIER 2 — Catálogo y auditoría
-                _idbSet('products',                  products),
-                _idbSet('auditoriaStatus',           auditoriaStatus),
-                _idbSet('myAuditoriaStatus',         myAuditoriaStatus),
-                _idbSet('myAuditoriaUnlocks',        myAuditoriaUnlocks),
-                _idbSet('auditoriaSessionId',        _auditoriaSessionId || ''),
-                _idbSet('cicloEstado',               inventarioCicloEstado),
-                _idbSet('cicloInfo',                 inventarioCicloInfo),
-                _idbSet('syncQueue',                 _syncQueue),
-                // TIER 3 — Estado UI
-                _idbSet('cart',                      cart),
-                _idbSet('activeTab',                 activeTab),
-                _idbSet('selectedArea',              selectedArea),
-                _idbSet('selectedGroup',             selectedGroup),
-                // Metadata
-                _idbSet('_savedAt',                  nowMs),
-                _idbSet('_appVersion',               APP_VERSION),
-                _idbSet('_dbVersion',                DB_VERSION)
-            ]).catch(function(e) {
-                console.warn('[IDB] Error en _idbSaveAll:', e);
+            return new Promise(function(resolve) {
+                try {
+                    const tx    = _idb.transaction('criticalData', 'readwrite');
+                    const store = tx.objectStore('criticalData');
+                    // TIER 1 — Conteos críticos
+                    store.put(inventarioConteo,          'inventarioConteo');
+                    store.put(myAuditoriaConteo,         'myAuditoriaConteo');
+                    store.put(auditoriaConteo,           'auditoriaConteo');
+                    store.put(auditoriaConteoPorUsuario, 'auditoriaConteoPorUsuario');
+                    // TIER 2 — Catálogo y auditoría
+                    store.put(products,                  'products');
+                    store.put(auditoriaStatus,           'auditoriaStatus');
+                    store.put(myAuditoriaStatus,         'myAuditoriaStatus');
+                    store.put(myAuditoriaUnlocks,        'myAuditoriaUnlocks');
+                    store.put(_auditoriaSessionId || '', 'auditoriaSessionId');
+                    store.put(inventarioCicloEstado,     'cicloEstado');
+                    store.put(inventarioCicloInfo,       'cicloInfo');
+                    store.put(_syncQueue,                'syncQueue');
+                    // TIER 3 — Estado UI
+                    store.put(cart,                      'cart');
+                    store.put(activeTab,                 'activeTab');
+                    store.put(selectedArea,              'selectedArea');
+                    store.put(selectedGroup,             'selectedGroup');
+                    // Metadata — _savedAt va en la MISMA transacción que el resto,
+                    // así que si el conteo no se alcanzó a escribir, tampoco se
+                    // actualiza el timestamp (ambos viven o mueren juntos).
+                    store.put(nowMs,                     '_savedAt');
+                    store.put(APP_VERSION,                '_appVersion');
+                    store.put(DB_VERSION,                 '_dbVersion');
+
+                    tx.oncomplete = function() { resolve(); };
+                    tx.onerror = function() {
+                        console.warn('[IDB] Error en _idbSaveAll (transacción atómica):', tx.error);
+                        resolve();
+                    };
+                    tx.onabort = function() {
+                        console.warn('[IDB] _idbSaveAll abortada:', tx.error);
+                        resolve();
+                    };
+                } catch(e) {
+                    console.warn('[IDB] Error en _idbSaveAll:', e);
+                    resolve();
+                }
             });
+        }
+
+        /**
+         * _contarEntradasConteo(conteo)
+         * FIX-IDB-GUARD (BarInventory): cuenta cuántas entradas producto×área
+         * tiene un objeto de conteo (myAuditoriaConteo / inventarioConteo).
+         * Se usa para detectar si una fuente de datos (IDB) está incompleta
+         * respecto a otra (localStorage) aunque su timestamp parezca más nuevo.
+         */
+        function _contarEntradasConteo(conteo) {
+            if (!conteo || typeof conteo !== 'object') return 0;
+            let n = 0;
+            Object.keys(conteo).forEach(function(prodId) {
+                const areas = conteo[prodId];
+                if (areas && typeof areas === 'object') n += Object.keys(areas).length;
+            });
+            return n;
+        }
+
+        /** Lee y parsea una clave JSON de localStorage de forma segura (sin lanzar). */
+        function _leerJsonLS(key) {
+            try {
+                const raw = localStorage.getItem(key);
+                return raw ? JSON.parse(raw) : null;
+            } catch(e) { return null; }
         }
 
         /**
@@ -5374,6 +5517,14 @@ function _idbPruneSyncedQueue() {
             inventories = safeGet('inventarioApp_inventories', []);
             cart       = safeGet('inventarioApp_cart',       []);
 
+            // FIX-CONCURRENCIA: restaurar tombstones de borrado (ver _mergeArrayByIdPreferLocal)
+            const rawDelProd = safeGet('inventarioApp_deletedProductIds',   []);
+            const rawDelOrd  = safeGet('inventarioApp_deletedOrderIds',     []);
+            const rawDelInv  = safeGet('inventarioApp_deletedInventoryIds', []);
+            _deletedProductIds   = Array.isArray(rawDelProd) ? rawDelProd : [];
+            _deletedOrderIds     = Array.isArray(rawDelOrd)  ? rawDelOrd  : [];
+            _deletedInventoryIds = Array.isArray(rawDelInv)  ? rawDelInv  : [];
+
             const storedTab   = localStorage.getItem('inventarioApp_activeTab');
             const storedGroup = localStorage.getItem('inventarioApp_selectedGroup');
             const storedArea  = localStorage.getItem('inventarioApp_selectedArea');
@@ -5675,6 +5826,45 @@ function _idbPruneSyncedQueue() {
                         }
                         return;
                     }
+                }
+
+                // ══════════════════════════════════════════════════════════════
+                // FIX-CONCURRENCIA (BarInventory)
+                // ──────────────────────────────────────────────────────────────
+                // products/orders/inventories se escribían como el array LOCAL
+                // completo, sobreescribiendo lo que otro dispositivo hubiera
+                // agregado entre la última descarga y este momento (ej. dos
+                // bartenders creando un pedido casi al mismo tiempo → el que
+                // sincronizaba último borraba el pedido del otro). Se fusiona
+                // por id con la versión más reciente conocida de la nube —
+                // reutilizando el `snap` ya leído arriba, sin lecturas extra
+                // para 'products'; para 'orders'/'inventories' se usa la misma
+                // _readChunkedSubcollection ya empleada en _applyCloudData.
+                // ══════════════════════════════════════════════════════════════
+                const cloudDataForMerge = snap.exists ? snap.data() : null;
+                const cloudProductsForMerge = (cloudDataForMerge && Array.isArray(cloudDataForMerge.products))
+                    ? cloudDataForMerge.products : [];
+                products = _mergeArrayByIdPreferLocal(products, cloudProductsForMerge, _deletedProductIds);
+
+                try {
+                    const cloudOrdersForMerge = cloudDataForMerge
+                        ? (cloudDataForMerge._ordersInChunks
+                            ? await _readChunkedSubcollection(docRef, 'ordersChunks')
+                            : (cloudDataForMerge.orders || []))
+                        : [];
+                    orders = _mergeArrayByIdPreferLocal(orders, cloudOrdersForMerge, _deletedOrderIds);
+                } catch (e) {
+                    console.warn('[Sync] No se pudo fusionar orders con la nube antes de escribir, se usa versión local:', e);
+                }
+                try {
+                    const cloudInventoriesForMerge = cloudDataForMerge
+                        ? (cloudDataForMerge._inventoriesInChunks
+                            ? await _readChunkedSubcollection(docRef, 'inventoriesChunks')
+                            : (cloudDataForMerge.inventories || []))
+                        : [];
+                    inventories = _mergeArrayByIdPreferLocal(inventories, cloudInventoriesForMerge, _deletedInventoryIds);
+                } catch (e) {
+                    console.warn('[Sync] No se pudo fusionar inventories con la nube antes de escribir, se usa versión local:', e);
                 }
 
                 // ══════════════════════════════════════════════════════════════
@@ -6024,6 +6214,22 @@ function _idbPruneSyncedQueue() {
                     });
                 });
 
+                // FIX-SYNC-GUARD (BarInventory): si el conteo que estamos por
+                // subir tiene muchas MENOS entradas que la última versión que sí
+                // se confirmó sincronizada, es señal de que el estado local pudo
+                // restaurarse incompleto (ver FIX-IDB-GUARD más arriba). No
+                // bloqueamos la sincronización — podría ser una corrección
+                // legítima del usuario — pero avisamos de inmediato para que se
+                // note en el momento, en vez de descubrirlo después de que ya
+                // se sobreescribió lo que había en la nube.
+                const entradasActuales  = _contarEntradasConteo(conteoConTs);
+                const ultimoConfirmado  = parseInt(localStorage.getItem('inventarioApp_lastSyncedConteoSize') || '0', 10);
+                if (ultimoConfirmado > 0 && entradasActuales < ultimoConfirmado * 0.5) {
+                    console.warn('[AuditUser] El conteo a sincronizar (' + entradasActuales +
+                        ' entradas) es mucho menor que el último confirmado (' + ultimoConfirmado + ').');
+                    showNotification('⚠️ Tu conteo bajó de ' + ultimoConfirmado + ' a ' + entradasActuales + ' productos contados — revisa antes de seguir');
+                }
+
                 await ref.set({
                     uid:        currentUserUid,
                     email:      (_auth && _auth.currentUser) ? _auth.currentUser.email : currentUserUid,
@@ -6034,6 +6240,7 @@ function _idbPruneSyncedQueue() {
                     isAdmin:    isAdmin()
                 }, { merge: true }); // merge:true → preserva 'unlocks' y otros campos del admin
                 _auditSyncPending = false;
+                try { localStorage.setItem('inventarioApp_lastSyncedConteoSize', String(entradasActuales)); } catch(_) {}
                 console.info('[AuditUser] Mi conteo sincronizado ✓');
     } catch (err) {
         // FIX BUG 2: marcar pendiente para reintento automático al reconectar
@@ -6540,9 +6747,16 @@ const usersList = Object.values(allUsersAuditoria);
                     localStorage.setItem('inventarioApp_preMergeBackup', premergeSnap);
                 } catch (_) { /* backup es best-effort */ }
 
-                products    = validatedProducts;
-                orders      = cloudOrders;
-                inventories = cloudInventories;
+                // FIX-CONCURRENCIA (BarInventory): en vez de sobrescribir products/
+                // orders/inventories por completo con lo que llega de la nube (lo
+                // que borraba cualquier alta local hecha en este dispositivo que
+                // todavía no se había sincronizado), se fusiona por id — la nube
+                // gana para ids que ya existen en ambos lados (trae ediciones de
+                // otros dispositivos), pero se conservan los ids que solo existen
+                // localmente (alta reciente de este dispositivo, aún pendiente).
+                products    = _mergeArrayByIdPreferCloud(products,    validatedProducts);
+                orders      = _mergeArrayByIdPreferCloud(orders,      cloudOrders);
+                inventories = _mergeArrayByIdPreferCloud(inventories, cloudInventories);
                 cart        = data.cart        || [];
                 activeTab   = data.activeTab   || 'inicio';
                 selectedArea = data.selectedArea || 'almacen';
@@ -6848,6 +7062,13 @@ const usersList = Object.values(allUsersAuditoria);
         let _ajustes        = [];
         let _conteoSearchTerm = '';   // búsqueda dentro del conteo de inventario
         let _csSearchTimer    = null;  // debounce handle del buscador inteligente
+        // FIX-BUSCADOR-PEDIDOS-HISTORIA (BarInventario): estado del buscador en
+        // las pestañas de Pedidos e Historia — transitorio, no se persiste
+        // (igual que _conteoSearchTerm), se reinicia en cada carga de la app.
+        let _pedidosSearchTerm  = '';
+        let _historiaSearchTerm = '';
+        let _pedSearchTimer     = null;
+        let _histSearchTimer    = null;
 
         function isAdmin() { return currentUserRole === 'admin'; }
 
@@ -6945,7 +7166,9 @@ const usersList = Object.values(allUsersAuditoria);
                     const serverVersion = data.version || 0;
                     const localVersion  = parseInt(localStorage.getItem('inventarioApp_catalogVersion') || '0', 10);
                     if (serverVersion <= localVersion) return;
-                    products = data.productos;
+                    // FIX-CONCURRENCIA: mismo merge que _applyCloudData — conserva
+                    // cualquier producto local aún no sincronizado en vez de borrarlo.
+                    products = _mergeArrayByIdPreferCloud(products, data.productos);
                     // FIX: recalcular stockByArea desde inventarioConteo local después de recibir
                     // el catálogo del admin. Sin esto, el stockByArea que venía del admin
                     // sobreescribe el conteo local aunque el usuario ya había contado ese producto.
@@ -7459,12 +7682,29 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName) {
                 if (idbData && Array.isArray(idbData.products) && idbData.products.length > 0) {
                     const lsTs  = parseInt(localStorage.getItem('inventarioApp_lastModified') || '0', 10);
                     const idbTs = idbData._savedAt || 0;
-                    if (idbTs >= lsTs) {
+
+                    // FIX-IDB-GUARD (BarInventory): un timestamp de IDB más nuevo
+                    // NO garantiza que su contenido esté más completo — ver el
+                    // comentario en _idbSaveAll(). Como defensa adicional,
+                    // comparamos cuántas entradas de conteo propio tiene cada
+                    // fuente. localStorage se escribe de forma síncrona en cada
+                    // guardado, así que nunca debería tener MENOS entradas que
+                    // una versión "más nueva" salvo que IDB esté incompleto.
+                    const idbConteoSize = _contarEntradasConteo(idbData.myAuditoriaConteo);
+                    const lsConteoSize  = _contarEntradasConteo(_leerJsonLS('inventarioApp_myAuditoriaConteo'));
+                    const idbLuceIncompleto = (idbTs >= lsTs) && (idbConteoSize < lsConteoSize);
+
+                    if (idbTs >= lsTs && !idbLuceIncompleto) {
                         _applyIDBData(idbData);
                         console.info('[Init] Datos cargados desde IDB (primario). LS queda como backup.');
                     } else {
                         loadFromLocalStorage();
-                        console.info('[Init] LS más reciente que IDB. Cargando LS y sincronizando a IDB.');
+                        if (idbLuceIncompleto) {
+                            console.warn('[Init] IDB parecía más reciente pero tenía menos conteo propio (' +
+                                idbConteoSize + ' < ' + lsConteoSize + ' entradas) que LS — se prefirió LS para evitar pérdida de datos.');
+                        } else {
+                            console.info('[Init] LS más reciente que IDB. Cargando LS y sincronizando a IDB.');
+                        }
                         _idbSaveAll();
                     }
                 } else {
@@ -8167,12 +8407,30 @@ window.addEventListener('beforeunload', function() {
             if (orders.length === 0) {
                 return headerHtml + '<div class="bg-white rounded-2xl shadow-md" style="padding:50px 20px;text-align:center;"><div style="font-size:3rem;margin-bottom:12px;">🛒</div><p style="font-size:.95rem;font-weight:600;color:var(--txt-secondary);margin-bottom:6px;">No hay pedidos todavía</p><p style="font-size:.78rem;color:var(--txt-muted);">Ve a Inicio, agrega productos con 🛒 y genera un pedido</p></div>';
             }
-            let html = headerHtml + '<div class="mb-6">';
+            // FIX-BUSCADOR-PEDIDOS (BarInventario): buscador fuzzy — mismo motor
+            // que Inicio (_csBigrams) — sobre folio, proveedor, nota y productos.
+            let html = headerHtml;
+            html += '<div class="csb-wrap' + (_pedidosSearchTerm ? ' csb-wrap--active' : '') + '" id="pedidos-csb-wrap">'
+                + '<svg class="csb-icon" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">'
+                + '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>'
+                + '<input id="pedidos-search-input" type="search" class="csb-input"'
+                + ' placeholder="Buscar por folio, proveedor o producto\u2026"'
+                + ' value="' + escapeHtml(_pedidosSearchTerm) + '"'
+                + ' oninput="updatePedidosSearch(this.value)"'
+                + ' onkeydown="if(event.key===\'Escape\'){event.preventDefault();clearPedidosSearch();}"'
+                + ' autocomplete="off" autocorrect="off" spellcheck="false">'
+                + '<button class="csb-clear" onclick="clearPedidosSearch()" title="Limpiar (Esc)" aria-label="Limpiar búsqueda">✕</button>'
+                + '</div>';
+            html += '<div class="mb-6">';
             if (isAdmin()) {
             html += '<button onclick="deleteAllOrders()" class="bg-gradient-to-r from-red-500 to-orange-600 text-white px-6 py-3 rounded-xl flex items-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200" title="Eliminar todos los pedidos"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg><span class="font-medium">Eliminar todos los pedidos</span></button>';
             }
             html += '</div><div class="space-y-4">';
-            orders.forEach((order, idx) => {
+            const filteredOrders = _filtrarPedidos();
+            if (_pedidosSearchTerm && filteredOrders.length === 0) {
+                html += '<div class="bg-white rounded-2xl shadow-md" style="padding:40px 20px;text-align:center;"><p style="font-size:.85rem;color:var(--txt-muted);">Sin resultados para "' + escapeHtml(_pedidosSearchTerm) + '"</p></div>';
+            }
+            filteredOrders.forEach((order, idx) => {
                 const delay = Math.min(idx * 50, 400);
                 html += '<div class="bg-white rounded-2xl p-6 shadow-md" style="animation: tabContentIn 0.3s ease-out both; animation-delay:' + delay + 'ms"><div class="flex justify-between items-start mb-4"><div><h3 class="text-xl font-bold text-gray-900">' + escapeHtml(order.id) + '</h3><p class="text-gray-600">Proveedor: ' + escapeHtml(order.supplier) + '</p><p class="text-sm text-gray-600">Fecha: ' + escapeHtml(order.date) + '</p>';
                 if (order.deliveryDate) html += '<p class="text-sm text-gray-600">Entrega: ' + escapeHtml(order.deliveryDate) + '</p>';
@@ -8946,6 +9204,161 @@ document.body.appendChild(overlay);
             renderTab();
         }
 
+        // ═════════════════════════════════════════════════════════════════
+        // FIX-BUSCADOR-PEDIDOS-HISTORIA (BarInventario)
+        // Buscador fuzzy para las pestañas de Pedidos e Historia, con el
+        // mismo comportamiento (tolerancia a typos/acentos, multi-palabra,
+        // orden por relevancia) que el buscador de Inicio y el del conteo.
+        // Se duplica la puntuación (en vez de reusar _csFuzzyMatch) a
+        // propósito: así el buscador de productos existente queda
+        // completamente intacto, sin ningún riesgo de romperlo.
+        // ═════════════════════════════════════════════════════════════════
+
+        function _csFuzzyMatchOrder(order, query) {
+            if (!query) return 1;
+            const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const words = norm(query.trim()).split(/\s+/).filter(Boolean);
+            if (!words.length) return 1;
+
+            const productNames = (order.products || []).map(p => p.name || '').join(' ');
+            const fields = [norm(order.id), norm(order.supplier), norm(order.note || ''), norm(productNames)];
+            const haystack = fields.join(' ');
+            const tokens   = haystack.split(/\s+/).filter(Boolean);
+
+            let totalScore = 0;
+            for (const word of words) {
+                let wordScore = 0;
+                if (haystack.includes(word)) {
+                    wordScore = 10;
+                } else if (tokens.some(t => t.startsWith(word))) {
+                    wordScore = 7;
+                } else if (word.length >= 3) {
+                    const qBig = _csBigrams(word);
+                    let bestSim = 0;
+                    for (const token of tokens) {
+                        if (Math.abs(token.length - word.length) > 3) continue;
+                        const tBig   = _csBigrams(token);
+                        const common = qBig.filter(b => tBig.includes(b)).length;
+                        if (common === 0) continue;
+                        const sim = (2 * common) / (qBig.length + tBig.length);
+                        if (sim > bestSim) bestSim = sim;
+                    }
+                    if (bestSim >= 0.45) wordScore = Math.max(1, Math.round(bestSim * 6));
+                }
+                if (wordScore === 0) return 0;
+                totalScore += wordScore;
+            }
+            return totalScore;
+        }
+
+        function _csFuzzyMatchInventario(inv, query) {
+            if (!query) return 1;
+            const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const words = norm(query.trim()).split(/\s+/).filter(Boolean);
+            if (!words.length) return 1;
+
+            const productNames = (inv.products || []).map(p => p.name || '').join(' ');
+            const areaLabel = (typeof areas !== 'undefined' && areas[inv.area]) ? areas[inv.area] : (inv.area || '');
+            const fields = [norm(inv.id), norm(areaLabel), norm(inv.date || ''), norm(productNames)];
+            const haystack = fields.join(' ');
+            const tokens   = haystack.split(/\s+/).filter(Boolean);
+
+            let totalScore = 0;
+            for (const word of words) {
+                let wordScore = 0;
+                if (haystack.includes(word)) {
+                    wordScore = 10;
+                } else if (tokens.some(t => t.startsWith(word))) {
+                    wordScore = 7;
+                } else if (word.length >= 3) {
+                    const qBig = _csBigrams(word);
+                    let bestSim = 0;
+                    for (const token of tokens) {
+                        if (Math.abs(token.length - word.length) > 3) continue;
+                        const tBig   = _csBigrams(token);
+                        const common = qBig.filter(b => tBig.includes(b)).length;
+                        if (common === 0) continue;
+                        const sim = (2 * common) / (qBig.length + tBig.length);
+                        if (sim > bestSim) bestSim = sim;
+                    }
+                    if (bestSim >= 0.45) wordScore = Math.max(1, Math.round(bestSim * 6));
+                }
+                if (wordScore === 0) return 0;
+                totalScore += wordScore;
+            }
+            return totalScore;
+        }
+
+        function _filtrarPedidos() {
+            let filtered = orders;
+            if (_pedidosSearchTerm) {
+                const scored = filtered
+                    .map(function(o) { return { o: o, score: _csFuzzyMatchOrder(o, _pedidosSearchTerm) }; })
+                    .filter(function(x) { return x.score > 0; });
+                scored.sort(function(a, b) { return b.score - a.score; });
+                filtered = scored.map(function(x) { return x.o; });
+            }
+            return filtered;
+        }
+
+        function _filtrarHistoriaInventarios() {
+            let filtered = inventories;
+            if (_historiaSearchTerm) {
+                const scored = filtered
+                    .map(function(inv) { return { inv: inv, score: _csFuzzyMatchInventario(inv, _historiaSearchTerm) }; })
+                    .filter(function(x) { return x.score > 0; });
+                scored.sort(function(a, b) { return b.score - a.score; });
+                filtered = scored.map(function(x) { return x.inv; });
+            }
+            return filtered;
+        }
+
+        function updatePedidosSearch(val) {
+            const next = (val || '').trimStart();
+            clearTimeout(_pedSearchTimer);
+            _pedSearchTimer = setTimeout(function() {
+                const trimmed = next.trimEnd();
+                if (trimmed === _pedidosSearchTerm) return;
+                _pedidosSearchTerm = trimmed;
+                const wrap = document.getElementById('pedidos-csb-wrap');
+                if (wrap) wrap.classList.toggle('csb-wrap--active', !!_pedidosSearchTerm);
+                renderTab();
+            }, 180);
+        }
+
+        function clearPedidosSearch() {
+            clearTimeout(_pedSearchTimer);
+            _pedidosSearchTerm = '';
+            const inp  = document.getElementById('pedidos-search-input');
+            const wrap = document.getElementById('pedidos-csb-wrap');
+            if (inp)  { inp.value = ''; inp.focus(); }
+            if (wrap) wrap.classList.remove('csb-wrap--active');
+            renderTab();
+        }
+
+        function updateHistoriaSearch(val) {
+            const next = (val || '').trimStart();
+            clearTimeout(_histSearchTimer);
+            _histSearchTimer = setTimeout(function() {
+                const trimmed = next.trimEnd();
+                if (trimmed === _historiaSearchTerm) return;
+                _historiaSearchTerm = trimmed;
+                const wrap = document.getElementById('historia-csb-wrap');
+                if (wrap) wrap.classList.toggle('csb-wrap--active', !!_historiaSearchTerm);
+                renderTab();
+            }, 180);
+        }
+
+        function clearHistoriaSearch() {
+            clearTimeout(_histSearchTimer);
+            _historiaSearchTerm = '';
+            const inp  = document.getElementById('historia-search-input');
+            const wrap = document.getElementById('historia-csb-wrap');
+            if (inp)  { inp.value = ''; inp.focus(); }
+            if (wrap) wrap.classList.remove('csb-wrap--active');
+            renderTab();
+        }
+
         function renderInventarioTab() {
             // ── PANTALLA DE CONTEO ─────────────────────────────────────────────
             if (auditoriaView === 'counting' && auditoriaAreaActiva) {
@@ -9539,8 +9952,26 @@ document.body.appendChild(overlay);
                 html += '<button onclick="deleteAllInventories()" class="bg-gradient-to-r from-red-500 to-orange-600 text-white px-4 py-2 rounded-xl flex items-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs" title="Eliminar todo el historial"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg><span class="font-medium">Eliminar historial</span></button>';
                 }
                 html += '</div>';
+                // FIX-BUSCADOR-PEDIDOS-HISTORIA (BarInventario): buscador fuzzy —
+                // mismo motor que Inicio (_csBigrams) — sobre folio, área, fecha
+                // y productos contados en cada registro del historial.
+                html += '<div class="csb-wrap' + (_historiaSearchTerm ? ' csb-wrap--active' : '') + '" id="historia-csb-wrap">'
+                    + '<svg class="csb-icon" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">'
+                    + '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>'
+                    + '<input id="historia-search-input" type="search" class="csb-input"'
+                    + ' placeholder="Buscar por folio, área o producto\u2026"'
+                    + ' value="' + escapeHtml(_historiaSearchTerm) + '"'
+                    + ' oninput="updateHistoriaSearch(this.value)"'
+                    + ' onkeydown="if(event.key===\'Escape\'){event.preventDefault();clearHistoriaSearch();}"'
+                    + ' autocomplete="off" autocorrect="off" spellcheck="false">'
+                    + '<button class="csb-clear" onclick="clearHistoriaSearch()" title="Limpiar (Esc)" aria-label="Limpiar búsqueda">✕</button>'
+                    + '</div>';
                 html += '<div class="space-y-4">';
-                inventories.forEach((inv, idx) => {
+                const filteredInventories = _filtrarHistoriaInventarios();
+                if (_historiaSearchTerm && filteredInventories.length === 0) {
+                    html += '<div class="bg-white rounded-2xl shadow-md" style="padding:40px 20px;text-align:center;"><p style="font-size:.85rem;color:var(--txt-muted);">Sin resultados para "' + escapeHtml(_historiaSearchTerm) + '"</p></div>';
+                }
+                filteredInventories.forEach((inv, idx) => {
                     const isExpanded = expandedInventories.has(inv.id);
                     const delay = Math.min(idx * 50, 400);
                     html += '<div class="bg-white rounded-2xl shadow-md overflow-hidden" style="animation: tabContentIn 0.3s ease-out both; animation-delay:' + delay + 'ms">';
@@ -9873,6 +10304,7 @@ document.body.appendChild(overlay);
                             _crearBackupNombrado('pre_eliminacion_' + id + '_' + Date.now());
 
                             products = products.filter(p => p.id !== id);
+                            _marcarComoBorrado('producto', id); // FIX-CONCURRENCIA: no resucitar en el próximo merge
                             cart = cart.filter(item => item.id !== id);
                             delete inventarioConteo[id];
                             delete auditoriaConteo[id];
@@ -9923,6 +10355,7 @@ document.body.appendChild(overlay);
                                 uid:      currentUserUid || null
                             });
 
+                            products.forEach(function(p) { _marcarComoBorrado('producto', p.id); }); // FIX-CONCURRENCIA
                             products = []; cart = []; inventarioConteo = {};
                             auditoriaConteo = {}; myAuditoriaConteo = {}; auditoriaConteoPorUsuario = {};
                             saveToLocalStorage();
@@ -10039,6 +10472,13 @@ document.body.appendChild(overlay);
             if (cart.length === 0) showNotification('Carrito vacío');
         }
 
+        function _sufijoUnico() {
+            // FIX-CONCURRENCIA (BarInventory): sufijo corto casi-siempre-único
+            // (tiempo + aleatorio) para que dos dispositivos offline no generen
+            // el mismo ID (ej. PED-004) al crear un pedido casi al mismo tiempo.
+            return Date.now().toString(36).slice(-4) + Math.random().toString(36).slice(2, 4);
+        }
+
         function createOrder() {
             const supplier = document.getElementById('orderSupplier').value.trim();
             if (!supplier) { showNotification('El proveedor es requerido'); return; }
@@ -10049,11 +10489,13 @@ document.body.appendChild(overlay);
             orders.forEach(o => {
                 // FIX: guardia — o.id podría ser undefined en datos corruptos
                 if (!o.id || typeof o.id !== 'string') return;
-                const m = o.id.match(/^PED-(\d+)$/);
+                // FIX-CONCURRENCIA: el regex ya no exige fin de cadena ($) para
+                // seguir reconociendo el número aunque el id incluya el sufijo único.
+                const m = o.id.match(/^PED-(\d+)/);
                 if (m) maxOrderNum = Math.max(maxOrderNum, parseInt(m[1], 10));
             });
             const order = {
-                id: 'PED-' + String(maxOrderNum + 1).padStart(3, '0'),
+                id: 'PED-' + String(maxOrderNum + 1).padStart(3, '0') + '-' + _sufijoUnico(),
                 date: new Date().toLocaleString(),
                 supplier: supplier,
                 deliveryDate: deliveryDate || null,
@@ -10074,6 +10516,7 @@ document.body.appendChild(overlay);
         function deleteOrder(orderId) {
             showConfirm('¿Está seguro de eliminar este pedido?', function() {
                 orders = orders.filter(o => o.id !== orderId);
+                _marcarComoBorrado('pedido', orderId); // FIX-CONCURRENCIA: no resucitar en el próximo merge
                 saveToLocalStorage();
                 showNotification('Pedido eliminado');
                 renderTab();
@@ -10089,6 +10532,7 @@ document.body.appendChild(overlay);
             if (!isAdmin()) { showNotification('⚠️ Solo el administrador puede eliminar todos los pedidos'); return; }
             if (orders.length === 0) { showNotification('No hay pedidos para eliminar'); return; }
             showConfirm('¿Está seguro de que desea eliminar TODOS los pedidos? Esta acción no se puede deshacer.', function() {
+                orders.forEach(function(o) { _marcarComoBorrado('pedido', o.id); }); // FIX-CONCURRENCIA
                 orders = [];
                 saveToLocalStorage();
                 showNotification('Todos los pedidos han sido eliminados');
@@ -10102,6 +10546,7 @@ document.body.appendChild(overlay);
             if (!isAdmin()) { showNotification('⚠️ Solo el administrador puede eliminar el historial de inventarios'); return; }
             if (inventories.length === 0) { showNotification('No hay historial de inventarios para eliminar'); return; }
             showConfirm('¿Está seguro de que desea eliminar TODO el historial de inventarios? Esta acción no se puede deshacer.', function() {
+                inventories.forEach(function(inv) { _marcarComoBorrado('inventario', inv.id); }); // FIX-CONCURRENCIA
                 inventories = [];
                 expandedInventories.clear();
                 saveToLocalStorage();
@@ -10134,9 +10579,10 @@ document.body.appendChild(overlay);
         function saveInventorySnapshot() {
             if (products.length === 0) { showNotification('No hay productos para guardar en el inventario'); return; }
             let maxInvNum = 0;
-            inventories.forEach(inv => { const m = inv.id.match(/^INV-(\d+)$/); if (m) maxInvNum = Math.max(maxInvNum, parseInt(m[1], 10)); });
+            // FIX-CONCURRENCIA: regex sin fin de cadena ($) para tolerar el sufijo único
+            inventories.forEach(inv => { const m = inv.id.match(/^INV-(\d+)/); if (m) maxInvNum = Math.max(maxInvNum, parseInt(m[1], 10)); });
             const snapshot = {
-                id: 'INV-' + String(maxInvNum + 1).padStart(3, '0'),
+                id: 'INV-' + String(maxInvNum + 1).padStart(3, '0') + '-' + _sufijoUnico(),
                 date: new Date().toLocaleString(),
                 area: selectedArea,
                 products: products.map(p => {

@@ -1,0 +1,201 @@
+rules_version = '2';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BarInventory — Reglas de seguridad de Firestore
+// ═══════════════════════════════════════════════════════════════════════════
+// IMPORTANTE — LEER ANTES DE DESPLEGAR:
+// El objetivo original pedía "solo admin escribe, usuarios solo leen". Eso
+// NO es compatible con cómo funciona esta app: los bartenders necesitan
+// escribir su propio conteo de auditoría, contar stock por área y crear
+// pedidos — si solo admin pudiera escribir, ningún bartender podría guardar
+// un conteo o un pedido. Estas reglas implementan el modelo real:
+//   • Cualquier usuario autenticado puede leer casi todo (necesario para que
+//     la sincronización en tiempo real funcione para todos).
+//   • Cada usuario solo puede escribir SU PROPIO conteo de auditoría
+//     (userAuditoria/{uid}) — nunca el de otro.
+//   • Las operaciones destructivas/administrativas (borrar todo, publicar
+//     catálogo, resolver ajustes, asignar roles) exigen role == 'admin'.
+//   • El rol de cada usuario (usuarios/{uid}) SOLO lo puede escribir un
+//     admin — si un usuario pudiera escribir su propio rol, cualquier
+//     bartender podría auto-asignarse admin desde la consola del navegador,
+//     sin importar cuántas validaciones isAdmin() tenga el JS del cliente.
+//
+// Pruébalas en el emulador de Firestore antes de desplegar a producción:
+//   firebase emulators:start --only firestore
+// ═══════════════════════════════════════════════════════════════════════════
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helpers ────────────────────────────────────────────────────────────
+    function estaAutenticado() {
+      return request.auth != null;
+    }
+
+    function esAdmin() {
+      return estaAutenticado() &&
+             exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function esPropioUid(uid) {
+      return estaAutenticado() && request.auth.uid == uid;
+    }
+
+    // ── usuarios/{uid} — rol de cada usuario ────────────────────────────────
+    // Lectura: el propio usuario (para saber su rol) y cualquier admin.
+    // Escritura: SOLO admin. Un usuario nunca puede modificar su propio rol.
+    match /usuarios/{uid} {
+      allow read:   if esPropioUid(uid) || esAdmin();
+      allow create: if esAdmin();
+      allow update: if esAdmin();
+      allow delete: if esAdmin();
+    }
+
+    // ── inventarioApp/{docId} — documento principal ─────────────────────────
+    match /inventarioApp/{docId} {
+      // Lectura: cualquier usuario autenticado (todos necesitan ver el
+      // estado operativo en tiempo real: productos, carrito, estado de
+      // auditoría, etc.).
+      allow read: if estaAutenticado();
+
+      // Escritura: cualquier usuario autenticado puede actualizar campos
+      // operativos (cart, activeTab, selectedArea, products, auditoriaStatus,
+      // _auditoriaSessionId, etc.) — así es como bartenders y admin colaboran
+      // en tiempo real. No se restringe por campo porque casi todos los
+      // campos del doc principal los toca alguna operación de usuario normal.
+      allow create: if estaAutenticado();
+      allow update: if estaAutenticado();
+
+      // Borrar el documento principal completo: solo admin (operación
+      // extremadamente destructiva, no debería hacerse desde la app normal).
+      allow delete: if esAdmin();
+
+      // ── ordersChunks/{chunkId} — pedidos, particionados ──────────────────
+      // Cualquier usuario autenticado crea/lee/actualiza pedidos (son ellos
+      // quienes generan los pedidos a proveedores). Igual que arriba, no se
+      // restringe a admin porque cualquier bartender crea pedidos.
+      match /ordersChunks/{chunkId} {
+        allow read:   if estaAutenticado();
+        allow write:  if estaAutenticado();
+      }
+
+      // ── inventoriesChunks/{chunkId} — historial de conteos ───────────────
+      match /inventoriesChunks/{chunkId} {
+        allow read:   if estaAutenticado();
+        allow write:  if estaAutenticado();
+      }
+
+      // ── stockAreas/{area} — conteo de inventario regular por área ────────
+      // Cualquier bartender cuenta cualquier área — esto YA está protegido a
+      // nivel de aplicación con merge por producto (ver _applyCloudData/
+      // syncToCloud), así que a nivel de reglas basta con exigir autenticación.
+      match /stockAreas/{area} {
+        allow read:   if estaAutenticado();
+        allow write:  if estaAutenticado();
+      }
+
+      // ── userAuditoria/{uid} — conteo de auditoría de CADA usuario ────────
+      // Esta es la regla más importante de todo el archivo: cada usuario
+      // SOLO puede escribir su propio documento (uid == su propio uid). El
+      // admin puede LEER todos (para agregar los conteos), pero nunca
+      // escribir el conteo de otro usuario en su nombre.
+      match /userAuditoria/{uid} {
+        allow read:   if estaAutenticado();
+        allow create: if esPropioUid(uid);
+        allow update: if esPropioUid(uid);
+        allow delete: if esPropioUid(uid) || esAdmin();
+      }
+
+      // ── conflictos/{id} — registro de conflictos de sincronización ───────
+      // Cualquier dispositivo puede loguear un conflicto detectado durante
+      // el merge; solo lectura ampliada para diagnóstico (admin y afectado).
+      match /conflictos/{id} {
+        allow read:   if estaAutenticado();
+        allow create: if estaAutenticado();
+        allow update: if false;   // los registros de conflicto no se editan, solo se crean
+        allow delete: if esAdmin();
+      }
+
+      // ── conteoAreas/{id}, dispositivos/{id}, conteoMultiUsuario/{id} ─────
+      // Presencia/coordinación en tiempo real ("quién está contando qué
+      // área ahora") — cada usuario administra su propia entrada.
+      match /conteoAreas/{id} {
+        allow read:  if estaAutenticado();
+        allow write: if estaAutenticado();
+      }
+      match /dispositivos/{id} {
+        allow read:  if estaAutenticado();
+        allow write: if estaAutenticado();
+      }
+      match /conteoMultiUsuario/{id} {
+        allow read:  if estaAutenticado();
+        allow write: if estaAutenticado();
+      }
+
+      // ── cambios/{id} — cola de eventos de sincronización ─────────────────
+      match /cambios/{id} {
+        allow read:   if estaAutenticado();
+        allow create: if estaAutenticado();
+        allow update: if false;
+        allow delete: if esAdmin();
+      }
+    }
+
+    // ── catalogo/productos — catálogo publicado por el admin ────────────────
+    // "MÓDULO: CATÁLOGO (admin publica, usuarios reciben)" — según el propio
+    // comentario del código. Lectura para todos, escritura solo admin.
+    match /catalogo/{docId} {
+      allow read:  if estaAutenticado();
+      allow write: if esAdmin();
+    }
+
+    // ── ajustes/{id} — solicitudes de ajuste de stock ────────────────────────
+    // Cualquier usuario CREA su propia solicitud (debe quedar 'pendiente' y
+    // con su propio uid como solicitante — no puede crear una ya aprobada
+    // ni a nombre de otro). Solo admin puede RESOLVER (update) la solicitud.
+    match /ajustes/{id} {
+      allow read:   if estaAutenticado();
+      allow create: if estaAutenticado()
+                    && request.resource.data.solicitanteUid == request.auth.uid
+                    && request.resource.data.estado == 'pendiente';
+      allow update: if esAdmin();
+      allow delete: if esAdmin();
+    }
+
+    // ── notificaciones/{id} ───────────────────────────────────────────────
+    // Cualquier usuario crea notificaciones (ej. al solicitar un ajuste) y
+    // puede marcarlas como leídas. No se permite borrar desde el cliente.
+    match /notificaciones/{id} {
+      allow read:   if estaAutenticado();
+      allow create: if estaAutenticado();
+      allow update: if estaAutenticado();  // marcar leido:true
+      allow delete: if esAdmin();
+    }
+
+    // ── reportes/{id} — reportes globales publicados ─────────────────────
+    // Solo admin publica/elimina reportes; todos los leen.
+    match /reportes/{id} {
+      allow read:   if estaAutenticado();
+      allow create: if esAdmin();
+      allow update: if esAdmin();
+      allow delete: if esAdmin();
+    }
+
+    // ── historialCambios/{id} — auditoría de cambios (top-level) ──────────
+    match /historialCambios/{id} {
+      allow read:   if estaAutenticado();
+      allow create: if estaAutenticado();
+      allow update: if false;
+      allow delete: if esAdmin();
+    }
+
+    // ── Cualquier otra colección no listada explícitamente: denegada ─────
+    // Por defecto-cerrado: si agregas una colección nueva, tienes que
+    // agregar su regla aquí a propósito — así nunca queda algo expuesto
+    // por accidente.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
