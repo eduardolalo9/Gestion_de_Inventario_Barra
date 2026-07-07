@@ -2886,6 +2886,18 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
     transform: translateX(20px);
     background: var(--accent-on, #003063);
 }
+
+
+/* ── OPTIMIZACIÓN CONTEO: wrapper invisible + flash verde suave ── */
+/* display:contents => el wrapper NO genera caja, el layout queda IDÉNTICO */
+.inv-card-wrap { display: contents; }
+@keyframes cardFlashGreen {
+  0%   { background-color: var(--green-dim); }
+  100% { background-color: var(--card); }
+}
+.inv-card.card-updated { animation: cardFlashGreen 1.1s var(--ease-out); }
+
+
 </style>
 </head>
 <body class="min-h-screen">
@@ -3381,6 +3393,21 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#039;');
         }
+
+/* ── Utilidad debounce reutilizable ──────────────────────────────
+   Retrasa la ejecución hasta que pasen `wait` ms sin nuevas llamadas. */
+function debounce(fn, wait) {
+  if (wait == null) wait = 290;
+  let t;
+  function debounced() {
+    const ctx = this, args = arguments;
+    clearTimeout(t);
+    t = setTimeout(function () { fn.apply(ctx, args); }, wait);
+  }
+  debounced.cancel = function () { clearTimeout(t); };
+  return debounced;
+}
+
 
         // ==================== ESTADO GLOBAL ENCAPSULADO ====================
         // Toda la mutación de estado ocurre a través de estas variables.
@@ -8507,6 +8534,7 @@ document.body.appendChild(overlay);
             });
         }
 
+let _savedScrollBeforeModal = 0;
         function openInventarioModal(productId) {
             const product = products.find(p => p.id === productId);
             if (!product) return;
@@ -8588,11 +8616,13 @@ document.body.appendChild(overlay);
                 if (errEl) errEl.classList.add('hidden');
             }
 
-            isInventarioModalOpen = true;
-            disableAreaButtons(true);
-            const modal = document.getElementById('inventarioModal');
-            modal.classList.remove('hidden');
-            document.body.classList.add('modal-open');
+              isInventarioModalOpen = true;
+  disableAreaButtons(true);
+  const modal = document.getElementById('inventarioModal');
+  _savedScrollBeforeModal = window.scrollY || window.pageYOffset || 0; // guardar posición
+  modal.classList.remove('hidden');
+  document.body.classList.add('modal-open');
+
             setTimeout(() => {
                 const firstInput = modal.querySelector('input, button');
                 if (firstInput) firstInput.focus();
@@ -8862,9 +8892,17 @@ document.body.appendChild(overlay);
                 showNotification('Conteo guardado en ' + areas[selectedArea]);
             }
 
-            closeInventarioModal();
-            renderTab();
-        }
+             const _updatedProductId = inventarioModalProductId;
+  const _wasAuditSave = isAuditoriaMode && !!auditoriaAreaActiva;
+  const _updatedArea = auditoriaAreaActiva;
+  closeInventarioModal();
+  if (_wasAuditSave) {
+    _surgicalUpdateInvCard(_updatedProductId, _updatedArea); // solo la tarjeta, sin parpadeo
+  } else {
+    renderTab();
+  }
+}
+
 
 
         // Toggle expansión de tarjeta de inventario (botellas abiertas adicionales)
@@ -9176,33 +9214,31 @@ document.body.appendChild(overlay);
             return result;
         }
 
-        /**
-         * updateConteoSearch — con debounce (180ms) y skip si el término no cambió.
-         * Restaura foco al input después del render (manejado por _getElementSelector via id).
-         */
-        function updateConteoSearch(val) {
-            const next = (val || '').trimStart();
-            clearTimeout(_csSearchTimer);
-            _csSearchTimer = setTimeout(function() {
-                const trimmed = next.trimEnd();
-                if (trimmed === _conteoSearchTerm) return; // sin cambio → no re-render
-                _conteoSearchTerm = trimmed;
-                // Actualizar clase del wrapper sin esperar re-render completo
-                const wrap = document.getElementById('csb-wrap');
-                if (wrap) wrap.classList.toggle('csb-wrap--active', !!_conteoSearchTerm);
-                renderTab();
-            }, 180);
-        }
+/* Búsqueda del conteo con debounce reutilizable (290ms) — filtra fluido
+   sin ejecutar en cada tecla. renderTab() ya preserva scroll y foco,
+   así que la vista NO se reinicia ni salta. */
+const _runConteoSearch = debounce(function (nextRaw) {
+  const trimmed = (nextRaw || '').trimEnd();
+  if (trimmed === _conteoSearchTerm) return; // sin cambio → no re-render
+  _conteoSearchTerm = trimmed;
+  const wrap = document.getElementById('csb-wrap');
+  if (wrap) wrap.classList.toggle('csb-wrap--active', !!_conteoSearchTerm);
+  renderTab();
+}, 290);
+
+function updateConteoSearch(val) {
+  _runConteoSearch((val || '').trimStart());
+}
 
         function clearConteoSearch() {
-            clearTimeout(_csSearchTimer);
-            _conteoSearchTerm = '';
-            const inp  = document.getElementById('csb-input');
-            const wrap = document.getElementById('csb-wrap');
-            if (inp)  { inp.value = ''; inp.focus(); }
-            if (wrap) wrap.classList.remove('csb-wrap--active');
-            renderTab();
-        }
+  if (_runConteoSearch && _runConteoSearch.cancel) _runConteoSearch.cancel();
+  _conteoSearchTerm = '';
+  const inp = document.getElementById('csb-input');
+  const wrap = document.getElementById('csb-wrap');
+  if (inp) { inp.value = ''; inp.focus(); }
+  if (wrap) wrap.classList.remove('csb-wrap--active');
+  renderTab();
+}
 
         // ═════════════════════════════════════════════════════════════════
         // FIX-BUSCADOR-PEDIDOS-HISTORIA (BarInventario)
@@ -9658,6 +9694,117 @@ document.body.appendChild(overlay);
                     .catch(err => { console.error(err); showNotification('❌ Error al habilitar'); });
             });
         }
+/* ── Construye el HTML de UNA tarjeta de conteo (misma estructura que antes) ──
+   Va envuelta en .inv-card-wrap (display:contents) para poder reemplazarla
+   de forma quirúrgica sin alterar el layout. */
+function _buildInvCardHTML(product, area, conteoRef, idx) {
+  const areaData = (conteoRef[product.id] && conteoRef[product.id][area]) || { enteras: 0, abiertas: [] };
+  const enteras = areaData.enteras || 0;
+  const abiertas = areaData.abiertas || [];
+  const hasData = enteras > 0 || abiertas.some(a => a > 0);
+  const hasExtra = abiertas.length > 1;
+  const isExpanded = expandedCards.has(product.id);
+  const delay = Math.min(idx * 35, 350);
+  const usaConversion = tieneConversion(product);
+
+  let totalFinal = enteras;
+  if (usaConversion) {
+    abiertas.forEach(oz => { totalFinal += convertirOzAPuntos(oz, product.capacidadMl, product.pesoBotellaLlenaOz); });
+  } else {
+    abiertas.forEach(v => { totalFinal += (v || 0); });
+  }
+  const puntosAbiertas = abiertas.map(pesoOz =>
+    usaConversion ? convertirOzAPuntos(pesoOz, product.capacidadMl, product.pesoBotellaLlenaOz) : pesoOz);
+
+  let html = '<div class="inv-card-wrap" id="invcard-wrap-' + escapeHtml(product.id) + '">';
+  html += '<div class="inv-card' + (hasData ? ' has-data' : '') + (areaData.alerta_conflicto ? ' inv-card--conflict' : '') + '"'
+    + ' onclick="openInventarioModal(\'' + escapeHtml(product.id) + '\')"'
+    + ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();openInventarioModal(\'' + escapeHtml(product.id) + '\');}"'
+    + ' role="button" tabindex="0" aria-label="Contar ' + escapeHtml(product.name) + '" style="animation-delay:' + delay + 'ms">';
+  html += '<div class="inv-card__ripple"></div>';
+  html += '<div class="inv-card__header">';
+  html += '<div style="min-width:0;flex:1">';
+  html += '<div class="inv-card__name">' + highlightConteoMatch(product.name, _conteoSearchTerm) + '</div>';
+  html += '<span class="inv-card__group-badge">' + escapeHtml(product.group || 'General') + '</span>';
+  if (areaData.alerta_conflicto) {
+    html += '<div class="inv-card__conflict-badge"><i class="fa-solid fa-triangle-exclamation"></i> Conflicto abierta</div>';
+  }
+  html += '</div>';
+  html += '<span class="inv-card__code" title="Total (enteras + fracciones de abiertas)">' + totalFinal.toFixed(2) + ' u</span>';
+  html += '</div>';
+
+  html += '<div class="inv-card__chips">';
+  html += '<div class="inv-chip entera' + (enteras === 0 ? ' empty' : '') + '">';
+  html += '<span class="inv-chip__val">' + (enteras > 0 ? enteras : '0') + '</span>';
+  html += '<span class="inv-chip__label">Entera</span>';
+  html += '</div>';
+
+  const pt1 = puntosAbiertas.length > 0 ? puntosAbiertas[0] : 0;
+  const ab1Raw = abiertas.length > 0 ? abiertas[0] : 0;
+  const ab1Label = usaConversion ? (pt1 * 100).toFixed(0) + '%' : pt1.toFixed(2);
+  html += '<div class="inv-chip abierta' + (pt1 === 0 ? ' empty' : '') + '">';
+  html += '<span class="inv-chip__val">' + ab1Label + '</span>';
+  html += '<span class="inv-chip__label">' + (usaConversion ? ab1Raw.toFixed(1) + ' oz' : 'Abierta 1') + '</span>';
+  html += '</div>';
+  html += '</div>';
+
+  if (hasExtra) {
+    html += '<div class="inv-card__extra' + (isExpanded ? ' open' : '') + '" id="card-extra-' + escapeHtml(product.id) + '">';
+    puntosAbiertas.slice(1).forEach((pt, i) => {
+      const rawOz = abiertas[i + 1] || 0;
+      const chipLabel = usaConversion ? (pt * 100).toFixed(0) + '%' : pt.toFixed(2);
+      html += '<div class="inv-chip abierta' + (pt === 0 ? ' empty' : '') + '">';
+      html += '<span class="inv-chip__val">' + chipLabel + '</span>';
+      html += '<span class="inv-chip__label">' + (usaConversion ? rawOz.toFixed(1) + ' oz' : 'Abierta ' + (i + 2)) + '</span>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+  if (hasExtra) {
+    html += '<button class="inv-card__expand-btn' + (isExpanded ? ' open' : '') + '" id="card-expand-btn-' + escapeHtml(product.id) + '" onclick="toggleCardExpand(\'' + escapeHtml(product.id) + '\', event)" aria-expanded="' + isExpanded + '">';
+    html += '<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>';
+    html += '<span>' + (isExpanded ? 'Ocultar' : 'Ver más abiertas') + '</span>';
+    html += '<span style="font-size:0.65rem;opacity:0.7;margin-left:2px">(+' + (abiertas.length - 1) + ')</span>';
+    html += '</button>';
+  }
+  html += '</div>'; // .inv-card
+  html += renderAuditTrailForProduct(product.id, area);
+  html += '</div>'; // .inv-card-wrap
+  return html;
+}
+
+/* ── Actualiza SOLO la tarjeta modificada (DOM quirúrgico, sin recargar la lista) ── */
+function _surgicalUpdateInvCard(productId, area) {
+  try {
+    if (!area) { renderTab(); return; }
+    const conteoRef = isAdmin() ? auditoriaConteo : myAuditoriaConteo;
+    const product = products.find(p => p.id === productId);
+    const wrap = document.getElementById('invcard-wrap-' + productId);
+    if (!product || !wrap) { renderTab(); return; } // fallback seguro
+    wrap.outerHTML = _buildInvCardHTML(product, area, conteoRef, 0);
+    const card = document.querySelector('#invcard-wrap-' + CSS.escape(productId) + ' .inv-card');
+    if (card) {
+      card.classList.remove('card-updated');
+      void card.offsetWidth;              // reinicia la animación
+      card.classList.add('card-updated'); // flash verde suave
+      card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+    _refreshConteoCounter(area);          // mantener el contador "Con cantidad X/Y"
+  } catch (e) {
+    console.warn('[Surgical] fallback a renderTab:', e);
+    renderTab();
+  }
+}
+
+/* ── Refresca el contador de productos con cantidad sin re-render total ── */
+function _refreshConteoCounter(area) {
+  const el = document.getElementById('auditCounter');
+  if (!el) return;
+  const conteoRef = isAdmin() ? auditoriaConteo : myAuditoriaConteo;
+  const ingresados = products.filter(p => conteoRef[p.id] && conteoRef[p.id][area] &&
+    (conteoRef[p.id][area].enteras > 0 || (conteoRef[p.id][area].abiertas || []).some(a => a > 0))).length;
+  el.innerHTML = ingresados + '<span style="font-size:0.65rem;font-weight:500;color:var(--txt-muted);">/' + products.length + '</span>';
+}
 
         // ── Pantalla 2: Conteo de un área específica ───────────────────────────
         function renderAuditoriaConteo() {
@@ -9697,7 +9844,8 @@ document.body.appendChild(overlay);
             const ingresados = products.filter(p => conteoRef[p.id] && conteoRef[p.id][area] && (conteoRef[p.id][area].enteras > 0 || (conteoRef[p.id][area].abiertas || []).some(a => a > 0))).length;
             html += '<div style="text-align:right;">';
             html += '<div style="font-size:0.65rem;font-weight:600;color:var(--txt-muted);">Con cantidad</div>';
-            html += '<div style="font-family:\'IBM Plex Mono\',monospace;font-weight:700;font-size:1rem;color:var(--accent);">' + ingresados + '<span style="font-size:0.65rem;font-weight:500;color:var(--txt-muted);">/' + products.length + '</span></div>';
+            html += '<div id="auditCounter" style="font-family:\'IBM Plex Mono\',monospace;font-weight:700;font-size:1rem;color:var(--accent);">' + ingresados + '<span style="font-size:0.65rem;font-weight:500;color:var(--txt-muted);">/' + products.length + '</span></div>';
+
             html += '</div>';
             html += '</div></div>'; // end audit-count-header
 
@@ -9830,94 +9978,10 @@ document.body.appendChild(overlay);
                 html += '<p class="text-gray-500 text-sm">No hay productos en este grupo</p>';
                 html += '</div>';
             } else {
-                filteredProducts.forEach((product, idx) => {
-                    // Leer conteo de auditoría (no del inventario operativo)
-                    const areaData = (conteoRef[product.id] && conteoRef[product.id][area]) || { enteras: 0, abiertas: [] };
-                    const enteras  = areaData.enteras || 0;
-                    const abiertas = areaData.abiertas || [];
-                    const hasData  = enteras > 0 || abiertas.some(a => a > 0);
-                    const hasExtra = abiertas.length > 1;
-                    const isExpanded = expandedCards.has(product.id);
-                    const delay = Math.min(idx * 35, 350);
-                    const usaConversion = tieneConversion(product);
+               filteredProducts.forEach((product, idx) => {
+  html += _buildInvCardHTML(product, area, conteoRef, idx);
+});
 
-                    // Total con conversión
-                    let totalFinal = enteras;
-                    if (usaConversion) {
-                        abiertas.forEach(oz => { totalFinal += convertirOzAPuntos(oz, product.capacidadMl, product.pesoBotellaLlenaOz); });
-                    } else {
-                        abiertas.forEach(v => { totalFinal += (v || 0); });
-                    }
-
-                    const puntosAbiertas = abiertas.map(pesoOz =>
-                        usaConversion
-                            ? convertirOzAPuntos(pesoOz, product.capacidadMl, product.pesoBotellaLlenaOz)
-                            : pesoOz
-                    );
-
-                    // FIX #4: onkeydown para activar la tarjeta con Enter/Espacio desde teclado
-                    html += '<div class="inv-card' + (hasData ? ' has-data' : '') + (areaData.alerta_conflicto ? ' inv-card--conflict' : '') + '"'
-                          + ' onclick="openInventarioModal(\'' + escapeHtml(product.id) + '\')"'
-                          + ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();openInventarioModal(\'' + escapeHtml(product.id) + '\');}"'
-                          + ' role="button" tabindex="0" aria-label="Contar ' + escapeHtml(product.name) + '" style="animation-delay:' + delay + 'ms">';
-                    html += '<div class="inv-card__ripple"></div>';
-
-                    html += '<div class="inv-card__header">';
-                    html += '<div style="min-width:0;flex:1">';
-                    html += '<div class="inv-card__name">' + highlightConteoMatch(product.name, _conteoSearchTerm) + '</div>';
-                    html += '<span class="inv-card__group-badge">' + escapeHtml(product.group || 'General') + '</span>';
-                    if (areaData.alerta_conflicto) {
-                        html += '<div class="inv-card__conflict-badge"><i class="fa-solid fa-triangle-exclamation"></i> Conflicto abierta</div>';
-                    }
-                    html += '</div>';
-                    html += '<span class="inv-card__code" title="Total (enteras + fracciones de abiertas)">' + totalFinal.toFixed(2) + ' u</span>';
-                    html += '</div>';
-
-                    html += '<div class="inv-card__chips">';
-                    html += '<div class="inv-chip entera' + (enteras === 0 ? ' empty' : '') + '">';
-                    html += '<span class="inv-chip__val">' + (enteras > 0 ? enteras : '0') + '</span>';
-                    html += '<span class="inv-chip__label">Entera</span>';
-                    html += '</div>';
-
-                    const pt1 = puntosAbiertas.length > 0 ? puntosAbiertas[0] : 0;
-                    const ab1Raw = abiertas.length > 0 ? abiertas[0] : 0;
-                    const ab1Label = usaConversion ? (pt1 * 100).toFixed(0) + '%' : pt1.toFixed(2);
-                    html += '<div class="inv-chip abierta' + (pt1 === 0 ? ' empty' : '') + '">';
-                    html += '<span class="inv-chip__val">' + ab1Label + '</span>';
-                    html += '<span class="inv-chip__label">' + (usaConversion ? ab1Raw.toFixed(1) + ' oz' : 'Abierta 1') + '</span>';
-                    html += '</div>';
-
-                    html += '</div>'; // FIX-3: cierre de .inv-card__chips ANTES de chips extra
-
-                    if (hasExtra) {
-                        // FIX-3: wrap chips extra en .inv-card__extra con id="card-extra-{id}"
-                        // para que toggleCardExpand() lo encuentre y aplique la clase .open
-                        html += '<div class="inv-card__extra' + (isExpanded ? ' open' : '') + '" id="card-extra-' + escapeHtml(product.id) + '">';
-                        puntosAbiertas.slice(1).forEach((pt, i) => {
-                            const rawOz = abiertas[i + 1] || 0;
-                            const chipLabel = usaConversion ? (pt * 100).toFixed(0) + '%' : pt.toFixed(2);
-                            html += '<div class="inv-chip abierta' + (pt === 0 ? ' empty' : '') + '">';
-                            html += '<span class="inv-chip__val">' + chipLabel + '</span>';
-                            html += '<span class="inv-chip__label">' + (usaConversion ? rawOz.toFixed(1) + ' oz' : 'Abierta ' + (i + 2)) + '</span>';
-                            html += '</div>';
-                        });
-                        html += '</div>'; // close .inv-card__extra
-                    }
-
-                    if (hasExtra) {
-                        html += '<button class="inv-card__expand-btn' + (isExpanded ? ' open' : '') + '" id="card-expand-btn-' + escapeHtml(product.id) + '" onclick="toggleCardExpand(\'' + escapeHtml(product.id) + '\', event)" aria-expanded="' + isExpanded + '">';
-                        html += '<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>';
-                        html += '<span>' + (isExpanded ? 'Ocultar' : 'Ver más abiertas') + '</span>';
-                        html += '<span style="font-size:0.65rem;opacity:0.7;margin-left:2px">(+' + (abiertas.length - 1) + ')</span>';
-                        html += '</button>';
-                    }
-                    html += '</div>'; // inv-card
-
-                    // ── Trail multiusuario (quién contó, cuánto, cuándo, diferencias) ──
-                    html += renderAuditTrailForProduct(product.id, area); // FIX-04: usa var local en lugar de global
-                });
-            }
-            html += '</div>'; // flex flex-col gap-3
 
             // ── Botón FINALIZAR ÁREA ──────────────────────────────────────────
             // FIX #4 — Solo mostrar si el área no está completada (o si es admin)
@@ -10158,8 +10222,10 @@ document.body.appendChild(overlay);
         function closeProductModal() {
             const modal = document.getElementById('productModal');
             if (modal._trapHandler) { modal.removeEventListener('keydown', modal._trapHandler); modal._trapHandler = null; }
-            modal.classList.add('hidden');
-            document.body.classList.remove('modal-open');
+             modal.classList.add('hidden');
+  document.body.classList.remove('modal-open');
+  window.scrollTo(0, _savedScrollBeforeModal); // evita el salto al inicio
+
             editingProductId = null;
         }
 
