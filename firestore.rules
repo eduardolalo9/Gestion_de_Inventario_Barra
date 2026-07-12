@@ -1,193 +1,131 @@
-// ════════════════════════════════════════════════════════════════════════════
-//  BarInventory — Firestore Security Rules
-//  Proyecto: gestor-de-inventarios-76c19 / bar-inventario-1109e
-//  Despliega con: firebase deploy --only firestore:rules --project bar-inventario-1109e
-//
-//  AUDITORÍA DE SEGURIDAD — 3 vulnerabilidades corregidas respecto a la versión
-//  anterior (la que estaba comentada dentro de index.html):
-//
-//  FIX-RULES-1 (CRÍTICO — auto-escalación de privilegios):
-//    La regla anterior era:
-//      match /usuarios/{uid} {
-//        allow read, write: if request.auth != null && request.auth.uid == uid;
-//      }
-//    Esto permitía que CUALQUIER usuario autenticado, desde la consola del
-//    navegador (sin tocar la UI de la app), ejecutara:
-//      firebase.firestore().collection('usuarios').doc(miUid).update({role:'admin'})
-//    y se auto-otorgara privilegios de administrador de forma permanente.
-//    El código cliente (loadUserRole en index.html) solo necesita CREAR su
-//    propio doc con role:'user' la primera vez que inicia sesión — nunca
-//    necesita modificarlo después. Ahora: create solo permitido con
-//    role=='user' forzado, y update solo permitido al admin.
-//
-//  FIX-RULES-2 (CRÍTICO — borrado total del documento principal):
-//    La regla anterior era:
-//      match /inventarioApp/{docId} {
-//        allow read, write: if request.auth != null;
-//        ...
-//      }
-//    En Firestore, "write" = create + update + delete combinados. Cualquier
-//    bartender autenticado podía ejecutar
-//      firebase.firestore().collection('inventarioApp').doc(docId).delete()
-//    y borrar TODO el documento principal (productos, carrito, config,
-//    sessionId de auditoría) para TODOS los usuarios simultáneamente.
-//    Ahora: solo read/create/update permitidos; delete explícitamente
-//    bloqueado (allow delete: if false).
-//
-//  FIX-RULES-3 (CRÍTICO — bypass total del aislamiento de conteo ciego):
-//    La regla anterior tenía un comodín genérico:
-//      match /{subcoll}/{subId} {
-//        allow read, write: if request.auth != null;
-//      }
-//    En Firestore Security Rules, cuando dos bloques "match" distintos
-//    coinciden con la misma ruta, los permisos se combinan con OR (no gana
-//    el más específico). Esto significa que el comodín de arriba TAMBIÉN
-//    coincidía con /inventarioApp/{docId}/userAuditoria/{uid} y otorgaba
-//    lectura/escritura total — ANULANDO POR COMPLETO la regla específica
-//    "solo tu propio uid o el admin" que aparecía más abajo en el mismo
-//    archivo. En la práctica, cualquier bartender podía leer o sobrescribir
-//    el conteo de otro bartender en tiempo real durante el conteo ciego,
-//    rompiendo el requisito central de aislamiento multiusuario del sistema.
-//    Ahora: el comodín genérico fue ELIMINADO. Cada subcolección real usada
-//    por la app (userAuditoria, conteoAreas, conteoAreas/dispositivos,
-//    conteoMultiUsuario, stockAreas, ordersChunks, inventoriesChunks) tiene
-//    su propia regla explícita — no existe ningún comodín de respaldo que
-//    pueda anular una protección específica.
-//
-//  FIX-RULES-4 (medio — notificaciones de otros usuarios modificables):
-//    La regla anterior permitía "allow update: if auth != null" sin
-//    restricción de campos, por lo que cualquier usuario podía modificar
-//    CUALQUIER campo de la notificación de CUALQUIER otro usuario (no solo
-//    marcarla como leída). Ahora el update solo puede tocar el campo 'leido'.
-//
-//  NOTA IMPORTANTE (no corregida aquí, fuera del alcance de reglas):
-//    subscribeNotificacionesUsuario() en index.html hace la consulta
-//    .where('leido','==',false) SIN filtrar por destinatarioUid a nivel de
-//    Firestore — el filtro por uid ocurre solo en el cliente (.filter()).
-//    Esto significa que cualquier usuario autenticado DESCARGA todas las
-//    notificaciones no leídas del sistema (incluidas las dirigidas a otros
-//    usuarios específicos) y solo las oculta visualmente. Las reglas de
-//    Firestore no pueden filtrar resultados de queries por sí solas — esto
-//    requiere cambiar la consulta en el cliente (ej. dos listeners: uno con
-//    where('broadcast','==',true) y otro con where('destinatarioUid','==',uid),
-//    fusionados en memoria). Se documenta aquí como hallazgo pendiente para
-//    una próxima sesión, ya que modificar la lógica de notificaciones no
-//    estaba dentro del alcance de esta corrección.
-// ════════════════════════════════════════════════════════════════════════════
-
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function isAdminUser() {
-      return request.auth != null &&
+    function estaAutenticado() { return request.auth != null; }
+    function esAdmin() {
+      return estaAutenticado() &&
+        exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) &&
         get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role == 'admin';
     }
+    function esPropioUid(uid) { return estaAutenticado() && request.auth.uid == uid; }
+    function rolSinCambio() {
+      return !('role' in request.resource.data.diff(resource.data).affectedKeys());
+    }
 
-    // ── USUARIOS (perfiles + rol) ──────────────────────────────────────────
     match /usuarios/{uid} {
-      allow read: if request.auth != null && (request.auth.uid == uid || isAdminUser());
-
-      // FIX-RULES-1: auto-creación permitida SOLO con role=='user' forzado.
-      // Necesario porque loadUserRole() en index.html crea el doc propio
-      // en el primer login si no existe (ref.set({uid, role:'user', ...})).
-      allow create: if request.auth != null
-                    && request.auth.uid == uid
-                    && request.resource.data.role == 'user'
-                    && request.resource.data.uid == uid;
-
-      // Solo el admin puede cambiar roles (ascender/degradar) o cualquier
-      // otro campo del perfil de un usuario después de la creación inicial.
-      allow update: if isAdminUser();
-
-      // Nunca se borra un doc de usuario desde el cliente — su uid queda
-      // referenciado en el historial de auditoría (userAuditoria/{uid}).
-      // Borrarlo rompería la trazabilidad de conteos pasados.
-      allow delete: if false;
+      allow read:   if esPropioUid(uid) || esAdmin();
+      allow create: if esPropioUid(uid) && request.resource.data.role == 'user';
+      allow update: if esAdmin() || (esPropioUid(uid) && rolSinCambio());
+      allow delete: if esAdmin();
     }
 
-    // ── CATÁLOGO DE PRODUCTOS ───────────────────────────────────────────────
-    match /catalogo/{docId} {
-      allow read:  if request.auth != null;
-      allow write: if isAdminUser();   // create + update + delete: solo admin
-    }
-
-    // ── DOCUMENTO PRINCIPAL DE LA APP ───────────────────────────────────────
     match /inventarioApp/{docId} {
-      // FIX-RULES-2: delete explícitamente bloqueado — nadie borra el
-      // documento principal desde el cliente, ni siquiera el admin (usar
-      // Firebase Console/CLI si alguna vez es intencional).
-      allow read, create, update: if request.auth != null;
-      allow delete: if false;
+      allow read:   if estaAutenticado();
+      allow create: if estaAutenticado();
+      allow update: if estaAutenticado();
+      allow delete: if esAdmin();
 
-      // ── Subcolecciones — cada una con su propia regla explícita ─────────
-      // FIX-RULES-3: NO existe comodín /{subcoll}/{subId} de respaldo.
+      match /ordersChunks/{chunkId}      { allow read: if estaAutenticado(); allow write: if estaAutenticado(); }
+      match /inventoriesChunks/{chunkId} { allow read: if estaAutenticado(); allow write: if estaAutenticado(); }
 
-      // Conteo individual por usuario durante auditoría (conteo ciego).
-      // Un bartender solo puede leer/escribir SU PROPIO documento; el
-      // admin puede leer/escribir el de todos (para consolidar y otorgar
-      // desbloqueos de recuento).
-      match /userAuditoria/{uid} {
-        allow read:  if request.auth != null && (request.auth.uid == uid || isAdminUser());
-        allow write: if request.auth != null && (request.auth.uid == uid || isAdminUser());
-      }
+      match /stockAreas/{area} {
+        // Documento por-área heredado — se conserva de solo escritura
+        // amplia únicamente para el script de migración (migrarStockAreasAProductos)
+        // y para lectura de compatibilidad de dispositivos aún no migrados.
+        // El conteo regular ya NO se escribe aquí — ver /productos/{productId}.
+        allow read:  if estaAutenticado();
+        allow write: if estaAutenticado();
 
-      // Conteo por dispositivo/área (sistema multi-dispositivo con
-      // FieldValue.increment()). Cualquier usuario autenticado participa.
-      match /conteoAreas/{area} {
-        allow read, write: if request.auth != null;
+        // MIGRACIÓN MÍNIMA — CONCURRENCIA SEGURA: un documento por producto,
+        // con optimistic locking. `create` exige version==1 (primer conteo
+        // de ese producto en esa área, desde cualquier dispositivo);
+        // `update` exige que la versión nueva sea exactamente version_actual+1
+        // — si otro dispositivo ya escribió una versión más reciente, esta
+        // condición falla y Firestore RECHAZA la escritura, en vez de
+        // aceptarla y sobrescribir en silencio el valor del otro usuario.
+        match /productos/{productId} {
+          allow read: if estaAutenticado();
 
-        match /dispositivos/{dispId} {
-          allow read, write: if request.auth != null;
+          allow create: if estaAutenticado()
+                        && request.resource.data.version == 1
+                        && request.resource.data.enteras is number
+                        && request.resource.data.enteras >= 0
+                        && request.resource.data.actualizadoPor is string;
+
+          allow update: if estaAutenticado()
+                        && request.resource.data.version == resource.data.version + 1
+                        && request.resource.data.enteras is number
+                        && request.resource.data.enteras >= 0
+                        && request.resource.data.actualizadoPor is string;
+
+          allow delete: if esAdmin();
         }
       }
 
-      // Sistema legacy de conteo multiusuario (mantenido por compatibilidad).
-      match /conteoMultiUsuario/{area} {
-        allow read, write: if request.auth != null;
+      match /conteoMultiUsuario/{id}     { allow read: if estaAutenticado(); allow write: if estaAutenticado(); }
+
+      match /conteoAreas/{area} {
+        allow read: if estaAutenticado();
+        allow write: if estaAutenticado();
+        match /dispositivos/{devId} {
+          allow read: if estaAutenticado();
+          allow write: if estaAutenticado();
+        }
       }
 
-      // Snapshot de stock consolidado por área.
-      match /stockAreas/{areaId} {
-        allow read, write: if request.auth != null;
+      match /userAuditoria/{uid} {
+        allow read:   if estaAutenticado();
+        allow create: if esPropioUid(uid) || esAdmin();
+        allow update: if esPropioUid(uid) || esAdmin();
+        allow delete: if esPropioUid(uid) || esAdmin();
       }
 
-      // Pedidos a proveedores, particionados en chunks de 80 ítems.
-      match /ordersChunks/{chunkId} {
-        allow read, write: if request.auth != null;
+      match /conflictos/{id} {
+        allow read: if estaAutenticado();
+        allow create: if estaAutenticado();
+        allow update: if false;
+        allow delete: if esAdmin();
       }
-
-      // Historial de inventarios, particionado en chunks de 80 ítems.
-      match /inventoriesChunks/{chunkId} {
-        allow read, write: if request.auth != null;
+      match /cambios/{id} {
+        allow read: if estaAutenticado();
+        allow create: if estaAutenticado();
+        allow update: if false;
+        allow delete: if esAdmin();
       }
     }
 
-    // ── AJUSTES (solicitudes de corrección de inventario) ───────────────────
-    match /ajustes/{ajusteId} {
-      allow read:   if request.auth != null;
-      allow create: if request.auth != null;
-      allow update: if isAdminUser();   // resolver/rechazar: solo admin
-      allow delete: if false;           // historial de ajustes es permanente
+    match /catalogo/{docId} {
+      allow read:  if estaAutenticado();
+      allow write: if esAdmin();
+    }
+    match /ajustes/{id} {
+      allow read:   if estaAutenticado();
+      allow create: if estaAutenticado()
+                    && request.resource.data.solicitanteUid == request.auth.uid
+                    && request.resource.data.estado == 'pendiente';
+      allow update: if esAdmin();
+      allow delete: if esAdmin();
+    }
+    match /notificaciones/{id} {
+      allow read:   if estaAutenticado();
+      allow create: if estaAutenticado();
+      allow update: if estaAutenticado();
+      allow delete: if esAdmin();
+    }
+    match /reportes/{id} {
+      allow read:  if estaAutenticado();
+      allow create: if esAdmin();
+      allow update: if esAdmin();
+      allow delete: if esAdmin();
+    }
+    match /historialCambios/{id} {
+      allow read:   if estaAutenticado();
+      allow create: if estaAutenticado();
+      allow update: if false;
+      allow delete: if esAdmin();
     }
 
-    // ── NOTIFICACIONES ────────────────────────────────────────────────────
-    match /notificaciones/{notifId} {
-      allow read, create: if request.auth != null;
-
-      // FIX-RULES-4: solo se permite modificar el campo 'leido' — evita que
-      // un usuario altere el texto, tipo o destinatario de la notificación
-      // de otra persona.
-      allow update: if request.auth != null
-                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['leido']);
-
-      allow delete: if isAdminUser();
-    }
-
-    // ── REPORTES GENERADOS ───────────────────────────────────────────────
-    match /reportes/{reporteId} {
-      allow read:  if request.auth != null;
-      allow write: if isAdminUser();   // create + update + delete: solo admin
-    }
+    match /{document=**} { allow read, write: if false; }
   }
 }
