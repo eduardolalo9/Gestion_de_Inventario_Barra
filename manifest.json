@@ -2,14 +2,12 @@
   "name": "BarInventory — Control de Inventario",
   "short_name": "BarInventory",
   "description": "Sistema de inventario para bar y restaurante. Conteo ciego, auditoría y sincronización en tiempo real.",
-  "id": "./",
-  "start_url": "./",
+  "start_url": "./?tab=inicio",
   "scope": "./",
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui", "browser"],
   "orientation": "portrait-primary",
-  "background_color": "#0f0f13",
-  "theme_color": "#0f0f13",
+  "background_color": "#0d1321",
+  "theme_color": "#0d1321",
   "lang": "es-MX",
   "dir": "ltr",
   "categories": ["business", "productivity"],
@@ -42,25 +40,19 @@
   ],
   "shortcuts": [
     {
-      "name": "Nueva Auditoría",
+      "name": "Nuevo Conteo",
       "short_name": "Conteo",
-      "url": "./?open=inventario",
-      "description": "Iniciar conteo físico de inventario",
-      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+      "url": "./?tab=inventario"
     },
     {
-      "name": "Panel Admin",
-      "short_name": "Admin",
-      "url": "./?open=admin",
-      "description": "Panel de administración",
-      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+      "name": "Auditoría",
+      "short_name": "Auditoría",
+      "url": "./?tab=auditoria"
     },
     {
       "name": "Pedidos",
       "short_name": "Pedidos",
-      "url": "./?open=pedidos",
-      "description": "Gestión de pedidos a proveedores",
-      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+      "url": "./?tab=pedidos"
     }
   ]
 }
