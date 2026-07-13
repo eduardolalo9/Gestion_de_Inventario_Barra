@@ -2886,6 +2886,18 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
     transform: translateX(20px);
     background: var(--accent-on, #003063);
 }
+
+
+/* ── OPTIMIZACIÓN CONTEO: wrapper invisible + flash verde suave ── */
+/* display:contents => el wrapper NO genera caja, el layout queda IDÉNTICO */
+.inv-card-wrap { display: contents; }
+@keyframes cardFlashGreen {
+  0%   { background-color: var(--green-dim); }
+  100% { background-color: var(--card); }
+}
+.inv-card.card-updated { animation: cardFlashGreen 1.1s var(--ease-out); }
+
+
 </style>
 </head>
 <body class="min-h-screen">
@@ -3381,6 +3393,21 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                 .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#039;');
         }
+
+/* ── Utilidad debounce reutilizable ──────────────────────────────
+   Retrasa la ejecución hasta que pasen `wait` ms sin nuevas llamadas. */
+function debounce(fn, wait) {
+  if (wait == null) wait = 290;
+  let t;
+  function debounced() {
+    const ctx = this, args = arguments;
+    clearTimeout(t);
+    t = setTimeout(function () { fn.apply(ctx, args); }, wait);
+  }
+  debounced.cancel = function () { clearTimeout(t); };
+  return debounced;
+}
+
 
         // ==================== ESTADO GLOBAL ENCAPSULADO ====================
         // Toda la mutación de estado ocurre a través de estas variables.
@@ -5714,216 +5741,6 @@ function _idbPruneSyncedQueue() {
             }
         }
 
-        // ══════════════════════════════════════════════════════════════════════
-        //  CONTEO POR PRODUCTO — MIGRACIÓN MÍNIMA PARA CONCURRENCIA SEGURA
-        //  ────────────────────────────────────────────────────────────────────
-        //  Esquema nuevo:  stockAreas/{area}/productos/{productId}
-        //                  { enteras, abiertas, version, actualizadoPor, ts }
-        //
-        //  Sustituye la escritura de snapshot completo por área (un solo
-        //  documento con TODOS los productos, sobrescrito entero en cada sync)
-        //  por una escritura atómica de UN producto a la vez, protegida con
-        //  optimistic locking (campo `version`). Dos usuarios contando
-        //  productos distintos en la misma área ya no compiten por el mismo
-        //  documento; dos usuarios contando el MISMO producto casi al mismo
-        //  tiempo son detectados y ninguno sobrescribe al otro en silencio.
-        //
-        //  No se usa runTransaction() a propósito: los conteos deben poder
-        //  guardarse offline y quedar en cola del propio SDK de Firestore.
-        //  En su lugar, cada escritura declara la versión que espera
-        //  sobrescribir, y firestore.rules la rechaza si ya no coincide con
-        //  la real — incluso si el rechazo llega minutos después, al
-        //  reconectar y reenviar una escritura que quedó en cola offline.
-        // ══════════════════════════════════════════════════════════════════════
-
-        // Caché en memoria de la última versión conocida por producto+área.
-        // Deliberadamente NO se persiste entre sesiones (se recarga sola la
-        // primera vez que se toca cada producto) para mantener esta
-        // migración mínima — ver _leerConteoProducto().
-        let _versionesConteoProducto = {};
-        let _conteoProductoSyncTimers = {};
-
-        function _claveVersionProducto(productId, area) {
-            return productId + '|' + area;
-        }
-
-        // Lee el documento actual de un producto/área directo de Firestore.
-        // Devuelve null si nunca se ha escrito (primer conteo de ese producto
-        // en esa área, desde ningún dispositivo).
-        async function _leerConteoProducto(productId, area) {
-            if (!_db || !docRef) return null;
-            try {
-                const snap = await docRef.collection('stockAreas').doc(area)
-                    .collection('productos').doc(productId).get();
-                return snap.exists ? snap.data() : null;
-            } catch (e) {
-                console.warn('[ConteoProducto] Error leyendo', productId, area, e);
-                return null;
-            }
-        }
-
-        /**
-         * syncConteoProductoAtomico(productId, area, enteras, abiertas)
-         * ───────────────────────────────────────────────────────────
-         * Escritura atómica de UN producto en UNA área, con optimistic
-         * locking. Es la única forma correcta de sincronizar un conteo
-         * regular hacia Firestore — reemplaza al bloque `areaWrites` que
-         * syncToCloud() usaba antes (snapshot completo del área, sin
-         * protección alguna ante escritura concurrente).
-         *
-         * Devuelve { ok: true, version } en éxito, o
-         *          { ok: false, motivo, error? } si no se pudo confirmar.
-         * Un `ok:false` NUNCA significa pérdida de datos: el valor ya vive
-         * en localStorage/IndexedDB vía saveToLocalStorage() antes de que
-         * esta función se invoque — solo significa que la nube todavía no
-         * lo confirmó como autoritativo.
-         */
-        async function syncConteoProductoAtomico(productId, area, enteras, abiertas) {
-            if (!_db || !docRef) return { ok: false, motivo: 'sin_conexion_bd' };
-            if (!navigator.onLine) return { ok: false, motivo: 'offline' };
-
-            const clave = _claveVersionProducto(productId, area);
-            const ref = docRef.collection('stockAreas').doc(area)
-                               .collection('productos').doc(productId);
-
-            try {
-                // Si esta sesión nunca tocó este producto/área, se pregunta
-                // primero al servidor la versión real — evita adivinar
-                // version:1 sobre un documento que ya existía y provocar un
-                // rechazo evitable en el caso más común (primer conteo desde
-                // ESTE dispositivo, aunque OTROS ya hayan contado antes).
-                if (!(clave in _versionesConteoProducto)) {
-                    const actual = await _leerConteoProducto(productId, area);
-                    _versionesConteoProducto[clave] = actual ? (actual.version || 0) : 0;
-                }
-
-                const versionEsperada = _versionesConteoProducto[clave];
-                const nuevaVersion    = versionEsperada + 1;
-
-                await ref.set({
-                    enteras:        enteras,
-                    abiertas:       abiertas,
-                    version:        nuevaVersion,
-                    actualizadoPor: currentUserUid || 'anonymous',
-                    ts:             firebase.firestore.FieldValue.serverTimestamp()
-                });
-
-                _versionesConteoProducto[clave] = nuevaVersion;
-                return { ok: true, version: nuevaVersion };
-
-            } catch (err) {
-                // Rechazado por firestore.rules (versión desactualizada) o
-                // error de red/permisos. Se trata siempre como conflicto
-                // potencial — nunca se asume éxito silencioso.
-                console.warn('[ConteoProducto] Escritura rechazada para', productId, area, err);
-                await _registrarConflictoVersion(productId, area, _versionesConteoProducto[clave] || 0, enteras, abiertas);
-                return { ok: false, motivo: 'conflicto_version', error: err };
-            }
-        }
-
-        // ── Log de conflictos ───────────────────────────────────────────────
-        // Reutiliza el mecanismo ya existente (_registrarConflictos: memoria +
-        // localStorage + IDB + Firestore) para que verConflictos() y el resto
-        // de la infraestructura de conflictos ya construida sigan funcionando
-        // sin cambios sobre este nuevo tipo de conflicto.
-        async function _registrarConflictoVersion(productId, area, versionEsperada, enterasLocal, abiertasLocal) {
-            const remoto  = await _leerConteoProducto(productId, area);
-            const product = products.find(function(p) { return p.id === productId; });
-
-            _registrarConflictos([{
-                tipo:          'version_mismatch',
-                ts:            Date.now(),
-                prodId:        productId,
-                prodName:      product ? product.name : productId,
-                area:          area,
-                valorOriginal: versionEsperada,
-                valorLocal:    enterasLocal,
-                valorNube:     remoto ? remoto.enteras : null,
-                usuarioLocal:  currentUserUid || 'local'
-            }]);
-
-            // Refrescar el caché con la versión real, para que el próximo
-            // intento de guardado (manual o automático) parta de la base
-            // correcta en vez de repetir el mismo rechazo.
-            if (remoto) {
-                _versionesConteoProducto[_claveVersionProducto(productId, area)] = remoto.version;
-            }
-
-            showNotification('⚠️ ' + (product ? product.name : productId) +
-                ': alguien más actualizó este producto en ' + area +
-                '. Tu valor no se guardó — revisa el conteo actual antes de reintentar.');
-        }
-
-        // ── Rollback simple ──────────────────────────────────────────────────
-        // Descarta el valor local no confirmado y adopta el valor actual del
-        // servidor para un producto/área específico. Es la acción que se
-        // ofrece al usuario tras un conflicto de versión, y también sirve
-        // como recuperación manual ante cualquier duda sobre el conteo local.
-        async function revertirConteoProductoAServidor(productId, area) {
-            const remoto = await _leerConteoProducto(productId, area);
-            if (!remoto) {
-                showNotification('No hay valor en el servidor todavía para ' + productId + ' — se conserva el local.');
-                return false;
-            }
-            if (!inventarioConteo[productId]) inventarioConteo[productId] = {};
-            inventarioConteo[productId][area] = { enteras: remoto.enteras, abiertas: remoto.abiertas || [] };
-            _versionesConteoProducto[_claveVersionProducto(productId, area)] = remoto.version;
-            syncStockByAreaFromConteo();
-            saveToLocalStorage();
-            renderTab();
-            showNotification('Conteo de ' + productId + ' revertido al valor del servidor (v' + remoto.version + ').');
-            return true;
-        }
-
-        // ── Migración de datos existentes ───────────────────────────────────
-        // Traslada, una sola vez, el contenido de los documentos antiguos
-        // stockAreas/{area} (un documento con TODOS los productos) hacia el
-        // nuevo esquema stockAreas/{area}/productos/{productId}. Idempotente:
-        // puede ejecutarse más de una vez sin duplicar ni corromper nada,
-        // porque siempre escribe version:1 solo si el producto nuevo aún no
-        // existe. Pensada para ejecutarse una vez, por un admin, desde la
-        // consola (migrarStockAreasAProductos()), no automáticamente.
-        async function migrarStockAreasAProductos() {
-            if (!_db || !docRef || !isAdmin()) {
-                console.warn('[Migración] Requiere admin autenticado con conexión.');
-                return { ok: false };
-            }
-            const areasConocidas = ['almacen', 'barra1', 'barra2'];
-            let migrados = 0, yaExistian = 0, errores = 0;
-
-            for (const area of areasConocidas) {
-                const snapArea = await docRef.collection('stockAreas').doc(area).get();
-                if (!snapArea.exists) continue;
-                const data = snapArea.data();
-                const colProductos = docRef.collection('stockAreas').doc(area).collection('productos');
-
-                for (const prodId of Object.keys(data)) {
-                    if (prodId.startsWith('_')) continue; // metadatos (_lastModified, etc.)
-                    const valor = data[prodId];
-                    if (!valor || typeof valor !== 'object') continue;
-                    try {
-                        const destino = colProductos.doc(prodId);
-                        const yaExiste = await destino.get();
-                        if (yaExiste.exists) { yaExistian++; continue; }
-                        await destino.set({
-                            enteras:        valor.enteras || 0,
-                            abiertas:       valor.abiertas || [],
-                            version:        1,
-                            actualizadoPor: 'migracion',
-                            ts:             firebase.firestore.FieldValue.serverTimestamp()
-                        });
-                        migrados++;
-                    } catch (e) {
-                        console.warn('[Migración] Error migrando', prodId, area, e);
-                        errores++;
-                    }
-                }
-            }
-            console.info('[Migración] Completa — migrados:', migrados, 'ya existían:', yaExistian, 'errores:', errores);
-            showNotification('Migración de conteo completa: ' + migrados + ' productos migrados.');
-            return { ok: true, migrados: migrados, yaExistian: yaExistian, errores: errores };
-        }
-
         /**
          * syncToCloud()
          * ─────────────
@@ -5936,12 +5753,6 @@ function _idbPruneSyncedQueue() {
          *   • Si no hay _db o no hay conexión, marca _cloudSyncPending = true
          *     y espera al evento 'online' para reintentar
          *   • Reintentos con back-off exponencial (max 3 intentos)
-         *
-         * NOTA — MIGRACIÓN MÍNIMA DE CONCURRENCIA (ver bloque anterior):
-         * esta función YA NO escribe el snapshot completo de stockAreas por
-         * área. El conteo regular se sincroniza producto por producto, de
-         * forma atómica, vía syncConteoProductoAtomico() — invocado
-         * directamente desde saveInventarioModal(), no desde aquí.
          */
         async function syncToCloud(retryCount = 0) {
             if (!_db) return; // Firebase no configurado
@@ -6122,20 +5933,25 @@ function _idbPruneSyncedQueue() {
                     _auditoriaSessionId: _auditoriaSessionId || null
                 };
 
-                // MIGRACIÓN MÍNIMA DE CONCURRENCIA: el conteo por producto/área
-                // (stockAreas/{area}/productos/{id}) YA NO se sincroniza aquí.
-                // Se escribe de forma atómica y versionada, producto por
-                // producto, desde syncConteoProductoAtomico() — invocada
-                // directamente al guardar cada conteo en saveInventarioModal().
-                // Escribir aquí un snapshot completo por área (como antes)
-                // reintroduciría exactamente el riesgo que esta migración
-                // elimina: dos usuarios contando productos distintos en la
-                // misma área podían sobrescribirse el uno al otro.
+                // Construir escrituras por área (merge:true = solo toca el área modificada)
+                // Cada dispositivo escribe SOLO su área → no hay colisión entre dispositivos
+                const stockAreaRef = docRef.collection('stockAreas');
+                const areaWrites = ['almacen', 'barra1', 'barra2'].map(area => {
+                    const areaPayload = {};
+                    Object.keys(inventarioConteo).forEach(prodId => {
+                        if (inventarioConteo[prodId] && inventarioConteo[prodId][area]) {
+                            areaPayload[prodId] = inventarioConteo[prodId][area];
+                        }
+                    });
+                    areaPayload._lastModified = localTs;
+                    return stockAreaRef.doc(area).set(areaPayload, { merge: true });
+                });
 
-                // Escritura paralela: doc principal + subcolecciones históricas
+                // Escritura paralela: doc principal + áreas + subcolecciones históricas
                 // merge:true en docRef.set() evita sobrescribir campos de otros dispositivos
                 await Promise.all([
                     docRef.set(payload, { merge: true }),
+                    ...areaWrites,
                     _writeChunkedSubcollection(docRef, 'ordersChunks', orders),
                     _writeChunkedSubcollection(docRef, 'inventoriesChunks', inventories)
                 ]);
@@ -7009,57 +6825,29 @@ const usersList = Object.values(allUsersAuditoria);
                     }
                 }
 
-                // Migración de formato inventarioConteo — tres niveles de
-                // compatibilidad, del más nuevo al más antiguo:
-                //   1) stockAreas/{area}/productos/{id} — esquema nuevo, un
-                //      documento por producto, con `version` (concurrencia segura)
-                //   2) stockAreas/{area} como documento único con todos los
-                //      productos — esquema anterior, se usa si (1) no tiene
-                //      datos todavía (dispositivo/organización sin migrar)
-                //   3) data.inventarioConteo embebido en el doc principal —
-                //      el esquema más antiguo de todos
+                // Migración de formato inventarioConteo (igual que loadFromLocalStorage)
+                // Bug #1 fix: si _conteoInSubcol, leer cada área desde su propio subdocumento
                 let rawConteo = {};
-                if (docRef) {
-                    const areasConocidas = ['almacen', 'barra1', 'barra2'];
-                    const snapshotsProductos = await Promise.all(areasConocidas.map(function(area) {
-                        return docRef.collection('stockAreas').doc(area).collection('productos').get();
-                    }));
-                    let huboDatosNuevos = false;
-                    snapshotsProductos.forEach(function(snap, idx) {
-                        const areaKey = areasConocidas[idx];
-                        snap.forEach(function(doc) {
-                            huboDatosNuevos = true;
-                            const d = doc.data();
-                            const prodId = doc.id;
+                if (data._conteoInSubcol && docRef) {
+                    const [snapAlmacen, snapBarra1, snapBarra2] = await Promise.all([
+                        docRef.collection('stockAreas').doc('almacen').get(),
+                        docRef.collection('stockAreas').doc('barra1').get(),
+                        docRef.collection('stockAreas').doc('barra2').get(),
+                    ]);
+                    const mergeArea = (snap, areaKey) => {
+                        if (!snap.exists) return;
+                        const areaData = snap.data();
+                        Object.keys(areaData).forEach(prodId => {
+                            if (prodId.startsWith('_')) return; // saltar metadatos
                             if (!rawConteo[prodId]) rawConteo[prodId] = {};
-                            rawConteo[prodId][areaKey] = { enteras: d.enteras, abiertas: d.abiertas };
-                            _versionesConteoProducto[_claveVersionProducto(prodId, areaKey)] = d.version || 0;
+                            rawConteo[prodId][areaKey] = areaData[prodId];
                         });
-                    });
-
-                    if (!huboDatosNuevos && data._conteoInSubcol) {
-                        // Nivel 2 — esquema anterior (documento único por área)
-                        const [snapAlmacen, snapBarra1, snapBarra2] = await Promise.all([
-                            docRef.collection('stockAreas').doc('almacen').get(),
-                            docRef.collection('stockAreas').doc('barra1').get(),
-                            docRef.collection('stockAreas').doc('barra2').get(),
-                        ]);
-                        const mergeArea = (snap, areaKey) => {
-                            if (!snap.exists) return;
-                            const areaData = snap.data();
-                            Object.keys(areaData).forEach(prodId => {
-                                if (prodId.startsWith('_')) return; // saltar metadatos
-                                if (!rawConteo[prodId]) rawConteo[prodId] = {};
-                                rawConteo[prodId][areaKey] = areaData[prodId];
-                            });
-                        };
-                        mergeArea(snapAlmacen, 'almacen');
-                        mergeArea(snapBarra1,  'barra1');
-                        mergeArea(snapBarra2,  'barra2');
-                    }
-                }
-                if (Object.keys(rawConteo).length === 0) {
-                    // Nivel 3 — compatibilidad con documentos muy anteriores
+                    };
+                    mergeArea(snapAlmacen, 'almacen');
+                    mergeArea(snapBarra1,  'barra1');
+                    mergeArea(snapBarra2,  'barra2');
+                } else {
+                    // Compatibilidad con documentos anteriores al cambio
                     rawConteo = data.inventarioConteo || {};
                 }
                 const migrated  = {};
@@ -8028,30 +7816,6 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName) {
                     }
                 } catch(_) {}
 
-                // MIGRACIÓN MÍNIMA — reintentar conteos por producto que
-                // quedaron sin confirmar contra el servidor al cerrar la
-                // sesión anterior (ver beforeunload). El valor local ya es
-                // correcto (viene de inventarioConteo, ya restaurado arriba);
-                // esto solo reintenta la confirmación contra Firestore.
-                try {
-                    const pendientesRaw = localStorage.getItem('inventarioApp_conteoProductoPendiente');
-                    if (pendientesRaw) {
-                        localStorage.removeItem('inventarioApp_conteoProductoPendiente');
-                        const claves = JSON.parse(pendientesRaw);
-                        if (Array.isArray(claves) && claves.length > 0 && _db) {
-                            claves.forEach(function(clave) {
-                                const partes = clave.split('|');
-                                const pid = partes[0], area = partes[1];
-                                const valor = inventarioConteo[pid] && inventarioConteo[pid][area];
-                                if (valor) {
-                                    syncConteoProductoAtomico(pid, area, valor.enteras, valor.abiertas);
-                                }
-                            });
-                            console.info('[ConteoProducto]', claves.length, 'conteo(s) pendiente(s) reintentado(s) al arrancar.');
-                        }
-                    }
-                } catch(_) {}
-
                 if (inventarioCicloEstado === 'EN_CAPTURA') {
                     console.info('[Ciclo] Ciclo EN_CAPTURA restaurado al arranque.');
                 }
@@ -8090,17 +7854,6 @@ window.addEventListener('beforeunload', function() {
             saveInventarioModal._auditSyncTimer = null;
             _auditSyncPending = true;
             try { localStorage.setItem('inventarioApp_auditSyncPending', '1'); } catch(_) {}
-        }
-
-        // MIGRACIÓN MÍNIMA — cualquier conteo por producto cuyo debounce de
-        // 800ms no alcanzó a dispararse queda registrado como pendiente.
-        // El dato ya está seguro en localStorage/IndexedDB (líneas de arriba);
-        // esto solo asegura que la próxima carga sepa que faltó confirmar
-        // contra el servidor y lo reintente en vez de darlo por sincronizado.
-        var clavesPendientes = Object.keys(_conteoProductoSyncTimers || {});
-        if (clavesPendientes.length > 0) {
-            clavesPendientes.forEach(function(clave) { clearTimeout(_conteoProductoSyncTimers[clave]); });
-            try { localStorage.setItem('inventarioApp_conteoProductoPendiente', JSON.stringify(clavesPendientes)); } catch(_) {}
         }
     });
             window.addEventListener('online',  updateNetworkStatus);
@@ -8781,6 +8534,7 @@ document.body.appendChild(overlay);
             });
         }
 
+let _savedScrollBeforeModal = 0;
         function openInventarioModal(productId) {
             const product = products.find(p => p.id === productId);
             if (!product) return;
@@ -8862,11 +8616,13 @@ document.body.appendChild(overlay);
                 if (errEl) errEl.classList.add('hidden');
             }
 
-            isInventarioModalOpen = true;
-            disableAreaButtons(true);
-            const modal = document.getElementById('inventarioModal');
-            modal.classList.remove('hidden');
-            document.body.classList.add('modal-open');
+              isInventarioModalOpen = true;
+  disableAreaButtons(true);
+  const modal = document.getElementById('inventarioModal');
+  _savedScrollBeforeModal = window.scrollY || window.pageYOffset || 0; // guardar posición
+  modal.classList.remove('hidden');
+  document.body.classList.add('modal-open');
+
             setTimeout(() => {
                 const firstInput = modal.querySelector('input, button');
                 if (firstInput) firstInput.focus();
@@ -9134,25 +8890,19 @@ document.body.appendChild(overlay);
                 syncStockByAreaFromConteo();
                 saveToLocalStorage();
                 showNotification('Conteo guardado en ' + areas[selectedArea]);
-
-                // MIGRACIÓN MÍNIMA — sincronización atómica y versionada de
-                // ESTE producto únicamente (nunca un snapshot del área
-                // completa). Debounce corto por si el usuario ajusta el
-                // mismo producto varias veces seguidas antes de cambiar de
-                // ítem; el valor ya está seguro en local desde la línea
-                // anterior, este envío solo confirma contra el servidor.
-                (function(pid, area, ent, abi) {
-                    const clave = pid + '|' + area;
-                    clearTimeout(_conteoProductoSyncTimers[clave]);
-                    _conteoProductoSyncTimers[clave] = setTimeout(function() {
-                        syncConteoProductoAtomico(pid, area, ent, abi);
-                    }, 800);
-                })(inventarioModalProductId, selectedArea, enteras, abiertas);
             }
 
-            closeInventarioModal();
-            renderTab();
-        }
+             const _updatedProductId = inventarioModalProductId;
+  const _wasAuditSave = isAuditoriaMode && !!auditoriaAreaActiva;
+  const _updatedArea = auditoriaAreaActiva;
+  closeInventarioModal();
+  if (_wasAuditSave) {
+    _surgicalUpdateInvCard(_updatedProductId, _updatedArea); // solo la tarjeta, sin parpadeo
+  } else {
+    renderTab();
+  }
+}
+
 
 
         // Toggle expansión de tarjeta de inventario (botellas abiertas adicionales)
@@ -9464,33 +9214,31 @@ document.body.appendChild(overlay);
             return result;
         }
 
-        /**
-         * updateConteoSearch — con debounce (180ms) y skip si el término no cambió.
-         * Restaura foco al input después del render (manejado por _getElementSelector via id).
-         */
-        function updateConteoSearch(val) {
-            const next = (val || '').trimStart();
-            clearTimeout(_csSearchTimer);
-            _csSearchTimer = setTimeout(function() {
-                const trimmed = next.trimEnd();
-                if (trimmed === _conteoSearchTerm) return; // sin cambio → no re-render
-                _conteoSearchTerm = trimmed;
-                // Actualizar clase del wrapper sin esperar re-render completo
-                const wrap = document.getElementById('csb-wrap');
-                if (wrap) wrap.classList.toggle('csb-wrap--active', !!_conteoSearchTerm);
-                renderTab();
-            }, 180);
-        }
+/* Búsqueda del conteo con debounce reutilizable (290ms) — filtra fluido
+   sin ejecutar en cada tecla. renderTab() ya preserva scroll y foco,
+   así que la vista NO se reinicia ni salta. */
+const _runConteoSearch = debounce(function (nextRaw) {
+  const trimmed = (nextRaw || '').trimEnd();
+  if (trimmed === _conteoSearchTerm) return; // sin cambio → no re-render
+  _conteoSearchTerm = trimmed;
+  const wrap = document.getElementById('csb-wrap');
+  if (wrap) wrap.classList.toggle('csb-wrap--active', !!_conteoSearchTerm);
+  renderTab();
+}, 290);
+
+function updateConteoSearch(val) {
+  _runConteoSearch((val || '').trimStart());
+}
 
         function clearConteoSearch() {
-            clearTimeout(_csSearchTimer);
-            _conteoSearchTerm = '';
-            const inp  = document.getElementById('csb-input');
-            const wrap = document.getElementById('csb-wrap');
-            if (inp)  { inp.value = ''; inp.focus(); }
-            if (wrap) wrap.classList.remove('csb-wrap--active');
-            renderTab();
-        }
+  if (_runConteoSearch && _runConteoSearch.cancel) _runConteoSearch.cancel();
+  _conteoSearchTerm = '';
+  const inp = document.getElementById('csb-input');
+  const wrap = document.getElementById('csb-wrap');
+  if (inp) { inp.value = ''; inp.focus(); }
+  if (wrap) wrap.classList.remove('csb-wrap--active');
+  renderTab();
+}
 
         // ═════════════════════════════════════════════════════════════════
         // FIX-BUSCADOR-PEDIDOS-HISTORIA (BarInventario)
@@ -9946,6 +9694,117 @@ document.body.appendChild(overlay);
                     .catch(err => { console.error(err); showNotification('❌ Error al habilitar'); });
             });
         }
+/* ── Construye el HTML de UNA tarjeta de conteo (misma estructura que antes) ──
+   Va envuelta en .inv-card-wrap (display:contents) para poder reemplazarla
+   de forma quirúrgica sin alterar el layout. */
+function _buildInvCardHTML(product, area, conteoRef, idx) {
+  const areaData = (conteoRef[product.id] && conteoRef[product.id][area]) || { enteras: 0, abiertas: [] };
+  const enteras = areaData.enteras || 0;
+  const abiertas = areaData.abiertas || [];
+  const hasData = enteras > 0 || abiertas.some(a => a > 0);
+  const hasExtra = abiertas.length > 1;
+  const isExpanded = expandedCards.has(product.id);
+  const delay = Math.min(idx * 35, 350);
+  const usaConversion = tieneConversion(product);
+
+  let totalFinal = enteras;
+  if (usaConversion) {
+    abiertas.forEach(oz => { totalFinal += convertirOzAPuntos(oz, product.capacidadMl, product.pesoBotellaLlenaOz); });
+  } else {
+    abiertas.forEach(v => { totalFinal += (v || 0); });
+  }
+  const puntosAbiertas = abiertas.map(pesoOz =>
+    usaConversion ? convertirOzAPuntos(pesoOz, product.capacidadMl, product.pesoBotellaLlenaOz) : pesoOz);
+
+  let html = '<div class="inv-card-wrap" id="invcard-wrap-' + escapeHtml(product.id) + '">';
+  html += '<div class="inv-card' + (hasData ? ' has-data' : '') + (areaData.alerta_conflicto ? ' inv-card--conflict' : '') + '"'
+    + ' onclick="openInventarioModal(\'' + escapeHtml(product.id) + '\')"'
+    + ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();openInventarioModal(\'' + escapeHtml(product.id) + '\');}"'
+    + ' role="button" tabindex="0" aria-label="Contar ' + escapeHtml(product.name) + '" style="animation-delay:' + delay + 'ms">';
+  html += '<div class="inv-card__ripple"></div>';
+  html += '<div class="inv-card__header">';
+  html += '<div style="min-width:0;flex:1">';
+  html += '<div class="inv-card__name">' + highlightConteoMatch(product.name, _conteoSearchTerm) + '</div>';
+  html += '<span class="inv-card__group-badge">' + escapeHtml(product.group || 'General') + '</span>';
+  if (areaData.alerta_conflicto) {
+    html += '<div class="inv-card__conflict-badge"><i class="fa-solid fa-triangle-exclamation"></i> Conflicto abierta</div>';
+  }
+  html += '</div>';
+  html += '<span class="inv-card__code" title="Total (enteras + fracciones de abiertas)">' + totalFinal.toFixed(2) + ' u</span>';
+  html += '</div>';
+
+  html += '<div class="inv-card__chips">';
+  html += '<div class="inv-chip entera' + (enteras === 0 ? ' empty' : '') + '">';
+  html += '<span class="inv-chip__val">' + (enteras > 0 ? enteras : '0') + '</span>';
+  html += '<span class="inv-chip__label">Entera</span>';
+  html += '</div>';
+
+  const pt1 = puntosAbiertas.length > 0 ? puntosAbiertas[0] : 0;
+  const ab1Raw = abiertas.length > 0 ? abiertas[0] : 0;
+  const ab1Label = usaConversion ? (pt1 * 100).toFixed(0) + '%' : pt1.toFixed(2);
+  html += '<div class="inv-chip abierta' + (pt1 === 0 ? ' empty' : '') + '">';
+  html += '<span class="inv-chip__val">' + ab1Label + '</span>';
+  html += '<span class="inv-chip__label">' + (usaConversion ? ab1Raw.toFixed(1) + ' oz' : 'Abierta 1') + '</span>';
+  html += '</div>';
+  html += '</div>';
+
+  if (hasExtra) {
+    html += '<div class="inv-card__extra' + (isExpanded ? ' open' : '') + '" id="card-extra-' + escapeHtml(product.id) + '">';
+    puntosAbiertas.slice(1).forEach((pt, i) => {
+      const rawOz = abiertas[i + 1] || 0;
+      const chipLabel = usaConversion ? (pt * 100).toFixed(0) + '%' : pt.toFixed(2);
+      html += '<div class="inv-chip abierta' + (pt === 0 ? ' empty' : '') + '">';
+      html += '<span class="inv-chip__val">' + chipLabel + '</span>';
+      html += '<span class="inv-chip__label">' + (usaConversion ? rawOz.toFixed(1) + ' oz' : 'Abierta ' + (i + 2)) + '</span>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+  if (hasExtra) {
+    html += '<button class="inv-card__expand-btn' + (isExpanded ? ' open' : '') + '" id="card-expand-btn-' + escapeHtml(product.id) + '" onclick="toggleCardExpand(\'' + escapeHtml(product.id) + '\', event)" aria-expanded="' + isExpanded + '">';
+    html += '<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>';
+    html += '<span>' + (isExpanded ? 'Ocultar' : 'Ver más abiertas') + '</span>';
+    html += '<span style="font-size:0.65rem;opacity:0.7;margin-left:2px">(+' + (abiertas.length - 1) + ')</span>';
+    html += '</button>';
+  }
+  html += '</div>'; // .inv-card
+  html += renderAuditTrailForProduct(product.id, area);
+  html += '</div>'; // .inv-card-wrap
+  return html;
+}
+
+/* ── Actualiza SOLO la tarjeta modificada (DOM quirúrgico, sin recargar la lista) ── */
+function _surgicalUpdateInvCard(productId, area) {
+  try {
+    if (!area) { renderTab(); return; }
+    const conteoRef = isAdmin() ? auditoriaConteo : myAuditoriaConteo;
+    const product = products.find(p => p.id === productId);
+    const wrap = document.getElementById('invcard-wrap-' + productId);
+    if (!product || !wrap) { renderTab(); return; } // fallback seguro
+    wrap.outerHTML = _buildInvCardHTML(product, area, conteoRef, 0);
+    const card = document.querySelector('#invcard-wrap-' + CSS.escape(productId) + ' .inv-card');
+    if (card) {
+      card.classList.remove('card-updated');
+      void card.offsetWidth;              // reinicia la animación
+      card.classList.add('card-updated'); // flash verde suave
+      card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+    _refreshConteoCounter(area);          // mantener el contador "Con cantidad X/Y"
+  } catch (e) {
+    console.warn('[Surgical] fallback a renderTab:', e);
+    renderTab();
+  }
+}
+
+/* ── Refresca el contador de productos con cantidad sin re-render total ── */
+function _refreshConteoCounter(area) {
+  const el = document.getElementById('auditCounter');
+  if (!el) return;
+  const conteoRef = isAdmin() ? auditoriaConteo : myAuditoriaConteo;
+  const ingresados = products.filter(p => conteoRef[p.id] && conteoRef[p.id][area] &&
+    (conteoRef[p.id][area].enteras > 0 || (conteoRef[p.id][area].abiertas || []).some(a => a > 0))).length;
+  el.innerHTML = ingresados + '<span style="font-size:0.65rem;font-weight:500;color:var(--txt-muted);">/' + products.length + '</span>';
+}
 
         // ── Pantalla 2: Conteo de un área específica ───────────────────────────
         function renderAuditoriaConteo() {
@@ -9985,7 +9844,8 @@ document.body.appendChild(overlay);
             const ingresados = products.filter(p => conteoRef[p.id] && conteoRef[p.id][area] && (conteoRef[p.id][area].enteras > 0 || (conteoRef[p.id][area].abiertas || []).some(a => a > 0))).length;
             html += '<div style="text-align:right;">';
             html += '<div style="font-size:0.65rem;font-weight:600;color:var(--txt-muted);">Con cantidad</div>';
-            html += '<div style="font-family:\'IBM Plex Mono\',monospace;font-weight:700;font-size:1rem;color:var(--accent);">' + ingresados + '<span style="font-size:0.65rem;font-weight:500;color:var(--txt-muted);">/' + products.length + '</span></div>';
+            html += '<div id="auditCounter" style="font-family:\'IBM Plex Mono\',monospace;font-weight:700;font-size:1rem;color:var(--accent);">' + ingresados + '<span style="font-size:0.65rem;font-weight:500;color:var(--txt-muted);">/' + products.length + '</span></div>';
+
             html += '</div>';
             html += '</div></div>'; // end audit-count-header
 
@@ -10118,94 +9978,10 @@ document.body.appendChild(overlay);
                 html += '<p class="text-gray-500 text-sm">No hay productos en este grupo</p>';
                 html += '</div>';
             } else {
-                filteredProducts.forEach((product, idx) => {
-                    // Leer conteo de auditoría (no del inventario operativo)
-                    const areaData = (conteoRef[product.id] && conteoRef[product.id][area]) || { enteras: 0, abiertas: [] };
-                    const enteras  = areaData.enteras || 0;
-                    const abiertas = areaData.abiertas || [];
-                    const hasData  = enteras > 0 || abiertas.some(a => a > 0);
-                    const hasExtra = abiertas.length > 1;
-                    const isExpanded = expandedCards.has(product.id);
-                    const delay = Math.min(idx * 35, 350);
-                    const usaConversion = tieneConversion(product);
+               filteredProducts.forEach((product, idx) => {
+  html += _buildInvCardHTML(product, area, conteoRef, idx);
+});
 
-                    // Total con conversión
-                    let totalFinal = enteras;
-                    if (usaConversion) {
-                        abiertas.forEach(oz => { totalFinal += convertirOzAPuntos(oz, product.capacidadMl, product.pesoBotellaLlenaOz); });
-                    } else {
-                        abiertas.forEach(v => { totalFinal += (v || 0); });
-                    }
-
-                    const puntosAbiertas = abiertas.map(pesoOz =>
-                        usaConversion
-                            ? convertirOzAPuntos(pesoOz, product.capacidadMl, product.pesoBotellaLlenaOz)
-                            : pesoOz
-                    );
-
-                    // FIX #4: onkeydown para activar la tarjeta con Enter/Espacio desde teclado
-                    html += '<div class="inv-card' + (hasData ? ' has-data' : '') + (areaData.alerta_conflicto ? ' inv-card--conflict' : '') + '"'
-                          + ' onclick="openInventarioModal(\'' + escapeHtml(product.id) + '\')"'
-                          + ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();openInventarioModal(\'' + escapeHtml(product.id) + '\');}"'
-                          + ' role="button" tabindex="0" aria-label="Contar ' + escapeHtml(product.name) + '" style="animation-delay:' + delay + 'ms">';
-                    html += '<div class="inv-card__ripple"></div>';
-
-                    html += '<div class="inv-card__header">';
-                    html += '<div style="min-width:0;flex:1">';
-                    html += '<div class="inv-card__name">' + highlightConteoMatch(product.name, _conteoSearchTerm) + '</div>';
-                    html += '<span class="inv-card__group-badge">' + escapeHtml(product.group || 'General') + '</span>';
-                    if (areaData.alerta_conflicto) {
-                        html += '<div class="inv-card__conflict-badge"><i class="fa-solid fa-triangle-exclamation"></i> Conflicto abierta</div>';
-                    }
-                    html += '</div>';
-                    html += '<span class="inv-card__code" title="Total (enteras + fracciones de abiertas)">' + totalFinal.toFixed(2) + ' u</span>';
-                    html += '</div>';
-
-                    html += '<div class="inv-card__chips">';
-                    html += '<div class="inv-chip entera' + (enteras === 0 ? ' empty' : '') + '">';
-                    html += '<span class="inv-chip__val">' + (enteras > 0 ? enteras : '0') + '</span>';
-                    html += '<span class="inv-chip__label">Entera</span>';
-                    html += '</div>';
-
-                    const pt1 = puntosAbiertas.length > 0 ? puntosAbiertas[0] : 0;
-                    const ab1Raw = abiertas.length > 0 ? abiertas[0] : 0;
-                    const ab1Label = usaConversion ? (pt1 * 100).toFixed(0) + '%' : pt1.toFixed(2);
-                    html += '<div class="inv-chip abierta' + (pt1 === 0 ? ' empty' : '') + '">';
-                    html += '<span class="inv-chip__val">' + ab1Label + '</span>';
-                    html += '<span class="inv-chip__label">' + (usaConversion ? ab1Raw.toFixed(1) + ' oz' : 'Abierta 1') + '</span>';
-                    html += '</div>';
-
-                    html += '</div>'; // FIX-3: cierre de .inv-card__chips ANTES de chips extra
-
-                    if (hasExtra) {
-                        // FIX-3: wrap chips extra en .inv-card__extra con id="card-extra-{id}"
-                        // para que toggleCardExpand() lo encuentre y aplique la clase .open
-                        html += '<div class="inv-card__extra' + (isExpanded ? ' open' : '') + '" id="card-extra-' + escapeHtml(product.id) + '">';
-                        puntosAbiertas.slice(1).forEach((pt, i) => {
-                            const rawOz = abiertas[i + 1] || 0;
-                            const chipLabel = usaConversion ? (pt * 100).toFixed(0) + '%' : pt.toFixed(2);
-                            html += '<div class="inv-chip abierta' + (pt === 0 ? ' empty' : '') + '">';
-                            html += '<span class="inv-chip__val">' + chipLabel + '</span>';
-                            html += '<span class="inv-chip__label">' + (usaConversion ? rawOz.toFixed(1) + ' oz' : 'Abierta ' + (i + 2)) + '</span>';
-                            html += '</div>';
-                        });
-                        html += '</div>'; // close .inv-card__extra
-                    }
-
-                    if (hasExtra) {
-                        html += '<button class="inv-card__expand-btn' + (isExpanded ? ' open' : '') + '" id="card-expand-btn-' + escapeHtml(product.id) + '" onclick="toggleCardExpand(\'' + escapeHtml(product.id) + '\', event)" aria-expanded="' + isExpanded + '">';
-                        html += '<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>';
-                        html += '<span>' + (isExpanded ? 'Ocultar' : 'Ver más abiertas') + '</span>';
-                        html += '<span style="font-size:0.65rem;opacity:0.7;margin-left:2px">(+' + (abiertas.length - 1) + ')</span>';
-                        html += '</button>';
-                    }
-                    html += '</div>'; // inv-card
-
-                    // ── Trail multiusuario (quién contó, cuánto, cuándo, diferencias) ──
-                    html += renderAuditTrailForProduct(product.id, area); // FIX-04: usa var local en lugar de global
-                });
-            }
-            html += '</div>'; // flex flex-col gap-3
 
             // ── Botón FINALIZAR ÁREA ──────────────────────────────────────────
             // FIX #4 — Solo mostrar si el área no está completada (o si es admin)
@@ -10446,8 +10222,10 @@ document.body.appendChild(overlay);
         function closeProductModal() {
             const modal = document.getElementById('productModal');
             if (modal._trapHandler) { modal.removeEventListener('keydown', modal._trapHandler); modal._trapHandler = null; }
-            modal.classList.add('hidden');
-            document.body.classList.remove('modal-open');
+             modal.classList.add('hidden');
+  document.body.classList.remove('modal-open');
+  window.scrollTo(0, _savedScrollBeforeModal); // evita el salto al inicio
+
             editingProductId = null;
         }
 

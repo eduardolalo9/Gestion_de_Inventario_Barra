@@ -28,41 +28,7 @@ service cloud.firestore {
 
       match /ordersChunks/{chunkId}      { allow read: if estaAutenticado(); allow write: if estaAutenticado(); }
       match /inventoriesChunks/{chunkId} { allow read: if estaAutenticado(); allow write: if estaAutenticado(); }
-
-      match /stockAreas/{area} {
-        // Documento por-área heredado — se conserva de solo escritura
-        // amplia únicamente para el script de migración (migrarStockAreasAProductos)
-        // y para lectura de compatibilidad de dispositivos aún no migrados.
-        // El conteo regular ya NO se escribe aquí — ver /productos/{productId}.
-        allow read:  if estaAutenticado();
-        allow write: if estaAutenticado();
-
-        // MIGRACIÓN MÍNIMA — CONCURRENCIA SEGURA: un documento por producto,
-        // con optimistic locking. `create` exige version==1 (primer conteo
-        // de ese producto en esa área, desde cualquier dispositivo);
-        // `update` exige que la versión nueva sea exactamente version_actual+1
-        // — si otro dispositivo ya escribió una versión más reciente, esta
-        // condición falla y Firestore RECHAZA la escritura, en vez de
-        // aceptarla y sobrescribir en silencio el valor del otro usuario.
-        match /productos/{productId} {
-          allow read: if estaAutenticado();
-
-          allow create: if estaAutenticado()
-                        && request.resource.data.version == 1
-                        && request.resource.data.enteras is number
-                        && request.resource.data.enteras >= 0
-                        && request.resource.data.actualizadoPor is string;
-
-          allow update: if estaAutenticado()
-                        && request.resource.data.version == resource.data.version + 1
-                        && request.resource.data.enteras is number
-                        && request.resource.data.enteras >= 0
-                        && request.resource.data.actualizadoPor is string;
-
-          allow delete: if esAdmin();
-        }
-      }
-
+      match /stockAreas/{area}           { allow read: if estaAutenticado(); allow write: if estaAutenticado(); }
       match /conteoMultiUsuario/{id}     { allow read: if estaAutenticado(); allow write: if estaAutenticado(); }
 
       match /conteoAreas/{area} {
