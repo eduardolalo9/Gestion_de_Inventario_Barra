@@ -11913,6 +11913,19 @@ document.body.appendChild(overlay);
             // Actualizar email visible en el sidebar
             const emailEl = $id('sbUserEmail');
             if (emailEl && user) emailEl.textContent = user.email;
+
+            // FIX-SEC-6: aviso de email sin verificar. Deliberadamente NO
+            // bloquea el acceso — el sistema fue provisionado originalmente
+            // sin exigir verificación, y convertir esto en un bloqueo duro
+            // dejaría fuera a usuarios reales ya operando hoy. Se muestra
+            // una sola vez por sesión como visibilidad, no como control de
+            // acceso — endurecerlo a bloqueo requiere coordinarse primero
+            // con la base de usuarios existente.
+            if (user && user.emailVerified === false) {
+                setTimeout(function() {
+                    showNotification('⚠️ Tu email no está verificado — revisa tu bandeja de entrada.');
+                }, 1500);
+            }
         }
 
         /* ── onAuthStateChanged — persistencia de sesión ─────────── */
