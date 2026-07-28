@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es-MX">
 <head>
@@ -7049,6 +7050,31 @@ const usersList = Object.values(allUsersAuditoria);
                         auditoriaView      = 'selection';
                         auditoriaAreaActiva = null;
                         isAuditoriaMode    = false;
+
+                        // FIX-ADMIN-SYNC (caso reportado: "dos admin en dos
+                        // dispositivos, uno inicia auditoría, el otro no lo ve"):
+                        // subscribeAllUsersAuditoria() filtra cada documento por
+                        // `data.sessionId !== _auditoriaSessionId` (línea ~6602).
+                        // Ese filtro usa el valor de _auditoriaSessionId que YA
+                        // TENÍA cargado en memoria en el momento en que llegó su
+                        // último snapshot — que puede ser anterior a esta misma
+                        // actualización, porque subscribeMainDoc (que llega aquí)
+                        // y subscribeAllUsersAuditoria son dos listeners
+                        // independientes, sin garantía de orden entre ellos.
+                        // Resultado: un segundo admin podía ver su PROPIO conteo
+                        // reiniciado correctamente, pero el panel agregado
+                        // (allUsersAuditoria) seguía mostrando datos de la sesión
+                        // vieja hasta que algo más disparara ese listener de nuevo
+                        // — a veces nunca, si nadie volvía a escribir en esa
+                        // colección. Se corrige limpiando la vista agregada de
+                        // inmediato y re-suscribiendo con el _auditoriaSessionId
+                        // ya actualizado, para que el filtro se reevalúe con el
+                        // valor correcto sin depender de que llegue otro evento.
+                        if (isAdmin()) {
+                            allUsersAuditoria = {};
+                            subscribeAllUsersAuditoria();
+                        }
+
                         console.info('[AuditSession] Nueva sesión detectada — conteo reiniciado');
                         // La notificación se mostrará al final del renderTab
                         setTimeout(function() {
