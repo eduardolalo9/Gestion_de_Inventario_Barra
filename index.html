@@ -12202,6 +12202,7 @@ document.body.appendChild(overlay);
                     const toImport = [];
                     const usedInBatch = new Set();
                     let skipped = 0;
+                    let valoresCorregidos = 0; // FIX AUDITORÍA MAESTRA: cuántas filas traían un valor no físico (negativo/cero) que se descartó
 
                     jsonData.forEach((row) => {
                         // ── Nombre (obligatorio) ──────────────────────────────
@@ -12230,22 +12231,38 @@ document.body.appendChild(overlay);
                         const group = groupRaw !== undefined ? String(groupRaw).trim() : 'General';
 
                         // ── Stock (enteras almacén) ──────────────────────────
+                        // FIX AUDITORÍA MAESTRA (Sección 20 — "no permitir
+                        // valores negativos"): parseExcelNumber ya descarta
+                        // NaN/Infinity/fechas, pero SÍ dejaba pasar negativos
+                        // legítimos (ej. "-5" en una celda) directo al
+                        // inventario. Un stock negativo no tiene sentido
+                        // físico y corrompería calcularStockTotal() /
+                        // calcularTotalMultiUsuario() aguas abajo.
                         const stockRaw = findCol(row, columnMap.stock);
-                        const stock = stockRaw !== undefined ? parseExcelNumber(stockRaw) : 0;
+                        let stock = stockRaw !== undefined ? parseExcelNumber(stockRaw) : 0;
+                        if (stock < 0) { stock = 0; valoresCorregidos++; }
 
                         // ── CapacidadML — parseFloat + null si vacío ─────────
                         // Se usa parseFloat (no parseExcelNumber) para respetar
-                        // exactamente el valor numérico del Excel sin conversiones
+                        // exactamente el valor numérico del Excel sin conversiones.
+                        // FIX AUDITORÍA MAESTRA: una capacidad ≤0 no es físicamente
+                        // válida (rompería calcularContenidoMl/calcularStockTotal,
+                        // que dividen usando este valor) — se descarta como si no
+                        // se hubiera provisto, en vez de dejar pasar 0 o negativo.
                         const capRaw = findCol(row, columnMap.capacidadMl);
-                        const capacidadMl = (capRaw !== undefined)
+                        let capacidadMl = (capRaw !== undefined)
                             ? (isNaN(parseFloat(capRaw)) ? null : parseFloat(capRaw))
                             : null;
+                        if (capacidadMl !== null && capacidadMl <= 0) { capacidadMl = null; valoresCorregidos++; }
 
                         // ── PesoBotellaOz — parseFloat + null si vacío ───────
+                        // FIX AUDITORÍA MAESTRA: mismo criterio — un peso ≤0 no
+                        // es físicamente válido.
                         const pesoRaw = findCol(row, columnMap.pesoBotellaLlenaOz);
-                        const pesoBotellaLlenaOz = (pesoRaw !== undefined)
+                        let pesoBotellaLlenaOz = (pesoRaw !== undefined)
                             ? (isNaN(parseFloat(pesoRaw)) ? null : parseFloat(pesoRaw))
                             : null;
+                        if (pesoBotellaLlenaOz !== null && pesoBotellaLlenaOz <= 0) { pesoBotellaLlenaOz = null; valoresCorregidos++; }
 
                         // ── Construir producto ────────────────────────────────
                         const product = {
@@ -12263,7 +12280,9 @@ document.body.appendChild(overlay);
                     });
 
                     products = products.concat(toImport);
-                    showNotification(toImport.length + ' productos importados.' + (skipped ? ' ' + skipped + ' filas omitidas por falta de nombre.' : ''));
+                    showNotification(toImport.length + ' productos importados.'
+                        + (skipped ? ' ' + skipped + ' filas omitidas por falta de nombre.' : '')
+                        + (valoresCorregidos ? ' ⚠️ ' + valoresCorregidos + ' valor(es) no físico(s) (negativo/cero) descartado(s).' : ''));
                     activeTab = 'inicio';
                     selectedGroup = 'Todos';
                     searchTerm = '';
