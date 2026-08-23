@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es-MX">
 <head>
@@ -205,43 +204,192 @@ const firebaseConfig = {
              • Solo un admin puede cambiar el campo 'role' de otros usuarios.
              • Un usuario autenticado puede leer y actualizar su propio doc
                ÚNICAMENTE si no cambia 'role' (campo protegido).
+           FIX ETAPA 14.1 (ROLES + PERMISOS):
+             • isAdminUser() ahora reconoce TANTO el valor legacy 'admin' COMO
+               el nuevo valor canónico 'ADMIN' — durante la migración conviven
+               usuarios con uno u otro valor, y ambos deben conservar
+               autoridad administrativa también a nivel de Rules (no solo en
+               el cliente).
+             • 'create' del propio doc de usuario acepta 'user' O 'BARTENDER'
+               como valor de rol por defecto (el cliente hoy sigue escribiendo
+               'user' — ver loadUserRole en el HTML — pero la regla admite
+               ambos por compatibilidad hacia adelante).
+             • 'update' del propio doc ahora protege TAMBIÉN
+               'permissionOverrides', con el mismo patrón que ya protegía
+               'role': un usuario normal no puede otorgarse ni denegarse
+               permisos a sí mismo.
+             • Nueva colección roles/{roleId}: lectura para cualquier
+               autenticado (necesaria para resolver permisos), escritura solo
+               admin, y protección mínima para que ADMIN nunca pierda su
+               comodín '*' por una edición accidental.
+           FIX ETAPA 14.1.1 (SINCRONIZACIÓN EN TIEMPO REAL):
+             • 'update' del propio doc ahora protege TAMBIÉN 'status' — se
+               detectó durante esta etapa que, sin esto, un usuario al que un
+               admin marca status='inactivo' podía escribirse a sí mismo
+               status='activo' y revertir su propia desactivación. Como esta
+               etapa es la que por primera vez hace que 'status' tenga efecto
+               real (invalida el contexto de autorización en tiempo real —
+               ver _actualizarAuthzState en el HTML), dejar el campo sin
+               proteger habría vuelto inútil esa protección. Mismo patrón que
+               ya protegía 'role'/'permissionOverrides', sin mecanismo nuevo.
+           FIX MICROFASE P0.2 (OPTIMISTIC LOCKING REAL + PRECEDENCIA):
+             • stockAreas/{area}/productos/{productId} ya NO cae bajo un
+               wildcard genérico sin condición — ahora exige version==1 en
+               creación y version==version_anterior+1 en cada actualización.
+               Firestore rechaza cualquier otro valor (version vieja, misma
+               version, salto de version, retroceso) de forma NATIVA y
+               SERVER-SIDE — antes esta protección solo existía como
+               suposición incorrecta en un comentario de código JS, sin
+               ningún respaldo real en las Rules.
+             • HALLAZGO ADICIONAL DURANTE ESTA MICROFASE: el wildcard
+               genérico que existía antes (match /{subcoll}/{subId} {...})
+               también anulaba en la práctica la protección específica de
+               userAuditoria/{uid} de más abajo. Firestore concede acceso si
+               CUALQUIERA de las reglas que coinciden con una ruta lo
+               permite (unión / OR) — NO "la regla más específica gana". Un
+               wildcard de 1 nivel con 'allow read, write: if request.auth
+               != null' coincide también con userAuditoria/{uid} (subcoll=
+               'userAuditoria', subId=uid), así que esa condición permisiva
+               SIEMPRE ganaba sobre la condición más estricta de la regla
+               específica, sin importar lo que esta última dijera. Esto NO
+               fue introducido por ninguna etapa reciente — es preexistente
+               desde que se agregó el wildcard — pero una auditoría previa
+               (14.1.2) lo pasó por alto y afirmó incorrectamente que
+               userAuditoria/{uid} "sí estaba protegida"; se corrige aquí.
+             • Solución: se eliminó el wildcard genérico y se enumeran
+               explícitamente las subcolecciones de soporte/legacy que sí
+               deben seguir siendo permisivas (conteoMultiUsuario,
+               conteoAreas/dispositivos, conflictos, cambios, ordersChunks,
+               inventoriesChunks — verificadas una por una contra el código
+               real, ninguna inventada). stockAreas y userAuditoria tienen
+               ahora sus propias reglas, sin ningún wildcard hermano que
+               pueda volver a anularlas.
            ══════════════════════════════════════════════════════════════════════
            rules_version = '2';
            service cloud.firestore {
              match /databases/{database}/documents {
                function isAdminUser() {
                  return request.auth != null &&
-                   get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role == 'admin';
+                   get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role in ['admin', 'ADMIN'];
+               }
+               // FIX MICROFASE P0.2: valida la forma exacta que
+               // syncConteoProductoAtomico() y migrarStockAreasAProductos()
+               // ya escriben hoy (verificado contra el código real, no
+               // inventado) — nunca exige campos que el cliente no envía.
+               function _datosConteoValidos(data) {
+                 return data.keys().hasAll(['enteras','abiertas','version','actualizadoPor','ts'])
+                   && data.enteras is number && data.enteras >= 0
+                   && data.abiertas is list
+                   && data.version is int && data.version >= 1;
                }
                // FIX-SECURITY CRÍTICO: Evitar auto-escalación a admin.
-               // - Un usuario puede crear su propio doc solo con role='user'.
-               // - Un usuario puede actualizar su propio doc solo si NO cambia 'role'.
-               // - Solo un admin puede cambiar el campo 'role' de cualquier usuario.
+               // - Un usuario puede crear su propio doc solo con role='user' (o 'BARTENDER').
+               // - Un usuario puede actualizar su propio doc solo si NO cambia role/permissionOverrides/status.
+               // - Solo un admin puede cambiar esos campos de cualquier usuario.
                match /usuarios/{uid} {
                  allow get:    if request.auth != null && (request.auth.uid == uid || isAdminUser());
                  allow list:   if isAdminUser();
                  allow create: if request.auth != null && request.auth.uid == uid
-                                  && request.resource.data.role == 'user';
+                                  && request.resource.data.role in ['user', 'BARTENDER'];
                  allow update: if request.auth != null && (
                                   // Admin puede cambiar cualquier campo
                                   isAdminUser()
-                                  // Usuario solo puede actualizar si role NO cambia
-                                  || (request.auth.uid == uid && !('role' in request.resource.data.diff(resource.data).affectedKeys()))
+                                  // Usuario solo puede actualizar si NO cambia role, permissionOverrides ni status
+                                  || (request.auth.uid == uid
+                                      && !('role' in request.resource.data.diff(resource.data).affectedKeys())
+                                      && !('permissionOverrides' in request.resource.data.diff(resource.data).affectedKeys())
+                                      && !('status' in request.resource.data.diff(resource.data).affectedKeys()))
                                );
                  allow delete: if isAdminUser();
+               }
+               // FIX ETAPA 14.1: catálogo de roles del sistema. Lectura abierta
+               // a cualquier autenticado (todo usuario necesita poder resolver
+               // los permisos de SU PROPIO rol); escritura solo admin.
+               match /roles/{roleId} {
+                 allow read:   if request.auth != null;
+                 allow create: if isAdminUser();
+                 allow update: if isAdminUser() &&
+                                  !(roleId == 'ADMIN' && !('*' in request.resource.data.permissions));
+                 allow delete: if false; // los roles de sistema no se eliminan en esta etapa
                }
                match /catalogo/{docId} {
                  allow read:  if request.auth != null;
                  allow write: if isAdminUser();
                }
                match /inventarioApp/{docId} {
-                 allow read, write: if request.auth != null;
-                 match /{subcoll}/{subId} {
+                 allow read, write: if request.auth != null; // el documento raíz en sí — sin cambios
+
+                 // FIX MICROFASE P0.2: subcolecciones de soporte/legacy que
+                 // NO requieren version-checking ni restricción por uid —
+                 // enumeradas EXPLÍCITAMENTE (verificadas contra el código
+                 // real: _flushSyncQueueToFirestore, syncConteoPorUsuarioToFirestore,
+                 // resetConteoAtomicoEnFirestore, _registrarConflictos,
+                 // _writeChunkedSubcollection) en vez de un wildcard genérico,
+                 // precisamente para que ese wildcard no vuelva a anular las
+                 // reglas específicas de stockAreas/userAuditoria de abajo.
+                 match /conteoMultiUsuario/{area} {
                    allow read, write: if request.auth != null;
-                   match /{deep}/{deepId} { allow read, write: if request.auth != null; }
                  }
-                 // FIX 6 SEGURIDAD: cada usuario solo escribe SU propio doc de auditoría.
-                 // El admin puede leer/escribir todos (para ver conteos y otorgar unlocks).
+                 match /conteoAreas/{area} {
+                   allow read, write: if request.auth != null;
+                   match /dispositivos/{deviceId} {
+                     allow read, write: if request.auth != null;
+                   }
+                 }
+                 match /conflictos/{conflictoId} {
+                   allow read, write: if request.auth != null;
+                 }
+                 match /cambios/{cambioId} {
+                   allow read, write: if request.auth != null;
+                 }
+                 match /ordersChunks/{chunkId} {
+                   allow read, write: if request.auth != null;
+                 }
+                 match /inventoriesChunks/{chunkId} {
+                   allow read, write: if request.auth != null;
+                 }
+
+                 // FIX MICROFASE P0.2 (CRÍTICO — Optimistic Locking real):
+                 // Antes caía bajo el wildcard genérico, sin ningún chequeo.
+                 // Ahora Firestore exige version==1 al crear y
+                 // version==version_anterior+1 en cada actualización, y
+                 // rechaza cualquier otro valor — versión vieja, misma
+                 // versión, salto de versión o retroceso. Dos dispositivos
+                 // escribiendo version+1 sobre el mismo estado base: SOLO
+                 // uno gana; el otro recibe un error real de Firestore que
+                 // syncConteoProductoAtomico() ya sabía interpretar como
+                 // conflicto (ver _registrarConflictoVersion en el HTML) —
+                 // ese manejo en JS ya existía, solo esperaba un rechazo que
+                 // hasta ahora nunca ocurría.
+                 // Sin 'allow delete': un conteo nunca se borra (no existe
+                 // ningún .delete() sobre esta ruta en el código real).
+                 // FIX P0.3 (hallazgo de esta etapa de validación): el
+                 // cliente (syncConteoProductoAtomico → _leerConteoProducto)
+                 // ya asumía defensivamente que un documento SIN campo
+                 // 'version' equivale a versión base 0 ("actual.version ||
+                 // 0"). La regla original de 'update' no contemplaba ese
+                 // caso: 'resource.data.version + 1' sobre un documento sin
+                 // ese campo evalúa a error → Firestore deniega SIEMPRE,
+                 // dejando ese documento bloqueado para cualquier
+                 // actualización futura hasta corregirlo manualmente. Ahora
+                 // la regla usa la MISMA convención que el cliente (versión
+                 // ausente = 0), consistente en ambos lados.
+                 match /stockAreas/{area}/productos/{productId} {
+                   allow read: if request.auth != null;
+                   allow create: if request.auth != null
+                     && _datosConteoValidos(request.resource.data)
+                     && request.resource.data.version == 1;
+                   allow update: if request.auth != null
+                     && _datosConteoValidos(request.resource.data)
+                     && request.resource.data.version ==
+                        (('version' in resource.data) ? resource.data.version : 0) + 1;
+                 }
+
+                 // FIX 6 SEGURIDAD (intención sin cambios): cada usuario solo
+                 // escribe SU propio doc de auditoría; el admin puede
+                 // leer/escribir todos. FIX MICROFASE P0.2: esta regla ahora
+                 // SÍ es la única que aplica sobre esta ruta — ya no convive
+                 // con un wildcard hermano más permisivo que la anulaba.
                  match /userAuditoria/{uid} {
                    allow read:  if request.auth != null && (request.auth.uid == uid || isAdminUser());
                    allow write: if request.auth != null && (request.auth.uid == uid || isAdminUser());
@@ -3438,6 +3586,178 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
             return o;
         }
 
+        // ══════════════════════════════════════════════════════════════════════
+        //  SESSION MANAGER — FASE 1: INFRAESTRUCTURA ÚNICAMENTE
+        //  ────────────────────────────────────────────────────────────────────
+        //  Este módulo NO controla la sesión todavía. onAuthStateChanged(),
+        //  loadUserRole() e initializeApp() siguen siendo, hoy, los únicos
+        //  responsables reales del arranque — sin ningún cambio en su lógica
+        //  ni en el orden en que se ejecutan. Ningún método de SessionManager
+        //  es invocado desde ningún punto del flujo real de la aplicación en
+        //  esta fase.
+        //
+        //  Cada método de solo lectura (restoreSession, compareSession,
+        //  isReady) SÍ reporta información real, leyendo las variables
+        //  globales existentes tal como están — sin duplicar su lógica ni
+        //  producir ningún efecto secundario. Los métodos que en una fase
+        //  futura tendrían efectos reales (registerListeners,
+        //  unregisterListeners, restoreAudit, clearOldState) están definidos
+        //  como contenedores documentados, listos para que una fase
+        //  posterior — con autorización explícita — los conecte por
+        //  composición a las funciones ya existentes (subscribeMainDoc,
+        //  loadUserRole, etc.), sin tener que reescribirlas.
+        //
+        //  Objetivo de esta fase, únicamente: que el módulo exista, compile,
+        //  se pueda instanciar sin error, y quede listo para recibir
+        //  responsabilidades — no que las ejerza todavía.
+        // ══════════════════════════════════════════════════════════════════════
+        const SessionManager = (function() {
+
+            // Estado interno, privado al propio módulo — no interfiere con
+            // ninguna variable global existente.
+            let _initialized = false;
+            let _ready = false;
+            let _registeredListenerNames = [];
+
+            /**
+             * init()
+             * Prepara el estado interno del SessionManager. No toca Firebase
+             * Auth, no toca Firestore, no dispara ningún listener. Idempotente
+             * — seguro de llamar cualquier cantidad de veces.
+             */
+            function init() {
+                _initialized = true;
+                _ready = false;
+                console.info('[SessionManager] init() — infraestructura preparada (Fase 1, inactivo).');
+                return { initialized: _initialized };
+            }
+
+            /**
+             * start()
+             * FASE 1: no orquesta el arranque todavía. En una fase futura,
+             * con autorización explícita, aquí es donde se llamaría en
+             * secuencia a restoreSession() → compareSession() →
+             * restoreAudit() → registerListeners() — reemplazando la
+             * orquestación que hoy vive repartida entre onAuthStateChanged
+             * y loadUserRole(). Por ahora es un contenedor sin efecto.
+             */
+            function start() {
+                if (!_initialized) init();
+                console.info('[SessionManager] start() — Fase 1: sin efecto. El arranque real sigue '
+                    + 'a cargo de onAuthStateChanged()/loadUserRole()/initializeApp(), sin cambios.');
+                return { started: false, reason: 'fase_1_infraestructura_unicamente' };
+            }
+
+            /**
+             * destroy()
+             * Limpia únicamente el estado interno de este módulo. No cierra
+             * ningún listener real todavía (ver unregisterListeners()).
+             */
+            function destroy() {
+                _initialized = false;
+                _ready = false;
+                _registeredListenerNames = [];
+                console.info('[SessionManager] destroy() — estado interno limpiado.');
+            }
+
+            /**
+             * restoreSession()
+             * Wrapper de SOLO LECTURA: reporta el estado de sesión ya
+             * determinado por el flujo real existente (Firebase Auth y las
+             * variables globales que loadUserRole() ya mantiene), sin
+             * volver a ejecutar ni duplicar esa lógica.
+             */
+            function restoreSession() {
+                const user = (typeof _auth !== 'undefined' && _auth && _auth.currentUser)
+                    ? _auth.currentUser : null;
+                return {
+                    uid:  user ? user.uid : ((typeof currentUserUid !== 'undefined') ? currentUserUid : null),
+                    role: (typeof currentUserRole !== 'undefined') ? currentUserRole : null,
+                    restauradoPorSessionManager: false // Fase 1: informativo únicamente
+                };
+            }
+
+            /**
+             * compareSession(sessionIdRemoto)
+             * Wrapper de SOLO LECTURA sobre la comparación de sesión que hoy
+             * ya existe dentro de _applyCloudData(). No la reemplaza — la
+             * reutiliza para reportar el resultado, sin ningún efecto
+             * secundario ni limpieza de estado.
+             */
+            function compareSession(sessionIdRemoto) {
+                const actual = (typeof _auditoriaSessionId !== 'undefined') ? _auditoriaSessionId : null;
+                return {
+                    local:    actual,
+                    remoto:   sessionIdRemoto,
+                    coincide: actual === sessionIdRemoto
+                };
+            }
+
+            /**
+             * registerListeners()
+             * FASE 1: contenedor documentado, sin efecto — no invoca
+             * subscribeMainDoc() ni ningún otro listener real todavía.
+             * loadUserRole() sigue siendo, hoy, quien los registra.
+             */
+            function registerListeners() {
+                console.info('[SessionManager] registerListeners() — Fase 1: definido pero no '
+                    + 'invocado por el flujo real todavía.');
+                return { registrados: _registeredListenerNames.slice(), fase: 1 };
+            }
+
+            /**
+             * unregisterListeners()
+             * Simétrico al anterior — sin efecto en esta fase.
+             */
+            function unregisterListeners() {
+                console.info('[SessionManager] unregisterListeners() — Fase 1: sin efecto todavía.');
+                return { liberados: [], fase: 1 };
+            }
+
+            /**
+             * restoreAudit()
+             * FASE 1: sin efecto. Placeholder para la apertura automática de
+             * la auditoría activa — funcionalidad NUEVA que hoy no existe en
+             * la aplicación y que corresponde a una fase posterior, con
+             * autorización explícita por separado.
+             */
+            function restoreAudit() {
+                console.info('[SessionManager] restoreAudit() — Fase 1: sin efecto '
+                    + '(funcionalidad nueva, pendiente de autorización).');
+                return { auditoriaAbierta: null, fase: 1 };
+            }
+
+            /**
+             * clearOldState()
+             * FASE 1: sin efecto — no toca inventarioConteo, myAuditoriaConteo,
+             * localStorage, IndexedDB ni ninguna estructura de datos existente.
+             */
+            function clearOldState() {
+                console.info('[SessionManager] clearOldState() — Fase 1: sin efecto todavía.');
+                return { limpiado: false, fase: 1 };
+            }
+
+            /**
+             * isReady()
+             * Único estado que este módulo gestiona de forma real en esta
+             * fase: si el propio SessionManager fue inicializado. No indica
+             * nada sobre si la sesión de la aplicación está lista — eso
+             * seguirá siendo responsabilidad del flujo actual hasta que una
+             * fase futura conecte este módulo.
+             */
+            function isReady() {
+                return _ready;
+            }
+
+            return {
+                init, start, destroy,
+                restoreSession, compareSession,
+                registerListeners, unregisterListeners,
+                restoreAudit, clearOldState,
+                isReady
+            };
+        })();
+
         // ── AUDITORÍA FÍSICA CIEGA ────────────────────────────────────────────
         let auditoriaView = 'selection'; // 'selection' | 'counting'
         let auditoriaAreaActiva = null;
@@ -6506,6 +6826,167 @@ function _idbPruneSyncedQueue() {
             if (msg) showNotification(msg);
             renderTab();
         }
+        // NOTA: tras la unificación de abajo, _resetMiConteoLocal() ya no
+        // tiene ningún punto de llamada — se conserva sin eliminar (no se
+        // borra código existente en esta fase) por si una fase futura
+        // decide reutilizarla; su lógica está ahora duplicada de forma
+        // intencional y correcta dentro de handleAuditSessionChange().
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  AUTORIDAD CENTRAL DE CAMBIO DE SESIÓN DE AUDITORÍA
+        //  ────────────────────────────────────────────────────────────────────
+        //  Unifica lo que antes eran DOS implementaciones independientes:
+        //    · _applyCloudData()     comparaba inventarioApp/{docId}._auditoriaSessionId
+        //    · subscribeMyAuditoria() comparaba userAuditoria/{uid}.sessionId,
+        //                              vía _resetMiConteoLocal()
+        //  Ambas rutas de DETECCIÓN se conservan intactas — cada listener
+        //  sigue recibiendo su propio snapshot de Firestore exactamente igual
+        //  que antes — pero ninguna de las dos vuelve a decidir por su cuenta
+        //  qué limpiar ni cuándo. Las dos delegan aquí.
+        //
+        //  Por qué es SÍNCRONA a propósito (sin await antes de completar su
+        //  trabajo): en JavaScript, dos callbacks de onSnapshot que "llegan
+        //  casi al mismo tiempo" nunca se ejecutan en paralelo de verdad — el
+        //  bucle de eventos los procesa uno a la vez, hasta el final de cada
+        //  función síncrona. Mientras esta función no ceda el hilo antes de
+        //  actualizar _auditoriaSessionId, ninguna segunda llamada puede
+        //  colarse a mitad de un procesamiento — es lo que la hace idempotente
+        //  sin necesitar ningún mecanismo de bloqueo adicional.
+        //
+        //  Qué NO toca, nunca, bajo ninguna rama: products, cart, orders,
+        //  inventories, inventarioConteo (conteo regular — no es auditoría),
+        //  catálogo, configuración, ni ninguna estructura de datos permanente.
+        //  Solo limpia el estado que pertenece exclusivamente a la sesión de
+        //  auditoría anterior.
+        //
+        //  @param {string} nuevoSessionId   el sessionId reportado por Firestore
+        //  @param {string} origen           'applyCloudData' | 'subscribeMyAuditoria' (solo para logs)
+        //  @param {string|null} iniciadoPorUid  uid de quien inició la sesión,
+        //         si se conoce (viene de data._auditoriaStartedBy en el doc
+        //         principal; subscribeMyAuditoria no tiene este dato y pasa null).
+        //         Se conserva únicamente para trazabilidad/logs — YA NO decide
+        //         por sí solo si el cambio fue "propio" (ver FIX P0 abajo).
+        //  @param {string|null} iniciadoPorDeviceId  deviceId de la INSTANCIA que
+        //         inició la sesión, si se conoce (viene de
+        //         data._auditoriaStartedByDeviceId en el doc principal;
+        //         subscribeMyAuditoria no tiene este dato y pasa null).
+        //
+        //  FIX P0 — USUARIO ≠ DISPOSITIVO:
+        //  Un mismo UID puede estar activo simultáneamente en más de un
+        //  dispositivo (mismo usuario, dos instancias). Antes, "inicio propio"
+        //  se decidía comparando solo iniciadoPorUid === currentUserUid, lo que
+        //  hacía que CUALQUIER dispositivo logueado con el mismo usuario que
+        //  inició la auditoría se considerara a sí mismo el iniciador — aunque
+        //  el reset real hubiera ocurrido en OTRA instancia — y por lo tanto
+        //  nunca limpiaba su estado temporal obsoleto. Ahora "inicio propio" se
+        //  decide por identidad de INSTANCIA (deviceId), no de cuenta (uid): la
+        //  instancia que ejecutó el reset ya limpió su estado localmente y de
+        //  forma síncrona (ver auditoriaResetear) antes de escribir a Firestore,
+        //  así que cuando su propio snapshot regresa no debe reprocesar. Ese
+        //  caso, sin embargo, ya queda cubierto primero por la idempotencia del
+        //  paso 2 (mismo sessionId ⇒ no-op) — esPropioInicio solo entra en juego
+        //  cuando el sessionId SÍ cambió respecto al local, es decir: para
+        //  cualquier instancia (propia o ajena) que aún no había visto este
+        //  sessionId. Si iniciadoPorDeviceId no coincide con _deviceId (incluye
+        //  el caso "no se conoce" ⇒ null), se trata como ajeno y se resetea.
+        //  @returns {{procesado:boolean, reseteo?:boolean, motivo?:string,
+        //             sessionAnterior?:string, sessionNueva?:string}}
+        // ══════════════════════════════════════════════════════════════════════
+        function handleAuditSessionChange(nuevoSessionId, origen, iniciadoPorUid, iniciadoPorDeviceId) {
+            // 1. Validación
+            if (!nuevoSessionId) {
+                return { procesado: false, motivo: 'sessionId_invalido' };
+            }
+
+            // 2. Idempotencia — si ya es la sesión activa, no hay nada que
+            //    procesar. Cubre tanto "la misma sesión llega varias veces"
+            //    como "la segunda ruta llega después de que la primera ya
+            //    procesó este mismo cambio" (TEST 4, 5, 6, 11).
+            if (nuevoSessionId === _auditoriaSessionId) {
+                console.info('[AuditSession] (' + origen + ') sessionId', nuevoSessionId,
+                    'ya es la sesión activa — sin cambios, no se reprocesa.');
+                return { procesado: false, motivo: 'sin_cambio' };
+            }
+
+            const sessionAnterior     = _auditoriaSessionId;
+            const teniaSesionAnterior = !!sessionAnterior; // false = primer arranque, nada que perder
+            // FIX P0 (USUARIO ≠ DISPOSITIVO): "inicio propio" se decide por
+            // INSTANCIA (deviceId), no por cuenta (uid) — dos dispositivos con
+            // el mismo uid ya no se confunden entre sí. iniciadoPorUid se
+            // conserva como argumento solo por trazabilidad (logs / futura
+            // auditoría), nunca participa en esta decisión.
+            const esPropioInicio      = !!iniciadoPorDeviceId && iniciadoPorDeviceId === _deviceId;
+
+            // 3. Actualizar la única fuente de verdad EN MEMORIA — síncrono,
+            //    antes de cualquier otro paso (ver nota de idempotencia arriba).
+            //    Firestore es quien decide esto — localStorage/IndexedDB nunca
+            //    participan en esta decisión, solo se actualizan después,
+            //    como copia de exhibición/recuperación (REGLA DE PRIORIDAD).
+            _auditoriaSessionId = nuevoSessionId;
+            try { localStorage.setItem('inventarioApp_auditoriaSessionId', nuevoSessionId); } catch(_) {}
+
+            // 4. Primer arranque (no había sesión previa que perder) o cambio
+            //    provocado por esta misma INSTANCIA (mismo deviceId), que ya
+            //    reseteó su estado localmente y de forma síncrona en
+            //    auditoriaResetear() ANTES de escribir a Firestore — en ambos
+            //    casos se adopta el sessionId sin repetir una limpieza que no
+            //    corresponde o que ya ocurrió. Otra instancia con el MISMO uid
+            //    (otro dispositivo del mismo usuario) NO entra por esta rama.
+            if (!teniaSesionAnterior || esPropioInicio) {
+                console.info('[AuditSession] (' + origen + ') sessionId adoptado sin reset (motivo: '
+                    + (!teniaSesionAnterior ? 'primer_arranque' : 'propio_inicio_mismo_dispositivo')
+                    + ', uid=' + (iniciadoPorUid || '—') + ', deviceId=' + (iniciadoPorDeviceId || '—') + ').');
+                return { procesado: true, reseteo: false, sessionAnterior: sessionAnterior, sessionNueva: nuevoSessionId };
+            }
+
+            // 5. RESET REAL — únicamente el estado que pertenece en exclusiva
+            //    a la auditoría anterior. Deliberadamente NO aparecen aquí:
+            //    products, cart, orders, inventories, inventarioConteo, catálogo.
+            myAuditoriaConteo   = {};
+            myAuditoriaStatus   = estadoAreasVacio('pendiente');
+            myAuditoriaUnlocks  = {};
+            auditoriaView       = 'selection';
+            auditoriaAreaActiva = null;
+            isAuditoriaMode     = false;
+            auditoriaConteo     = {};
+            auditoriaStatus     = estadoAreasVacio('pendiente');
+
+            // Vista agregada de admin — pertenece exclusivamente a la sesión
+            // anterior. Se limpia y se re-suscribe con el sessionId YA
+            // actualizado (evita el bug admin-a-admin corregido puntualmente
+            // en un turno anterior: el filtro de subscribeAllUsersAuditoria
+            // debe evaluarse con el valor nuevo, no con el que tenía cargado
+            // antes de que esta función corriera).
+            if (isAdmin()) {
+                allUsersAuditoria = {};
+                subscribeAllUsersAuditoria();
+            }
+
+            // 6. Persistir el nuevo estado (vacío) local — para que sobreviva
+            //    un cierre de la app a mitad de la transición — vía el mismo
+            //    saveToLocalStorage()/_idbSaveAll() ya existentes, sin
+            //    reimplementar esa lógica aquí.
+            saveToLocalStorage({ skipSyncTrigger: true });
+            renderTab();
+            // Retraso deliberado (idéntico al que ya usaba _applyCloudData)
+            // para que la notificación se muestre después de que renderTab()
+            // termine, no se pierda visualmente en el redibujado.
+            setTimeout(function() {
+                showNotification('🔄 Nueva auditoría iniciada — tus conteos se reiniciaron.');
+            }, 500);
+
+            console.info('[AuditSession] (' + origen + ') Reset completo:', sessionAnterior, '→', nuevoSessionId);
+
+            return { procesado: true, reseteo: true, sessionAnterior: sessionAnterior, sessionNueva: nuevoSessionId };
+        }
+
+        // Se expone también como capacidad del SessionManager ya existente
+        // (Fase 1) por composición — no se crea un segundo SessionManager ni
+        // una arquitectura paralela; es la misma función, referenciada desde
+        // ambos lugares.
+        if (typeof SessionManager !== 'undefined' && SessionManager) {
+            SessionManager.handleAuditSessionChange = handleAuditSessionChange;
+        }
 
         function subscribeMyAuditoria() {
             if (!_db || !currentUserUid) return;
@@ -6542,26 +7023,23 @@ function _idbPruneSyncedQueue() {
                 //
                 // FIX (BUG 2): Diferenciar "primer arranque" de "nueva auditoría real".
                 //
-                // Si _auditoriaSessionId es null/vacío (localStorage limpio o primera
-                // visita), simplemente adoptamos el sessionId del servidor SIN resetear.
-                // Resetear aquí causaba pérdida de datos en usuarios que recargaban
-                // la página con localStorage vacío pero con datos ya contados en sesión.
-                //
-                // Solo reseteamos si YA teníamos un sessionId anterior Y cambió —
-                // eso sí indica que el admin inició una nueva auditoría explícitamente.
-                // ─────────────────────────────────────────────────────────────
-                if (data.sessionId && data.sessionId !== _auditoriaSessionId) {
-                    if (!_auditoriaSessionId) {
-                        // Primer arranque: adoptar sessionId sin resetear
-                        _auditoriaSessionId = data.sessionId;
-                        try { localStorage.setItem('inventarioApp_auditoriaSessionId', data.sessionId); } catch(_) {}
-                        // No retornar: continuar para procesar desbloqueos (Path C)
-                    } else {
-                        // Sesión anterior diferente: nueva auditoría real del admin
-                        _auditoriaSessionId = data.sessionId;
-                        try { localStorage.setItem('inventarioApp_auditoriaSessionId', data.sessionId); } catch(_) {}
-                        _resetMiConteoLocal('🔄 Nueva auditoría iniciada por el administrador — tus conteos se reiniciaron');
-                        return;
+                // Detección de cambio de sesión — delega en la autoridad
+                // central (handleAuditSessionChange), que unifica esta ruta
+                // con la de _applyCloudData(). Ya no se decide aquí qué
+                // limpiar ni cuándo — solo se reporta lo que este listener
+                // observó en su propio documento (userAuditoria/{uid}).
+                if (data.sessionId) {
+                    // userAuditoria/{uid} no registra quién inició la sesión (ni uid
+                    // ni deviceId) — se pasan ambos como null explícitamente. Esto
+                    // es seguro: si esta instancia fue la iniciadora, su propio
+                    // _auditoriaSessionId ya fue actualizado de forma síncrona por
+                    // auditoriaResetear() antes de este snapshot, así que la
+                    // idempotencia (paso 2) ya intercepta ese caso antes de llegar
+                    // aquí — este listener nunca necesita distinguir "propia" de
+                    // "ajena" por sí mismo.
+                    const resultado = handleAuditSessionChange(data.sessionId, 'subscribeMyAuditoria', null, null);
+                    if (resultado.procesado && resultado.reseteo) {
+                        return; // reset ya aplicado y renderizado — no seguir con Path C sobre datos viejos
                     }
                 }
 
@@ -6758,68 +7236,79 @@ const usersList = Object.values(allUsersAuditoria);
             if (!navigator.onLine) {
                 throw new Error('sin_conexion: no se puede iniciar la sesión de auditoría offline');
             }
-            // Borrar todos los documentos de userAuditoria de la sesión anterior
-            const colRef = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
-                               .collection('userAuditoria');
-            const snap = await colRef.get();
+
+            const mainDocRef          = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID);
+            const userAuditoriaColRef = mainDocRef.collection('userAuditoria');
+
+            // FIX P0.1 (ATOMICIDAD DEL INICIO DE AUDITORÍA):
+            // Antes, esta función ejecutaba TRES operaciones Firestore
+            // independientes en secuencia: (1) batch.commit() borrando
+            // userAuditoria/* de otros usuarios, (2) .set() del documento
+            // principal, (3) .set() del userAuditoria propio del admin. Si la
+            // conexión se cortaba entre cualquiera de ellas, Firestore quedaba
+            // en un estado intermedio real y persistente:
+            //   - (1)✅+(2)❌: el progreso finalizado de OTROS usuarios ya se
+            //     había borrado de Firestore, pero el documento principal
+            //     seguía anunciando la sesión ANTERIOR — ningún otro
+            //     dispositivo se enteraba de nada, y ese progreso perdido era
+            //     irrecuperable desde Firestore.
+            //   - (2)✅+(3)❌: el documento principal ya apuntaba a la nueva
+            //     sesión (otros dispositivos podían empezar a converger) pero
+            //     el propio admin nunca recibía su confirmación de vuelta.
+            // Ahora las tres operaciones viven en el MISMO WriteBatch:
+            // Firestore garantiza que se aplican TODAS o NINGUNA. La lectura
+            // previa (snap = colRef.get()) es solo lectura, no escribe nada,
+            // así que no rompe la atomicidad de lo que sí se escribe.
+            const snap  = await userAuditoriaColRef.get();
             const batch = _db.batch();
-            // BUG-6 FIX: excluir el doc del propio admin para no triggerar su propio
-            // onSnapshot con un delete que causaría un loop de reset.
+
+            // 1) Borrar todos los documentos de userAuditoria de la sesión
+            //    anterior, EXCEPTO el propio admin (BUG-6 FIX: evita que su
+            //    propio delete dispare un loop de reset en su propio listener;
+            //    su doc se sobrescribe explícitamente en el punto 3).
             snap.forEach(doc => {
                 if (doc.id !== currentUserUid) batch.delete(doc.ref);
             });
-            await batch.commit();
-            // Escribir la nueva sesión en el documento principal.
-            // FIX-G1: también limpiar auditoriaStatus y auditoriaConteo del ciclo anterior
-            // en el doc principal. Sin esto, _applyCloudData en otros dispositivos podría
-            // leer el auditoriaConteo del ciclo anterior y restaurarlo incorrectamente.
-            //
-            // FIX-PROP-3 (LA CAUSA RAÍZ REAL de "la nueva auditoría no llega al
-            // dispositivo"): este payload NO incluía _lastModified. subscribeMainDoc()
-            // en TODOS los demás dispositivos compara cloudTs (=data._lastModified)
-            // contra su propio localTs, y si cloudTs no aumentó, descarta el snapshot
-            // completo ANTES de llegar a _applyCloudData() — es decir, antes de
-            // siquiera mirar si _auditoriaSessionId cambió. El batch.commit() y el
-            // resto de las escrituras de esta función SIEMPRE se completaban bien;
-            // lo que fallaba era que ningún otro dispositivo llegaba a procesar el
-            // resultado, porque su propio guard de "¿hay algo más nuevo?" lo cortaba
-            // primero. También se agrega _lastWrittenBy/_lastWrittenRole para que el
-            // aviso ("🔄 Inventario actualizado por 👑 Admin") sea correcto.
-            await _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
-                     .set({
-                         _auditoriaSessionId:  sessionId,
-                         _auditoriaStartedBy:  currentUserUid,
-                         _auditoriaStartedAt:  Date.now(),
-                         _lastModified:        Date.now(),
-                         _lastWrittenBy:       currentUserUid,
-                         _lastWrittenRole:     'admin',
-                         // FIX-G1: resetear campos de auditoría del ciclo anterior
-                         auditoriaStatus:  estadoAreasVacio('pendiente'),
-                         auditoriaConteo:  {}
-                     }, { merge: true });
 
-            // FIX-G2: limpiar el doc userAuditoria del propio admin.
-            // Antes se excluía de la limpieza para evitar un loop en subscribeMyAuditoria,
-            // pero eso dejaba datos obsoletos del ciclo anterior que podían volver a aparecer
-            // si subscribeAllUsersAuditoria los leía antes de que _auditoriaSessionId cambiara.
-            // Solución: sobrescribir (sin merge) el doc del admin con la nueva sesión y conteo vacío.
-            await _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
-                     .collection('userAuditoria').doc(currentUserUid)
-                     .set({
-                         uid:       currentUserUid,
-                         email:     (_auth && _auth.currentUser) ? _auth.currentUser.email : currentUserUid,
-                         sessionId: sessionId,
-                         status:    estadoAreasVacio('pendiente'),
-                         conteo:    {},
-                         unlocks:   {},
-                         updatedAt: Date.now(),
-                         isAdmin:   true
-                     }); // sin merge: false = sobrescribe todo, elimina conteos y unlocks del ciclo anterior
+            // 2) Documento principal: nueva sesión + limpieza de campos de
+            //    auditoría del ciclo anterior (FIX-G1) + metadatos de
+            //    trazabilidad de quién y qué instancia la inició (FIX-PROP-3,
+            //    FIX P0 — incluye _auditoriaStartedByDeviceId).
+            batch.set(mainDocRef, {
+                _auditoriaSessionId:  sessionId,
+                _auditoriaStartedBy:  currentUserUid,
+                _auditoriaStartedByDeviceId: _deviceId,
+                _auditoriaStartedAt:  Date.now(),
+                _lastModified:        Date.now(),
+                _lastWrittenBy:       currentUserUid,
+                _lastWrittenRole:     'admin',
+                auditoriaStatus:  estadoAreasVacio('pendiente'),
+                auditoriaConteo:  {}
+            }, { merge: true });
 
-            console.info('[AuditAdmin] Nueva sesión', sessionId, 'iniciada ✓');
+            // 3) userAuditoria del propio admin (FIX-G2): sobrescritura
+            //    completa (sin merge, elimina conteos/unlocks del ciclo
+            //    anterior), ahora en el MISMO batch en vez de una escritura
+            //    aparte.
+            batch.set(userAuditoriaColRef.doc(currentUserUid), {
+                uid:       currentUserUid,
+                email:     (_auth && _auth.currentUser) ? _auth.currentUser.email : currentUserUid,
+                sessionId: sessionId,
+                status:    estadoAreasVacio('pendiente'),
+                conteo:    {},
+                unlocks:   {},
+                updatedAt: Date.now(),
+                isAdmin:   true
+            });
+
+            await batch.commit(); // atómico: todo-o-nada para (1)+(2)+(3)
+
+            console.info('[AuditAdmin] Nueva sesión', sessionId, 'iniciada ✓ (batch atómico)');
             // Ya NO hay try/catch aquí — cualquier error de red a mitad de estas
             // escrituras se propaga tal cual al llamador (auditoriaResetear),
-            // que es quien decide cómo informarlo al usuario.
+            // que es quien decide cómo informarlo al usuario. Con el batch
+            // atómico, un error aquí garantiza que NADA de lo anterior se
+            // aplicó — no hay estados intermedios que limpiar.
         }
 
         /**
@@ -7026,64 +7515,23 @@ const usersList = Object.values(allUsersAuditoria);
                 if (data.auditoriaStatus && typeof data.auditoriaStatus === 'object') auditoriaStatus = data.auditoriaStatus;
                 if (data.auditoriaConteo && typeof data.auditoriaConteo === 'object') auditoriaConteo = data.auditoriaConteo;
 
-                // Detectar cambio de sesión de auditoría (admin inició nueva auditoría)
-                if (data._auditoriaSessionId && data._auditoriaSessionId !== _auditoriaSessionId) {
-                    const isOwnReset = (data._auditoriaStartedBy === currentUserUid);
-                    const teniaSesionAnterior = !!_auditoriaSessionId; // null/'' = primer arranque
-                    _auditoriaSessionId = data._auditoriaSessionId;
-                    if (!isOwnReset && teniaSesionAnterior) {
-                        // FIX-I: Limpiar también auditoriaConteo y auditoriaStatus cuando
-                        // detectamos una nueva sesión del admin. Sin esto, el conteo AGREGADO
-                        // del ciclo anterior quedaría visible en los dispositivos secundarios
-                        // aunque el admin hubiera iniciado una nueva auditoría, porque el doc
-                        // principal puede tener auditoriaConteo del ciclo viejo hasta que
-                        // subscribeAllUsersAuditoria recompute con los nuevos datos.
-                        auditoriaConteo = {};
-                        auditoriaStatus = estadoAreasVacio('pendiente');
-                        // FIX: Solo resetear si ya teníamos una sesión previa Y el admin
-                        // inició una nueva. Si _auditoriaSessionId era null (primer arranque
-                        // o localStorage vacío), no hay datos previos que perder y el reset
-                        // solo causaría confusión al usuario.
-                        myAuditoriaConteo  = {};
-                        myAuditoriaStatus  = estadoAreasVacio('pendiente');
-                        myAuditoriaUnlocks = {};
-                        auditoriaView      = 'selection';
-                        auditoriaAreaActiva = null;
-                        isAuditoriaMode    = false;
-
-                        // FIX-ADMIN-SYNC (caso reportado: "dos admin en dos
-                        // dispositivos, uno inicia auditoría, el otro no lo ve"):
-                        // subscribeAllUsersAuditoria() filtra cada documento por
-                        // `data.sessionId !== _auditoriaSessionId` (línea ~6602).
-                        // Ese filtro usa el valor de _auditoriaSessionId que YA
-                        // TENÍA cargado en memoria en el momento en que llegó su
-                        // último snapshot — que puede ser anterior a esta misma
-                        // actualización, porque subscribeMainDoc (que llega aquí)
-                        // y subscribeAllUsersAuditoria son dos listeners
-                        // independientes, sin garantía de orden entre ellos.
-                        // Resultado: un segundo admin podía ver su PROPIO conteo
-                        // reiniciado correctamente, pero el panel agregado
-                        // (allUsersAuditoria) seguía mostrando datos de la sesión
-                        // vieja hasta que algo más disparara ese listener de nuevo
-                        // — a veces nunca, si nadie volvía a escribir en esa
-                        // colección. Se corrige limpiando la vista agregada de
-                        // inmediato y re-suscribiendo con el _auditoriaSessionId
-                        // ya actualizado, para que el filtro se reevalúe con el
-                        // valor correcto sin depender de que llegue otro evento.
-                        if (isAdmin()) {
-                            allUsersAuditoria = {};
-                            subscribeAllUsersAuditoria();
-                        }
-
-                        console.info('[AuditSession] Nueva sesión detectada — conteo reiniciado');
-                        // La notificación se mostrará al final del renderTab
-                        setTimeout(function() {
-                            showNotification('🔄 Nueva auditoría iniciada por el administrador — tus conteos se reiniciaron');
-                        }, 500);
-                    } else if (!isOwnReset && !teniaSesionAnterior) {
-                        // Primer arranque: solo adoptar el sessionId sin notificar ni resetear
-                        console.info('[AuditSession] SessionId adoptado en primer arranque:', _auditoriaSessionId);
-                    }
+                // Detectar cambio de sesión de auditoría — delega en la
+                // autoridad central (handleAuditSessionChange), que unifica
+                // esta ruta con la de subscribeMyAuditoria(). Ya no se decide
+                // aquí qué limpiar ni cuándo — solo se reporta lo que este
+                // listener observó en el documento principal.
+                if (data._auditoriaSessionId) {
+                    // FIX P0 (USUARIO ≠ DISPOSITIVO): se añade el deviceId del
+                    // iniciador (data._auditoriaStartedByDeviceId) como 4º
+                    // argumento — es el dato que handleAuditSessionChange usa
+                    // ahora para decidir "inicio propio" por instancia. El uid
+                    // (3er argumento) se conserva solo para trazabilidad.
+                    handleAuditSessionChange(
+                        data._auditoriaSessionId,
+                        'applyCloudData',
+                        data._auditoriaStartedBy,
+                        data._auditoriaStartedByDeviceId
+                    );
                 }
 
                 // Migración de formato inventarioConteo — tres niveles de
@@ -7296,8 +7744,432 @@ const usersList = Object.values(allUsersAuditoria);
         // ══════════════════════════════════════════════════════════════════════
         //  MÓDULO: ROLES Y PERMISOS
         // ══════════════════════════════════════════════════════════════════════
-        let currentUserRole = null;  // 'admin' | 'user'
+        let currentUserRole = null;  // 'admin' | 'user' (legacy) — SIN CAMBIOS, se sigue asignando igual
         let currentUserUid  = null;
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  ETAPA 14.1 — CATÁLOGO DE ROLES Y PERMISOS
+        //  ────────────────────────────────────────────────────────────────────
+        //  Esto EXTIENDE el modelo anterior, no lo reemplaza. currentUserRole
+        //  sigue existiendo, se sigue asignando exactamente igual que antes
+        //  (ver loadUserRole más abajo), y ninguno de los +65 llamadores de
+        //  isAdmin() en este archivo necesita cambiar: isAdmin() conserva su
+        //  firma y su contrato de siempre ("¿tiene privilegios administrativos
+        //  totales?") — solo cambia SU implementación interna para delegar en
+        //  el sistema nuevo.
+        //
+        //  Catálogo CERRADO de permisos: ningún código puede usar un string de
+        //  permiso que no esté en esta lista — hasPermission() lo rechaza.
+        // ══════════════════════════════════════════════════════════════════════
+        const PERMISOS_CATALOGO = [
+            'users.read', 'users.create', 'users.update', 'users.disable',
+            'roles.read', 'roles.update',
+            'permissions.read', 'permissions.update',
+            'branches.read', 'branches.create', 'branches.update', 'branches.disable',
+            'warehouses.read', 'warehouses.create', 'warehouses.update', 'warehouses.disable',
+            'inventory.create', 'inventory.count', 'inventory.viewOwn', 'inventory.viewAll',
+            'inventory.closeOwn', 'inventory.closeOther', 'inventory.closeGlobal', 'inventory.reopenArea',
+            'inventory.export', 'inventory.history',
+            'catalog.read', 'catalog.publish', 'catalog.edit',
+            'reports.read', 'reports.export',
+            'settings.read', 'settings.update',
+            'adminLog.read'
+        ];
+        const PERMISOS_CATALOGO_SET = new Set(PERMISOS_CATALOGO);
+
+        // Roles de sistema — semilla y fallback si Firestore no tiene (todavía)
+        // los documentos roles/{roleId}, o si no hay conexión. ADMIN usa '*'
+        // (comodín: todos los permisos del catálogo, presentes y futuros).
+        // SUBJEFE_BARRA y BARTENDER arrancan con la MISMA base técnica a
+        // propósito (así lo pide esta etapa) — diferenciarlos es
+        // responsabilidad de una etapa posterior, agregando permisos, no de
+        // esta.
+        const ROLES_SISTEMA_DEFECTO = {
+            ADMIN: {
+                nombre: 'Administrador',
+                permissions: ['*'],
+                esSistema: true
+            },
+            SUBJEFE_BARRA: {
+                nombre: 'Subjefe de Barra',
+                permissions: ['inventory.count', 'inventory.viewOwn', 'inventory.closeOwn', 'inventory.history'],
+                esSistema: true
+            },
+            BARTENDER: {
+                nombre: 'Bartender',
+                permissions: ['inventory.count', 'inventory.viewOwn', 'inventory.closeOwn', 'inventory.history'],
+                esSistema: true
+            }
+        };
+
+        // Mapeo de compatibilidad: valores LEGACY de usuarios/{uid}.role hacia
+        // un roleId canónico, SOLO para efectos de resolución de permisos EN
+        // MEMORIA. Nunca reescribe el documento — el valor 'admin'/'user'
+        // original permanece intacto en Firestore hasta que se ejecute
+        // migrarRolesExistentes() de forma explícita (ver más abajo).
+        const ROLE_LEGACY_A_CANONICO = { admin: 'ADMIN', user: 'BARTENDER' };
+        function _roleCanonico(rawRole) {
+            if (!rawRole) return 'BARTENDER'; // mismo default que el código legacy (|| 'user')
+            return ROLE_LEGACY_A_CANONICO[rawRole] || rawRole; // ya canónico, o desconocido → se usa tal cual
+        }
+
+        // Caché en memoria de definiciones de rol leídas de Firestore
+        // (roles/{roleId}) — evita una lectura por cada resolución de
+        // permisos. Se reconstruye al recargar la página; no hay listener en
+        // vivo sobre roles/ en esta etapa (ver "Riesgos restantes" en el
+        // entregable) — coherente con "no agregar todavía un sistema
+        // complejo de caché" pedido por el ticket.
+        let _rolesCache = {};
+
+        async function _resolverPermisosDeRol(roleId) {
+            if (_rolesCache[roleId]) return _rolesCache[roleId];
+            let permisos = null;
+            if (_db) {
+                try {
+                    const snap = await _db.collection('roles').doc(roleId).get();
+                    if (snap.exists && Array.isArray(snap.data().permissions)) {
+                        permisos = snap.data().permissions;
+                    }
+                } catch (e) {
+                    console.warn('[Permisos] No se pudo leer roles/' + roleId + ' — usando definición por defecto:', e);
+                }
+            }
+            if (!permisos) {
+                // Fallback: rol de sistema conocido, o BARTENDER si es un roleId
+                // desconocido (nunca se otorga '*' por defecto ante lo desconocido).
+                permisos = (ROLES_SISTEMA_DEFECTO[roleId] || ROLES_SISTEMA_DEFECTO.BARTENDER).permissions;
+            }
+            _rolesCache[roleId] = permisos;
+            return permisos;
+        }
+
+        // Crea (idempotente, solo si faltan) los 3 documentos roles/{roleId}
+        // de sistema en Firestore. Esto NO es "migración de datos de
+        // usuario" — es asegurar que exista la configuración base del
+        // sistema, tan seguro de repetir como publicarCatalogoFirestore().
+        // Se ejecuta de forma perezosa la primera vez que un ADMIN resuelve
+        // sus propios permisos; nunca se dispara para un usuario no-admin.
+        async function _asegurarRolesSistemaEnFirestore() {
+            if (!_db) return;
+            try {
+                const batch = _db.batch();
+                let huboCambios = false;
+                for (const roleId of Object.keys(ROLES_SISTEMA_DEFECTO)) {
+                    const ref  = _db.collection('roles').doc(roleId);
+                    const snap = await ref.get();
+                    if (!snap.exists) {
+                        const def = ROLES_SISTEMA_DEFECTO[roleId];
+                        batch.set(ref, {
+                            roleId:        roleId,
+                            nombre:        def.nombre,
+                            permissions:   def.permissions,
+                            esSistema:     true,
+                            creadoEn:      Date.now(),
+                            actualizadoEn: Date.now()
+                        });
+                        huboCambios = true;
+                    }
+                }
+                if (huboCambios) {
+                    await batch.commit();
+                    console.info('[Permisos] Roles de sistema creados en Firestore ✓');
+                    _rolesCache = {}; // forzar relectura la próxima vez que se resuelvan permisos
+                }
+            } catch (e) {
+                console.warn('[Permisos] No se pudieron crear los roles de sistema (no crítico, se usa el fallback local):', e);
+            }
+        }
+
+        // Overrides válidos ÚNICAMENTE con valor 'allow' o 'deny' — cualquier
+        // otro valor (true, false, null, strings arbitrarios) o cualquier
+        // permiso fuera del catálogo se descarta silenciosamente y NO
+        // participa en la resolución.
+        function _sanitizarOverrides(raw) {
+            const limpio = {};
+            if (raw && typeof raw === 'object') {
+                Object.keys(raw).forEach(function(perm) {
+                    if (PERMISOS_CATALOGO_SET.has(perm) && (raw[perm] === 'allow' || raw[perm] === 'deny')) {
+                        limpio[perm] = raw[perm];
+                    }
+                });
+            }
+            return limpio;
+        }
+
+        // ── Estado de autorización en memoria (caché de LA SESIÓN ACTUAL) ──
+        // Se reconstruye POR COMPLETO (nunca se fusiona con el anterior) cada
+        // vez que loadUserRole() corre, y se limpia por completo en logout —
+        // así no sobreviven permisos de un usuario a la sesión del siguiente.
+        let _authzState = {
+            loaded:      false,
+            uid:         null,
+            legacyRole:  null,   // valor crudo tal cual está en Firestore hoy
+            roleId:      null,   // roleId canónico resuelto (ADMIN/SUBJEFE_BARRA/BARTENDER/...)
+            permissions: null,   // Set<string> — permisos del rol ya resueltos
+            overrides:   {},     // permissionOverrides ya saneados
+            disabled:    false   // ETAPA 14.1.1: true si usuarios/{uid}.status === 'inactivo'
+        };
+        function _resetAuthzState() {
+            _authzState = { loaded: false, uid: null, legacyRole: null, roleId: null, permissions: null, overrides: {}, disabled: false };
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  hasPermission() — ÚNICA autoridad de resolución de permisos del
+        //  frontend. No crear hasPermissionAdmin()/hasPermissionUser()/etc. —
+        //  toda decisión de permiso pasa por aquí.
+        //
+        //  Orden de resolución:
+        //    1. El permiso no existe en el catálogo             → DENEGADO
+        //    2. No hay usuario autenticado / permisos sin cargar → DENEGADO
+        //    3. El rol resuelto tiene '*' (ADMIN)                → PERMITIDO
+        //       (EXCEPCIÓN DELIBERADA Y DOCUMENTADA: ADMIN es autoridad
+        //       absoluta — ningún override de usuario, ni siquiera un 'deny'
+        //       explícito, puede degradar a un ADMIN. Ver prueba obligatoria
+        //       "Override deny + ADMIN" del ticket de esta etapa.)
+        //    4. Override 'deny' explícito del usuario            → DENEGADO
+        //    5. Override 'allow' explícito del usuario           → PERMITIDO
+        //    6. El permiso está en la lista de permisos del rol  → PERMITIDO
+        //    7. Ninguna coincidencia                              → DENEGADO
+        //
+        //  NOTA ETAPA 14.1.1: no fue necesario tocar esta función. Cuando la
+        //  cuenta está desactivada (_authzState.disabled), _actualizarAuthzState()
+        //  ya deja permissions como un Set VACÍO (sin '*') — así que el paso 3
+        //  nunca se cumple para una cuenta desactivada y el resto de los pasos
+        //  tampoco encuentran coincidencia. Un solo lugar decide la regla.
+        // ══════════════════════════════════════════════════════════════════════
+        function hasPermission(permission) {
+            if (!PERMISOS_CATALOGO_SET.has(permission)) {
+                console.warn('[Permisos] Permiso fuera de catálogo, denegado:', permission);
+                return false;
+            }
+            if (!currentUserUid || !_authzState.loaded || !_authzState.permissions) return false;
+            if (_authzState.permissions.has('*')) return true; // ADMIN: autoridad absoluta
+            const ov = _authzState.overrides;
+            if (ov[permission] === 'deny')  return false;
+            if (ov[permission] === 'allow') return true;
+            return _authzState.permissions.has(permission);
+        }
+        window.hasPermission = hasPermission; // testeable desde consola — mismo patrón que window._db/_auth
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  ETAPA 14.1.1 — SINCRONIZACIÓN EN TIEMPO REAL DEL CONTEXTO DE
+        //  AUTORIZACIÓN
+        //  ────────────────────────────────────────────────────────────────────
+        //  Dos listeners, MISMO patrón de desduplicación que el resto de la
+        //  app (_unsubX + guard "si ya existe, no crear otro" — ver
+        //  subscribeNotificacionesUsuario/subscribeAjustesPendientes, etc.):
+        //
+        //    usuarios/{uid}   (SIEMPRE el propio uid, nunca otros usuarios)
+        //    roles/{roleId}   (SOLO el rol actualmente resuelto de ESTE
+        //                      usuario — nunca todos los roles del catálogo)
+        //
+        //  Ambos convergen en UNA sola función de reconciliación,
+        //  _actualizarAuthzState(), que es la única que escribe _authzState.
+        //  No existe una segunda ruta de resolución de permisos.
+        // ══════════════════════════════════════════════════════════════════════
+        let _unsubUsuarioPropio   = null;
+        let _unsubRolActual       = null;
+        let _rolEscuchadoActualId = null;
+        let _lastUserData         = null; // último perfil conocido de usuarios/{uid} — fuente para reconciliar
+
+        // Huella comparable del estado de autorización — permite detectar si
+        // un nuevo cálculo realmente cambió algo antes de re-renderizar
+        // (PASO 3.9 / PASO 11: evitar reconstrucciones y renders innecesarios).
+        function _huellaAuthz(state) {
+            if (!state || !state.loaded) return 'unloaded';
+            const perms = state.permissions ? Array.from(state.permissions).sort().join(',') : '';
+            const overr = state.overrides ? Object.keys(state.overrides).sort().map(function(k) { return k + ':' + state.overrides[k]; }).join(',') : '';
+            return state.roleId + '|' + perms + '|' + overr + '|' + (state.disabled ? '1' : '0');
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  _actualizarAuthzState() — ÚNICA función de reconciliación del
+        //  contexto de autorización. Se invoca desde tres disparadores
+        //  posibles: carga inicial (loadUserRole), snapshot de usuarios/{uid},
+        //  snapshot de roles/{roleId}.
+        //
+        //  SIEMPRE re-deriva TODO desde la fuente más fresca conocida
+        //  (_lastUserData + _rolesCache) en vez de confiar en cuál de los dos
+        //  listeners la disparó — así, sin importar el orden de llegada de
+        //  los eventos, el resultado final es determinista (PASO 10: cambio
+        //  de rol + cambio de permisos del rol casi simultáneo). Si el roleId
+        //  resuelto cambió respecto al que se estaba escuchando, esta función
+        //  reapunta el listener de rol automáticamente (PASO 5).
+        // ══════════════════════════════════════════════════════════════════════
+        function _actualizarAuthzState() {
+            if (!currentUserUid || !_lastUserData) return;
+
+            const legacyRole  = _lastUserData.role || 'user';
+            const roleId      = _roleCanonico(legacyRole);
+            const status      = _lastUserData.status || 'activo';
+            const cuentaActiva = status !== 'inactivo';
+
+            // PASO 5/10: si el rol resuelto cambió, reapuntar el listener de
+            // rol ANTES de leer _rolesCache[roleId] (puede que todavía no
+            // tengamos ese rol en caché — _resolverPermisosDeRol más abajo
+            // cubre ese primer instante con su propio fallback).
+            if (roleId !== _rolEscuchadoActualId) {
+                _suscribirRolActual(roleId);
+            }
+
+            const permisosDelRol = _rolesCache[roleId] ||
+                (ROLES_SISTEMA_DEFECTO[roleId] || ROLES_SISTEMA_DEFECTO.BARTENDER).permissions;
+
+            // PASO 7 — status='inactivo': se invalida el contexto de
+            // autorización (permisos VACÍOS) en vez de forzar logout. Ver
+            // justificación en el entregable de esta etapa.
+            const permisosEfectivos = cuentaActiva ? new Set(permisosDelRol) : new Set();
+            const overridesEfectivos = cuentaActiva ? _sanitizarOverrides(_lastUserData.permissionOverrides) : {};
+
+            const eraActivaAntes = _authzState.loaded && !_authzState.disabled;
+            const huellaAnterior = _huellaAuthz(_authzState);
+
+            _authzState = { // reemplazo ATÓMICO — nunca una mutación parcial
+                loaded:      true,
+                uid:         currentUserUid,
+                legacyRole:  legacyRole,
+                roleId:      roleId,
+                permissions: permisosEfectivos,
+                overrides:   overridesEfectivos,
+                disabled:    !cuentaActiva
+            };
+
+            if (_huellaAuthz(_authzState) === huellaAnterior) return; // nada cambió de verdad → no re-renderizar
+
+            console.info('[Permisos] Contexto de autorización actualizado:', {
+                roleId: roleId,
+                permisos: permisosEfectivos.has('*') ? '*' : permisosEfectivos.size,
+                disabled: !cuentaActiva
+            });
+
+            if (!cuentaActiva && eraActivaAntes) {
+                showNotification('⚠️ Tu cuenta fue desactivada por un administrador. Algunas acciones ya no están disponibles.');
+            } else if (cuentaActiva && !eraActivaAntes && _authzState.loaded) {
+                showNotification('✅ Tu cuenta fue reactivada.');
+            }
+
+            applyRoleUI(); // re-renderiza badge/nav/tab actual con las restricciones vigentes
+
+            // MICROFASE P0.2 (REQUISITO P1): tras aplicar la UI, reconciliar
+            // qué CONJUNTO de listeners de datos debe estar activo. Antes,
+            // esta decisión se tomaba UNA sola vez dentro de loadUserRole() y
+            // nunca se revisaba de nuevo — un cambio de rol en tiempo real
+            // (14.1.1) actualizaba _authzState/la UI correctamente, pero un
+            // admin degradado seguía recibiendo en segundo plano los datos
+            // de subscribeAllUsersAuditoria()/subscribeAjustesPendientes().
+            _reconciliarListenersPorAutorizacion();
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  _reconciliarListenersPorAutorizacion() — MICROFASE P0.2 (REQUISITO
+        //  P1.1: "un solo punto de reconciliación")
+        //  ────────────────────────────────────────────────────────────────────
+        //  ÚNICA función que decide qué conjunto de listeners de datos debe
+        //  estar activo, según isAdmin() YA RESUELTO por _actualizarAuthzState()
+        //  o por el bootstrap síncrono de loadUserRole(). Se invoca:
+        //    1. Al final de loadUserRole() (arranque de sesión) — reemplaza al
+        //       bloque if(isAdmin()){...}else{...} que antes vivía ahí inline,
+        //       para que exista un único camino, no dos que puedan divergir.
+        //    2. Al final de _actualizarAuthzState() en cada reconciliación de
+        //       autorización en tiempo real (14.1.1).
+        //
+        //  Idempotente (REQUISITO P1.7): si el modo (admin/usuario) no
+        //  cambió respecto a la última llamada, no hace nada — no
+        //  desuscribe ni vuelve a suscribir nada innecesariamente, sin
+        //  importar cuántas veces se invoque.
+        // ══════════════════════════════════════════════════════════════════════
+        let _modoListenersActual = null; // null | 'admin' | 'usuario' — qué conjunto está activo AHORA MISMO
+
+        function _reconciliarListenersPorAutorizacion() {
+            if (!currentUserUid) return; // sin sesión, nada que reconciliar
+
+            const modoNuevo = isAdmin() ? 'admin' : 'usuario';
+            if (modoNuevo === _modoListenersActual) return; // nada cambió → no-op
+
+            const modoAnterior = _modoListenersActual;
+            _modoListenersActual = modoNuevo;
+
+            if (modoNuevo === 'admin') {
+                // Se ganó autorización de admin (o es el arranque inicial ya
+                // siendo admin): apagar listeners de "usuario" que ya no
+                // corresponden, encender los de "admin".
+                if (typeof _unsubMyAuditoria === 'function') { _unsubMyAuditoria(); _unsubMyAuditoria = null; }
+                if (typeof _unsubNotifs      === 'function') { _unsubNotifs();      _unsubNotifs      = null; }
+                // subscribeCatalogoAdmin() es un no-op (el admin publica el
+                // catálogo, no necesita escucharlo) — se apaga igualmente el
+                // listener de catálogo de usuario para no dejarlo huérfano.
+                if (typeof _unsubCatalogo === 'function') { _unsubCatalogo(); _unsubCatalogo = null; }
+
+                subscribeAjustesPendientes();
+                subscribeCatalogoAdmin();
+                subscribeAllUsersAuditoria(); // Admin ve todos los conteos en tiempo real
+
+                console.info('[Permisos] Listeners reconciliados → modo ADMIN' + (modoAnterior ? ' (antes: ' + modoAnterior + ')' : ' (arranque)'));
+            } else {
+                // Se perdió autorización de admin (degradación en tiempo
+                // real) o es el arranque inicial como no-admin: apagar
+                // listeners administrativos INMEDIATAMENTE y limpiar los
+                // datos ya recibidos que ya no corresponde conservar.
+                if (typeof _unsubAllUsers === 'function') { _unsubAllUsers(); _unsubAllUsers = null; }
+                if (typeof _unsubAjustes  === 'function') { _unsubAjustes();  _unsubAjustes  = null; }
+                if (typeof _unsubCatalogo === 'function') { _unsubCatalogo(); _unsubCatalogo = null; }
+
+                // REQUISITO P1.2 (pasos 6-7-9 del ticket): sin esto, los
+                // conteos de TODOS los usuarios y los ajustes administrativos
+                // seguirían siendo accesibles en memoria (allUsersAuditoria,
+                // _ajustes) aunque los listeners ya estén apagados.
+                allUsersAuditoria = {};
+                _ajustes = [];
+
+                subscribeCatalogoUsuario();
+                subscribeNotificacionesUsuario();
+                subscribeMyAuditoria(); // Usuario escucha sus propios desbloqueos
+
+                console.info('[Permisos] Listeners reconciliados → modo USUARIO' + (modoAnterior ? ' (antes: ' + modoAnterior + ')' : ' (arranque)'));
+            }
+        }
+
+        // Listener en vivo del PROPIO documento usuarios/{uid} — única fuente
+        // de verdad para role/status/permissionOverrides/displayName de este
+        // usuario. Nunca se suscribe al doc de otro usuario.
+        function _suscribirUsuarioPropio(uid) {
+            if (!_db || !uid || _unsubUsuarioPropio) return; // desduplicación (PASO 11)
+            _unsubUsuarioPropio = _db.collection('usuarios').doc(uid).onSnapshot(function(snap) {
+                if (snap.exists) {
+                    _lastUserData = snap.data();
+                } else {
+                    _lastUserData = _lastUserData || { role: 'user' };
+                }
+                _actualizarAuthzState();
+            }, function(err) {
+                console.warn('[Permisos] Error en listener de usuarios/' + uid + ':', err);
+                // PASO 16 (offline): un error de listener NO borra _lastUserData
+                // ni _authzState — se conserva el último contexto conocido de
+                // forma segura hasta que el SDK reconecte por su cuenta.
+            });
+        }
+
+        // Listener en vivo del documento roles/{roleId} ACTUALMENTE en uso
+        // por este usuario — SOLO ese, nunca una suscripción a todos los
+        // roles del catálogo (PASO 2). Si el roleId del usuario cambia, este
+        // listener se destruye y se vuelve a crear apuntando al nuevo roleId.
+        function _suscribirRolActual(roleId) {
+            if (!_db || !roleId) return;
+            if (_unsubRolActual && _rolEscuchadoActualId === roleId) return; // ya escuchando este mismo rol
+            if (typeof _unsubRolActual === 'function') { _unsubRolActual(); _unsubRolActual = null; }
+            _rolEscuchadoActualId = roleId;
+            _unsubRolActual = _db.collection('roles').doc(roleId).onSnapshot(function(snap) {
+                if (snap.exists && Array.isArray(snap.data().permissions)) {
+                    _rolesCache[roleId] = snap.data().permissions;
+                } else {
+                    delete _rolesCache[roleId]; // fallback a ROLES_SISTEMA_DEFECTO
+                }
+                _actualizarAuthzState();
+            }, function(err) {
+                console.warn('[Permisos] Error en listener de roles/' + roleId + ':', err);
+            });
+        }
+
         let _syncEnabled    = true;
         let _unsubAjustes   = null;
         let _unsubCatalogo  = null;
@@ -7408,41 +8280,190 @@ const usersList = Object.values(allUsersAuditoria);
         let _pedSearchTimer     = null;
         let _histSearchTimer    = null;
 
-        function isAdmin() { return currentUserRole === 'admin'; }
+        // ETAPA 14.1: isAdmin() conserva firma y contrato ("¿privilegios
+        // administrativos totales?") — ya NO compara currentUserRole
+        // directamente, delega en el wildcard '*' resuelto por el nuevo
+        // sistema de permisos (ver _authzState/hasPermission arriba). Ningún
+        // llamador (+65 sitios en este archivo) necesita cambiar.
+        function isAdmin() {
+            return _authzState.loaded && !!_authzState.permissions && _authzState.permissions.has('*');
+        }
 
         async function loadUserRole(uid) {
-            if (!_db || !uid) { currentUserRole = 'user'; applyRoleUI(); return; }
+            if (!_db || !uid) { currentUserRole = 'user'; _resetAuthzState(); applyRoleUI(); return; }
             currentUserUid = uid;
+            let userData = null;
             try {
                 const ref  = _db.collection('usuarios').doc(uid);
                 const snap = await ref.get();
                 if (snap.exists) {
-                    currentUserRole = snap.data().role || 'user';
+                    userData = snap.data();
+                    currentUserRole = userData.role || 'user';
                 } else {
+                    // Auto-creación de usuario nuevo: SIN CAMBIOS respecto al
+                    // comportamiento anterior — se sigue creando con role:'user'
+                    // (legacy). _roleCanonico('user') ya lo resuelve a
+                    // BARTENDER para efectos de permisos; no hay necesidad de
+                    // tocar este valor para lograrlo (ver entregable, decisión
+                    // documentada).
                     await ref.set({ uid, role: 'user', creadoEn: Date.now() });
                     currentUserRole = 'user';
+                    userData = { uid: uid, role: 'user' };
                 }
                 console.info('[Roles] Rol:', currentUserRole);
             } catch (e) {
                 console.warn('[Roles] Error leyendo rol:', e);
                 currentUserRole = 'user';
+                userData = { role: 'user' };
             }
+
+            // ETAPA 14.1: resolver roles/permisos ANTES de que isAdmin() se
+            // use más abajo — subscribeAllUsersAuditoria() vs
+            // subscribeMyAuditoria() depende de un isAdmin() ya resuelto.
+            const roleId = _roleCanonico(currentUserRole);
+            let permisosArray;
+            try {
+                permisosArray = await _resolverPermisosDeRol(roleId);
+            } catch (e) {
+                console.warn('[Permisos] Fallback a permisos por defecto para', roleId, e);
+                permisosArray = (ROLES_SISTEMA_DEFECTO[roleId] || ROLES_SISTEMA_DEFECTO.BARTENDER).permissions;
+            }
+            _rolesCache[roleId] = permisosArray; // ETAPA 14.1.1: comparte caché con el listener en vivo
+
+            // ETAPA 14.1.1: _lastUserData es la fuente que usará
+            // _actualizarAuthzState() en cada reconciliación futura — se
+            // establece aquí ANTES de la primera construcción de _authzState
+            // para que ambas rutas (bootstrap inicial y reconciliaciones en
+            // vivo posteriores) apliquen exactamente la misma regla de
+            // status='inactivo' (ver PASO 7).
+            _lastUserData = userData;
+            const cuentaActivaInicial = (userData && userData.status) !== 'inactivo';
+            _authzState = {
+                loaded:      true,
+                uid:         uid,
+                legacyRole:  currentUserRole,
+                roleId:      roleId,
+                permissions: cuentaActivaInicial ? new Set(permisosArray) : new Set(),
+                overrides:   cuentaActivaInicial ? _sanitizarOverrides(userData && userData.permissionOverrides) : {},
+                disabled:    !cuentaActivaInicial
+            };
+
+            // Asegurar (perezoso, idempotente) que los 3 roles de sistema
+            // existan en Firestore — solo si este usuario es ADMIN.
+            if (isAdmin()) {
+                _asegurarRolesSistemaEnFirestore();
+            }
+
             applyRoleUI();
+
+            // ETAPA 14.1.1: listeners en tiempo real — mantienen _authzState
+            // sincronizado con Firestore sin necesidad de logout/reload.
+            // Se activan DESPUÉS del bootstrap síncrono de arriba (que ya
+            // garantiza que isAdmin() esté resuelto para las suscripciones
+            // que siguen) — nunca antes, para no cambiar el orden/timing que
+            // ya dependía de esa resolución síncrona inicial.
+            _suscribirUsuarioPropio(uid);
+            _suscribirRolActual(roleId);
 
             // FIX SYNC-4: iniciar listener en tiempo real del documento principal
             // DESPUÉS de cargar el rol, para que _applyCloudData sepa si somos admin o user.
             subscribeMainDoc();
 
-            if (isAdmin()) {
-                subscribeAjustesPendientes();
-                subscribeCatalogoAdmin();
-                subscribeAllUsersAuditoria(); // Admin ve todos los conteos en tiempo real
-            } else {
-                subscribeCatalogoUsuario();
-                subscribeNotificacionesUsuario();
-                subscribeMyAuditoria(); // Usuario escucha sus propios desbloqueos
-            }
+            // MICROFASE P0.2 (REQUISITO P1.1): antes este bloque decidía
+            // directamente aquí, en línea, cuáles de los 6 listeners de
+            // datos activar (if(isAdmin()){...}else{...}). Esa decisión
+            // nunca se volvía a evaluar tras el arranque, así que un cambio
+            // de rol en tiempo real (14.1.1) dejaba el conjunto de
+            // listeners desactualizado respecto al isAdmin() vigente. Ahora
+            // existe UN SOLO lugar que decide esto —
+            // _reconciliarListenersPorAutorizacion()— invocado tanto aquí
+            // (arranque) como al final de _actualizarAuthzState() (cambios
+            // en tiempo real), para que nunca puedan divergir entre sí.
+            _reconciliarListenersPorAutorizacion();
         }
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  migrarRolesExistentes() — ETAPA 14.1
+        //  ────────────────────────────────────────────────────────────────────
+        //  Acción ADMINISTRATIVA EXPLÍCITA — NUNCA se ejecuta automáticamente
+        //  al abrir la app. Recorre usuarios/* y reescribe SOLO el campo
+        //  'role' de los documentos que todavía usan un valor legacy
+        //  ('admin'/'user') hacia su equivalente canónico
+        //  ('ADMIN'/'BARTENDER'). Idempotente: un usuario ya migrado (role ya
+        //  es ADMIN/SUBJEFE_BARRA/BARTENDER) se omite sin escribir nada. No
+        //  toca permissionOverrides, displayName, ni ningún otro campo.
+        // ══════════════════════════════════════════════════════════════════════
+        async function migrarRolesExistentes() {
+            if (!hasPermission('users.update')) {
+                showNotification('⚠️ No tienes permiso para migrar roles de usuario');
+                return;
+            }
+            if (!_db)              { showNotification('📴 Sin conexión a Firestore'); return; }
+            if (!navigator.onLine) { showNotification('📴 Sin conexión — intenta de nuevo con internet'); return; }
+
+            showConfirm(
+                '🔁 Migrar roles legacy a nuevo modelo\n\n' +
+                'Esto actualizará el campo "role" de los usuarios que todavía usan ' +
+                "'admin'/'user' hacia 'ADMIN'/'BARTENDER'.\n\n" +
+                'Los usuarios ya migrados se omiten (operación segura de repetir). ' +
+                'No se modifica ningún otro dato del usuario.\n\n' +
+                '¿Continuar?',
+                async function() {
+                    showNotification('⏳ Migrando roles…');
+                    try {
+                        const snap = await _db.collection('usuarios').get();
+                        const ROLES_VALIDOS_CANONICOS = new Set(Object.keys(ROLES_SISTEMA_DEFECTO));
+                        let migrados = 0, omitidos = 0;
+                        const docsToUpdate = [];
+                        snap.forEach(function(doc) {
+                            const data    = doc.data();
+                            const rawRole = data.role;
+                            if (ROLES_VALIDOS_CANONICOS.has(rawRole)) {
+                                omitidos++; // ya migrado — no tocar (idempotencia)
+                                return;
+                            }
+                            const nuevo = ROLE_LEGACY_A_CANONICO[rawRole];
+                            if (!nuevo) {
+                                omitidos++; // valor desconocido/no mapeable — no se toca por seguridad
+                                return;
+                            }
+                            // REGLA ESPECIAL PARA ADMIN del ticket: defensa
+                            // explícita adicional — esta rama nunca puede
+                            // degradar a un admin, porque el único mapeo
+                            // posible desde 'admin' es hacia 'ADMIN' (una
+                            // equivalencia, no una degradación). Se deja el
+                            // check aquí de todos modos, para que sea
+                            // imposible incluso si el mapeo cambiara.
+                            if (rawRole === 'admin' && nuevo !== 'ADMIN') return;
+                            docsToUpdate.push({ ref: doc.ref, nuevo: nuevo });
+                        });
+
+                        // Batches de máximo 400 operaciones (margen bajo el límite de 500 de Firestore)
+                        for (let i = 0; i < docsToUpdate.length; i += 400) {
+                            const chunk = docsToUpdate.slice(i, i + 400);
+                            const batch = _db.batch();
+                            chunk.forEach(function(item) {
+                                batch.update(item.ref, {
+                                    role:      item.nuevo,
+                                    updatedAt: Date.now(),
+                                    updatedBy: currentUserUid
+                                });
+                            });
+                            await batch.commit();
+                            migrados += chunk.length;
+                        }
+
+                        showNotification('✅ Migración completa — ' + migrados + ' actualizado(s), ' + omitidos + ' ya estaban al día');
+                        console.info('[Migración roles]', { migrados: migrados, omitidos: omitidos });
+                    } catch (err) {
+                        console.error('[Migración roles] Error:', err);
+                        showNotification('❌ Error durante la migración — revisa la conexión e intenta de nuevo');
+                    }
+                }
+            );
+        }
+        window.migrarRolesExistentes = migrarRolesExistentes;
+
 
         function applyRoleUI() {
             const badge = document.getElementById('sbRoleBadge');
@@ -7942,6 +8963,18 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName) {
             html += '<div class="adm-stat"><span>Productos en catálogo</span><b>' + products.length + '</b></div>';
             html += '<div class="adm-stat"><span>Ajustes pendientes</span><b style="color:var(--amber)">' + pendAjustes + '</b></div>';
             html += '<div class="adm-stat"><span>Conteos multi-dispositivo</span><b>' + (Object.keys(auditoriaConteo).length) + ' productos</b></div>';
+            html += '</div>';
+
+            // ETAPA 14.1: panel MÍNIMO de Roles y Permisos — solo lo
+            // necesario para comprobar que el sistema funciona; la UI
+            // completa de Configuración (Usuarios/Roles/Sucursales/
+            // Almacenes) es una etapa posterior, fuera de este alcance.
+            html += '<div class="adm-card">';
+            html += '<h3>🔐 Roles y Permisos</h3>';
+            html += '<div class="adm-stat"><span>Tu rol resuelto</span><b>' + escapeHtml(_authzState.roleId || '—') + '</b></div>';
+            html += '<div class="adm-stat"><span>Rol legacy en Firestore</span><b>' + escapeHtml(_authzState.legacyRole || '—') + '</b></div>';
+            html += '<div class="adm-stat"><span>Permisos activos</span><b>' + (_authzState.permissions ? (_authzState.permissions.has('*') ? 'Todos (*)' : _authzState.permissions.size) : 0) + '</b></div>';
+            html += '<button class="adm-btn warn" onclick="migrarRolesExistentes()"><i class="fa-solid fa-arrows-rotate"></i> Migrar roles legacy a nuevo modelo</button>';
             html += '</div>';
 
             // Acciones admin
@@ -9371,6 +10404,14 @@ document.body.appendChild(overlay);
             renderTab();
         }
 
+        // FIX P0.1 (DOBLE CLIC / REENTRADA): flag en memoria que marca que una
+        // creación de auditoría ya está en curso. Se activa justo antes de la
+        // primera escritura real a Firestore y se libera SIEMPRE en el
+        // finally, tanto en éxito como en error — evita que dos confirmaciones
+        // casi simultáneas disparen dos escrituras atómicas con dos sessionId
+        // distintos compitiendo entre sí.
+        let _auditoriaCreandoEnProgreso = false;
+
         function auditoriaResetear() {
             if (!isAdmin()) {
                 showNotification('⚠️ Solo el administrador puede iniciar un nuevo ciclo de inventario');
@@ -9380,6 +10421,12 @@ document.body.appendChild(overlay);
                 showNotification('📴 Sin conexión — conecta a internet antes de iniciar nueva auditoría');
                 return;
             }
+            // FIX P0.1 (DOBLE CLIC): si ya hay una creación en curso, no se abre
+            // un segundo flujo de confirmación.
+            if (_auditoriaCreandoEnProgreso) {
+                showNotification('⏳ Ya se está iniciando una nueva auditoría — espera a que termine');
+                return;
+            }
             // CORRECCIÓN 4: Primera confirmación
             showConfirm(
                 '⚠️ ¿Iniciar nueva auditoría?\n\n' +
@@ -9387,6 +10434,14 @@ document.body.appendChild(overlay);
                 'Se creará un respaldo automático antes de continuar.\n' +
                 'Esta acción no se puede deshacer.',
                 function() {
+                    // FIX P0.1: re-chequeo — cierra la ventana entre el primer
+                    // diálogo y el segundo (p.ej. dos clics casi simultáneos en
+                    // el botón original, cada uno abriendo su propia cadena de
+                    // confirmaciones).
+                    if (_auditoriaCreandoEnProgreso) {
+                        showNotification('⏳ Ya se está iniciando una nueva auditoría — espera a que termine');
+                        return;
+                    }
                     // Segunda confirmación (acción crítica irreversible)
                     showConfirm(
                         '🔁 CONFIRMACIÓN FINAL — NUEVA AUDITORÍA\n\n' +
@@ -9395,12 +10450,25 @@ document.body.appendChild(overlay);
                         '• Todas las áreas (Almacén, Barra 1, Barra 2)\n\n' +
                         '¿Confirmar inicio de nueva auditoría?',
                         async function() {
-                            // Crear respaldo antes de resetear
+                            // FIX P0.1: última comprobación justo antes de escribir.
+                            if (_auditoriaCreandoEnProgreso) {
+                                showNotification('⏳ Ya se está iniciando una nueva auditoría — espera a que termine');
+                                return;
+                            }
+                            _auditoriaCreandoEnProgreso = true;
+
+                            // Crear respaldo antes de resetear. Se hace con el
+                            // estado AÚN vigente (sesión anterior) — nada se ha
+                            // tocado todavía.
                             _crearBackupNombrado('pre_reset_auditoria_' + new Date().toISOString().split('T')[0]);
 
                             const newSessionId = String(Date.now());
 
-                            // CORRECCIÓN 3: Auditoría del reset
+                            // CORRECCIÓN 3: Auditoría del reset. Se registra la
+                            // INTENCIÓN antes de escribir — _auditoriaSessionId
+                            // todavía es el valor anterior en este punto, porque
+                            // (ver FIX P0.1 abajo) el estado local ya no se muta
+                            // hasta que Firestore confirme.
                             _registrarEnSyncQueue({
                                 tipo:         'reset_auditoria',
                                 detalle:      'Nueva auditoría iniciada. Sesión anterior: ' + (_auditoriaSessionId || 'N/A'),
@@ -9412,30 +10480,75 @@ document.body.appendChild(overlay);
                                 motivo:       'Inicio de nuevo ciclo de auditoría'
                             });
 
-                            // Reiniciar estado del admin
-                            _auditoriaSessionId       = newSessionId;
-                            auditoriaStatus           = estadoAreasVacio('pendiente');
-                            auditoriaConteo           = {};
-                            auditoriaConteoPorUsuario = {};
-                            allUsersAuditoria         = {};
-                            // Reiniciar estado propio del admin (él también cuenta)
-                            myAuditoriaConteo  = {};
-                            myAuditoriaStatus  = estadoAreasVacio('pendiente');
-                            myAuditoriaUnlocks = {};
-                            auditoriaView      = 'selection';
-                            auditoriaAreaActiva = null;
-                            isAuditoriaMode    = false;
-                            saveToLocalStorage();
-                            renderTab();
-
                             showNotification('⏳ Iniciando nueva auditoría…');
+
+                            // ══════════════════════════════════════════════════════════════
+                            // FIX P0.1 (REGLA PRINCIPAL — CONSISTENCIA Y ROLLBACK):
+                            // Antes, el estado local (memoria + localStorage + IndexedDB, vía
+                            // saveToLocalStorage) se declaraba "nueva auditoría" de forma
+                            // INCONDICIONAL, ANTES de intentar cualquier escritura a Firestore.
+                            // Si _adminIniciarSesionFirestore() fallaba a mitad de camino (o
+                            // simplemente por pérdida de conexión), este dispositivo quedaba
+                            // mostrando una auditoría "fantasma" — sessionId nuevo, conteos en
+                            // cero — que Firestore NUNCA confirmó, sin ningún mecanismo de
+                            // rollback: el catch original solo mostraba un error y dejaba el
+                            // estado local tal cual había quedado.
+                            //
+                            // Ahora el orden se invierte: el estado local SOLO avanza a la
+                            // nueva sesión DESPUÉS de que el batch atómico de Firestore se
+                            // confirme. Si falla, el bloque de mutación de abajo nunca se
+                            // ejecuta — el estado local permanece intacto en la sesión
+                            // anterior. Esto es un "rollback" trivial por construcción: nunca
+                            // hay nada que revertir, porque nunca se avanzó de más. El admin
+                            // puede reintentar la misma acción con seguridad (no hay estado
+                            // parcial que limpiar).
+                            // ══════════════════════════════════════════════════════════════
                             try {
-                                await _adminIniciarSesionFirestore(newSessionId);
-                                await resetConteoAtomicoEnFirestore();
-                                showNotification('✅ Nueva auditoría iniciada — todos los conteos en ceros');
+                                await _adminIniciarSesionFirestore(newSessionId); // atómico: todo o nada
+
+                                // Firestore confirmó la nueva sesión — ahora sí es seguro
+                                // reflejarla localmente.
+                                _auditoriaSessionId       = newSessionId;
+                                auditoriaStatus           = estadoAreasVacio('pendiente');
+                                auditoriaConteo           = {};
+                                auditoriaConteoPorUsuario = {};
+                                allUsersAuditoria         = {};
+                                // Reiniciar estado propio del admin (él también cuenta)
+                                myAuditoriaConteo  = {};
+                                myAuditoriaStatus  = estadoAreasVacio('pendiente');
+                                myAuditoriaUnlocks = {};
+                                auditoriaView      = 'selection';
+                                auditoriaAreaActiva = null;
+                                isAuditoriaMode    = false;
+                                saveToLocalStorage();
+                                renderTab();
+
+                                // FIX P0.1: la limpieza de colecciones LEGACY
+                                // (conteoAreas/dispositivos, conteoMultiUsuario — usadas
+                                // solo por generarYPublicarReporte(), ver comentarios en
+                                // resetConteoAtomicoEnFirestore) se trata como paso
+                                // SECUNDARIO y NO bloqueante: la sesión de auditoría ya
+                                // quedó confirmada en Firestore aunque este paso falle, así
+                                // que NO se revierte la sesión por un fallo aquí. Si falla,
+                                // se avisa honestamente (nunca se muestra un "✅" que
+                                // implique éxito total) y queda marcado para reintento.
+                                try {
+                                    await resetConteoAtomicoEnFirestore();
+                                    try { localStorage.removeItem('inventarioApp_legacyCleanupPending'); } catch(_) {}
+                                    showNotification('✅ Nueva auditoría iniciada — todos los conteos en ceros');
+                                } catch (errLegacy) {
+                                    console.error('[AuditReset] Sesión ' + newSessionId + ' confirmada en Firestore, pero falló la limpieza de conteos legacy (conteoAreas/conteoMultiUsuario):', errLegacy);
+                                    try { localStorage.setItem('inventarioApp_legacyCleanupPending', newSessionId); } catch(_) {}
+                                    showNotification('⚠️ Nueva auditoría iniciada, pero algunos datos históricos de reportes no se limpiaron — reintenta desde Ajustes o contacta soporte');
+                                }
                             } catch (err) {
-                                console.error('[AuditReset] Error crítico al iniciar sesión en Firestore:', err);
-                                showNotification('❌ Error al iniciar auditoría — revisa la conexión y vuelve a intentarlo');
+                                // La sesión NUNCA se confirmó en Firestore — el estado local
+                                // NO se tocó, sigue en la sesión anterior. No hay nada que
+                                // revertir.
+                                console.error('[AuditReset] Error crítico al iniciar sesión en Firestore — estado local NO modificado, sesión anterior sigue activa:', err);
+                                showNotification('❌ No se pudo iniciar la nueva auditoría — la auditoría anterior sigue activa. Revisa la conexión y vuelve a intentarlo');
+                            } finally {
+                                _auditoriaCreandoEnProgreso = false;
                             }
                         }
                     );
@@ -11978,9 +13091,27 @@ document.body.appendChild(overlay);
                     if (typeof _unsubMainDoc   === 'function') { _unsubMainDoc();   _unsubMainDoc   = null; } // FIX SYNC-6
                     if (typeof _unsubAllUsers  === 'function') { _unsubAllUsers();  _unsubAllUsers  = null; }
                     if (typeof _unsubMyAuditoria === 'function') { _unsubMyAuditoria(); _unsubMyAuditoria = null; }
+                    // ETAPA 14.1.1: limpiar también los listeners en tiempo
+                    // real del contexto de autorización — nunca deben
+                    // sobrevivir a un logout, ni seguir escuchando el doc del
+                    // usuario/rol anterior en la sesión del siguiente.
+                    if (typeof _unsubUsuarioPropio === 'function') { _unsubUsuarioPropio(); _unsubUsuarioPropio = null; }
+                    if (typeof _unsubRolActual     === 'function') { _unsubRolActual();     _unsubRolActual     = null; }
+                    _rolEscuchadoActualId = null;
+                    _lastUserData         = null;
                     allUsersAuditoria = {};
+                    _ajustes = [];
+                    // MICROFASE P0.2: sin este reset, si el siguiente usuario
+                    // en loguearse resulta tener el MISMO modo (p.ej. admin →
+                    // logout → otro admin), _reconciliarListenersPorAutorizacion()
+                    // vería "nada cambió" (mismo string 'admin') y se
+                    // saltaría la resuscripción — aunque los listeners de la
+                    // sesión anterior ya fueron destruidos arriba. null
+                    // fuerza que la próxima llamada siempre reconcilie de cero.
+                    _modoListenersActual = null;
                     currentUserRole = null;
                     currentUserUid  = null;
+                    _resetAuthzState(); // ETAPA 14.1: logout limpia también el contexto de permisos
                     showLogin();
                 }
             });

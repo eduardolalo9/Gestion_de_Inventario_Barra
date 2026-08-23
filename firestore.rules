@@ -1,176 +1,155 @@
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
+           rules_version = '2';
+           service cloud.firestore {
+             match /databases/{database}/documents {
+               function isAdminUser() {
+                 return request.auth != null &&
+                   get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role in ['admin', 'ADMIN'];
+               }
+               // FIX MICROFASE P0.2: valida la forma exacta que
+               // syncConteoProductoAtomico() y migrarStockAreasAProductos()
+               // ya escriben hoy (verificado contra el código real, no
+               // inventado) — nunca exige campos que el cliente no envía.
+               function _datosConteoValidos(data) {
+                 return data.keys().hasAll(['enteras','abiertas','version','actualizadoPor','ts'])
+                   && data.enteras is number && data.enteras >= 0
+                   && data.abiertas is list
+                   && data.version is int && data.version >= 1;
+               }
+               // FIX-SECURITY CRÍTICO: Evitar auto-escalación a admin.
+               // - Un usuario puede crear su propio doc solo con role='user' (o 'BARTENDER').
+               // - Un usuario puede actualizar su propio doc solo si NO cambia role/permissionOverrides/status.
+               // - Solo un admin puede cambiar esos campos de cualquier usuario.
+               match /usuarios/{uid} {
+                 allow get:    if request.auth != null && (request.auth.uid == uid || isAdminUser());
+                 allow list:   if isAdminUser();
+                 allow create: if request.auth != null && request.auth.uid == uid
+                                  && request.resource.data.role in ['user', 'BARTENDER'];
+                 allow update: if request.auth != null && (
+                                  // Admin puede cambiar cualquier campo
+                                  isAdminUser()
+                                  // Usuario solo puede actualizar si NO cambia role, permissionOverrides ni status
+                                  || (request.auth.uid == uid
+                                      && !('role' in request.resource.data.diff(resource.data).affectedKeys())
+                                      && !('permissionOverrides' in request.resource.data.diff(resource.data).affectedKeys())
+                                      && !('status' in request.resource.data.diff(resource.data).affectedKeys()))
+                               );
+                 allow delete: if isAdminUser();
+               }
+               // FIX ETAPA 14.1: catálogo de roles del sistema. Lectura abierta
+               // a cualquier autenticado (todo usuario necesita poder resolver
+               // los permisos de SU PROPIO rol); escritura solo admin.
+               match /roles/{roleId} {
+                 allow read:   if request.auth != null;
+                 allow create: if isAdminUser();
+                 allow update: if isAdminUser() &&
+                                  !(roleId == 'ADMIN' && !('*' in request.resource.data.permissions));
+                 allow delete: if false; // los roles de sistema no se eliminan en esta etapa
+               }
+               match /catalogo/{docId} {
+                 allow read:  if request.auth != null;
+                 allow write: if isAdminUser();
+               }
+               match /inventarioApp/{docId} {
+                 allow read, write: if request.auth != null; // el documento raíz en sí — sin cambios
 
-    function estaAutenticado() { return request.auth != null; }
-    function esAdmin() {
-      return estaAutenticado() &&
-        exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role == 'admin';
-    }
-    function esPropioUid(uid) { return estaAutenticado() && request.auth.uid == uid; }
-    function rolSinCambio() {
-      return !('role' in request.resource.data.diff(resource.data).affectedKeys());
-    }
+                 // FIX MICROFASE P0.2: subcolecciones de soporte/legacy que
+                 // NO requieren version-checking ni restricción por uid —
+                 // enumeradas EXPLÍCITAMENTE (verificadas contra el código
+                 // real: _flushSyncQueueToFirestore, syncConteoPorUsuarioToFirestore,
+                 // resetConteoAtomicoEnFirestore, _registrarConflictos,
+                 // _writeChunkedSubcollection) en vez de un wildcard genérico,
+                 // precisamente para que ese wildcard no vuelva a anular las
+                 // reglas específicas de stockAreas/userAuditoria de abajo.
+                 match /conteoMultiUsuario/{area} {
+                   allow read, write: if request.auth != null;
+                 }
+                 match /conteoAreas/{area} {
+                   allow read, write: if request.auth != null;
+                   match /dispositivos/{deviceId} {
+                     allow read, write: if request.auth != null;
+                   }
+                 }
+                 match /conflictos/{conflictoId} {
+                   allow read, write: if request.auth != null;
+                 }
+                 match /cambios/{cambioId} {
+                   allow read, write: if request.auth != null;
+                 }
+                 match /ordersChunks/{chunkId} {
+                   allow read, write: if request.auth != null;
+                 }
+                 match /inventoriesChunks/{chunkId} {
+                   allow read, write: if request.auth != null;
+                 }
 
-    match /usuarios/{uid} {
-      allow read:   if esPropioUid(uid) || esAdmin();
-      allow create: if esPropioUid(uid) && request.resource.data.role == 'user';
-      allow update: if esAdmin() || (esPropioUid(uid) && rolSinCambio());
-      allow delete: if esAdmin();
-    }
+                 // FIX MICROFASE P0.2 (CRÍTICO — Optimistic Locking real):
+                 // Antes caía bajo el wildcard genérico, sin ningún chequeo.
+                 // Ahora Firestore exige version==1 al crear y
+                 // version==version_anterior+1 en cada actualización, y
+                 // rechaza cualquier otro valor — versión vieja, misma
+                 // versión, salto de versión o retroceso. Dos dispositivos
+                 // escribiendo version+1 sobre el mismo estado base: SOLO
+                 // uno gana; el otro recibe un error real de Firestore que
+                 // syncConteoProductoAtomico() ya sabía interpretar como
+                 // conflicto (ver _registrarConflictoVersion en el HTML) —
+                 // ese manejo en JS ya existía, solo esperaba un rechazo que
+                 // hasta ahora nunca ocurría.
+                 // Sin 'allow delete': un conteo nunca se borra (no existe
+                 // ningún .delete() sobre esta ruta en el código real).
+                 // FIX P0.3 (hallazgo de esta etapa de validación): el
+                 // cliente (syncConteoProductoAtomico → _leerConteoProducto)
+                 // ya asumía defensivamente que un documento SIN campo
+                 // 'version' equivale a versión base 0 ("actual.version ||
+                 // 0"). La regla original de 'update' no contemplaba ese
+                 // caso: 'resource.data.version + 1' sobre un documento sin
+                 // ese campo evalúa a error → Firestore deniega SIEMPRE,
+                 // dejando ese documento bloqueado para cualquier
+                 // actualización futura hasta corregirlo manualmente. Ahora
+                 // la regla usa la MISMA convención que el cliente (versión
+                 // ausente = 0), consistente en ambos lados.
+                 match /stockAreas/{area}/productos/{productId} {
+                   allow read: if request.auth != null;
+                   allow create: if request.auth != null
+                     && _datosConteoValidos(request.resource.data)
+                     && request.resource.data.version == 1;
+                   allow update: if request.auth != null
+                     && _datosConteoValidos(request.resource.data)
+                     && request.resource.data.version ==
+                        (('version' in resource.data) ? resource.data.version : 0) + 1;
+                 }
 
-    match /inventarioApp/{docId} {
-      allow read:   if estaAutenticado();
-      // FIX-SEC-5: validación mínima de forma. Antes cualquier usuario
-      // autenticado podía escribir `products` con cualquier tipo (string,
-      // número, null) y la app lo aceptaba sin objeción del servidor —
-      // dependía enteramente de que _applyCloudData() en el cliente lo
-      // rechazara. Ahora, si el campo `products` está presente en la
-      // escritura, debe ser una lista.
-      allow create: if estaAutenticado()
-                    && (!('products' in request.resource.data) || request.resource.data.products is list);
-      allow update: if estaAutenticado()
-                    && (!('products' in request.resource.data) || request.resource.data.products is list);
-      allow delete: if esAdmin();
-
-      match /ordersChunks/{chunkId}      { allow read: if estaAutenticado(); allow write: if estaAutenticado(); }
-      match /inventoriesChunks/{chunkId} { allow read: if estaAutenticado(); allow write: if estaAutenticado(); }
-
-      match /stockAreas/{area} {
-        // FIX-SEC-3: nada en el código actual escribe ya este documento
-        // plano (verificado — el conteo regular se sincroniza exclusivamente
-        // vía /productos/{productId} desde la migración de concurrencia
-        // segura). Se restringe su escritura a admin, reservada para el
-        // script de migración puntual; la lectura se mantiene abierta para
-        // que dispositivos aún no migrados sigan funcionando durante la
-        // transición.
-        allow read:  if estaAutenticado();
-        allow write: if esAdmin();
-
-        // MIGRACIÓN MÍNIMA — CONCURRENCIA SEGURA: un documento por producto,
-        // con optimistic locking. `create` exige version==1 (primer conteo
-        // de ese producto en esa área, desde cualquier dispositivo);
-        // `update` exige que la versión nueva sea exactamente version_actual+1
-        // — si otro dispositivo ya escribió una versión más reciente, esta
-        // condición falla y Firestore RECHAZA la escritura, en vez de
-        // aceptarla y sobrescribir en silencio el valor del otro usuario.
-        match /productos/{productId} {
-          allow read: if estaAutenticado();
-
-          allow create: if estaAutenticado()
-                        && request.resource.data.version == 1
-                        && request.resource.data.enteras is number
-                        && request.resource.data.enteras >= 0
-                        && request.resource.data.actualizadoPor is string;
-
-          allow update: if estaAutenticado()
-                        && request.resource.data.version == resource.data.version + 1
-                        && request.resource.data.enteras is number
-                        && request.resource.data.enteras >= 0
-                        && request.resource.data.actualizadoPor is string;
-
-          allow delete: if esAdmin();
-        }
-      }
-
-      match /conteoMultiUsuario/{id} {
-        // FIX-SEC-4: sistema legacy sin vínculo verificable entre
-        // pseudo-identidad de dispositivo y uid autenticado — no es posible
-        // restringir por ownership real sin retirarlo (ya recomendado en
-        // auditorías previas). Como mitigación mínima, se impide el borrado
-        // arbitrario mientras siga en uso.
-        allow read: if estaAutenticado();
-        allow create: if estaAutenticado();
-        allow update: if estaAutenticado();
-        allow delete: if esAdmin();
-      }
-
-      match /conteoAreas/{area} {
-        allow read: if estaAutenticado();
-        allow create: if estaAutenticado();
-        allow update: if estaAutenticado();
-        allow delete: if esAdmin();
-        match /dispositivos/{devId} {
-          allow read: if estaAutenticado();
-          allow create: if estaAutenticado();
-          allow update: if estaAutenticado();
-          allow delete: if esAdmin();
-        }
-      }
-
-      match /userAuditoria/{uid} {
-        // FIX-SEC-1 (CRÍTICO): antes 'read' era estaAutenticado() sin más —
-        // cualquier usuario podía leer el conteo en curso de cualquier otro
-        // bartender directamente vía la SDK, sin pasar por la UI que sí
-        // filtra por uid propio. La auditoría "ciega" no era ciega a nivel
-        // de servidor. Ahora solo el propio dueño del documento o un admin
-        // pueden leerlo — igual que ya estaba correctamente resuelto para
-        // create/update/delete.
-        allow read: if esPropioUid(uid) || esAdmin();
-
-        // FIX-SEC-2 (CRÍTICO): el campo `isAdmin` de este documento lo
-        // escribe el propio cliente (syncMyAuditoriaToFirestore), y
-        // _recalcAdminAggregatedConteo() lo usa para decidir qué conteo
-        // tiene autoridad en la consolidación — sin esta condición,
-        // cualquier usuario con role='user' podía escribir isAdmin:true en
-        // su propio documento y hacer que su conteo sobrescribiera al del
-        // admin real. Ahora, si el documento declara isAdmin:true, la
-        // regla exige que quien escribe sea un admin verificado
-        // server-side (contra usuarios/{uid}.role) — el campo deja de ser
-        // una autodeclaración y pasa a ser, otra vez, un hecho verificado.
-        allow create: if (esPropioUid(uid) || esAdmin())
-                      && (request.resource.data.isAdmin != true || esAdmin());
-        allow update: if (esPropioUid(uid) || esAdmin())
-                      && (request.resource.data.isAdmin != true || esAdmin());
-        allow delete: if esPropioUid(uid) || esAdmin();
-      }
-
-      match /conflictos/{id} {
-        allow read: if estaAutenticado();
-        allow create: if estaAutenticado();
-        allow update: if false;
-        allow delete: if esAdmin();
-      }
-      match /cambios/{id} {
-        allow read: if estaAutenticado();
-        allow create: if estaAutenticado();
-        allow update: if false;
-        allow delete: if esAdmin();
-      }
-    }
-
-    match /catalogo/{docId} {
-      allow read:  if estaAutenticado();
-      allow write: if esAdmin();
-    }
-    match /ajustes/{id} {
-      allow read:   if estaAutenticado();
-      allow create: if estaAutenticado()
-                    && request.resource.data.solicitanteUid == request.auth.uid
-                    && request.resource.data.estado == 'pendiente';
-      allow update: if esAdmin();
-      allow delete: if esAdmin();
-    }
-    match /notificaciones/{id} {
-      allow read:   if estaAutenticado();
-      allow create: if estaAutenticado();
-      allow update: if estaAutenticado();
-      allow delete: if esAdmin();
-    }
-    match /reportes/{id} {
-      allow read:  if estaAutenticado();
-      allow create: if esAdmin();
-      allow update: if esAdmin();
-      allow delete: if esAdmin();
-    }
-    match /historialCambios/{id} {
-      allow read:   if estaAutenticado();
-      allow create: if estaAutenticado();
-      allow update: if false;
-      allow delete: if esAdmin();
-    }
-
-    match /{document=**} { allow read, write: if false; }
-  }
-}
+                 // FIX 6 SEGURIDAD (intención sin cambios): cada usuario solo
+                 // escribe SU propio doc de auditoría; el admin puede
+                 // leer/escribir todos. FIX MICROFASE P0.2: esta regla ahora
+                 // SÍ es la única que aplica sobre esta ruta — ya no convive
+                 // con un wildcard hermano más permisivo que la anulaba.
+                 match /userAuditoria/{uid} {
+                   allow read:  if request.auth != null && (request.auth.uid == uid || isAdminUser());
+                   allow write: if request.auth != null && (request.auth.uid == uid || isAdminUser());
+                 }
+               }
+               match /ajustes/{ajusteId} {
+                 allow read:   if request.auth != null;
+                 allow create: if request.auth != null;
+                 allow update: if isAdminUser();
+               }
+               match /notificaciones/{notifId} {
+                 allow read, create: if request.auth != null;
+                 allow update: if request.auth != null;
+               }
+               match /reportes/{reporteId} {
+                 allow read:  if request.auth != null;
+                 allow write: if isAdminUser();
+               }
+               // FIX-SECURITY: Historial permanente de cambios de inventario.
+               // Sin esta regla, _flushSyncQueueToFirestore() falla con permission-denied
+               // en todos sus writes a historialCambios, dejando los eventos en estado
+               // "pendiente" indefinidamente y nunca sincronizando el historial a la nube.
+               // Escritura: cualquier usuario autenticado (cada uno solo sube sus propios cambios).
+               // Lectura: solo administrador (datos sensibles de inventario).
+               match /historialCambios/{docId} {
+                 allow read:  if isAdminUser();
+                 allow write: if request.auth != null;
+               }
+             }
+           }
