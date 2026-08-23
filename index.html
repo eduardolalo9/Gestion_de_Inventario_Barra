@@ -268,8 +268,23 @@ const firebaseConfig = {
            rules_version = '2';
            service cloud.firestore {
              match /databases/{database}/documents {
+               // FIX P0.3.1 (investigación con Firestore Emulator real): antes,
+               // get(...).data.role sobre un usuarios/{uid} INEXISTENTE producía
+               // un error de evaluación real de Firestore (no un valor null
+               // silencioso) — confirmado empíricamente con el emulador, no
+               // supuesto. En producción esto podría manifestarse en la ventana
+               // teórica entre "usuario autenticado" y "su doc usuarios/{uid}
+               // ya fue creado por loadUserRole()". Se agrega exists() ANTES de
+               // .data.role: si el documento no existe, la función devuelve
+               // false de forma segura y predecible, en vez de propagar un
+               // error de evaluación. exists() y get() sobre la MISMA ruta se
+               // cachean dentro de la misma evaluación de regla — no hay costo
+               // adicional de lectura. No se debilita ni un ápice el criterio
+               // de autorización: solo cambia "error opaco" por "false seguro"
+               // en el único caso donde antes fallaba.
                function isAdminUser() {
                  return request.auth != null &&
+                   exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) &&
                    get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role in ['admin', 'ADMIN'];
                }
                // FIX MICROFASE P0.2: valida la forma exacta que
