@@ -138,9 +138,79 @@
                  // leer/escribir todos. FIX MICROFASE P0.2: esta regla ahora
                  // SÍ es la única que aplica sobre esta ruta — ya no convive
                  // con un wildcard hermano más permisivo que la anulaba.
+                 //
+                 // ETAPA 15: la rama del PROPIO usuario (request.auth.uid ==
+                 // uid) queda EXACTAMENTE igual — el motor de conteo normal
+                 // (un bartender guardando/finalizando su propio conteo) no
+                 // gana ninguna condición nueva, cero riesgo/latencia añadida
+                 // a ese camino. Solo la rama de ADMIN escribiendo el doc de
+                 // OTRO usuario (el caso real de "reabrir almacén") ahora
+                 // exige además que el Inventario Físico referenciado
+                 // (request.resource.data.sessionId, ya presente en cada doc
+                 // — ver _adminIniciarSesionFirestore/syncMyAuditoriaToFirestore
+                 // en el HTML) NO esté CERRADO. Esto es lo que el ticket pide
+                 // explícitamente: "ADMIN NO puede reabrir un inventario que
+                 // ya esté CERRADO... ningún camino de UI, JS, Firestore SDK o
+                 // Rules que permita modificarlo" — antes esto SOLO se
+                 // verificaba en el cliente (reabrirAlmacenAdmin), lo cual el
+                 // propio ticket dice explícitamente que no basta.
                  match /userAuditoria/{uid} {
-                   allow read:  if request.auth != null && (request.auth.uid == uid || isAdminUser());
-                   allow write: if request.auth != null && (request.auth.uid == uid || isAdminUser());
+                   allow read: if request.auth != null && (request.auth.uid == uid || isAdminUser());
+                   // 'delete' se mantiene INDEPENDIENTE de 'create'/'update' a
+                   // propósito: request.resource es null en un delete, así que
+                   // la condición de abajo (que lee
+                   // request.resource.data.sessionId) directamente no aplica
+                   // a un delete — de haberla puesto también aquí, se habría
+                   // roto el batch.delete() de userAuditoria de OTROS usuarios
+                   // que _adminIniciarSesionFirestore() ejecuta al iniciar cada
+                   // nueva sesión (P0.1), ya que ese borrado es "limpiar lo
+                   // viejo para lo nuevo", no "reabrir algo cerrado" — son dos
+                   // operaciones de negocio distintas y no deben compartir esta
+                   // condición.
+                   allow delete: if request.auth != null && (request.auth.uid == uid || isAdminUser());
+                   allow create, update: if request.auth != null && (
+                     request.auth.uid == uid
+                     || (
+                       isAdminUser() &&
+                       get(/databases/$(database)/documents/inventarioApp/$(docId)/inventories/$(request.resource.data.sessionId)).data.estado != 'CERRADO'
+                     )
+                   );
+                 }
+
+                 // ETAPA 15 — INVENTARIO FÍSICO
+                 // inventoryId === _auditoriaSessionId (mismo identificador,
+                 // sin duplicar la noción de "sesión" — ver informe). Solo
+                 // admin crea/actualiza. INMUTABILIDAD REAL: una vez
+                 // estado=='CERRADO', ningún 'update' pasa la condición de
+                 // abajo — ni siquiera el admin puede modificarlo después,
+                 // esto no es un botón oculto, es la propia Rule la que lo
+                 // impide. 'delete' nunca se permite (el historial es
+                 // permanente por diseño de negocio).
+                 match /inventories/{inventoryId} {
+                   allow read:   if request.auth != null;
+                   allow create: if isAdminUser();
+                   allow update: if isAdminUser() && resource.data.estado != 'CERRADO';
+                   allow delete: if false;
+                   // Snapshot final fragmentado (mismo patrón que
+                   // ordersChunks/inventoriesChunks) — una vez escrito, es
+                   // tan inmutable como el doc padre: solo se crea DURANTE
+                   // el cierre (cuando el padre pasa a CERRADO en el MISMO
+                   // batch), nunca se actualiza después.
+                   match /snapshotChunks/{chunkId} {
+                     allow read:   if request.auth != null;
+                     allow create: if isAdminUser();
+                     allow update, delete: if false;
+                   }
+                 }
+
+                 // Contador atómico para el número visible (#101, #102...).
+                 // Documento único; se incrementa con FieldValue.increment()
+                 // dentro de una transacción — nunca se lee/escribe el valor
+                 // "a mano", así que dos admins creando casi simultáneamente
+                 // nunca pueden terminar con el mismo número (ver informe).
+                 match /contadores/inventarios {
+                   allow read:   if request.auth != null;
+                   allow write:  if isAdminUser();
                  }
                }
                match /ajustes/{ajusteId} {

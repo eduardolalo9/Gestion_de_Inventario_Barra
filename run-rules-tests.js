@@ -10,17 +10,15 @@
  *   3. npx firebase emulators:exec --only firestore --project demo-barinventory \
  *        "node run-rules-tests.js"
  *
- * FIX P0.3.1: cada prueba ahora es VERDADERAMENTE independiente — se limpia
- * Firestore Y se re-siembran los documentos usuarios/* en el MISMO paso
- * (reiniciarConDatosBase), nunca en pasos separados. Antes, los documentos
- * usuarios/admin1|bartender1|bartender2 se creaban UNA sola vez al inicio del
- * script, y la primera llamada a testEnv.clearFirestore() (dentro de la
- * prueba 1) los borraba para siempre — las pruebas 12-14, que dependen de
- * isAdminUser() (y por tanto de que esos documentos existan), quedaban
- * corriendo sobre un Firestore sin usuarios. Las pruebas 12 y 13 "pasaban"
- * por razones accidentales (ver comentarios en cada una); la 14 fue la única
- * que expuso el problema, porque es la única que exige que isAdminUser()
- * evalúe realmente a true.
+ * ETAPA 15 (INVENTARIO FÍSICO): reiniciarConDatosBase() ahora TAMBIÉN siembra
+ * dos inventories/{id} — uno SINCRONIZADO ('inv-activo') y uno CERRADO
+ * ('inv-cerrado') — porque la regla de userAuditoria, cuando el ADMIN escribe
+ * el doc de OTRO usuario, ahora exige (get()) que el inventario referenciado
+ * por sessionId no esté CERRADO (ver firestore.rules). Las pruebas 1-19
+ * (usuarios/roles + versionado de stockAreas) se conservan TAL CUAL estaban —
+ * solo se actualizó el sessionId de placeholder 'x' a 'inv-activo' donde el
+ * admin escribe el doc de otro usuario, para que seguir pasando sea una
+ * afirmación real y no un artefacto de un sessionId inexistente.
  */
 
 const { initializeTestEnvironment, assertSucceeds, assertFails } = require('@firebase/rules-unit-testing');
@@ -46,9 +44,11 @@ function docBase(version) {
     return { enteras: 5, abiertas: [], version, actualizadoPor: 'u1', ts: Date.now() };
 }
 
-// FIX P0.3.1: limpia Firestore Y re-siembra usuarios/roles en el MISMO paso
-// atómico — ninguna prueba que dependa de isAdminUser() puede quedar
+// FIX P0.3.1 (conservado): limpia Firestore Y re-siembra usuarios/roles en el
+// MISMO paso — ninguna prueba que dependa de isAdminUser() puede quedar
 // corriendo sobre un Firestore sin los documentos de usuario que necesita.
+// ETAPA 15: además siembra un inventario SINCRONIZADO y uno CERRADO, porque
+// la rama admin de userAuditoria ahora depende de esa referencia también.
 async function reiniciarConDatosBase() {
     await testEnv.clearFirestore();
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
@@ -56,10 +56,19 @@ async function reiniciarConDatosBase() {
         await db.doc('usuarios/admin1').set({ uid: 'admin1', role: 'ADMIN' });
         await db.doc('usuarios/bartender1').set({ uid: 'bartender1', role: 'BARTENDER' });
         await db.doc('usuarios/bartender2').set({ uid: 'bartender2', role: 'BARTENDER' });
-        // Rol de sistema real (mismo shape que _asegurarRolesSistemaEnFirestore
-        // escribe en index.html) — necesario para la prueba 7, que usa
-        // roles/{roleId} como operación que depende EXCLUSIVAMENTE de admin.
         await db.doc('roles/BARTENDER').set({ roleId: 'BARTENDER', nombre: 'Bartender', permissions: ['inventory.count'], esSistema: true });
+        await db.doc('inventarioApp/barra-principal/inventories/inv-activo').set({
+            inventoryId: 'inv-activo', numero: 101, tipo: 'inventario_fisico', branchId: 'barra-principal',
+            estado: 'SINCRONIZADO', fechaCreacion: Date.now(), creadoPorUid: 'admin1',
+            creadoPorNombre: 'Admin Uno', creadoPorRol: 'ADMIN', fechaCierre: null,
+            cerradoPorUid: null, cerradoPorNombre: null, totalProductos: 5, warehousesSnapshot: ['almacen', 'barra1', 'barra2']
+        });
+        await db.doc('inventarioApp/barra-principal/inventories/inv-cerrado').set({
+            inventoryId: 'inv-cerrado', numero: 100, tipo: 'inventario_fisico', branchId: 'barra-principal',
+            estado: 'CERRADO', fechaCreacion: Date.now() - 86400000, creadoPorUid: 'admin1',
+            creadoPorNombre: 'Admin Uno', creadoPorRol: 'ADMIN', fechaCierre: Date.now(),
+            cerradoPorUid: 'admin1', cerradoPorNombre: 'Admin Uno', totalProductos: 5, warehousesSnapshot: ['almacen', 'barra1', 'barra2']
+        });
     });
 }
 
@@ -80,6 +89,7 @@ async function main() {
 
     const rutaProducto = (db) => db.doc('inventarioApp/barra-principal/stockAreas/almacen/productos/PRD-001');
     const rutaAuditoria = (db, uid) => db.doc('inventarioApp/barra-principal/userAuditoria/' + uid);
+    const rutaInventario = (db, id) => db.doc('inventarioApp/barra-principal/inventories/' + id);
 
     // ══════════════════════════════════════════════════════════════════
     //  PARTE 1 — USUARIOS Y ROLES (userAuditoria + isAdminUser)
@@ -87,26 +97,23 @@ async function main() {
 
     await prueba('1. Un usuario normal puede escribir su propio userAuditoria', async () => {
         await reiniciarConDatosBase();
-        await assertSucceeds(rutaAuditoria(bt1, 'bartender1').set({ sessionId: 'x', conteo: {} }));
+        await assertSucceeds(rutaAuditoria(bt1, 'bartender1').set({ sessionId: 'inv-activo', conteo: {} }));
     });
 
     await prueba('2. Un usuario normal NO puede escribir userAuditoria de otro usuario', async () => {
         await reiniciarConDatosBase();
-        // Ahora isAdminUser() SÍ puede evaluarse limpiamente (usuarios/bartender1
-        // existe) — esta prueba verifica la razón de negocio correcta (no es
-        // admin y no es su propio doc), no un error de evaluación accidental.
-        await assertFails(rutaAuditoria(bt1, 'bartender2').set({ sessionId: 'x', conteo: {} }));
+        await assertFails(rutaAuditoria(bt1, 'bartender2').set({ sessionId: 'inv-activo', conteo: {} }));
     });
 
-    await prueba('3. Un admin puede escribir userAuditoria de otro usuario', async () => {
+    await prueba('3. Un admin puede escribir userAuditoria de otro usuario (inventario SINCRONIZADO)', async () => {
         await reiniciarConDatosBase();
-        await assertSucceeds(rutaAuditoria(admin1, 'bartender2').set({ sessionId: 'x', conteo: {} }));
+        await assertSucceeds(rutaAuditoria(admin1, 'bartender2').set({ sessionId: 'inv-activo', conteo: {} }));
     });
 
     await prueba('4. Un admin puede leer userAuditoria de otro usuario', async () => {
         await reiniciarConDatosBase();
         await testEnv.withSecurityRulesDisabled(async (ctx) => {
-            await rutaAuditoria(ctx.firestore(), 'bartender2').set({ sessionId: 'x', conteo: {} });
+            await rutaAuditoria(ctx.firestore(), 'bartender2').set({ sessionId: 'inv-activo', conteo: {} });
         });
         await assertSucceeds(rutaAuditoria(admin1, 'bartender2').get());
     });
@@ -114,7 +121,7 @@ async function main() {
     await prueba('5. Un usuario normal NO puede leer userAuditoria de otro usuario', async () => {
         await reiniciarConDatosBase();
         await testEnv.withSecurityRulesDisabled(async (ctx) => {
-            await rutaAuditoria(ctx.firestore(), 'bartender2').set({ sessionId: 'x', conteo: {} });
+            await rutaAuditoria(ctx.firestore(), 'bartender2').set({ sessionId: 'inv-activo', conteo: {} });
         });
         await assertFails(rutaAuditoria(bt1, 'bartender2').get());
     });
@@ -124,20 +131,14 @@ async function main() {
         await assertSucceeds(admin1.doc('usuarios/admin1').get());
     });
 
-    await prueba('7. isAdminUser() probado de forma AISLADA: roles/{roleId} exige EXCLUSIVAMENTE ser admin (sin escape "es mi propio doc")', async () => {
+    await prueba('7. isAdminUser() probado de forma AISLADA: roles/{roleId} exige EXCLUSIVAMENTE ser admin', async () => {
         await reiniciarConDatosBase();
-        // A diferencia de userAuditoria (que tiene la vía alterna "es tu propio
-        // doc"), la actualización de roles/{roleId} depende ÚNICAMENTE de
-        // isAdminUser() — es la operación más limpia para aislar la función.
         await assertFails(bt1.doc('roles/BARTENDER').update({ permissions: ['inventory.count', 'inventory.export'] }));
         await assertSucceeds(admin1.doc('roles/BARTENDER').update({ permissions: ['inventory.count', 'inventory.export'] }));
     });
 
-    await prueba('8. isAdminUser() con usuarios/{uid} INEXISTENTE no lanza error, deniega de forma segura (fix P0.3.1)', async () => {
-        await testEnv.clearFirestore(); // sin reiniciarConDatosBase: usuarios/* NO existen a propósito
-        // Un uid autenticado cuyo doc usuarios/{uid} todavía no existe (ventana
-        // real de un usuario recién registrado) no debe recibir un error de
-        // evaluación — debe denegarse limpiamente, como cualquier no-admin.
+    await prueba('8. isAdminUser() con usuarios/{uid} INEXISTENTE no lanza error, deniega de forma segura', async () => {
+        await testEnv.clearFirestore();
         await assertFails(
             testEnv.authenticatedContext('usuario-sin-doc-todavia').firestore()
                 .doc('inventarioApp/barra-principal/userAuditoria/otro-uid')
@@ -154,11 +155,9 @@ async function main() {
         await assertSucceeds(rutaProducto(bt1).set(docBase(1)));
     });
 
-    await prueba('10/11. Dos dispositivos parten de version=3: solo el primero en llegar es aceptado, el segundo es RECHAZADO', async () => {
+    await prueba('10/11. Dos dispositivos parten de version=3: solo el primero es aceptado, el segundo RECHAZADO', async () => {
         await reiniciarConDatosBase();
-        await testEnv.withSecurityRulesDisabled(async (ctx) => {
-            await rutaProducto(ctx.firestore()).set(docBase(3));
-        });
+        await testEnv.withSecurityRulesDisabled(async (ctx) => { await rutaProducto(ctx.firestore()).set(docBase(3)); });
         await assertSucceeds(rutaProducto(bt1).set(docBase(4)));
         await assertFails(rutaProducto(bt2).set(docBase(4)));
     });
@@ -189,7 +188,7 @@ async function main() {
     await prueba('16. documento legacy SIN campo version puede actualizarse escribiendo version=1', async () => {
         await reiniciarConDatosBase();
         await testEnv.withSecurityRulesDisabled(async (ctx) => {
-            await rutaProducto(ctx.firestore()).set({ enteras: 2, abiertas: [] }); // sin 'version'
+            await rutaProducto(ctx.firestore()).set({ enteras: 2, abiertas: [] });
         });
         await assertSucceeds(rutaProducto(bt1).set(docBase(1)));
     });
@@ -208,6 +207,95 @@ async function main() {
         await reiniciarConDatosBase();
         const doc = docBase(1); delete doc.ts;
         await assertFails(rutaProducto(bt1).set(doc));
+    });
+
+    // ══════════════════════════════════════════════════════════════════
+    //  PARTE 3 — ETAPA 15: INVENTARIO FÍSICO (creación, cierre inmutable,
+    //  reapertura de almacén, snapshot)
+    // ══════════════════════════════════════════════════════════════════
+
+    await prueba('20. Solo admin puede crear un Inventario Físico', async () => {
+        await reiniciarConDatosBase();
+        const nuevo = { inventoryId: 'inv-nuevo', numero: 102, estado: 'SINCRONIZADO', fechaCreacion: Date.now(), creadoPorUid: 'x' };
+        await assertFails(rutaInventario(bt1, 'inv-nuevo').set(nuevo));
+        await assertSucceeds(rutaInventario(admin1, 'inv-nuevo').set(nuevo));
+    });
+
+    await prueba('21. Inventario SINCRONIZADO puede modificarse por admin (según permisos)', async () => {
+        await reiniciarConDatosBase();
+        await assertSucceeds(rutaInventario(admin1, 'inv-activo').update({ totalProductos: 6 }));
+    });
+
+    await prueba('22. Inventario CERRADO NO puede modificarse — ni siquiera por admin (inmutabilidad real)', async () => {
+        await reiniciarConDatosBase();
+        await assertFails(rutaInventario(admin1, 'inv-cerrado').update({ totalProductos: 999 }));
+    });
+
+    await prueba('23. bartender NO puede cerrar el inventario global (cambiar estado a CERRADO)', async () => {
+        await reiniciarConDatosBase();
+        await assertFails(rutaInventario(bt1, 'inv-activo').update({ estado: 'CERRADO', fechaCierre: Date.now(), cerradoPorUid: 'bartender1' }));
+    });
+
+    await prueba('24. admin SÍ puede cerrar el inventario global', async () => {
+        await reiniciarConDatosBase();
+        await assertSucceeds(rutaInventario(admin1, 'inv-activo').update({ estado: 'CERRADO', fechaCierre: Date.now(), cerradoPorUid: 'admin1', cerradoPorNombre: 'Admin Uno' }));
+    });
+
+    await prueba('25. bartender NO puede reabrir un almacén de otro usuario (no es admin)', async () => {
+        await reiniciarConDatosBase();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await rutaAuditoria(ctx.firestore(), 'bartender2').set({ sessionId: 'inv-activo', conteo: {}, status: { almacen: 'completada' } });
+        });
+        await assertFails(rutaAuditoria(bt1, 'bartender2').update({ 'status.almacen': 'pendiente' }));
+    });
+
+    await prueba('26. admin SÍ puede reabrir un almacén mientras el inventario está SINCRONIZADO', async () => {
+        await reiniciarConDatosBase();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await rutaAuditoria(ctx.firestore(), 'bartender2').set({ sessionId: 'inv-activo', conteo: {}, status: { almacen: 'completada' } });
+        });
+        await assertSucceeds(rutaAuditoria(admin1, 'bartender2').update({ 'status.almacen': 'pendiente' }));
+    });
+
+    await prueba('27. admin NO puede reabrir un almacén si el inventario referenciado está CERRADO (Rules, no solo UI)', async () => {
+        await reiniciarConDatosBase();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await rutaAuditoria(ctx.firestore(), 'bartender2').set({ sessionId: 'inv-cerrado', conteo: {}, status: { almacen: 'completada' } });
+        });
+        await assertFails(rutaAuditoria(admin1, 'bartender2').update({ 'status.almacen': 'pendiente' }));
+    });
+
+    await prueba('28. Un usuario NO autenticado no puede modificar ningún documento de Inventario Físico', async () => {
+        await reiniciarConDatosBase();
+        await assertFails(rutaInventario(sinAuth, 'inv-activo').update({ totalProductos: 1 }));
+    });
+
+    await prueba('29. El snapshot de un inventario (snapshotChunks) no puede alterarse después de creado', async () => {
+        await reiniciarConDatosBase();
+        const chunkRef = rutaInventario(admin1, 'inv-cerrado').collection('snapshotChunks').doc('chunk_0');
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await ctx.firestore().doc('inventarioApp/barra-principal/inventories/inv-cerrado/snapshotChunks/chunk_0').set({ items: [{ tipo: 'meta', numero: 100 }] });
+        });
+        await assertFails(chunkRef.update({ items: [{ tipo: 'meta', numero: 999 }] }));
+        await assertFails(chunkRef.delete());
+    });
+
+    await prueba('30. bartender NO puede crear snapshotChunks (solo admin, y solo durante el cierre)', async () => {
+        await reiniciarConDatosBase();
+        await assertFails(
+            rutaInventario(bt1, 'inv-activo').collection('snapshotChunks').doc('chunk_0').set({ items: [] })
+        );
+    });
+
+    await prueba('31. Solo admin puede escribir el contador de numeración (contadores/inventarios)', async () => {
+        await reiniciarConDatosBase();
+        await assertFails(bt1.doc('inventarioApp/barra-principal/contadores/inventarios').set({ ultimoNumero: 999 }));
+        await assertSucceeds(admin1.doc('inventarioApp/barra-principal/contadores/inventarios').set({ ultimoNumero: 101 }));
+    });
+
+    await prueba('32. Nadie puede eliminar (delete) un documento de Inventario Físico — ni admin', async () => {
+        await reiniciarConDatosBase();
+        await assertFails(rutaInventario(admin1, 'inv-activo').delete());
     });
 
     await testEnv.cleanup();
