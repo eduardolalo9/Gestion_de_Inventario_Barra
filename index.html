@@ -11522,11 +11522,11 @@ document.body.appendChild(overlay);
             // guard que auditoriaResetear() — el botón no se ofrece si hay un
             // Inventario Físico activo que no esté CERRADO, para que el admin
             // ni siquiera vea la opción que la función rechazaría.
-                        if (isAdmin() && hasPermission('inventory.create') && (!_inventarioActivo || _inventarioActivo.estado === 'CERRADO')) {
+            if (isAdmin() && hasPermission('inventory.create') && (!_inventarioActivo || _inventarioActivo.estado === 'CERRADO')) {
                 html += '<button onclick="auditoriaResetear()" title="Iniciar nuevo Inventario Físico (solo admin)" style="flex-shrink:0;padding:6px 10px;border-radius:var(--r-md);background:var(--red-dim);border:1px solid rgba(239,68,68,0.18);color:var(--red-text);font-size:0.7rem;font-weight:600;cursor:pointer;white-space:nowrap;" class="flex items-center gap-1">';
                 html += '<svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>';
                 html += ' Nuevo Inventario Físico</button>';
-           else if (isAdmin() && hasPermission('inventory.create') && _inventarioActivo) {
+            } else if (isAdmin() && hasPermission('inventory.create') && _inventarioActivo) {
                 html += '<span title="Cierra el Inventario Físico #' + _inventarioActivo.numero + ' para poder iniciar uno nuevo" style="flex-shrink:0;padding:6px 10px;border-radius:var(--r-md);background:var(--bg-subtle,rgba(148,163,184,0.12));border:1px solid rgba(148,163,184,0.18);color:var(--txt-muted);font-size:0.7rem;font-weight:600;white-space:nowrap;" class="flex items-center gap-1">';
                 html += '🔒 Cierra #' + _inventarioActivo.numero + ' primero</span>';
             }
