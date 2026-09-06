@@ -298,6 +298,151 @@ async function main() {
         await assertFails(rutaInventario(admin1, 'inv-activo').delete());
     });
 
+    // ═══════════════════════════════════════════════════════════════════════
+    //  FASE 0 — SEGURIDAD CRÍTICA
+    //  Cada prueba de este bloque reproduce una vulnerabilidad concreta
+    //  hallada en la auditoría. Antes de la corrección, TODAS fallan.
+    // ═══════════════════════════════════════════════════════════════════════
+
+    await prueba('S1a. bartender NO puede reescribir el catálogo (products) del doc raíz', async () => {
+        await reiniciarConDatosBase();
+        await assertFails(bt1.doc('inventarioApp/barra-principal')
+            .set({ products: [{ id: 'HACK-001', name: 'Producto inyectado' }] }, { merge: true }));
+    });
+
+    await prueba('S1b. bartender NO puede VACIAR el catálogo del bar', async () => {
+        await reiniciarConDatosBase();
+        await assertFails(bt1.doc('inventarioApp/barra-principal').set({ products: [] }, { merge: true }));
+    });
+
+    await prueba('S1c. bartender NO puede alterar auditoriaStatus (reabrir/cerrar áreas)', async () => {
+        await reiniciarConDatosBase();
+        await assertFails(bt1.doc('inventarioApp/barra-principal')
+            .set({ auditoriaStatus: { almacen: 'completada', barra1: 'completada', barra2: 'completada' } }, { merge: true }));
+    });
+
+    await prueba('S1d. bartender NO puede forzar un cambio de sesión de auditoría', async () => {
+        await reiniciarConDatosBase();
+        await assertFails(bt1.doc('inventarioApp/barra-principal')
+            .set({ _auditoriaSessionId: 'sesion-falsa' }, { merge: true }));
+    });
+
+    await prueba('S1e. el sync normal del bartender SIGUE funcionando (no romper la operación)', async () => {
+        await reiniciarConDatosBase();
+        await assertSucceeds(bt1.doc('inventarioApp/barra-principal').set({
+            cart: [], activeTab: 'inventario', selectedArea: 'barra1',
+            _lastModified: Date.now(), _syncedAt: Date.now(),
+            _ordersInChunks: true, _inventoriesInChunks: true, _conteoInSubcol: true,
+            _lastWrittenBy: 'bartender1', _lastWrittenRole: 'user'
+        }, { merge: true }));
+    });
+
+    await prueba('S1f. el admin SÍ puede escribir products y auditoriaStatus', async () => {
+        await reiniciarConDatosBase();
+        await assertSucceeds(admin1.doc('inventarioApp/barra-principal')
+            .set({ products: [{ id: 'PRD-001', name: 'Tequila' }],
+                   auditoriaStatus: { almacen: 'pendiente' } }, { merge: true }));
+    });
+
+    await prueba('S2a. usuario nuevo NO puede autoconcederse permissionOverrides al crear su perfil', async () => {
+        await reiniciarConDatosBase();
+        const nuevo = testEnv.authenticatedContext('usuario-nuevo').firestore();
+        await assertFails(nuevo.doc('usuarios/usuario-nuevo').set({
+            uid: 'usuario-nuevo', role: 'BARTENDER',
+            permissionOverrides: { 'inventory.closeGlobal': 'allow', 'catalog.edit': 'allow' }
+        }));
+    });
+
+    await prueba('S2b. usuario nuevo NO puede crearse ya desactivado-inmune (status arbitrario)', async () => {
+        await reiniciarConDatosBase();
+        const nuevo = testEnv.authenticatedContext('usuario-nuevo2').firestore();
+        await assertFails(nuevo.doc('usuarios/usuario-nuevo2').set({
+            uid: 'usuario-nuevo2', role: 'BARTENDER', status: 'superadmin'
+        }));
+    });
+
+    await prueba('S2c. el alta normal de un usuario SIGUE funcionando', async () => {
+        await reiniciarConDatosBase();
+        const nuevo = testEnv.authenticatedContext('usuario-nuevo3').firestore();
+        await assertSucceeds(nuevo.doc('usuarios/usuario-nuevo3').set({
+            uid: 'usuario-nuevo3', email: 'nuevo@bar.mx', role: 'user'
+        }));
+    });
+
+    await prueba('S3a. bartender NO puede MODIFICAR un evento del historial permanente', async () => {
+        await reiniciarConDatosBase();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await ctx.firestore().doc('historialCambios/ev1')
+                .set({ uid: 'admin1', tipo: 'inventario', detalle: 'conteo original' });
+        });
+        await assertFails(bt1.doc('historialCambios/ev1').update({ detalle: 'borrado' }));
+    });
+
+    await prueba('S3b. bartender NO puede BORRAR un evento del historial permanente', async () => {
+        await reiniciarConDatosBase();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await ctx.firestore().doc('historialCambios/ev2').set({ uid: 'admin1', tipo: 'inventario' });
+        });
+        await assertFails(bt1.doc('historialCambios/ev2').delete());
+    });
+
+    await prueba('S3c. NI EL ADMIN puede modificar o borrar el historial permanente', async () => {
+        await reiniciarConDatosBase();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await ctx.firestore().doc('historialCambios/ev3').set({ uid: 'admin1', tipo: 'inventario' });
+        });
+        await assertFails(admin1.doc('historialCambios/ev3').update({ tipo: 'nada' }));
+        await assertFails(admin1.doc('historialCambios/ev3').delete());
+    });
+
+    await prueba('S3d. bartender NO puede escribir un evento a nombre de otro usuario', async () => {
+        await reiniciarConDatosBase();
+        await assertFails(bt1.doc('historialCambios/ev4')
+            .set({ uid: 'admin1', tipo: 'inventario', detalle: 'evento falsificado' }));
+    });
+
+    await prueba('S3e. el bartender SÍ puede registrar sus propios eventos', async () => {
+        await reiniciarConDatosBase();
+        await assertSucceeds(bt1.doc('historialCambios/ev5')
+            .set({ uid: 'bartender1', tipo: 'inventario', detalle: 'conteo guardado' }));
+    });
+
+    await prueba('S7a. bartender NO puede marcar leída la notificación de OTRO usuario', async () => {
+        await reiniciarConDatosBase();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await ctx.firestore().doc('notificaciones/n1')
+                .set({ destinatarioUid: 'bartender2', broadcast: false, leido: false, texto: 'privada' });
+        });
+        await assertFails(bt1.doc('notificaciones/n1').update({ leido: true }));
+    });
+
+    await prueba('S7b. bartender NO puede alterar el TEXTO de una notificación propia', async () => {
+        await reiniciarConDatosBase();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await ctx.firestore().doc('notificaciones/n2')
+                .set({ destinatarioUid: 'bartender1', broadcast: false, leido: false, texto: 'original' });
+        });
+        await assertFails(bt1.doc('notificaciones/n2').update({ texto: 'alterado' }));
+    });
+
+    await prueba('S7c. el bartender SÍ puede marcar leída SU propia notificación', async () => {
+        await reiniciarConDatosBase();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await ctx.firestore().doc('notificaciones/n3')
+                .set({ destinatarioUid: 'bartender1', broadcast: false, leido: false, texto: 'para mi' });
+        });
+        await assertSucceeds(bt1.doc('notificaciones/n3').update({ leido: true }));
+    });
+
+    await prueba('S7d. las notificaciones broadcast SIGUEN pudiendo marcarse leídas', async () => {
+        await reiniciarConDatosBase();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await ctx.firestore().doc('notificaciones/n4')
+                .set({ destinatarioUid: null, broadcast: true, leido: false, texto: 'para todos' });
+        });
+        await assertSucceeds(bt1.doc('notificaciones/n4').update({ leido: true }));
+    });
+
     await testEnv.cleanup();
 
     console.log('\n── Resumen ──');
