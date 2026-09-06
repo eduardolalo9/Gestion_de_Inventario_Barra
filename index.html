@@ -4472,7 +4472,7 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
          * Nunca elimina conteos de otros usuarios.
          */
         async function loadConteoPorUsuarioFromFirestore() {
-            if (!_db || !navigator.onLine) return;
+            if (!_db || !navigator.onLine || !_haySesionFirebase()) return; // M2a
             try {
                 let changed = false;
                 const AUDIT_AREAS = AREAS_CONTEO; // FIX-05: array declarado una sola vez
@@ -6471,8 +6471,56 @@ function _idbPruneSyncedQueue() {
          * forma atómica, vía syncConteoProductoAtomico() — invocado
          * directamente desde saveInventarioModal(), no desde aquí.
          */
+        // ════════════════════════════════════════════════════════
+        //  M2a — SESIÓN DE FIREBASE RESUELTA
+        //  ────────────────────────────────────────────────────
+        //  Firebase Auth restaura la sesion desde IndexedDB de forma ASINCRONA.
+        //  Hasta que eso termina, _auth.currentUser es null y las Rules rechazan
+        //  cualquier lectura o escritura (request.auth == null). Medido en
+        //  produccion el 2026-09-06: ~8 peticiones condenadas por arranque, mas
+        //  tres reintentos con back-off (2+4+8 s) que ademas llenaban
+        //  _syncErrorLog de permission-denied falsos, enterrando los errores
+        //  reales. Nada de esto era un fallo de permisos: era una carrera.
+        // ════════════════════════════════════════════════════════
+        function _haySesionFirebase() {
+            // window._auth y el _auth lexico son DOS enlaces distintos: el
+            // primero es una copia hecha al inicializar Firebase. Hay que
+            // comprobar y leer sobre la MISMA referencia o, si una de las dos
+            // esta a null (Firebase no cargo), esto revienta.
+            var a = window._auth || _auth;
+            return !!(a && a.currentUser);
+        }
+
+        // Resuelve UNA sola vez, con el usuario restaurado o null. En cuanto
+        // resuelve, vacia la sincronizacion que se haya quedado pendiente
+        // durante la carrera — sin esperar al sync periodico de 3 minutos.
+        const _esperarSesion = (function() {
+            const p = new Promise(function(resolve) {
+                const a = window._auth || _auth;   // misma referencia (ver arriba)
+                if (!a || typeof a.onAuthStateChanged !== 'function') { resolve(null); return; }
+                const cancelar = a.onAuthStateChanged(function(user) {
+                    cancelar();
+                    resolve(user || null);
+                });
+            });
+            p.then(function(user) {
+                if (user && _db && navigator.onLine && _cloudSyncPending) {
+                    console.info('[Init] Sesion resuelta — vaciando sincronizacion pendiente.');
+                    syncToCloud();
+                }
+            });
+            return function() { return p; };
+        })();
+
         async function syncToCloud(retryCount = 0) {
             if (!_db) return; // Firebase no configurado
+            // M2a: sin sesion resuelta la escritura esta condenada. Se marca
+            // pendiente y se vacia desde _esperarSesion, sin quemar el back-off.
+            if (!_haySesionFirebase()) {
+                _cloudSyncPending = true;
+                updateCloudSyncBadge('pending');
+                return;
+            }
             if (!_syncEnabled) { _cloudSyncPending = true; updateCloudSyncBadge('pending'); return; } // sync desactivado
             if (_syncInProgress) return; // Ya hay una sincronización en curso
             if (!navigator.onLine) {
@@ -7138,6 +7186,40 @@ function _idbPruneSyncedQueue() {
                 return { procesado: false, motivo: 'sin_cambio' };
             }
 
+            // 2-bis. GUARDA DE MONOTONIA (M2a) — ARREGLO DE PERDIDA DE DATOS.
+            //    Un sessionId es SIEMPRE String(Date.now()) del dispositivo que
+            //    inicio la auditoria (ver auditoriaResetear), asi que solo puede
+            //    avanzar en el tiempo. Un id MAS VIEJO que el vigente no es una
+            //    sesion nueva: es un documento rezagado.
+            //
+            //    El caso real: userAuditoria/{uid} solo se reescribe cuando el
+            //    usuario FINALIZA un area. Si el admin abre una sesion nueva y
+            //    ese usuario no finaliza nada, su documento se queda con el id
+            //    de la sesion anterior — dias o semanas atras. Al siguiente
+            //    arranque, subscribeMyAuditoria entregaba ese id rezagado, esta
+            //    funcion lo tomaba por una sesion nueva y ejecutaba un RESET
+            //    COMPLETO, que borra myAuditoriaConteo — el conteo del
+            //    bartender — en silencio, sin aviso ni error.
+            //
+            //    Observado en produccion el 2026-09-06: la sesion retrocedio de
+            //    1788197472538 (31-ago) a 1788115846917 (30-ago), 22.7 horas
+            //    hacia atras, sin que nadie hubiera iniciado una auditoria.
+            //
+            //    La guarda es deliberadamente numerica y no confia en el origen:
+            //    protege TODAS las rutas presentes y futuras, no solo la que
+            //    fallo. Si algun id no fuese numerico, no se bloquea nada — se
+            //    conserva el comportamiento anterior.
+            var _nuevoNum   = Number(nuevoSessionId);
+            var _vigenteNum = Number(_auditoriaSessionId);
+            if (_auditoriaSessionId &&
+                isFinite(_nuevoNum) && isFinite(_vigenteNum) &&
+                _nuevoNum < _vigenteNum) {
+                console.warn('[AuditSession] (' + origen + ') sessionId ' + nuevoSessionId +
+                    ' es ANTERIOR al vigente ' + _auditoriaSessionId +
+                    ' — documento rezagado, se ignora. NO se resetea el conteo.');
+                return { procesado: false, motivo: 'sessionId_retrocede' };
+            }
+
             const sessionAnterior     = _auditoriaSessionId;
             const teniaSesionAnterior = !!sessionAnterior; // false = primer arranque, nada que perder
             // FIX P0 (USUARIO ≠ DISPOSITIVO): "inicio propio" se decide por
@@ -7646,7 +7728,7 @@ const usersList = Object.values(allUsersAuditoria);
          * para mostrarlo en las tarjetas de auditoría.
          */
         async function loadConflictosDesdeFirestore() {
-            if (!_db || !navigator.onLine) return;
+            if (!_db || !navigator.onLine || !_haySesionFirebase()) return; // M2a
             try {
                 await Promise.all([
                     _cargarYAgeregarConteos('almacen'),
@@ -7671,6 +7753,7 @@ const usersList = Object.values(allUsersAuditoria);
          */
         async function loadFromCloud() {
             if (!_db) return;
+            if (!_haySesionFirebase()) return; // M2a: la lectura seria rechazada
             if (!navigator.onLine) {
                 console.info('[Firebase] Sin conexión — usando localStorage.');
                 return;
@@ -9515,11 +9598,19 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName) {
                 // Ahora: Firebase se consulta después de tener el estado local completo,
                 //   así _applyCloudData puede comparar correctamente local vs nube.
                 if (_db) {
-                    loadFromCloud().catch(err => console.warn('[Firebase] loadFromCloud silenciado:', err));
-                    loadConflictosDesdeFirestore().catch(() => {});
-                    loadConteoPorUsuarioFromFirestore().catch(err =>
-                        console.warn('[MultiUser] loadConteoPorUsuarioFromFirestore silenciado:', err)
-                    );
+                    // M2a: esperar a que Auth resuelva. Antes estas tres llamadas
+                    // salian con request.auth == null y las tres eran rechazadas.
+                    _esperarSesion().then(function(_usr) {
+                        if (!_usr) {
+                            console.info('[Init] Sin sesion — no se consulta la nube.');
+                            return;
+                        }
+                        loadFromCloud().catch(err => console.warn('[Firebase] loadFromCloud silenciado:', err));
+                        loadConflictosDesdeFirestore().catch(() => {});
+                        loadConteoPorUsuarioFromFirestore().catch(err =>
+                            console.warn('[MultiUser] loadConteoPorUsuarioFromFirestore silenciado:', err)
+                        );
+                    });
                 }
             });
 
