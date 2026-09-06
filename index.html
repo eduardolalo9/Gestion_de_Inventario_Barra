@@ -6537,8 +6537,14 @@ function _idbPruneSyncedQueue() {
                 // ══════════════════════════════════════════════════════════════
 
                 // ── Preparar payload OPERATIVO (sin orders ni inventories) ─────
+                // FASE 0 — S-1: el payload se divide en dos partes.
+                //
+                // Parte común: los campos que CUALQUIER dispositivo necesita
+                // escribir en su sincronización normal. Coinciden exactamente
+                // con la lista blanca _camposSyncNoAdmin() de firestore.rules;
+                // si se agrega un campo aquí, hay que agregarlo también allá o
+                // la escritura será rechazada.
                 const payload = {
-                    products:          products,
                     cart:              cart,
                     // inventarioConteo → en subcolección stockAreas (no en doc principal)
                     // auditoriaConteo → NO se persiste en Firestore porque es dato
@@ -6546,19 +6552,32 @@ function _idbPruneSyncedQueue() {
                     //   como canónico causaba corrupción al cargar en otro dispositivo.
                     activeTab:         activeTab,
                     selectedArea:      selectedArea,
-                    auditoriaStatus:   auditoriaStatus,
                     _lastModified:     Date.now(), // FIX 10: timestamp actual, no el del LS
                     _syncedAt:         Date.now(),
                     _ordersInChunks:      true,
                     _inventoriesInChunks: true,
                     _conteoInSubcol:      true,
                     _lastWrittenBy:    currentUserUid || 'anonymous',
-                    _lastWrittenRole:  currentUserRole || 'user',
+                    _lastWrittenRole:  currentUserRole || 'user'
+                };
+
+                // Parte de administrador: catálogo y estado global de auditoría.
+                //
+                // Antes se enviaban desde TODOS los dispositivos. Eso no solo
+                // era el vector de la vulnerabilidad S-1: era además un bug de
+                // datos real, porque un bartender con una copia local
+                // desactualizada podía revertir un cambio hecho por el admin
+                // (p. ej. devolver a 'completada' un área que el admin acababa
+                // de reabrir). Ahora solo el admin los propaga.
+                if (isAdmin()) {
+                    payload.products        = products;
+                    payload.auditoriaStatus = auditoriaStatus;
                     // FIX-SESSION: incluir _auditoriaSessionId para que otros dispositivos
                     // detecten cambios de ciclo de auditoría incluso sin pasar por
                     // _adminIniciarSesionFirestore (p.ej., reconexiones tardías).
-                    _auditoriaSessionId: _auditoriaSessionId || null
-                };
+                    // Solo el admin inicia sesiones, así que solo él debe anunciarlas.
+                    payload._auditoriaSessionId = _auditoriaSessionId || null;
+                }
 
                 // MIGRACIÓN MÍNIMA DE CONCURRENCIA: el conteo por producto/área
                 // (stockAreas/{area}/productos/{id}) YA NO se sincroniza aquí.
