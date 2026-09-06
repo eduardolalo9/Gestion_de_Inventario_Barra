@@ -65,7 +65,47 @@
                  allow write: if isAdminUser();
                }
                match /inventarioApp/{docId} {
-                 allow read, write: if request.auth != null; // el documento raíz en sí — sin cambios
+                 // FASE 0 — VULNERABILIDAD S-1 (CRÍTICA)
+                 // Antes: 'allow read, write: if request.auth != null'. Este
+                 // documento contiene el array 'products' (el catálogo COMPLETO
+                 // del bar), 'auditoriaStatus' y '_auditoriaSessionId'. Con esa
+                 // regla, cualquier bartender autenticado podía reescribir o
+                 // vaciar el catálogo entero desde la consola del navegador, o
+                 // forzar un cambio de sesión de auditoría en todos los
+                 // dispositivos. La regla admin-only de /catalogo/{docId} no
+                 // protegía nada, porque el catálogo real no vive ahí.
+                 //
+                 // Ahora se enumeran EXPLÍCITAMENTE los campos que un usuario
+                 // no-admin necesita escribir en su sincronización normal —
+                 // verificados uno por uno contra el payload real de
+                 // syncToCloud() en index.html, ninguno inventado. Cualquier
+                 // otro campo exige ser admin.
+                 //
+                 // Campos anidados: una escritura del tipo
+                 // {'auditoriaStatus.almacen': 'pendiente'} (ver reabrirArea en
+                 // index.html) aparece en affectedKeys() como la clave RAÍZ
+                 // 'auditoriaStatus', así que también queda cubierta. Esa
+                 // función ya era admin-only en el cliente; ahora también lo es
+                 // en el servidor.
+                 //
+                 // Efecto secundario deseado: 'auditoriaStatus' y 'products'
+                 // viajaban en el payload de TODOS los dispositivos, así que un
+                 // bartender con una copia local desactualizada podía revertir
+                 // un cambio del admin. Al restringirlos aquí, y quitarlos del
+                 // payload no-admin en index.html, se corrige también ese bug.
+                 function _camposSyncNoAdmin() {
+                   return ['cart', 'activeTab', 'selectedArea',
+                           '_lastModified', '_syncedAt',
+                           '_ordersInChunks', '_inventoriesInChunks', '_conteoInSubcol',
+                           '_lastWrittenBy', '_lastWrittenRole'];
+                 }
+                 allow read:   if request.auth != null;
+                 allow create: if isAdminUser();
+                 allow update: if isAdminUser()
+                                  || (request.auth != null
+                                      && request.resource.data.diff(resource.data).affectedKeys()
+                                           .hasOnly(_camposSyncNoAdmin()));
+                 allow delete: if false; // el documento raíz nunca se borra
 
                  // FIX MICROFASE P0.2: subcolecciones de soporte/legacy que
                  // NO requieren version-checking ni restricción por uid —
