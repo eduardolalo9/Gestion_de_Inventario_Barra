@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <!-- FIX #15: viewport como primer meta, antes de cualquier script, para que el
          navegador calcule el viewport correcto antes de ejecutar ningún código. -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#0d1321" media="(prefers-color-scheme: dark)">
     <meta name="theme-color" content="#0f2040" media="(prefers-color-scheme: light)">
     <!-- FIX #1: CSP movida ANTES de cualquier <script> para que el navegador
@@ -1121,8 +1121,8 @@ button[class*="from-blue-5"][class*="to-purple"] {
 /* ─── Inputs / Select / Textarea ─────────────────────────── */
 input, select, textarea {
     font-family: 'IBM Plex Sans', sans-serif !important;
-    font-size: 13px !important;
-    min-height: 34px !important;
+    font-size: 16px !important;   /* M1: <16px hace que iOS haga zoom al enfocar */
+    min-height: 44px !important;  /* M1: objetivo tactil minimo (antes 34px) */
     background-color: var(--surface) !important;
     color: var(--txt-primary) !important;
     border-color: var(--border-mid) !important;
@@ -1136,10 +1136,10 @@ input:focus, select:focus, textarea:focus {
 }
 input[type="number"] {
     font-family: 'IBM Plex Mono', monospace !important;
-    font-size: 13px !important;
+    font-size: 16px !important;   /* M1: sin zoom al capturar cantidades */
 }
 input:disabled { background-color: var(--bg) !important; color: var(--txt-muted) !important; }
-input::placeholder, textarea::placeholder { color: var(--txt-muted) !important; font-size: 12px !important; }
+input::placeholder, textarea::placeholder { color: var(--txt-muted) !important; font-size: 14px !important; }
 select { appearance: auto; color-scheme: dark; }
 label.block { color: var(--txt-secondary) !important; font-size: 11.5px !important; font-weight: 500 !important; }
 html[data-theme="light"] select { color-scheme: light; }
@@ -1339,9 +1339,52 @@ span.text-xs.px-2.py-1.bg-purple-100 {
 @media (min-width: 640px) { .px-6 { padding-left: 1.5rem !important; padding-right: 1.5rem !important; } }
 @media (max-width: 640px) { .px-6 { padding-left: 0.75rem !important; padding-right: 0.75rem !important; } }
 @media (max-width: 768px) {
-    body   { font-size: 12.5px; }
-    button { font-size: 12.5px; }
-    input, select, textarea { font-size: 13px !important; }
+    body   { font-size: 15px; }   /* M1: antes 12.5px */
+    button { font-size: 15px; }   /* M1: antes 12.5px */
+    input, select, textarea { font-size: 16px !important; }  /* M1: nunca por debajo de 16 */
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   M1 — CIMIENTOS MOVILES
+   Comportamiento tactil y de lectura. No toca ninguna logica de negocio.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* El navegador deja de rebotar al final de una lista y deja de disparar el
+   recargar-pagina al tirar desde arriba. Son las dos señales que mas delatan
+   que estas en una web y no en una aplicacion. */
+html, body { overscroll-behavior-y: none; }
+
+/* Sin el destello gris al tocar, y sin el retardo de ~300 ms que el navegador
+   se toma para decidir si el toque era un zoom. */
+* { -webkit-tap-highlight-color: transparent; }
+body { touch-action: manipulation; }
+
+/* 100vh en movil ignora que la barra de direcciones aparece y desaparece: la
+   altura salta al hacer scroll. 100dvh sigue la altura real. Se deja 100vh
+   antes como respaldo para navegadores que no conozcan dvh. */
+body { min-height: 100dvh; }
+
+/* La interfaz deja de ser seleccionable para que un toque sostenido no abra
+   el menu de seleccion de texto. Los campos siguen siendo seleccionables. */
+button, .btab-item, .tab-btn, .sb-item, .area-btn, label {
+    -webkit-user-select: none; user-select: none;
+}
+input, textarea, select { -webkit-user-select: text; user-select: text; }
+
+@media (max-width: 768px) {
+    /* Objetivo tactil minimo. Es min-height: nada se encoge, solo crece lo
+       que estaba por debajo del umbral. */
+    button, .area-btn, select { min-height: 44px; }
+
+    /* El menu lateral tiene mas entradas de las que caben en un telefono.
+       Como #sbNav es flex, cada boton se encogia de 56px a 24px en vez de
+       desbordar. #sbNav ya podia hacer scroll (overflow-y:auto); solo
+       faltaba impedir que los hijos se compriman. */
+    .sb-item { flex-shrink: 0; }
+    /* Esta clase trae min-height:auto !important desde antes de M1; sin
+       reabrirla aqui se queda en 24px y es el unico control por debajo
+       del umbral en toda la pestana de inventario. */
+    button.audit-rename-btn { min-height: 44px !important; }
 }
 
 ::selection { background: rgba(59,130,246,0.28); color: #fff; }
@@ -2088,8 +2131,12 @@ html[data-theme="light"] .csb-tag--ok   { color: #16a34a; }
 html[data-theme="light"] .csb-tag--none { color: #dc2626; }
 
 
-/* Ajuste de padding inferior para no solapar con la tab bar */
-#mainContent { padding-bottom: 96px !important; }
+/* Ajuste de padding inferior para no solapar con la tab bar.
+   M1: la barra inferior crece con la barra de gestos del telefono; el
+   contenido tiene que crecer igual o el ultimo renglon de una lista queda
+   tapado. env() vale 0 en navegadores sin muesca, asi que en escritorio
+   sigue siendo exactamente 96px. */
+#mainContent { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)) !important; }
 
 /* ══════════════════════════════════════════════════════════
    INICIO TAB — Tarjetas de stats y product cards rediseñadas
