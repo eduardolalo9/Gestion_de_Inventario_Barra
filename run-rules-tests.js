@@ -337,6 +337,53 @@ async function main() {
         }, { merge: true }));
     });
 
+    // Los tres casos de abajo cubren el camino que ocurre EN PRODUCCION: el
+    // documento raiz YA existe, asi que el set(merge:true) del bartender es un
+    // UPDATE, no un create. S1e cubre el create (entorno nuevo); estos cubren
+    // el update (operacion normal del bar).
+    async function sembrarDocRaiz() {
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await ctx.firestore().doc('inventarioApp/barra-principal').set({
+                products: [{ id: 'PRD-001', name: 'Tequila Reposado' }],
+                auditoriaStatus: { almacen: 'pendiente', barra1: 'pendiente', barra2: 'pendiente' },
+                _auditoriaSessionId: 'sesion-real',
+                cart: [], _lastModified: 1
+            });
+        });
+    }
+
+    await prueba('S1g. con el doc raiz YA existente, el sync del bartender funciona (UPDATE)', async () => {
+        await reiniciarConDatosBase();
+        await sembrarDocRaiz();
+        await assertSucceeds(bt1.doc('inventarioApp/barra-principal').set({
+            cart: [], activeTab: 'inventario', selectedArea: 'barra1',
+            _lastModified: Date.now(), _syncedAt: Date.now(),
+            _ordersInChunks: true, _inventoriesInChunks: true, _conteoInSubcol: true,
+            _lastWrittenBy: 'bartender1', _lastWrittenRole: 'user'
+        }, { merge: true }));
+    });
+
+    await prueba('S1h. con el doc raiz existente, el bartender NO puede tocar products', async () => {
+        await reiniciarConDatosBase();
+        await sembrarDocRaiz();
+        await assertFails(bt1.doc('inventarioApp/barra-principal')
+            .set({ _lastModified: Date.now(), products: [] }, { merge: true }));
+    });
+
+    await prueba('S1i. el catalogo sembrado sigue intacto tras el sync del bartender', async () => {
+        await reiniciarConDatosBase();
+        await sembrarDocRaiz();
+        await assertSucceeds(bt1.doc('inventarioApp/barra-principal')
+            .set({ _lastModified: Date.now() }, { merge: true }));
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            const snap = await ctx.firestore().doc('inventarioApp/barra-principal').get();
+            const prods = snap.data().products || [];
+            if (prods.length !== 1 || prods[0].id !== 'PRD-001') {
+                throw new Error('el catalogo se perdio o cambio: ' + JSON.stringify(prods));
+            }
+        });
+    });
+
     await prueba('S1f. el admin SÍ puede escribir products y auditoriaStatus', async () => {
         await reiniciarConDatosBase();
         await assertSucceeds(admin1.doc('inventarioApp/barra-principal')

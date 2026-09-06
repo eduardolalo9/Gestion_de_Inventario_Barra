@@ -116,8 +116,26 @@
                            '_ordersInChunks', '_inventoriesInChunks', '_conteoInSubcol',
                            '_lastWrittenBy', '_lastWrittenRole'];
                  }
+                 // HALLAZGO DE LA PRUEBA S1e (Eduardo, 6-sep-2026): la primera
+                 // versión de esta regla exigía ser admin para 'create', y la
+                 // suite lo detectó. El motivo es que syncToCloud() usa
+                 // set(payload, {merge:true}); sobre un documento que todavía
+                 // NO existe, Firestore lo trata como create, no como update.
+                 // En producción el documento existe, pero en un entorno nuevo
+                 // —o en el propio emulador— el primer sync de un bartender
+                 // quedaba rechazado y reintentando indefinidamente.
+                 //
+                 // Se permite el create a un no-admin CON LA MISMA lista blanca.
+                 // No hay pérdida de seguridad: un documento que solo puede
+                 // contener esos campos no puede traer products ni
+                 // auditoriaStatus. Nótese que aquí se usa keys().hasOnly() y no
+                 // diff(): en un create, 'resource' es null y diff() daría error
+                 // de evaluación.
                  allow read:   if request.auth != null;
-                 allow create: if isAdminUser();
+                 allow create: if isAdminUser()
+                                  || (request.auth != null
+                                      && request.resource.data.keys()
+                                           .hasOnly(_camposSyncNoAdmin()));
                  allow update: if isAdminUser()
                                   || (request.auth != null
                                       && request.resource.data.diff(resource.data).affectedKeys()
