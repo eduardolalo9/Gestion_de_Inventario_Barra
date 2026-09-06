@@ -275,9 +275,25 @@
                  allow create: if request.auth != null;
                  allow update: if isAdminUser();
                }
+               // FASE 0 — VULNERABILIDAD S-7
+               // Antes: 'allow update: if request.auth != null'. Cualquier
+               // usuario podía marcar como leídas las notificaciones de otro,
+               // o peor, reescribir su texto y su destinatario.
+               //
+               // Ahora un update solo puede tocar el campo 'leido', y solo en
+               // una notificación dirigida a uno mismo o de tipo broadcast.
+               // Las broadcast se mantienen escribibles por cualquiera a
+               // propósito: es como funcionan hoy (destinatarioUid es null y
+               // 'leido' es un campo compartido — ver crearNotificacion en
+               // index.html). Convertir eso en estado por-usuario es un cambio
+               // de modelo de datos, no de reglas, y no corresponde a esta fase.
                match /notificaciones/{notifId} {
                  allow read, create: if request.auth != null;
-                 allow update: if request.auth != null;
+                 allow update: if request.auth != null
+                                  && request.resource.data.diff(resource.data)
+                                       .affectedKeys().hasOnly(['leido'])
+                                  && (resource.data.destinatarioUid == request.auth.uid
+                                      || resource.data.broadcast == true);
                }
                match /reportes/{reporteId} {
                  allow read:  if request.auth != null;
