@@ -4965,6 +4965,31 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
 
         let _anomalyWarningPending = null; // CORRECCIÓN 8: advertencia de cambio anómalo pendiente
 
+        // ══════════════════════════════════════════════════════════════════════
+        //  FASE 0 — TIPOS DE EVENTO QUE VAN AL HISTORIAL PERMANENTE
+        //  ────────────────────────────────────────────────────────────────────
+        //  Lista obtenida enumerando los 'tipo:' que _registrarEnSyncQueue
+        //  recibe realmente en todo el archivo. Antes solo se replicaba
+        //  'inventario', así que las acciones más sensibles del sistema no
+        //  quedaban registradas en ninguna parte consultable.
+        //
+        //  Al agregar un evento nuevo con _registrarEnSyncQueue, añade aquí su
+        //  tipo si debe quedar en el historial permanente.
+        // ══════════════════════════════════════════════════════════════════════
+        const TIPOS_AUDITABLES = [
+            'inventario',                 // conteo de un producto en un área
+            'nuevo_producto',             // alta de catálogo
+            'edicion_producto',           // modificación de catálogo
+            'eliminacion_producto',       // baja de un producto
+            'eliminacion_catalogo',       // borrado masivo del catálogo
+            'importacion_excel',          // importación de productos
+            'cierre_inventario_fisico',   // cierre de un Inventario Físico
+            'reapertura_almacen',         // reapertura de un área a un usuario
+            'ciclo_estado',               // cambio de estado del ciclo
+            'restauracion_backup',        // restauración de un respaldo
+            'reset_auditoria'             // inicio de una nueva sesión de conteo
+        ];
+
         function _registrarEnSyncQueue(evento) {
             try {
                 const entry = Object.assign({
@@ -5117,11 +5142,29 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
                         batch.set(colQueue.doc(e.id), e);
 
                         // 2) Escribir en historial permanente (historialCambios/{id})
-                        // Solo eventos de inventario/auditoría — no estados de sistema
-                        if (['inventario','auditoria'].includes(e.tipo)) {
+                        // FASE 0 — PROBLEMA L-1
+                        // Antes esta condición era ['inventario','auditoria'].
+                        // El tipo 'auditoria' NO se emite en ninguna parte del
+                        // código, así que en la práctica solo llegaba
+                        // 'inventario'. Todo lo demás —crear o editar un
+                        // producto, borrar el catálogo completo, importar un
+                        // Excel, cerrar un inventario, reabrir un almacén,
+                        // restaurar un respaldo— quedaba FUERA del historial
+                        // permanente, que es justo lo que hay que poder
+                        // auditar. Los once tipos de abajo son los que el
+                        // código emite realmente, verificados uno por uno.
+                        if (TIPOS_AUDITABLES.includes(e.tipo)) {
                             batch.set(colHistorial.doc(e.id), Object.assign({}, e, {
                                 // Añadir referencia al doc principal para queries cruzadas
-                                _docId: FIRESTORE_DOC_ID
+                                _docId: FIRESTORE_DOC_ID,
+                                // FASE 0 — S-3: la regla exige uid == request.auth.uid
+                                // para que nadie pueda falsificar la autoría de un
+                                // evento. Un evento registrado ANTES de que la sesión
+                                // estuviera lista (migraciones, chequeo de integridad)
+                                // nace con uid null y sería rechazado; se le asigna el
+                                // usuario que efectivamente lo está subiendo.
+                                uid: e.uid || currentUserUid || null,
+                                _subidoPor: currentUserUid || null
                             }));
                         }
                     });
