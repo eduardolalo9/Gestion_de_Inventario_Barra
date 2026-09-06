@@ -9399,29 +9399,26 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName) {
                 syncStockByAreaFromConteo();
                 setTimeout(function() { _checkDataIntegrity(); }, 1500);
 
-                // ── BUG-1 FIX: Guard de productos demo DENTRO del .then() ─────
-                // Ahora products.length refleja los datos REALES ya cargados de IDB/LS.
-                // Solo se insertan los productos demo si genuinamente no hay catálogo.
+                // ── FASE 0 — CATÁLOGO VACÍO: NO SEMBRAR NADA ─────────────────
+                // Antes, si products.length === 0 tras cargar, la app insertaba
+                // 14 productos de demostración (Vodka Premium, Ron Añejo,
+                // Limones, Hielo…) y llamaba a saveToLocalStorage(), que dispara
+                // syncToCloud(). Bastaba UNA de estas situaciones —primera
+                // instalación sin red, fallo de lectura de la nube, IndexedDB
+                // bloqueada en modo privado— para que 14 productos falsos
+                // entraran al catálogo REAL del bar y se propagaran a todos los
+                // demás dispositivos. No hacía falta que nadie estuviera
+                // probando nada: podía ocurrir en operación normal.
+                //
+                // Un catálogo vacío es un ESTADO VÁLIDO, no un error que
+                // rellenar. Aquí no se escribe absolutamente nada: ni a
+                // localStorage, ni a IndexedDB, ni a Firestore. Solo se deja
+                // constancia en la consola. La interfaz ya sabe representar una
+                // lista vacía (renderInicioTab / renderProductosTab).
                 if (products.length === 0) {
-                    const initialProducts = [
-                        { id: 'PRD-001', name: 'Vodka Premium', stockByArea: { almacen: 12, barra1: 5, barra2: 3 }, unit: 'Botellas', group: 'Premium' },
-                        { id: 'PRD-002', name: 'Ron Añejo', stockByArea: { almacen: 8, barra1: 4, barra2: 2 }, unit: 'Botellas', group: 'Premium' },
-                        { id: 'PRD-003', name: 'Whisky Escocés', stockByArea: { almacen: 4, barra1: 2, barra2: 1 }, unit: 'Botellas', group: 'Premium' },
-                        { id: 'PRD-004', name: 'Gin London Dry', stockByArea: { almacen: 10, barra1: 3, barra2: 2 }, unit: 'Botellas', group: 'Premium' },
-                        { id: 'PRD-005', name: 'Tequila Reposado', stockByArea: { almacen: 3, barra1: 2, barra2: 1 }, unit: 'Botellas', group: 'Premium' },
-                        { id: 'PRD-006', name: 'Cerveza Nacional', stockByArea: { almacen: 48, barra1: 24, barra2: 18 }, unit: 'Unidad', group: 'Bebidas' },
-                        { id: 'PRD-007', name: 'Cerveza Importada', stockByArea: { almacen: 18, barra1: 12, barra2: 6 }, unit: 'Unidad', group: 'Bebidas' },
-                        { id: 'PRD-008', name: 'Vino Tinto Reserva', stockByArea: { almacen: 15, barra1: 6, barra2: 4 }, unit: 'Botellas', group: 'Vinos' },
-                        { id: 'PRD-009', name: 'Vino Blanco', stockByArea: { almacen: 12, barra1: 5, barra2: 3 }, unit: 'Botellas', group: 'Vinos' },
-                        { id: 'PRD-010', name: 'Coca Cola', stockByArea: { almacen: 36, barra1: 20, barra2: 15 }, unit: 'Unidad', group: 'Bebidas' },
-                        { id: 'PRD-011', name: 'Agua Mineral', stockByArea: { almacen: 42, barra1: 25, barra2: 18 }, unit: 'Unidad', group: 'Bebidas' },
-                        { id: 'PRD-012', name: 'Jugo de Naranja', stockByArea: { almacen: 8, barra1: 4, barra2: 3 }, unit: 'Litros', group: 'Bebidas' },
-                        { id: 'PRD-013', name: 'Limones', stockByArea: { almacen: 5, barra1: 2, barra2: 1.5 }, unit: 'Kilos', group: 'Frutas' },
-                        { id: 'PRD-014', name: 'Hielo', stockByArea: { almacen: 20, barra1: 10, barra2: 8 }, unit: 'Kilos', group: 'Insumos' }
-                    ];
-                    products = initialProducts;
-                    saveToLocalStorage();
-                    console.info('[Init] Catálogo vacío — cargados ' + initialProducts.length + ' productos de demostración.');
+                    console.info('[Init] Catálogo vacío — no se siembra ningún dato. ' +
+                                 'Si esto no es una instalación nueva, revisa la conexión ' +
+                                 'o el estado de la carga desde la nube.');
                 }
 
                 // ── BUG-2 FIX: switchTab() DENTRO del .then() ────────────────
