@@ -305,9 +305,25 @@
                // "pendiente" indefinidamente y nunca sincronizando el historial a la nube.
                // Escritura: cualquier usuario autenticado (cada uno solo sube sus propios cambios).
                // Lectura: solo administrador (datos sensibles de inventario).
+               // FASE 0 — VULNERABILIDAD S-3 (CRÍTICA)
+               // Antes: 'allow write: if request.auth != null'. En Firestore
+               // 'write' engloba create, update Y delete. Como además el id del
+               // documento lo elige el cliente (batch.set(colHistorial.doc(e.id))
+               // en _flushSyncQueueToFirestore), cualquier usuario podía
+               // sobrescribir o borrar cualquier evento del historial
+               // permanente. Un registro de auditoría que el auditado puede
+               // editar no es un registro de auditoría.
+               //
+               // Ahora es APPEND-ONLY de verdad: solo create, solo a nombre
+               // propio, y ni el administrador puede modificar ni borrar.
+               // 'uid' es el campo que ya escribe _registrarEnSyncQueue en
+               // index.html; se exige que coincida con quien hace la petición
+               // para que no se pueda falsificar la autoría de un evento.
                match /historialCambios/{docId} {
-                 allow read:  if isAdminUser();
-                 allow write: if request.auth != null;
+                 allow read:   if isAdminUser();
+                 allow create: if request.auth != null
+                                  && request.resource.data.uid == request.auth.uid;
+                 allow update, delete: if false;
                }
              }
            }
