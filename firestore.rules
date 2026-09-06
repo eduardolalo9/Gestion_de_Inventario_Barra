@@ -37,8 +37,25 @@
                match /usuarios/{uid} {
                  allow get:    if request.auth != null && (request.auth.uid == uid || isAdminUser());
                  allow list:   if isAdminUser();
+                 // FASE 0 — VULNERABILIDAD S-2 (CRÍTICA)
+                 // La regla de 'update' ya protegía role, permissionOverrides y
+                 // status. La de 'create' solo validaba 'role'. Un usuario nuevo
+                 // podía por tanto crear SU PROPIO documento incluyendo
+                 // permissionOverrides: { 'inventory.closeGlobal': 'allow',
+                 // 'catalog.edit': 'allow', ... } y hasPermission() se los
+                 // concedía, porque los overrides ganan sobre los permisos del
+                 // rol (ver el orden de resolución documentado en index.html).
+                 // Era una escalada de privilegios de un solo paso, disponible
+                 // para cualquiera capaz de registrarse.
+                 //
+                 // Ahora el alta del propio perfil no admite permissionOverrides
+                 // en absoluto, y 'status' solo puede nacer como 'activo'. Los
+                 // overrides quedan reservados a un admin vía 'update'.
                  allow create: if request.auth != null && request.auth.uid == uid
-                                  && request.resource.data.role in ['user', 'BARTENDER'];
+                                  && request.resource.data.role in ['user', 'BARTENDER']
+                                  && !request.resource.data.keys().hasAny(['permissionOverrides'])
+                                  && (!('status' in request.resource.data)
+                                      || request.resource.data.status == 'activo');
                  allow update: if request.auth != null && (
                                   // Admin puede cambiar cualquier campo
                                   isAdminUser()
