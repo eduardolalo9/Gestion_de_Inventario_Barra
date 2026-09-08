@@ -10,7 +10,7 @@ function chk(n, ok, det) { CASOS.push({n, ok, det}); }
   const ctx = await nav.newContext({ ...devices['Pixel 5'], viewport:{width:390,height:844} });
   const p = await ctx.newPage();
   const errs = []; p.on('pageerror', e => errs.push(String(e).slice(0,160)));
-  await p.goto('file://' + require('path').resolve(__dirname,'..','index.html') + '', { waitUntil:'load' });
+  await p.goto('http://127.0.0.1:' + (process.env.PUERTO || '8080') + '/index.html', { waitUntil:'load' });
   await p.waitForTimeout(1500);
 
   chk('La página carga sin errores de JavaScript', errs.length===0, errs.join(' | '));

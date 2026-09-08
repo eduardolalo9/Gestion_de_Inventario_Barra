@@ -3,10 +3,16 @@
   "private": true,
   "description": "Suite de pruebas REAL de firestore.rules contra el emulador oficial de Firestore (no simulación).",
   "scripts": {
-    "test": "firebase emulators:exec --only firestore --project demo-barinventory \"node run-rules-tests.js\""
+    "test": "node pruebas/prueba-integridad-split.js && firebase emulators:exec --only firestore --project demo-barinventory \"node run-rules-tests.js\"",
+    "test:split": "node pruebas/prueba-integridad-split.js",
+    "test:reglas": "firebase emulators:exec --only firestore --project demo-barinventory \"node run-rules-tests.js\""
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5",
     "firebase-tools": "^15",
-    "@firebase/rules-unit-testing": "^5"
+    "acorn": "^8"
+  },
+  "dependencies": {
+    "acorn": "^8.18.0"
   }
 }

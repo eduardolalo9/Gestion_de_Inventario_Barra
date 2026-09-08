@@ -25,16 +25,83 @@
 //          capturar sub-dominios nuevos de Firebase que no estaban listados.
 // ════════════════════════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'barinventory-v2.5';
+// M2: esta version DEBE coincidir con el ?v= de las etiquetas de index.html.
+// pruebas/prueba-integridad-split.js falla si se desincronizan: un index.html
+// nuevo sirviendo un .js viejo desde cache es el fallo mas dificil de
+// diagnosticar que puede tener una PWA partida en archivos.
+const APP_VERSION = '2.6';
+const CACHE_NAME  = 'barinventory-v' + APP_VERSION;
 
 // SW8 FIX: OFFLINE_URL calculado desde el scope del SW en tiempo de ejecución.
 let OFFLINE_URL = '';
 
 // Assets que se cachean en la instalación (shell de la app)
+// M2 - CAMINO CRITICO UNICAMENTE.
+//
+// cache.addAll() es todo-o-nada: si UN archivo falla, la instalacion del
+// Service Worker aborta entera y el dispositivo se queda sin modo offline.
+// Meter aqui los 17 archivos sobre el wifi de un bar en hora pico convertiria
+// un riesgo estrecho (primera carga interrumpida) en uno ancho (sin offline).
+//
+// Estos cuatro son lo minimo para que la app arranque y pinte. El resto de
+// los .js los cachea staleWhileRevalidate en cuanto se piden por primera vez
+// (regla 5 del fetch handler), que es lo que ya hacia bien antes de M2.
 const PRECACHE_URLS = [
     './index.html',
     './manifest.json',
+    './css/estilos.css?v=' + APP_VERSION,
+    './js/00-nucleo.js?v=' + APP_VERSION,
+    './js/auth.js?v=' + APP_VERSION,
 ];
+
+
+// M2 - CALENTAMIENTO DE CACHE
+//
+// En la PRIMERA visita el Service Worker todavia no controla la pagina: se
+// instala durante esa carga, asi que los <script src> de index.html NO pasan
+// por el fetch handler y staleWhileRevalidate nunca llega a cachearlos.
+// Medido: solo 7 de 17 entradas quedaban en la cache tras la primera visita.
+//
+// Consecuencia sin corregir: un dispositivo que visita la app una vez, la
+// cierra, y la reabre sin señal con la cache HTTP ya vencida, encuentra
+// index.html cacheado y catorce .js que no estan. Pantalla en blanco.
+//
+// Se resuelve pidiendo esos archivos nosotros mismos justo despues de activar.
+// A diferencia de addAll(), esto va UNO POR UNO y cada fallo se tolera: que un
+// archivo no se pueda traer no puede tumbar al resto ni impedir la activacion.
+const WARM_URLS = [
+    './js/10-multiusuario.js?v=' + APP_VERSION,
+    './js/20-persistencia.js?v=' + APP_VERSION,
+    './js/30-indexeddb.js?v=' + APP_VERSION,
+    './js/40-firestore.js?v=' + APP_VERSION,
+    './js/45-inventario-datos.js?v=' + APP_VERSION,
+    './js/50-roles-permisos.js?v=' + APP_VERSION,
+    './js/60-arranque.js?v=' + APP_VERSION,
+    './js/70-conversion-render.js?v=' + APP_VERSION,
+    './js/75-auditoria-flujo.js?v=' + APP_VERSION,
+    './js/80-buscador.js?v=' + APP_VERSION,
+    './js/85-ui-inventario-fisico.js?v=' + APP_VERSION,
+    './js/90-ciclo-admin.js?v=' + APP_VERSION,
+    './js/95-exportacion.js?v=' + APP_VERSION,
+    './js/99-window-arranque.js?v=' + APP_VERSION,
+];
+
+function _calentarCache() {
+    return caches.open(CACHE_NAME).then(function(cache) {
+        return Promise.all(WARM_URLS.map(function(url) {
+            return cache.match(url).then(function(yaEsta) {
+                if (yaEsta) return;
+                return fetch(url).then(function(res) {
+                    if (isCacheable(res)) return cache.put(url, res);
+                }).catch(function() { /* tolerado a proposito */ });
+            });
+        }));
+    }).then(function() {
+        console.info('[SW] Cache calentada: ' + WARM_URLS.length + ' archivo(s) revisados.');
+    }).catch(function(e) {
+        console.warn('[SW] No se pudo calentar la cache (no critico):', e);
+    });
+}
 
 // Dominios que NUNCA se cachean (siempre van a la red)
 const NETWORK_ONLY_ORIGINS = [
@@ -56,7 +123,9 @@ self.addEventListener('install', function(event) {
                 return cache.addAll(PRECACHE_URLS);
             }),
             new Promise(function(_, reject) {
-               setTimeout(function() { reject(new Error('[SW] Timeout precache (8s)')); }, 8000);
+               // M2: 8 s alcanzaban para 2 archivos. Son 5 y el wifi de un bar no
+           // es rapido; 20 s evita abortar la instalacion por lentitud.
+           setTimeout(function() { reject(new Error('[SW] Timeout precache (20s)')); }, 20000);
             })
         ])
         .then(function() { return self.skipWaiting(); })
@@ -91,6 +160,10 @@ self.addEventListener('activate', function(event) {
                     console.warn('[SW] clients.claim() falló (no crítico):', e);
                 });
             })
+            // M2: con el control ya tomado, traerse el resto de archivos.
+            // Va despues de claim() para no retrasar el control de la pagina,
+            // y nunca rechaza, asi que jamas impide la activacion.
+            .then(_calentarCache)
     );
 });
 
