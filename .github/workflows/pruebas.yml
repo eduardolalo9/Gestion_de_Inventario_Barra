@@ -1,0 +1,77 @@
+name: Pruebas
+
+# Rescatado del PR #1 (security/audit-hardening) y ampliado.
+# El original solo cubría main y security/**, así que ninguna rama fase/*
+# —donde ocurre todo el trabajo— pasaba jamás por aquí.
+#
+# Qué corre: `npm test`, que hoy son las comprobaciones de integridad de la
+# partición (M2) y las pruebas de firestore.rules contra el emulador oficial.
+
+on:
+  push:
+    branches:
+      - main
+      - produccion
+      - 'fase/**'
+      - 'ci/**'
+  pull_request:
+    branches:
+      - main
+      - produccion
+  workflow_dispatch:        # permite lanzarlo a mano desde la pestaña Actions
+
+# Si se empujan dos commits seguidos a la misma rama, cancela el anterior:
+# lo que importa es el resultado del último, no gastar minutos en el previo.
+concurrency:
+  group: pruebas-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pruebas:
+    name: Integridad + reglas de Firestore
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      # El emulador de Firestore es un JAR: sin Java no arranca. Los runners
+      # de ubuntu-latest suelen traerlo, pero depender de eso es frágil —
+      # el día que cambien la imagen, las pruebas fallarían por una razón
+      # que no tiene nada que ver con el código.
+      - name: Preparar Java (lo necesita el emulador de Firestore)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Preparar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      # Cachear el emulador evita volver a bajar 136 MB en cada ejecución.
+      - name: Caché del emulador de Firestore
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: emulador-firestore-${{ runner.os }}
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Ejecutar las pruebas
+        run: npm test
+
+      # Si algo falla, el log del emulador suele decir por qué. Se sube como
+      # artefacto para poder mirarlo sin tener que reproducir el fallo.
+      - name: Guardar el log del emulador si algo falló
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: firestore-debug-log
+          path: firestore-debug.log
+          if-no-files-found: ignore
+          retention-days: 7
