@@ -37,19 +37,25 @@ jobs:
         uses: actions/checkout@v4
 
       # El emulador de Firestore es un JAR: sin Java no arranca. Los runners
-      # de ubuntu-latest suelen traerlo, pero depender de eso es frágil —
-      # el día que cambien la imagen, las pruebas fallarían por una razón
-      # que no tiene nada que ver con el código.
-      - name: Preparar Java (lo necesita el emulador de Firestore)
-        uses: actions/setup-java@v4
+      # de ubuntu-latest suelen traerlo, pero depender de la imagen del runner
+      # es frágil — el día que la cambien, las pruebas fallarían por algo que
+      # no tiene que ver con el código.
+      #
+      # LA VERSIÓN NO ES LIBRE: firebase-tools 15 rechaza cualquier Java
+      # anterior al 21 y aborta con
+      #   "no longer supports Java versions before 21"
+      # La primera versión de este workflow fijaba 17 y ese fue justamente el
+      # motivo de que fallara. No bajar de 21.
+      - name: Preparar Java 21 (lo exige firebase-tools 15)
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
 
       - name: Preparar Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'   # la misma que corre Eduardo en su maquina
           cache: npm
 
       # Cachear el emulador evita volver a bajar 136 MB en cada ejecución.
