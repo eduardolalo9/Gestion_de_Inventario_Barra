@@ -168,6 +168,59 @@
         let notificationTimeout = null;
         // Timer externo para el toast (evita asignar propiedades en elementos DOM)
         let toastHideTimer = null;
+        // ════════════════════════════════════════════════════════
+        //  C1 — RESULTADO REAL DE LA SUBIDA DE UN CONTEO
+        //  ───────────────────────────────────────────────────
+        //  syncConteoProductoAtomico() siempre devolvio { ok, motivo }, pero los
+        //  dos puntos que la invocan descartaban ese valor. Un rechazo por
+        //  version desactualizada quedaba en un console.warn y en el registro de
+        //  conflictos — sitios donde un bartender no mira nunca.
+        //
+        //  Reglas de esta funcion:
+        //   · El fallo NUNCA es silencioso. El texto empieza por ⚠️, que en
+        //     showNotification() se considera critico y salta el limitador de
+        //     1 s. Un aviso de exito si puede perderse por ese limitador, y da
+        //     igual: el indicador de la nube queda en verde igualmente.
+        //   · Nunca dice que se perdio el conteo, porque no se pierde: sigue en
+        //     el dispositivo y se reintenta. Decirle 'error' a secas a alguien que
+        //     esta contando 424 productos solo provoca que recuente de mas.
+        // ════════════════════════════════════════════════════════
+        function _avisarResultadoConteo(res, prodId, area) {
+            var prod   = products.find(function(p) { return p.id === prodId; });
+            var nombre = prod ? prod.name : prodId;
+            var areaTx = (typeof areas === 'object' && areas[area]) ? areas[area] : area;
+
+            if (res && res.ok) {
+                updateCloudSyncBadge('ok');
+                showNotification('\u2713 Conteo confirmado en ' + areaTx);
+                return;
+            }
+
+            var motivo = (res && res.motivo) || 'desconocido';
+
+            if (motivo === 'offline' || motivo === 'sin_conexion_bd') {
+                // No es un fallo: es el modo sin conexion funcionando como debe.
+                _cloudSyncPending = true;
+                updateCloudSyncBadge('pending');
+                showNotification('\u23f3 Sin conexi\u00f3n \u2014 el conteo sube solo al reconectar');
+                return;
+            }
+
+            if (motivo === 'conflicto_version') {
+                // Otro dispositivo escribio este mismo producto y area. El conteo
+                // local NO se pierde y el conflicto queda registrado; lo que no se
+                // puede es seguir dejando que el bartender crea que quedo subido.
+                updateCloudSyncBadge('error');
+                showNotification('\u26a0\ufe0f ' + nombre + ': otro usuario cont\u00f3 este producto en '
+                    + areaTx + '. Tu conteo est\u00e1 guardado \u2014 av\u00edsale al jefe de barra.');
+                return;
+            }
+
+            updateCloudSyncBadge('error');
+            showNotification('\u26a0\ufe0f ' + nombre + ' no se pudo subir a la nube. '
+                + 'Sigue guardado en el dispositivo y se reintentar\u00e1.');
+        }
+
         function showNotification(message) {
             // Bug #9 fix: alertas críticas siempre pasan, independiente del throttle
             const isCritical = message.startsWith('⚠️') || message.startsWith('❌');
@@ -945,7 +998,9 @@ document.body.appendChild(overlay);
                 };
 
                 saveToLocalStorage();
-                showNotification('Conteo guardado en ' + areasAuditoria[auditoriaAreaActiva]);
+                // C1: mismo motivo que arriba. La subida de auditoria ocurre en el
+                // debounce de 800 ms de abajo, no aqui.
+                showNotification('Guardado en el dispositivo \u2014 subiendo\u2026');
 
                 // FIX BUG 3: Sync parcial a Firestore → admin ve progreso en tiempo real.
                 // Se usa un debounce ligero (800ms) para no saturar Firestore en conteos
@@ -1014,7 +1069,14 @@ document.body.appendChild(overlay);
                 inventarioConteo[inventarioModalProductId][selectedArea] = { enteras, abiertas };
                 syncStockByAreaFromConteo();
                 saveToLocalStorage();
-                showNotification('Conteo guardado en ' + areas[selectedArea]);
+                // C1 - EL AVISO DICE LA VERDAD.
+                // Antes aqui decia 'Conteo guardado en <area>', 800 ms ANTES de
+                // intentar siquiera hablar con el servidor, y el resultado de esa
+                // subida se ignoraba. El bartender leia 'guardado' y se iba; si la
+                // nube rechazaba la escritura, nadie se enteraba nunca.
+                // Ahora este primer aviso afirma solo lo que es cierto en este
+                // instante: el dato esta a salvo EN EL APARATO.
+                showNotification('Guardado en el dispositivo \u2014 subiendo\u2026');
 
                 // MIGRACIÓN MÍNIMA — sincronización atómica y versionada de
                 // ESTE producto únicamente (nunca un snapshot del área
@@ -1026,7 +1088,16 @@ document.body.appendChild(overlay);
                     const clave = pid + '|' + area;
                     clearTimeout(_conteoProductoSyncTimers[clave]);
                     _conteoProductoSyncTimers[clave] = setTimeout(function() {
-                        syncConteoProductoAtomico(pid, area, ent, abi);
+                        // C1: el resultado ya NO se descarta.
+                        updateCloudSyncBadge('syncing');
+                        syncConteoProductoAtomico(pid, area, ent, abi)
+                            .then(function(res) {
+                                _avisarResultadoConteo(res, pid, area);
+                            })
+                            .catch(function(err) {
+                                _avisarResultadoConteo(
+                                    { ok: false, motivo: 'excepcion', error: err }, pid, area);
+                            });
                     }, 800);
                 })(inventarioModalProductId, selectedArea, enteras, abiertas);
             }
