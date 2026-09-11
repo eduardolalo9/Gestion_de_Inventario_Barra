@@ -935,6 +935,9 @@
             document.getElementById('productGroup').value = '';
             document.getElementById('productCapacidadMl').value = '';
             document.getElementById('productPesoLlenaOz').value = '';
+            // P0 — limpiar tambien los campos de compras
+            ['productPrecio','productStockMinimo','productConversion','productProveedor']
+                .forEach(function(id) { var el = document.getElementById(id); if (el) el.value = ''; });
             if (productId) {
                 const product = products.find(p => p.id === productId);
                 if (product) {
@@ -947,6 +950,12 @@
                     // Cargar campos de conversión si existen
                     if (product.capacidadMl) document.getElementById('productCapacidadMl').value = product.capacidadMl;
                     if (product.pesoBotellaLlenaOz) document.getElementById('productPesoLlenaOz').value = product.pesoBotellaLlenaOz;
+                    // P0 — stockMinimo puede ser 0 y 0 es un valor legitimo ('no se
+                    // repone'), asi que aqui NO vale un if(valor) como en los de arriba.
+                    if (typeof product.precio      === 'number') document.getElementById('productPrecio').value      = product.precio;
+                    if (typeof product.conversion  === 'number') document.getElementById('productConversion').value  = product.conversion;
+                    if (typeof product.stockMinimo === 'number') document.getElementById('productStockMinimo').value = product.stockMinimo;
+                    if (product.proveedor) document.getElementById('productProveedor').value = product.proveedor;
                 } else {
                     showNotification('Producto no encontrado');
                     return;
@@ -1006,6 +1015,23 @@
             const capacidadMl       = isNaN(capacidadMlRaw) || capacidadMlRaw <= 0 ? undefined : capacidadMlRaw;
             const pesoBotellaLlenaOz = isNaN(pesoLlenaOzRaw) || pesoLlenaOzRaw <= 0 ? undefined : pesoLlenaOzRaw;
 
+            // P0 — campos de compras y reposicion.
+            // stockMinimo admite 0 ('no se repone'); precio y conversion no:
+            // un precio de 0 o una conversion de 0 corromperian cualquier costeo.
+            function _leerNum(id, permitirCero) {
+                var el = document.getElementById(id);
+                if (!el || el.value === '') return undefined;
+                var n = parseFloat(el.value);
+                if (isNaN(n) || !isFinite(n) || n < 0) return undefined;
+                if (n === 0 && !permitirCero) return undefined;
+                return n;
+            }
+            const precio      = _leerNum('productPrecio', false);
+            const conversion  = _leerNum('productConversion', false);
+            const stockMinimo = _leerNum('productStockMinimo', true);
+            const provEl      = document.getElementById('productProveedor');
+            const proveedor   = provEl ? provEl.value.trim() : '';
+
             // Bug #6 fix: validar coherencia física antes de guardar
             // pesoVidrio = pesoLleno - liquidoOz; si es negativo el usuario invirtió los campos
             if (capacidadMl !== undefined && pesoBotellaLlenaOz !== undefined) {
@@ -1060,6 +1086,11 @@
                 else delete product.capacidadMl;
                 if (pesoBotellaLlenaOz !== undefined) product.pesoBotellaLlenaOz = pesoBotellaLlenaOz;
                 else delete product.pesoBotellaLlenaOz;
+                // P0 — mismo criterio: si el campo se vacia, el dato se quita.
+                if (precio      !== undefined) product.precio      = precio;      else delete product.precio;
+                if (conversion  !== undefined) product.conversion  = conversion;  else delete product.conversion;
+                if (stockMinimo !== undefined) product.stockMinimo = stockMinimo; else delete product.stockMinimo;
+                if (proveedor)                 product.proveedor   = proveedor;   else delete product.proveedor;
                 // stockByArea se recalcula
                 syncStockByAreaFromConteo();
                 // CORRECCIÓN 3: Auditoría obligatoria en modificación de producto
@@ -1085,6 +1116,11 @@
                 };
                 if (capacidadMl !== undefined)       newProduct.capacidadMl = capacidadMl;
                 if (pesoBotellaLlenaOz !== undefined) newProduct.pesoBotellaLlenaOz = pesoBotellaLlenaOz;
+                // P0
+                if (precio      !== undefined) newProduct.precio      = precio;
+                if (conversion  !== undefined) newProduct.conversion  = conversion;
+                if (stockMinimo !== undefined) newProduct.stockMinimo = stockMinimo;
+                if (proveedor)                 newProduct.proveedor   = proveedor;
                 products.push(newProduct);
                 // CORRECCIÓN 3: Auditoría de nuevo producto
                 _registrarEnSyncQueue({

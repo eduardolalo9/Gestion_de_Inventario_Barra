@@ -302,6 +302,7 @@
                 case 'pedidos':         content.innerHTML = renderPedidosTab(); break;
                 case 'inventario':      content.innerHTML = renderInventarioTab(); break;
                 case 'historia':        content.innerHTML = renderHistoriaTab(); break;
+                case 'compras':         content.innerHTML = renderComprasTab(); break;
                 case 'ajustes':         content.innerHTML = renderAjustesTab(); break;
                 case 'notificaciones':  content.innerHTML = renderNotificacionesTab(); break;
                 case 'admin':           content.innerHTML = isAdmin() ? renderAdminTab() : renderInicioTab(); break;

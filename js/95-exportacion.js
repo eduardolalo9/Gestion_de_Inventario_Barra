@@ -187,8 +187,17 @@
             // — Datos técnicos de conversión (pueden estar vacíos) —
             headerRow.push('CapacidadML');    colMeta.push({ tipo: 'tecnico' });
             headerRow.push('PesoBotellaOz');  colMeta.push({ tipo: 'tecnico' });
+            // P0 — los cuatro campos de compras viajan tambien en la exportacion.
+            // Si no salieran aqui, el ciclo exportar→editar→importar que ya usas los
+            // borraria en silencio del catalogo entero. Los nombres son los
+            // mismos que trae Productos_Barra15.xlsx para que el archivo siga
+            // siendo intercambiable con el tuyo.
+            headerRow.push('Precio');                   colMeta.push({ tipo: 'compras' });
+            headerRow.push('Stock minimo');             colMeta.push({ tipo: 'compras' });
+            headerRow.push('Conversion de producto');   colMeta.push({ tipo: 'compras' });
+            headerRow.push('Proveedor');                colMeta.push({ tipo: 'compras' });
 
-            const FIXED_COLS = headerRow.length; // 6
+            const FIXED_COLS = headerRow.length; // 10 (6 + los 4 de P0)
 
             // — Columnas por área: Enteras | Abierta N (oz) | Total —
             areaKeys.forEach(area => {
@@ -226,6 +235,12 @@
                 // Técnicos: vacío ('') si no existen — NO poner 0
                 cells.push((p.capacidadMl != null && p.capacidadMl !== undefined) ? p.capacidadMl : '');
                 cells.push((p.pesoBotellaLlenaOz != null && p.pesoBotellaLlenaOz !== undefined) ? p.pesoBotellaLlenaOz : '');
+                // P0 — vacio si no existe, NUNCA 0: un 0 exportado volveria como
+                // un precio de cero al reimportar. stockMinimo si escribe el 0.
+                cells.push(typeof p.precio      === 'number' ? p.precio      : '');
+                cells.push(typeof p.stockMinimo === 'number' ? p.stockMinimo : '');
+                cells.push(typeof p.conversion  === 'number' ? p.conversion  : '');
+                cells.push(p.proveedor || '');
 
                 let totalGeneral = 0;
 

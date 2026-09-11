@@ -76,6 +76,10 @@
             'inventory.export', 'inventory.history',
             'catalog.read', 'catalog.publish', 'catalog.edit',
             'reports.read', 'reports.export',
+            // P1 — COMPRAS. El catalogo es CERRADO: hasPermission() rechaza
+            // cualquier string que no este aqui, asi que registrar los permisos
+            // es requisito para que la pestana pueda existir siquiera.
+            'purchases.read', 'purchases.create', 'purchases.import', 'purchases.delete',
             'settings.read', 'settings.update',
             'adminLog.read'
         ];

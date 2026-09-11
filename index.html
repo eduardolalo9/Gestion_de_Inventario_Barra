@@ -661,6 +661,10 @@ const firebaseConfig = {
                 <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
                 Inventario
             </button>
+            <button type="button" class="sb-item" data-sb-tab="compras" onclick="switchTab('compras'); sbClose()">
+                <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                Compras
+            </button>
             <button type="button" class="sb-item" data-sb-tab="historia" onclick="switchTab('historia'); sbClose()">
                 <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                 Historia
@@ -868,6 +872,37 @@ const firebaseConfig = {
                     </div>
                     <p class="text-xs text-gray-400 mt-2">Cuando se llenen, las botellas abiertas se ingresan en oz y se convierten automáticamente a fracciones de botella.</p>
                 </div>
+
+                <!-- P0 — COMPRAS Y REPOSICION
+                     Estos cuatro campos ya venian en Productos_Barra15.xlsx y la
+                     importacion los descartaba. Sin ellos no se puede costear una
+                     compra ni calcular un sugerido de reposicion. -->
+                <div class="mt-4 pt-4" style="border-top:1px solid var(--border-mid,#e5e7eb)">
+                    <p class="text-sm font-semibold text-gray-700 mb-3">Compras y reposicion</p>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label for="productPrecio" class="block text-sm font-medium text-gray-600 mb-2">Precio unitario</label>
+                            <input type="number" id="productPrecio" min="0" step="0.001"
+                                class="w-full px-3 py-2 bg-white text-gray-900 border border-gray-200 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Ej: 41.08">
+                        </div>
+                        <div>
+                            <label for="productStockMinimo" class="block text-sm font-medium text-gray-600 mb-2">Stock minimo</label>
+                            <input type="number" id="productStockMinimo" min="0" step="0.01"
+                                class="w-full px-3 py-2 bg-white text-gray-900 border border-gray-200 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Ej: 6">
+                        </div>
+                        <div>
+                            <label for="productConversion" class="block text-sm font-medium text-gray-600 mb-2">Conversion</label>
+                            <input type="number" id="productConversion" min="0" step="0.001"
+                                class="w-full px-3 py-2 bg-white text-gray-900 border border-gray-200 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Ej: 24 (piezas por caja)">
+                        </div>
+                        <div>
+                            <label for="productProveedor" class="block text-sm font-medium text-gray-600 mb-2">Proveedor</label>
+                            <input type="text" id="productProveedor"
+                                class="w-full px-3 py-2 bg-white text-gray-900 border border-gray-200 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Ej: STANDARD FOODS">
+                        </div>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-2">El precio es el ultimo costo conocido; la importacion de compras avisa cuando cambia. El minimo en 0 significa que no se repone.</p>
+                </div>
                 <div class="flex gap-3 mt-6 pt-4" style="position:sticky;bottom:0;background:var(--modal-bg,#fff);padding-bottom:4px;z-index:1;">
                     <button type="button" onclick="closeProductModal()" style="flex:1;height:40px;border-radius:9999px;border:none;background:transparent;color:var(--txt-secondary);font-family:'IBM Plex Sans',sans-serif;font-size:.875rem;font-weight:500;cursor:pointer;transition:background .18s ease;" onmouseover="this.style.background='rgba(202,196,208,0.10)'" onmouseout="this.style.background='transparent'">Cancelar</button>
                     <button type="button" onclick="saveProduct()" style="flex:1;height:40px;border-radius:9999px;border:none;background:var(--accent);color:var(--accent-on,#003063);font-family:'IBM Plex Sans',sans-serif;font-size:.875rem;font-weight:500;cursor:pointer;box-shadow:var(--shadow-card);" >Guardar</button>
@@ -1005,6 +1040,7 @@ const firebaseConfig = {
     <script src="js/75-auditoria-flujo.js?v=2.6"></script>
     <script src="js/80-buscador.js?v=2.6"></script>
     <script src="js/85-ui-inventario-fisico.js?v=2.6"></script>
+    <script src="js/88-compras.js?v=2.6"></script>
     <script src="js/90-ciclo-admin.js?v=2.6"></script>
     <script src="js/95-exportacion.js?v=2.6"></script>
     <script src="js/99-window-arranque.js?v=2.6"></script>

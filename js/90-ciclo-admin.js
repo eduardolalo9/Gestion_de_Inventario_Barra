@@ -43,14 +43,61 @@
                         // IMPORTANTE: se leen con parseFloat + null (no parseExcelNumber)
                         // para respetar exactamente los nombres del Excel exportado
                         capacidadMl:        ['CapacidadML', 'capacidadMl', 'CapacidadMl', 'Capacidad_ML', 'CapML'],
-                        pesoBotellaLlenaOz: ['PesoBotellaOz', 'pesoBotellaOz', 'PesoLlenaOz', 'PesoBotella_Oz', 'PesoOz']
+                        pesoBotellaLlenaOz: ['PesoBotellaOz', 'pesoBotellaOz', 'PesoLlenaOz', 'PesoBotella_Oz', 'PesoOz'],
+
+                        // ── P0: cuatro columnas que el Excel del catalogo YA trae ──
+                        // Estaban en Productos_Barra15.xlsx desde siempre y la importacion
+                        // las ignoraba, asi que el producto guardado no tenia con que
+                        // costear una compra ni calcular un sugerido. Verificado sobre el
+                        // archivo real: 424/424 traen Precio, 419 Conversion, 254 Stock
+                        // minimo y 424 Proveedor.
+                        // OJO: en ese Excel los dos ultimos nombres llevan un espacio
+                        // FINAL ('Conversion de producto ', 'Proveedor '). Se aceptan las
+                        // dos formas para no depender de que eso se mantenga.
+                        precio:      ['Precio', 'precio', 'PrecioUnitario', 'Costo', 'costo'],
+                        conversion:  ['Conversion de producto ', 'Conversion de producto',
+                                      'Conversion', 'conversion', 'Conversi\u00f3n'],
+                        stockMinimo: ['Stock minimo', 'Stock Minimo', 'StockMinimo',
+                                      'stockMinimo', 'Minimo', 'M\u00ednimo'],
+                        proveedor:   ['Proveedor ', 'Proveedor', 'proveedor']
                     };
 
                     // ── Helper: buscar valor en la fila por mapa de claves ───
+                    //
+                    // La coincidencia se hace NORMALIZANDO: sin espacios de sobra, sin
+                    // acentos y sin distinguir mayusculas. Motivo real, no teorico:
+                    // en Productos_Barra15.xlsx la cabecera del precio es " Precio "
+                    // — con un espacio a cada lado — y la del proveedor "Proveedor ".
+                    // Con comparacion exacta, esas dos columnas se importaban como
+                    // vacias sin que nadie se enterara: no falla nada, simplemente el
+                    // dato no llega. Normalizar cubre tambien mayusculas y acentos, que
+                    // es la otra forma habitual de que un Excel reexportado deje de
+                    // coincidir.
+                    function _normCab(s) {
+                        return String(s == null ? '' : s)
+                            .replace(/\s+/g, ' ').trim().toLowerCase()
+                            .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                    }
                     function findCol(row, keys) {
+                        if (!keys) return undefined;
+                        // 1) coincidencia exacta — comportamiento de siempre, sin cambios
                         for (const key of keys) {
                             if (row[key] !== undefined && row[key] !== null && row[key] !== '') {
                                 return row[key];
+                            }
+                        }
+                        // 2) coincidencia normalizada — solo si la exacta no encontro nada
+                        if (!row.__cabNorm) {
+                            const mapa = {};
+                            Object.keys(row).forEach(function(k) { mapa[_normCab(k)] = k; });
+                            Object.defineProperty(row, '__cabNorm',
+                                { value: mapa, enumerable: false });
+                        }
+                        for (const key of keys) {
+                            const real = row.__cabNorm[_normCab(key)];
+                            if (real !== undefined && row[real] !== undefined
+                                && row[real] !== null && row[real] !== '') {
+                                return row[real];
                             }
                         }
                         return undefined;
@@ -125,6 +172,26 @@
                             : null;
                         if (pesoBotellaLlenaOz !== null && pesoBotellaLlenaOz <= 0) { pesoBotellaLlenaOz = null; valoresCorregidos++; }
 
+                        // ── P0: precio, conversion, stock minimo, proveedor ──────
+                        // Mismo criterio que capacidadMl: un valor no numerico o
+                        // fisicamente imposible se descarta como si no viniera, en vez
+                        // de guardarse y corromper un costeo mas adelante.
+                        function numeroPositivo(bruto, permitirCero) {
+                            if (bruto === undefined || bruto === null || bruto === '') return null;
+                            var n = parseFloat(bruto);
+                            if (isNaN(n) || !isFinite(n)) return null;
+                            if (n < 0) return null;
+                            if (n === 0 && !permitirCero) return null;
+                            return n;
+                        }
+                        var precio      = numeroPositivo(findCol(row, columnMap.precio), false);
+                        var conversion  = numeroPositivo(findCol(row, columnMap.conversion), false);
+                        // El minimo SI puede ser 0: significa 'no se repone'.
+                        var stockMinimo = numeroPositivo(findCol(row, columnMap.stockMinimo), true);
+                        var provRaw     = findCol(row, columnMap.proveedor);
+                        var proveedor   = (provRaw !== undefined && provRaw !== null)
+                                          ? String(provRaw).trim() : '';
+
                         // ── Construir producto ────────────────────────────────
                         const product = {
                             id,
@@ -136,6 +203,11 @@
                         // Solo añadir si tienen valor real (no null)
                         if (capacidadMl !== null)       product.capacidadMl       = capacidadMl;
                         if (pesoBotellaLlenaOz !== null) product.pesoBotellaLlenaOz = pesoBotellaLlenaOz;
+                        // P0 — solo se guardan si traen valor real, igual que los de arriba.
+                        if (precio      !== null) product.precio      = precio;
+                        if (conversion  !== null) product.conversion  = conversion;
+                        if (stockMinimo !== null) product.stockMinimo = stockMinimo;
+                        if (proveedor)            product.proveedor   = proveedor;
 
                         toImport.push(product);
                     });

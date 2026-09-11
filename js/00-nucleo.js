@@ -66,6 +66,11 @@
         let cart = [];
         let orders = [];
         let inventories = [];
+        // P1 — COMPRAS. Vacio hasta que se importe o capture la primera.
+        // Se declara aqui, junto al resto del estado, para que renderTab() lo vea
+        // igual que a products u orders. Todavia NO se sincroniza a Firestore:
+        // eso es P4, y hasta entonces vive solo en este dispositivo.
+        let compras = [];
         let activeTab = 'inicio';
         let editingProductId = null;
         let searchTerm = '';

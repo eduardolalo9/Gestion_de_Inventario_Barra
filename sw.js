@@ -81,6 +81,7 @@ const WARM_URLS = [
     './js/75-auditoria-flujo.js?v=' + APP_VERSION,
     './js/80-buscador.js?v=' + APP_VERSION,
     './js/85-ui-inventario-fisico.js?v=' + APP_VERSION,
+    './js/88-compras.js?v=' + APP_VERSION,
     './js/90-ciclo-admin.js?v=' + APP_VERSION,
     './js/95-exportacion.js?v=' + APP_VERSION,
     './js/99-window-arranque.js?v=' + APP_VERSION,
