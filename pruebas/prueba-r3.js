@@ -38,8 +38,16 @@ chk('Existe la configuración de pruebas',    /const FIREBASE_PRUEBAS = \{/.test
 chk('Producción conserva el proyecto del bar',
     /FIREBASE_PRODUCCION = \{[\s\S]*?projectId: "gestor-de-inventarios-76c19"/.test(html),
     'R3 no puede cambiar a qué base se conecta el bar');
-chk('Pruebas llega vacío, a la espera del proyecto',
-    /FIREBASE_PRUEBAS = \{[\s\S]*?projectId: ""/.test(html));
+// R4: el proyecto ya existe, así que projectId dejó de estar vacío. Lo que
+// tiene que seguir vacío es la apiKey: es lo que mantiene la app sin nube en
+// local hasta que Eduardo pegue las credenciales.
+chk('Pruebas apunta a barinventory-staging',
+    /FIREBASE_PRUEBAS = \{[\s\S]*?projectId: "barinventory-staging"/.test(html));
+chk('Pruebas sigue sin credenciales, así que no se conecta todavía',
+    /FIREBASE_PRUEBAS = \{[\s\S]*?apiKey: ""/.test(html));
+chk('Producción y pruebas no apuntan al mismo proyecto',
+    !/FIREBASE_PRUEBAS = \{[\s\S]*?projectId: "gestor-de-inventarios-76c19"/.test(html),
+    'sería el peor error posible de esta fase');
 
 // ═══ 2 · La decisión se ejecuta de verdad ═════════════════════════════════
 const i = html.indexOf('function _esEntornoDePruebas()');

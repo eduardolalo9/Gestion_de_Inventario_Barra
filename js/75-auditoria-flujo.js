@@ -112,11 +112,26 @@
         // escribir un solo objeto grande).
         function _construirSnapshotInventario() {
             const registros = [];
+            // R4 (reglas 4 y 5) — a qué semana pertenece este cierre.
+            // Se calcula UNA vez, aquí, y se congela. Volver a deducirlo después
+            // a partir del timestamp daría un resultado distinto si alguien abre
+            // el histórico desde un dispositivo en otro huso horario.
+            var _claseR4 = (typeof clasificarRecuento === 'function')
+                           ? clasificarRecuento(new Date()) : null;
+
             registros.push({
                 tipo: 'meta',
                 numero: _inventarioActivo ? _inventarioActivo.numero : null,
                 inventoryId: _auditoriaSessionId,
                 fecha: Date.now(),
+                // Metadatos del ciclo semanal. De momento solo se guardan: el
+                // arrastre del inicial (regla 5) se activa cuando esté lista la
+                // pantalla de inventario físico.
+                semanaId:       _claseR4 ? _claseR4.semanaId : null,
+                fechaLocal:     _claseR4 ? _claseR4.fecha : null,
+                tipoRecuento:   _claseR4 ? _claseR4.tipo : null,
+                cierraSemana:   _claseR4 ? _claseR4.cierraSemana : null,
+                esCorteMensual: _claseR4 ? _claseR4.esCorteMensual : null,
                 totalProductos: products.length,
                 warehousesSnapshot: AREAS_CONTEO.slice(),
                 participantes: Object.keys(allUsersAuditoria)

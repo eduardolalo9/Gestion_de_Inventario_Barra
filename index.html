@@ -208,16 +208,19 @@ const FIREBASE_PRODUCCION = {
   appId: "1:520575498448:web:3a83c2e4fcaedfc9d386d5"
 };
 
-// Proyecto de pruebas (barinventory-staging). Se rellena con los valores que
-// da Firebase Console → Configuración del proyecto → Tus apps → App web.
-// Mientras esté vacío, en local la app funciona sin nube.
+// Proyecto barinventory-staging, creado el 12/09/2026.
+// Faltan DOS valores, que salen de Firebase Console → ⚙ Configuración del
+// proyecto → Tus apps → App web. Los otros cuatro ya están puestos: el
+// messagingSenderId es el número de proyecto (575323446273).
+// Mientras apiKey y appId sigan vacíos, en local la app funciona sin nube y
+// NO se conecta a la base del bar.
 const FIREBASE_PRUEBAS = {
-  apiKey: "",
-  authDomain: "",
-  projectId: "",
-  storageBucket: "",
-  messagingSenderId: "",
-  appId: ""
+  apiKey: "",                                                  // ← PEGAR
+  authDomain: "barinventory-staging.firebaseapp.com",
+  projectId: "barinventory-staging",
+  storageBucket: "barinventory-staging.firebasestorage.app",
+  messagingSenderId: "575323446273",
+  appId: ""                                                    // ← PEGAR
 };
 
 function _esEntornoDePruebas() {
@@ -624,7 +627,7 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
             }
         })();
     </script>
-    <link rel="stylesheet" href="css/estilos.css?v=2.9">
+    <link rel="stylesheet" href="css/estilos.css?v=3.0">
 </head>
 <body class="min-h-screen">
 
@@ -1130,28 +1133,29 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
         </div>
     </div>
 
-        <script src="js/00-nucleo.js?v=2.9"></script>
-    <script src="js/10-multiusuario.js?v=2.9"></script>
-    <script src="js/20-persistencia.js?v=2.9"></script>
-    <script src="js/30-indexeddb.js?v=2.9"></script>
-    <script src="js/40-firestore.js?v=2.9"></script>
-    <script src="js/45-inventario-datos.js?v=2.9"></script>
-    <script src="js/50-roles-permisos.js?v=2.9"></script>
-    <script src="js/60-arranque.js?v=2.9"></script>
-    <script src="js/70-conversion-render.js?v=2.9"></script>
-    <script src="js/75-auditoria-flujo.js?v=2.9"></script>
-    <script src="js/80-buscador.js?v=2.9"></script>
-    <script src="js/85-ui-inventario-fisico.js?v=2.9"></script>
-    <script src="js/88-compras.js?v=2.9"></script>
-    <script src="js/90-ciclo-admin.js?v=2.9"></script>
-    <script src="js/95-exportacion.js?v=2.9"></script>
-    <script src="js/99-window-arranque.js?v=2.9"></script>
+        <script src="js/00-nucleo.js?v=3.0"></script>
+    <script src="js/10-multiusuario.js?v=3.0"></script>
+    <script src="js/15-ciclo-semanal.js?v=3.0"></script>
+    <script src="js/20-persistencia.js?v=3.0"></script>
+    <script src="js/30-indexeddb.js?v=3.0"></script>
+    <script src="js/40-firestore.js?v=3.0"></script>
+    <script src="js/45-inventario-datos.js?v=3.0"></script>
+    <script src="js/50-roles-permisos.js?v=3.0"></script>
+    <script src="js/60-arranque.js?v=3.0"></script>
+    <script src="js/70-conversion-render.js?v=3.0"></script>
+    <script src="js/75-auditoria-flujo.js?v=3.0"></script>
+    <script src="js/80-buscador.js?v=3.0"></script>
+    <script src="js/85-ui-inventario-fisico.js?v=3.0"></script>
+    <script src="js/88-compras.js?v=3.0"></script>
+    <script src="js/90-ciclo-admin.js?v=3.0"></script>
+    <script src="js/95-exportacion.js?v=3.0"></script>
+    <script src="js/99-window-arranque.js?v=3.0"></script>
 
     </div><!-- /#appWrapper -->
 
     <!-- ══════════════════════════════════════════════════════
          AUTH — Lógica de autenticación Firebase
          ══════════════════════════════════════════════════════ -->
-        <script src="js/auth.js?v=2.9"></script>
+        <script src="js/auth.js?v=3.0"></script>
 </body>
 </html>

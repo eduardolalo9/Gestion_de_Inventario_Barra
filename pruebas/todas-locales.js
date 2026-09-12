@@ -33,6 +33,7 @@ const PRUEBAS = [
     'prueba-r1.js',                 // R1 — conteo en oz, decimales, sin motivo
     'prueba-r2.js',                 // R2 — el PV de Parrot en el catálogo
     'prueba-r3.js',                 // R3 — dos entornos, elegidos por el dominio
+    'prueba-r4.js',                 // R4 — ciclo semanal lunes→domingo
 ];
 
 let fallaron = [];
