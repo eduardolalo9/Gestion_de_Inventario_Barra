@@ -503,6 +503,25 @@ const usersList = Object.values(allUsersAuditoria);
             });
         }
 
+        // R7 — lectura defensiva de lo que dejo el formulario. Si alguien llama
+        // a la creacion por el camino antiguo, _opcionesNuevoInventario es null
+        // y todo cae a los valores de siempre.
+        function _opcNuevoInv(campo, porDefecto) {
+            var o = (typeof _opcionesNuevoInventario !== 'undefined') ? _opcionesNuevoInventario : null;
+            if (!o || o[campo] === undefined || o[campo] === null || o[campo] === '') return porDefecto;
+            return o[campo];
+        }
+        function _areasDelNuevoInventario() {
+            var o = (typeof _opcionesNuevoInventario !== 'undefined') ? _opcionesNuevoInventario : null;
+            if (o && Array.isArray(o.areas) && o.areas.length) {
+                // Solo las que existen de verdad: una lista guardada podria
+                // nombrar un area que el admin borro entre medias.
+                var v = o.areas.filter(function(a) { return AREAS_CONTEO.indexOf(a) !== -1; });
+                if (v.length) return v;
+            }
+            return AREAS_CONTEO.slice();
+        }
+
         async function _adminIniciarSesionFirestore(sessionId, numeroInventario) {
             // FIX-PROP-1 (CRÍTICO): antes, si el admin estaba offline en el
             // instante exacto de confirmar, esta función retornaba en silencio
@@ -611,7 +630,15 @@ const usersList = Object.values(allUsersAuditoria);
                 cerradoPorUid:   null,
                 cerradoPorNombre: null,
                 totalProductos:  products.length,
-                warehousesSnapshot: AREAS_CONTEO.slice() // fotografía congelada de los almacenes vigentes al crear
+                // R7 — el formulario puede limitar el inventario a unas areas
+                // concretas. Si no hay formulario (camino antiguo), entran todas.
+                // Esta fotografia es la que manda para ese inventario: aunque
+                // despues se creen o borren areas, este conteo sigue siendo de
+                // las que tenia cuando se abrio.
+                warehousesSnapshot: _areasDelNuevoInventario(),
+                nombre:          _opcNuevoInv('nombre', 'BARRA INVENTARIO FISICO'),
+                comentario:      _opcNuevoInv('comentario', ''),
+                fechaRecuento:   _opcNuevoInv('fechaRecuento', null)
             });
 
             await batch.commit(); // atómico: todo-o-nada para (1)+(2)+(3)+(4)

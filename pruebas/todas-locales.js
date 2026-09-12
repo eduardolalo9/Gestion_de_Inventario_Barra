@@ -36,6 +36,7 @@ const PRUEBAS = [
     'prueba-r4.js',                 // R4 — ciclo semanal lunes→domingo
     'prueba-r5.js',                 // R5 — el catálogo
     'prueba-r6.js',                 // R6 — áreas de conteo configurables
+    'prueba-r7.js',                 // R7 — crear inventario desde formulario
 ];
 
 let fallaron = [];

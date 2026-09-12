@@ -366,6 +366,24 @@
         // distintos compitiendo entre sí.
         let _auditoriaCreandoEnProgreso = false;
 
+        // ── R7 ────────────────────────────────────────────────────────────────
+        // El formulario de creacion YA es la confirmacion: pedir ademas los dos
+        // showConfirm de texto serian tres dialogos seguidos para una sola
+        // accion. En vez de partir auditoriaResetear —que es la funcion mas
+        // delicada de este archivo— se sustituyen sus dos confirmaciones por
+        // este envoltorio. Con la bandera apagada el comportamiento es
+        // identico al de siempre, asi que el camino antiguo no cambia.
+        let _saltarConfirmacionNuevoInv = false;
+
+        // Lo que el formulario deja preparado para la creacion. Se limpia
+        // siempre al terminar, con exito o sin el.
+        let _opcionesNuevoInventario = null;
+
+        function _confirmarOSaltar(mensaje, alAceptar) {
+            if (_saltarConfirmacionNuevoInv) { alAceptar(); return; }
+            showConfirm(mensaje, alAceptar);
+        }
+
         function auditoriaResetear() {
             if (!isAdmin()) {
                 showNotification('⚠️ Solo el administrador puede iniciar un nuevo ciclo de inventario');
@@ -386,7 +404,7 @@
                 return;
             }
             // CORRECCIÓN 4: Primera confirmación
-            showConfirm(
+            _confirmarOSaltar(
                 '⚠️ ¿Iniciar nuevo Inventario Físico?\n\n' +
                 'Se borrarán todos los conteos actuales de TODOS los usuarios y áreas ' +
                 '(el stock operativo actual de cada producto NO se toca — sigue exactamente igual).\n\n' +
@@ -402,11 +420,11 @@
                         return;
                     }
                     // Segunda confirmación (acción crítica irreversible)
-                    showConfirm(
+                    _confirmarOSaltar(
                         '🔁 CONFIRMACIÓN FINAL — NUEVO INVENTARIO FÍSICO\n\n' +
                         'Se eliminarán los conteos de auditoría de:\n' +
                         '• ' + Object.keys(auditoriaConteoPorUsuario).length + ' producto(s) ya contado(s)\n' +
-                        '• Todas las áreas (Almacén, Barra 1, Barra 2)\n\n' +
+                        '• Todas las áreas (' + AREAS_CONTEO.map(function(a) { return areasAuditoria[a]; }).join(', ') + ')\n\n' +
                         '¿Confirmar inicio del nuevo Inventario Físico?',
                         async function() {
                             // FIX P0.1: última comprobación justo antes de escribir.
@@ -675,3 +693,180 @@
             }, 180);
         }
 
+        // ══════════════════════════════════════════════════════════════════════
+        //  R7 — FORMULARIO DE NUEVO INVENTARIO FÍSICO
+        //  ────────────────────────────────────────────────────────────────────
+        //  Antes, crear un inventario eran dos cuadros de texto seguidos con
+        //  "¿estás seguro?". No se elegía nada: ni las áreas, ni la fecha, ni
+        //  quedaba dicho para qué era ese conteo. Ahora es un formulario, y el
+        //  propio formulario hace de confirmación.
+        //
+        //  El número NO se escribe: lo asigna Firestore con una transacción,
+        //  que es lo que garantiza que dos administradores creando a la vez no
+        //  se lleven el mismo número.
+        // ══════════════════════════════════════════════════════════════════════
+
+        function abrirModalNuevoInventario() {
+            if (!isAdmin() || !hasPermission('inventory.create')) {
+                showNotification('⚠️ Solo el administrador puede crear un Inventario Físico');
+                return;
+            }
+            if (_inventarioActivo && _inventarioActivo.estado !== 'CERRADO') {
+                showNotification('🔒 Cierra el Inventario Físico #' + _inventarioActivo.numero + ' antes de crear otro');
+                return;
+            }
+            if (!navigator.onLine) {
+                showNotification('📴 Sin conexión — el número de inventario se pide al servidor');
+                return;
+            }
+
+            var hoy = (typeof fechaISOLocal === 'function')
+                      ? fechaISOLocal(new Date())
+                      : new Date().toISOString().slice(0, 10);
+
+            var cont = document.getElementById('nuevoInvAreas');
+            if (cont) {
+                cont.innerHTML = areasDefinidas().map(function(a) {
+                    return '<label style="display:flex;align-items:center;gap:10px;min-height:44px;cursor:pointer;">'
+                         + '<input type="checkbox" class="nuevoInvArea" value="' + escapeHtml(a.id) + '" checked '
+                         + 'style="width:20px;height:20px;accent-color:var(--accent);flex-shrink:0;cursor:pointer;">'
+                         + '<span style="font-size:.88rem;">' + escapeHtml(a.icono || '📍') + ' ' + escapeHtml(a.nombre) + '</span>'
+                         + '</label>';
+                }).join('');
+            }
+            var f = document.getElementById('nuevoInvFecha');       if (f) f.value = hoy;
+            var c = document.getElementById('nuevoInvComentario');  if (c) c.value = '';
+            var n = document.getElementById('nuevoInvNombre');      if (n) n.value = 'BARRA INVENTARIO FÍSICO';
+
+            var cre = document.getElementById('nuevoInvCreadoPor');
+            if (cre) {
+                cre.textContent = (_auth && _auth.currentUser && _auth.currentUser.email)
+                                  ? _auth.currentUser.email : (currentUserUid || 'administrador');
+            }
+            _pintarAvisoFechaNuevoInv();
+
+            var m = document.getElementById('nuevoInventarioModal');
+            if (m) { m.classList.remove('hidden'); document.body.classList.add('modal-open'); }
+        }
+
+        function cerrarModalNuevoInventario() {
+            var m = document.getElementById('nuevoInventarioModal');
+            if (m) { m.classList.add('hidden'); document.body.classList.remove('modal-open'); }
+        }
+
+        /**
+         * Dice a qué semana pertenece la fecha elegida y si ese día cierra
+         * semana. No bloquea nada: un conteo a media semana es legítimo, pero
+         * el administrador debe saber que ese NO arrastra el inicial.
+         */
+        function _pintarAvisoFechaNuevoInv() {
+            var el = document.getElementById('nuevoInvAvisoFecha');
+            var f  = document.getElementById('nuevoInvFecha');
+            if (!el || !f || typeof clasificarRecuento !== 'function') return;
+            var cl = clasificarRecuento(f.value);
+            if (!cl) { el.textContent = ''; return; }
+
+            var semana = (typeof etiquetaSemana === 'function') ? etiquetaSemana(f.value) : cl.semanaId;
+            if (cl.cierraSemana) {
+                el.style.color = 'var(--green, #4ade80)';
+                el.textContent = '✓ Domingo — cierra la ' + semana +
+                                 (cl.esCorteMensual ? ' y además es corte de fin de mes.' : '.');
+            } else if (cl.esCorteMensual) {
+                el.style.color = 'var(--amber, #fbbf24)';
+                el.textContent = 'Corte de fin de mes. No cierra semana: el inicial del lunes seguirá saliendo del domingo.';
+            } else {
+                el.style.color = 'var(--txt-muted)';
+                el.textContent = 'Pertenece a la ' + semana + '. Al no ser domingo, no arrastra el inicial.';
+            }
+        }
+
+        function confirmarNuevoInventario() {
+            var areas = [].slice.call(document.querySelectorAll('.nuevoInvArea:checked'))
+                          .map(function(i) { return i.value; });
+            if (!areas.length) {
+                showNotification('⚠️ Elige al menos un área de conteo');
+                return;
+            }
+            var fechaEl = document.getElementById('nuevoInvFecha');
+            var fecha   = fechaEl ? fechaEl.value : '';
+            if (typeof parseFechaLocal === 'function' && !parseFechaLocal(fecha)) {
+                showNotification('⚠️ La fecha no es válida');
+                return;
+            }
+
+            _opcionesNuevoInventario = {
+                areas:         areas,
+                fechaRecuento: fecha,
+                nombre:        (document.getElementById('nuevoInvNombre') || {}).value || 'BARRA INVENTARIO FÍSICO',
+                comentario:    ((document.getElementById('nuevoInvComentario') || {}).value || '').trim().slice(0, 300)
+            };
+
+            cerrarModalNuevoInventario();
+
+            // El formulario ya fue la confirmación. La bandera se apaga sola en
+            // cuanto auditoriaResetear la consume, y aquí se repone por si esa
+            // función se corta antes de llegar (sin conexión, por ejemplo): una
+            // bandera encendida haría que el SIGUIENTE intento se saltara los
+            // avisos sin que nadie lo pidiera.
+            _saltarConfirmacionNuevoInv = true;
+            try {
+                auditoriaResetear();
+            } finally {
+                _saltarConfirmacionNuevoInv = false;
+            }
+        }
+
+        // ── Glosario y tarjeta de estado ──────────────────────────────────────
+
+        const ESTADOS_INVENTARIO = {
+            SINCRONIZADO: {
+                etiqueta: 'Sincronizado',
+                color:    '#60a5fa',
+                fondo:    'rgba(96,165,250,.12)',
+                texto:    'Conteo en curso. El stock todavía no se ha afectado.'
+            },
+            CERRADO: {
+                etiqueta: 'Cerrado',
+                color:    '#4ade80',
+                fondo:    'rgba(74,222,128,.12)',
+                texto:    'Cerrado e inmutable. Queda como histórico y nadie puede modificarlo, ni el administrador.'
+            }
+        };
+
+        function _pillEstadoInventario(estado) {
+            var e = ESTADOS_INVENTARIO[estado] || { etiqueta: estado || '—', color: '#9aa2b4', fondo: 'rgba(154,162,180,.12)' };
+            return '<span style="display:inline-block;padding:3px 10px;border-radius:999px;'
+                 + 'background:' + e.fondo + ';color:' + e.color + ';font-size:.68rem;font-weight:700;'
+                 + 'text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;">'
+                 + escapeHtml(e.etiqueta) + '</span>';
+        }
+
+        /** Cuántas personas tienen algo contado en este inventario ahora mismo. */
+        function _usuariosContando() {
+            var n = 0;
+            Object.keys(allUsersAuditoria || {}).forEach(function(uid) {
+                var u = allUsersAuditoria[uid];
+                if (!u) return;
+                var tieneAlgo = u.status && Object.keys(u.status).some(function(a) {
+                    return u.status[a] === 'completada' || u.status[a] === 'en_progreso';
+                });
+                if (tieneAlgo || (u.conteo && Object.keys(u.conteo).length)) n++;
+            });
+            return n;
+        }
+
+        function renderGlosarioEstados() {
+            var html = '<details style="margin-top:10px;">';
+            html += '<summary style="cursor:pointer;font-size:.72rem;color:var(--txt-muted);min-height:32px;'
+                 +  'display:flex;align-items:center;">¿Qué significa cada estado?</summary>';
+            html += '<div style="margin-top:8px;display:flex;flex-direction:column;gap:8px;">';
+            Object.keys(ESTADOS_INVENTARIO).forEach(function(k) {
+                var e = ESTADOS_INVENTARIO[k];
+                html += '<div style="display:flex;gap:8px;align-items:flex-start;">'
+                     +  _pillEstadoInventario(k)
+                     +  '<span style="font-size:.72rem;color:var(--txt-secondary);line-height:1.5;flex:1;">'
+                     +  escapeHtml(e.texto) + '</span></div>';
+            });
+            html += '</div></details>';
+            return html;
+        }

@@ -25,7 +25,14 @@
             let html = '<div class="bg-white rounded-xl p-4 sm:p-5 mb-4 shadow-md">';
 
             if (!_inventarioActivo) {
-                html += '<p style="font-size:0.8rem;color:var(--txt-muted);">Sin Inventario Físico activo todavía.</p>';
+                // R7: el estado vacio invita a crear en vez de constatar que no hay nada.
+                html += '<p style="font-size:0.86rem;font-weight:600;color:var(--txt-primary);margin-bottom:4px;">Sin Inventario Físico abierto</p>';
+                html += '<p style="font-size:0.75rem;color:var(--txt-muted);line-height:1.5;">'
+                     +  (isAdmin()
+                         ? 'Crea uno para que el equipo pueda empezar a contar. El número se asigna solo.'
+                         : 'El administrador todavía no ha abierto el inventario de esta semana.')
+                     +  '</p>';
+                if (typeof renderGlosarioEstados === 'function') html += renderGlosarioEstados();
                 html += '</div>';
                 return html;
             }
@@ -55,6 +62,38 @@
                 html += '<p style="font-size:0.72rem;color:var(--txt-muted);">Cerrado: ' + new Date(inv.fechaCierre).toLocaleDateString('es-MX') + ' por ' + escapeHtml(inv.cerradoPorNombre || '—') + '</p>';
             }
             html += '<p style="font-size:0.72rem;color:var(--txt-muted);margin-top:2px;">Artículos contados: ' + productosContados.size + ' / ' + products.length + '</p>';
+
+            // ── R7: lo que el formulario dejo escrito ────────────────────────
+            // Se lee siempre a la defensiva: los inventarios creados antes de R7
+            // no tienen ninguno de estos campos.
+            if (inv.fechaRecuento) {
+                var _cl = (typeof clasificarRecuento === 'function') ? clasificarRecuento(inv.fechaRecuento) : null;
+                html += '<p style="font-size:0.72rem;color:var(--txt-muted);margin-top:2px;">Recuento: '
+                     +  escapeHtml(inv.fechaRecuento)
+                     +  (_cl && typeof etiquetaSemana === 'function' ? ' · ' + escapeHtml(etiquetaSemana(inv.fechaRecuento)) : '')
+                     +  (_cl && _cl.cierraSemana ? ' · <span style="color:var(--green,#4ade80);font-weight:600;">cierra semana</span>' : '')
+                     +  '</p>';
+            }
+            if (Array.isArray(inv.warehousesSnapshot) && inv.warehousesSnapshot.length) {
+                html += '<p style="font-size:0.72rem;color:var(--txt-muted);margin-top:2px;">Áreas: '
+                     +  escapeHtml(inv.warehousesSnapshot.map(function(a) {
+                            return (typeof areasAuditoria !== 'undefined' && areasAuditoria[a]) ? areasAuditoria[a] : a;
+                        }).join(', '))
+                     +  '</p>';
+            }
+            // Cuantas personas tienen algo contado. Es el dato que el admin mira
+            // antes de cerrar: cerrar con gente contando pierde su trabajo.
+            var _contando = (typeof _usuariosContando === 'function') ? _usuariosContando() : 0;
+            if (!esCerrado) {
+                html += '<p style="font-size:0.72rem;margin-top:2px;color:'
+                     +  (_contando ? 'var(--accent)' : 'var(--txt-muted)') + ';font-weight:'
+                     +  (_contando ? '600' : '400') + ';">Usuarios contando: ' + _contando + '</p>';
+            }
+            if (inv.comentario) {
+                html += '<p style="font-size:0.72rem;color:var(--txt-secondary);margin-top:6px;'
+                     +  'padding-left:8px;border-left:2px solid var(--border-mid);line-height:1.5;">'
+                     +  escapeHtml(inv.comentario) + '</p>';
+            }
             html += '</div>';
 
             html += '<div class="flex flex-col gap-2" style="align-items:flex-end;">';
@@ -194,7 +233,7 @@
             // Inventario Físico activo que no esté CERRADO, para que el admin
             // ni siquiera vea la opción que la función rechazaría.
             if (isAdmin() && hasPermission('inventory.create') && (!_inventarioActivo || _inventarioActivo.estado === 'CERRADO')) {
-                html += '<button onclick="auditoriaResetear()" title="Iniciar nuevo Inventario Físico (solo admin)" style="flex-shrink:0;padding:6px 10px;border-radius:var(--r-md);background:var(--red-dim);border:1px solid rgba(239,68,68,0.18);color:var(--red-text);font-size:0.7rem;font-weight:600;cursor:pointer;white-space:nowrap;" class="flex items-center gap-1">';
+                html += '<button onclick="abrirModalNuevoInventario()" title="Crear nuevo Inventario Físico (solo admin)" style="flex-shrink:0;padding:6px 10px;border-radius:var(--r-md);background:var(--red-dim);border:1px solid rgba(239,68,68,0.18);color:var(--red-text);font-size:0.7rem;font-weight:600;cursor:pointer;white-space:nowrap;" class="flex items-center gap-1">';
                 html += '<svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>';
                 html += ' Nuevo Inventario Físico</button>';
             } else if (isAdmin() && hasPermission('inventory.create') && _inventarioActivo) {
@@ -204,7 +243,7 @@
             html += '</div>';
             // Barra de progreso
             html += '<div class="flex items-center gap-3">';
-            html += '<div style="font-size:0.68rem;font-weight:600;color:var(--txt-muted);white-space:nowrap;">' + totalCompletas + ' / 3 áreas</div>';
+            html += '<div style="font-size:0.68rem;font-weight:600;color:var(--txt-muted);white-space:nowrap;">' + totalCompletas + ' / ' + AREAS_CONTEO.length + ' áreas</div>';
             html += '<div class="audit-progress-bar" style="flex:1;"><div class="audit-progress-fill" style="width:' + porcentaje + '%;"></div></div>';
             html += '<div style="font-size:0.68rem;font-weight:700;color:' + (todasCompletas ? 'var(--green)' : 'var(--accent)') + ';white-space:nowrap;">' + porcentaje + '%</div>';
             html += '</div>';
@@ -276,7 +315,7 @@
                     html += '<i class="fa-solid fa-file-excel" style="font-size:1.1rem;"></i>';
                     html += 'DESCARGAR MI CONTEO (ÁREAS FINALIZADAS)';
                     html += '</button>';
-                    html += '<p style="text-align:center;font-size:0.68rem;color:var(--txt-muted);margin-top:8px;">Exporta únicamente tu conteo personal de las 3 áreas</p>';
+                    html += '<p style="text-align:center;font-size:0.68rem;color:var(--txt-muted);margin-top:8px;">Exporta únicamente tu conteo personal de las ' + AREAS_CONTEO.length + ' áreas</p>';
                 }
                 html += '</div>';
             } else {
@@ -367,7 +406,7 @@
                     html += '<span class="audit-timestamp">⏱ ' + relTime + '</span>';
                 }
                 html += '</div>';
-                html += '<span style="font-size:0.65rem;color:var(--txt-muted);">' + totalAreas + '/3 áreas</span>';
+                html += '<span style="font-size:0.65rem;color:var(--txt-muted);">' + totalAreas + '/' + AREAS_CONTEO.length + ' áreas</span>';
                 html += '</div>';
 
                 // ── Fila por área ───────────────────────────────────────────

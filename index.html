@@ -627,7 +627,7 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
             }
         })();
     </script>
-    <link rel="stylesheet" href="css/estilos.css?v=3.2">
+    <link rel="stylesheet" href="css/estilos.css?v=3.3">
 </head>
 <body class="min-h-screen">
 
@@ -1082,6 +1082,45 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
         </div>
     </div>
 
+    <!-- ══════════════════════════════════════════════════════════════════
+         R7 — NUEVO INVENTARIO FÍSICO
+         El número no se escribe: lo asigna el servidor con una transacción,
+         que es lo que evita que dos administradores creando a la vez se
+         lleven el mismo.
+         ══════════════════════════════════════════════════════════════════ -->
+    <div id="nuevoInventarioModal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[300] hidden" style="padding:12px;" role="dialog" aria-modal="true" aria-labelledby="nuevoInvTitulo">
+        <div class="modal-box" style="background:var(--modal-bg,#fff);border-radius:18px;max-width:26rem;width:100%;padding:18px;max-height:calc(100dvh - 80px);overflow-y:auto;">
+            <div style="width:48px;height:5px;background:var(--border-mid,#d1d5db);border-radius:999px;margin:0 auto 14px;"></div>
+            <h2 id="nuevoInvTitulo" style="font-size:1.15rem;font-weight:700;color:var(--txt-primary);margin-bottom:2px;">Nuevo Inventario Físico</h2>
+            <p style="font-size:.76rem;color:var(--txt-muted);margin-bottom:16px;">El número se asigna solo al crearlo.</p>
+
+            <label for="nuevoInvNombre" style="display:block;font-size:.78rem;font-weight:600;color:var(--txt-secondary);margin-bottom:5px;">Nombre</label>
+            <input type="text" id="nuevoInvNombre" maxlength="60" value="BARRA INVENTARIO FÍSICO"
+                style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border-mid);background:var(--surface);color:var(--txt-primary);font-family:inherit;font-size:.86rem;margin-bottom:14px;">
+
+            <label for="nuevoInvFecha" style="display:block;font-size:.78rem;font-weight:600;color:var(--txt-secondary);margin-bottom:5px;">Fecha del recuento</label>
+            <input type="date" id="nuevoInvFecha" onchange="_pintarAvisoFechaNuevoInv()"
+                style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border-mid);background:var(--surface);color:var(--txt-primary);font-family:inherit;font-size:.86rem;">
+            <p id="nuevoInvAvisoFecha" style="font-size:.72rem;margin:6px 0 14px;line-height:1.5;"></p>
+
+            <div style="font-size:.78rem;font-weight:600;color:var(--txt-secondary);margin-bottom:5px;">Creado por</div>
+            <div id="nuevoInvCreadoPor" style="font-size:.84rem;color:var(--txt-primary);margin-bottom:14px;"></div>
+
+            <div style="font-size:.78rem;font-weight:600;color:var(--txt-secondary);margin-bottom:5px;">Áreas de conteo</div>
+            <div id="nuevoInvAreas" style="display:flex;flex-direction:column;margin-bottom:4px;"></div>
+            <p style="font-size:.7rem;color:var(--txt-muted);margin-bottom:14px;line-height:1.5;">Las áreas elegidas quedan fijadas en este inventario, aunque después cambies la configuración.</p>
+
+            <label for="nuevoInvComentario" style="display:block;font-size:.78rem;font-weight:600;color:var(--txt-secondary);margin-bottom:5px;">Comentario <span style="font-weight:400;color:var(--txt-muted);">(opcional)</span></label>
+            <textarea id="nuevoInvComentario" rows="2" maxlength="300" placeholder="Ej: cierre de la semana 7-13 de septiembre"
+                style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border-mid);background:var(--surface);color:var(--txt-primary);font-family:inherit;font-size:.86rem;resize:vertical;margin-bottom:18px;"></textarea>
+
+            <div style="display:flex;gap:10px;">
+                <button type="button" onclick="cerrarModalNuevoInventario()" style="flex:1;min-height:44px;border-radius:9999px;border:1px solid var(--border-mid);background:transparent;color:var(--txt-secondary);font-family:inherit;font-size:.86rem;font-weight:500;cursor:pointer;">Cancelar</button>
+                <button type="button" onclick="confirmarNuevoInventario()" style="flex:1;min-height:44px;border-radius:9999px;border:none;background:var(--accent);color:var(--accent-on,#003063);font-family:inherit;font-size:.86rem;font-weight:600;cursor:pointer;">Crear inventario</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal Inventario -->
     <div id="inventarioModal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[300] animate-fadeIn hidden" style="padding:12px;" role="dialog" aria-modal="true" aria-labelledby="inventarioModalTitle">
         <div class="modal-box bg-white shadow-2xl max-w-sm w-full p-4 animate-slideUp" style="border-radius:18px;max-height:calc(100dvh - 56px - 24px);overflow-y:auto;">
@@ -1133,30 +1172,30 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
         </div>
     </div>
 
-        <script src="js/00-nucleo.js?v=3.2"></script>
-    <script src="js/10-multiusuario.js?v=3.2"></script>
-    <script src="js/15-ciclo-semanal.js?v=3.2"></script>
-    <script src="js/18-areas-config.js?v=3.2"></script>
-    <script src="js/20-persistencia.js?v=3.2"></script>
-    <script src="js/30-indexeddb.js?v=3.2"></script>
-    <script src="js/40-firestore.js?v=3.2"></script>
-    <script src="js/45-inventario-datos.js?v=3.2"></script>
-    <script src="js/50-roles-permisos.js?v=3.2"></script>
-    <script src="js/60-arranque.js?v=3.2"></script>
-    <script src="js/70-conversion-render.js?v=3.2"></script>
-    <script src="js/75-auditoria-flujo.js?v=3.2"></script>
-    <script src="js/80-buscador.js?v=3.2"></script>
-    <script src="js/85-ui-inventario-fisico.js?v=3.2"></script>
-    <script src="js/88-compras.js?v=3.2"></script>
-    <script src="js/90-ciclo-admin.js?v=3.2"></script>
-    <script src="js/95-exportacion.js?v=3.2"></script>
-    <script src="js/99-window-arranque.js?v=3.2"></script>
+        <script src="js/00-nucleo.js?v=3.3"></script>
+    <script src="js/10-multiusuario.js?v=3.3"></script>
+    <script src="js/15-ciclo-semanal.js?v=3.3"></script>
+    <script src="js/18-areas-config.js?v=3.3"></script>
+    <script src="js/20-persistencia.js?v=3.3"></script>
+    <script src="js/30-indexeddb.js?v=3.3"></script>
+    <script src="js/40-firestore.js?v=3.3"></script>
+    <script src="js/45-inventario-datos.js?v=3.3"></script>
+    <script src="js/50-roles-permisos.js?v=3.3"></script>
+    <script src="js/60-arranque.js?v=3.3"></script>
+    <script src="js/70-conversion-render.js?v=3.3"></script>
+    <script src="js/75-auditoria-flujo.js?v=3.3"></script>
+    <script src="js/80-buscador.js?v=3.3"></script>
+    <script src="js/85-ui-inventario-fisico.js?v=3.3"></script>
+    <script src="js/88-compras.js?v=3.3"></script>
+    <script src="js/90-ciclo-admin.js?v=3.3"></script>
+    <script src="js/95-exportacion.js?v=3.3"></script>
+    <script src="js/99-window-arranque.js?v=3.3"></script>
 
     </div><!-- /#appWrapper -->
 
     <!-- ══════════════════════════════════════════════════════
          AUTH — Lógica de autenticación Firebase
          ══════════════════════════════════════════════════════ -->
-        <script src="js/auth.js?v=3.2"></script>
+        <script src="js/auth.js?v=3.3"></script>
 </body>
 </html>
