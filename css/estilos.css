@@ -2607,3 +2607,17 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: #49454f !important; 
     transform: translateX(20px);
     background: var(--accent-on, #003063);
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   R5 — Columnas secundarias del catálogo
+   ────────────────────────────────────────────────────────────────────
+   Sustituyen a "hidden md:table-cell". Ese par de clases venía de Tailwind,
+   pero aquí .hidden está definida arriba con display:none !important y los
+   breakpoints md: no existen en esta hoja: el resultado era que la columna
+   quedaba oculta SIEMPRE, tambien en escritorio. La columna Grupo del
+   catalogo llevaba asi desde que se escribio.
+   ══════════════════════════════════════════════════════════════════════ */
+.cat-col-sec { display: table-cell; }
+@media (max-width: 767px) {
+    .cat-col-sec { display: none; }
+}

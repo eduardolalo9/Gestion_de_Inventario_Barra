@@ -1,6 +1,19 @@
         function handleFileImport(event) {
             const file = event.target.files[0];
             if (!file) return;
+
+            // ── R5: el permiso se comprueba AQUÍ, no solo ocultando el botón ──
+            // Hasta ahora la única defensa era que el botón no se dibujaba para
+            // los no-admin. Ocultar un botón no es un permiso: cualquiera que
+            // abra la consola podía llamar a esta función y reescribir su copia
+            // local del catálogo. Firestore frenaría la sincronización después,
+            // pero el bartender se quedaría trabajando sobre un catálogo
+            // corrompido y sin entender por qué.
+            if (!isAdmin()) {
+                showNotification('⚠️ Solo el administrador puede importar el catálogo');
+                event.target.value = '';
+                return;
+            }
             // ═══ FIX #3: Verificar que XLSX esté cargado (tiene defer) ═══
             // El script de SheetJS usa defer → puede no estar listo si el usuario
             // intenta importar muy rápido tras cargar la página.
@@ -113,6 +126,16 @@
                         return undefined;
                     }
 
+                    // ── R5: índice de lo que YA existe, por ID ────────────────
+                    // Hasta aquí, una fila cuyo ID ya existía NO actualizaba nada:
+                    // se le inventaba un ID nuevo (PRD-NNN) y se creaba un producto
+                    // clonado. Reimportar el catálogo de 424 productos generaba 424
+                    // productos más, con los nombres repetidos y los conteos
+                    // repartidos entre los dos. Ahora el ID manda: si existe, se
+                    // actualiza; si no, se da de alta.
+                    const _indicePorId = {};
+                    products.forEach(function(p, i) { _indicePorId[String(p.id)] = i; });
+
                     const existingIds = new Set(products.map(p => p.id));
                     let maxNum = 0;
                     products.forEach(p => { const m = p.id.match(/^PRD-(\d+)$/); if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10)); });
@@ -132,12 +155,14 @@
                         const rawId = findCol(row, columnMap.id);
                         let id = rawId !== undefined ? String(rawId).trim() : '';
                         if (!id) {
+                            // Sin ID en el Excel no hay forma de saber a qué producto
+                            // se refiere la fila: es un alta y se le genera uno.
                             do { id = 'PRD-' + String(nextNum++).padStart(3, '0'); } while (existingIds.has(id) || usedInBatch.has(id));
-                        } else {
-                            if (existingIds.has(id) || usedInBatch.has(id)) {
-                                do { id = 'PRD-' + String(nextNum++).padStart(3, '0'); } while (existingIds.has(id) || usedInBatch.has(id));
-                            }
                         }
+                        // Si el ID ya existe —en el catálogo o repetido dentro del
+                        // propio Excel— NO se inventa otro: la fila actualiza a ese
+                        // producto. Es lo que pidió Lalo y lo que espera cualquiera
+                        // que vuelva a importar su catálogo.
                         usedInBatch.add(id);
 
                         // ── Unidad ────────────────────────────────────────────
@@ -249,7 +274,32 @@
                         toImport.push(product);
                     });
 
-                    products = products.concat(toImport);
+                    // ── R5: alta o actualización, producto por producto ───────
+                    // Reglas del merge, y son deliberadas:
+                    //
+                    //   · Solo se tocan los campos que el Excel TRAE. Una columna
+                    //     ausente no borra el dato que ya había: importar un Excel
+                    //     sin la columna Proveedor no puede dejar 424 productos sin
+                    //     proveedor.
+                    //   · stockByArea NO se toca nunca en una actualización. Es el
+                    //     conteo, no es dato de catálogo. Pisarlo con la columna
+                    //     Stock del Excel borraría lo contado en barra1 y barra2.
+                    var _nuevos = 0, _actualizados = 0;
+                    toImport.forEach(function(prod) {
+                        var idx = _indicePorId[prod.id];
+                        if (idx === undefined) {
+                            products.push(prod);
+                            _indicePorId[prod.id] = products.length - 1;
+                            _nuevos++;
+                            return;
+                        }
+                        var actual = products[idx];
+                        Object.keys(prod).forEach(function(campo) {
+                            if (campo === 'stockByArea') return;   // el conteo es intocable
+                            actual[campo] = prod[campo];
+                        });
+                        _actualizados++;
+                    });
 
                     // ── R2: avisar de PV repetidos ────────────────────────────
                     // Un PV duplicado no da ningun error visible: reparte mal las
@@ -271,7 +321,7 @@
                         console.warn('[R2] PV repetidos tras importar:', _pvRepes.join(', '));
                     }
 
-                    showNotification(toImport.length + ' productos importados.'
+                    showNotification(_nuevos + ' nuevos, ' + _actualizados + ' actualizados.'
                         + (skipped ? ' ' + skipped + ' filas omitidas por falta de nombre.' : '')
                         + (valoresCorregidos ? ' ⚠️ ' + valoresCorregidos + ' valor(es) no físico(s) (negativo/cero) descartado(s).' : '')
                         + (_pvRepes.length ? ' ⚠️ ' + _pvRepes.length + ' PV repetido(s): ' + _pvRepes.slice(0, 3).join(', ')
