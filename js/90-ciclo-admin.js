@@ -231,7 +231,7 @@
                         const product = {
                             id,
                             name,
-                            stockByArea: { almacen: stock, barra1: 0, barra2: 0 },
+                            stockByArea: _stockInicialPorArea(stock),
                             unit,
                             group
                         };
@@ -329,7 +329,7 @@
                     activeTab = 'inicio';
                     selectedGroup = 'Todos';
                     searchTerm = '';
-                    selectedArea = 'almacen';
+                    selectedArea = AREAS_CONTEO[0] || 'almacen';   // R6
                     saveToLocalStorage();
                     renderTab();
                     fileInput.value = '';

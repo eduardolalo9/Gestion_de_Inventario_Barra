@@ -532,7 +532,7 @@
                     html += '<div class="prd-card__meta">' + escapeHtml(product.id) + ' · ' + escapeHtml(product.unit || '') + ' · Total: ' + total.toFixed(2) + '</div>';
                     // Area chips — total contado de auditoría por área
                     var ad           = adCheck;   // reutilizar el resultado ya calculado arriba
-                    var CHIP_LABELS  = { almacen: 'Almacén', barra1: 'Barra 1', barra2: 'Barra 2' };
+                    var CHIP_LABELS  = areas;   // R6: las etiquetas salen de la configuracion
                     html += '<div class="prd-card__areas">';
                     AREAS_CONTEO.forEach(function(area) {
                         var d          = ad[area];

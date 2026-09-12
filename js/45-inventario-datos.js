@@ -659,11 +659,12 @@ const usersList = Object.values(allUsersAuditoria);
         async function loadConflictosDesdeFirestore() {
             if (!_db || !navigator.onLine || !_haySesionFirebase()) return; // M2a
             try {
-                await Promise.all([
-                    _cargarYAgeregarConteos('almacen'),
-                    _cargarYAgeregarConteos('barra1'),
-                    _cargarYAgeregarConteos('barra2'),
-                ]);
+                // R6: una por cada area definida, no tres fijas. Con las areas
+                // escritas a mano, una cuarta area se contaba en el telefono y
+                // nunca llegaba al panel del administrador.
+                await Promise.all(AREAS_CONTEO.map(function(a) {
+                    return _cargarYAgeregarConteos(a);
+                }));
                 console.info('[MultiDisp] Conteos de todos los dispositivos cargados ✓');
             } catch (err) {
                 console.warn('[MultiDisp] No se pudieron cargar conteos desde Firestore:', err);
@@ -825,7 +826,14 @@ const usersList = Object.values(allUsersAuditoria);
                 inventories = _mergeArrayByIdPreferCloud(inventories, cloudInventories);
                 cart        = data.cart        || [];
                 activeTab   = data.activeTab   || 'inicio';
-                selectedArea = data.selectedArea || 'almacen';
+                selectedArea = data.selectedArea || AREAS_CONTEO[0] || 'almacen';   // R6
+                // R6: la definicion de areas llega antes que el estado que la usa.
+                // Si se aplicara despues, auditoriaStatus se leeria contra las areas
+                // viejas y un area nueva apareceria sin estado.
+                if (Array.isArray(data.areasConteo) && typeof aplicarDefinicionAreas === 'function') {
+                    aplicarDefinicionAreas(data.areasConteo);
+                    if (typeof _guardarAreasLocal === 'function') _guardarAreasLocal();
+                }
                 if (data.auditoriaStatus && typeof data.auditoriaStatus === 'object') auditoriaStatus = data.auditoriaStatus;
                 if (data.auditoriaConteo && typeof data.auditoriaConteo === 'object') auditoriaConteo = data.auditoriaConteo;
 
@@ -878,11 +886,11 @@ const usersList = Object.values(allUsersAuditoria);
 
                     if (!huboDatosNuevos && data._conteoInSubcol) {
                         // Nivel 2 — esquema anterior (documento único por área)
-                        const [snapAlmacen, snapBarra1, snapBarra2] = await Promise.all([
-                            docRef.collection('stockAreas').doc('almacen').get(),
-                            docRef.collection('stockAreas').doc('barra1').get(),
-                            docRef.collection('stockAreas').doc('barra2').get(),
-                        ]);
+                        // R6: se leen las areas definidas, no tres fijas.
+                        const _areasLegacy = AREAS_CONTEO.slice();
+                        const _snapsLegacy = await Promise.all(_areasLegacy.map(function(a) {
+                            return docRef.collection('stockAreas').doc(a).get();
+                        }));
                         const mergeArea = (snap, areaKey) => {
                             if (!snap.exists) return;
                             const areaData = snap.data();
@@ -892,9 +900,7 @@ const usersList = Object.values(allUsersAuditoria);
                                 rawConteo[prodId][areaKey] = areaData[prodId];
                             });
                         };
-                        mergeArea(snapAlmacen, 'almacen');
-                        mergeArea(snapBarra1,  'barra1');
-                        mergeArea(snapBarra2,  'barra2');
+                        _snapsLegacy.forEach(function(snap, i) { mergeArea(snap, _areasLegacy[i]); });
                     }
                 }
                 if (Object.keys(rawConteo).length === 0) {

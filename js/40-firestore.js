@@ -679,6 +679,10 @@
                 if (isAdmin()) {
                     payload.products        = products;
                     payload.auditoriaStatus = auditoriaStatus;
+                    // R6: la definicion de areas viaja con el resto de lo global.
+                    // Sin esto, el admin crea un area y los bartenders no la ven:
+                    // contarian en tres areas mientras el panel espera cuatro.
+                    if (typeof areasConteoDef !== 'undefined') payload.areasConteo = areasConteoDef;
                     // FIX-SESSION: incluir _auditoriaSessionId para que otros dispositivos
                     // detecten cambios de ciclo de auditoría incluso sin pasar por
                     // _adminIniciarSesionFirestore (p.ej., reconexiones tardías).

@@ -1253,6 +1253,10 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName) {
         function renderAjustesTab() {
             let html = '<div class="max-w-2xl mx-auto">';
 
+            // R6: la administracion de areas de conteo vive aqui, y solo para
+            // el admin. La funcion devuelve cadena vacia si no lo es.
+            if (typeof renderAreasConteoAdmin === 'function') html += renderAreasConteoAdmin();
+
             // Formulario para solicitar ajuste (solo usuarios)
             if (!isAdmin()) {
                 html += '<div class="adm-card" style="margin-bottom:16px;">';

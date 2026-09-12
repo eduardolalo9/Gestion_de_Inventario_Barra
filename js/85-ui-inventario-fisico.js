@@ -1249,7 +1249,7 @@
                     name: name,
                     unit: unit,
                     group: group,
-                    stockByArea: { almacen: 0, barra1: 0, barra2: 0 }
+                    stockByArea: _stockInicialPorArea(0)
                 };
                 if (capacidadMl !== undefined)       newProduct.capacidadMl = capacidadMl;
                 if (pesoBotellaLlenaOz !== undefined) newProduct.pesoBotellaLlenaOz = pesoBotellaLlenaOz;
