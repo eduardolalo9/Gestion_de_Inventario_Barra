@@ -32,6 +32,7 @@ const PRUEBAS = [
     'prueba-integridad-split.js',   // M2 — la partición en 17 archivos sigue sana
     'prueba-r1.js',                 // R1 — conteo en oz, decimales, sin motivo
     'prueba-r2.js',                 // R2 — el PV de Parrot en el catálogo
+    'prueba-r3.js',                 // R3 — dos entornos, elegidos por el dominio
 ];
 
 let fallaron = [];

@@ -183,7 +183,23 @@
         // usuario que abra el código fuente. Asegúrate de restringir la API Key
         // en https://console.cloud.google.com → Credenciales → Restricciones de clave.
         // (dominio HTTP Referrer + solo Firestore API)
-const firebaseConfig = {
+// ══════════════════════════════════════════════════════════════════════════
+//  R3 — DOS ENTORNOS, ELEGIDOS POR EL DOMINIO
+//  ────────────────────────────────────────────────────────────────────────
+//  Hasta aquí había una sola configuración. Eso significaba que abrir la app
+//  en localhost para probar cualquier cosa escribía en la base REAL del bar:
+//  el mismo Firestore que usan los bartenders durante el servicio.
+//
+//  Ahora el entorno lo decide el dominio, no una decisión humana que se puede
+//  olvidar a las dos de la mañana:
+//      · eduardolalo9.github.io  → PRODUCCIÓN, la base del bar
+//      · localhost / 127.0.0.1   → PRUEBAS
+//
+//  Y si el de pruebas todavía no está configurado, la app NO cae a producción:
+//  se queda en modo local con localStorage. Fallar cerrado. Un descuido aquí
+//  no borra un inventario.
+// ══════════════════════════════════════════════════════════════════════════
+const FIREBASE_PRODUCCION = {
   apiKey: "AIzaSyDaMcyv_o0YYv9XRDG1A-V3IrboLFK53-o",
   authDomain: "gestor-de-inventarios-76c19.firebaseapp.com",
   projectId: "gestor-de-inventarios-76c19",
@@ -191,6 +207,48 @@ const firebaseConfig = {
   messagingSenderId: "520575498448",
   appId: "1:520575498448:web:3a83c2e4fcaedfc9d386d5"
 };
+
+// Proyecto de pruebas (barinventory-staging). Se rellena con los valores que
+// da Firebase Console → Configuración del proyecto → Tus apps → App web.
+// Mientras esté vacío, en local la app funciona sin nube.
+const FIREBASE_PRUEBAS = {
+  apiKey: "",
+  authDomain: "",
+  projectId: "",
+  storageBucket: "",
+  messagingSenderId: "",
+  appId: ""
+};
+
+function _esEntornoDePruebas() {
+    var h = (location.hostname || '').toLowerCase();
+    // Cadena vacía cubre file:// — abrir el index a doble clic tampoco puede
+    // acabar escribiendo en la base del bar.
+    return h === '' || h === 'localhost' || h === '127.0.0.1' ||
+           h === '::1' || h.endsWith('.local');
+}
+
+const ENTORNO         = _esEntornoDePruebas() ? 'pruebas' : 'produccion';
+const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PRODUCCION;
+
+        // R3 — Aviso permanente cuando NO estás en producción. Sin esto es
+        // demasiado fácil contar media barra creyendo que va a la base buena, o
+        // al revés: tocar producción creyendo que estabas probando.
+        if (ENTORNO === 'pruebas') {
+            document.addEventListener('DOMContentLoaded', function() {
+                var b = document.createElement('div');
+                b.id = 'bannerEntorno';
+                b.textContent = FIREBASE_PRUEBAS.projectId
+                    ? 'PRUEBAS · ' + FIREBASE_PRUEBAS.projectId
+                    : 'PRUEBAS · sin nube, solo este dispositivo';
+                b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;' +
+                    'background:#b45309;color:#fff;text-align:center;font:600 11px/20px ' +
+                    '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;' +
+                    'letter-spacing:.08em;text-transform:uppercase;pointer-events:none;' +
+                    'padding:env(safe-area-inset-top) 8px 0';
+                document.body.appendChild(b);
+            });
+        }
 
         // ID del documento Firestore que almacena el estado de ESTA instalación.
         // Cambia este valor si quieres múltiples instancias (ej. "barra-norte", "barra-sur").
@@ -516,9 +574,17 @@ const firebaseConfig = {
   typeof v === "string" && v.length > 0 && !v.includes("REEMPLAZA")
 );
             if (!configured) {
-                console.warn("[Firebase] Config incompleta — solo se usará localStorage.");
+                // R3: en local esto es lo NORMAL mientras no exista el proyecto de
+                // pruebas, y es deliberado. No se cae a producción.
+                console.warn(ENTORNO === 'pruebas'
+                    ? '[Firebase] Entorno de PRUEBAS sin configurar — la app funciona solo con ' +
+                      'localStorage. No se toca la base del bar. Para conectar el proyecto de ' +
+                      'pruebas, rellena FIREBASE_PRUEBAS arriba en index.html.'
+                    : '[Firebase] Config incompleta — solo se usará localStorage.');
                 return;
             }
+            console.info('[Firebase] Entorno: ' + ENTORNO.toUpperCase() +
+                         ' · proyecto: ' + firebaseConfig.projectId);
             try {
                 firebase.initializeApp(firebaseConfig);
                 _db   = firebase.firestore();
@@ -558,7 +624,7 @@ const firebaseConfig = {
             }
         })();
     </script>
-    <link rel="stylesheet" href="css/estilos.css?v=2.8">
+    <link rel="stylesheet" href="css/estilos.css?v=2.9">
 </head>
 <body class="min-h-screen">
 
@@ -1064,28 +1130,28 @@ const firebaseConfig = {
         </div>
     </div>
 
-        <script src="js/00-nucleo.js?v=2.8"></script>
-    <script src="js/10-multiusuario.js?v=2.8"></script>
-    <script src="js/20-persistencia.js?v=2.8"></script>
-    <script src="js/30-indexeddb.js?v=2.8"></script>
-    <script src="js/40-firestore.js?v=2.8"></script>
-    <script src="js/45-inventario-datos.js?v=2.8"></script>
-    <script src="js/50-roles-permisos.js?v=2.8"></script>
-    <script src="js/60-arranque.js?v=2.8"></script>
-    <script src="js/70-conversion-render.js?v=2.8"></script>
-    <script src="js/75-auditoria-flujo.js?v=2.8"></script>
-    <script src="js/80-buscador.js?v=2.8"></script>
-    <script src="js/85-ui-inventario-fisico.js?v=2.8"></script>
-    <script src="js/88-compras.js?v=2.8"></script>
-    <script src="js/90-ciclo-admin.js?v=2.8"></script>
-    <script src="js/95-exportacion.js?v=2.8"></script>
-    <script src="js/99-window-arranque.js?v=2.8"></script>
+        <script src="js/00-nucleo.js?v=2.9"></script>
+    <script src="js/10-multiusuario.js?v=2.9"></script>
+    <script src="js/20-persistencia.js?v=2.9"></script>
+    <script src="js/30-indexeddb.js?v=2.9"></script>
+    <script src="js/40-firestore.js?v=2.9"></script>
+    <script src="js/45-inventario-datos.js?v=2.9"></script>
+    <script src="js/50-roles-permisos.js?v=2.9"></script>
+    <script src="js/60-arranque.js?v=2.9"></script>
+    <script src="js/70-conversion-render.js?v=2.9"></script>
+    <script src="js/75-auditoria-flujo.js?v=2.9"></script>
+    <script src="js/80-buscador.js?v=2.9"></script>
+    <script src="js/85-ui-inventario-fisico.js?v=2.9"></script>
+    <script src="js/88-compras.js?v=2.9"></script>
+    <script src="js/90-ciclo-admin.js?v=2.9"></script>
+    <script src="js/95-exportacion.js?v=2.9"></script>
+    <script src="js/99-window-arranque.js?v=2.9"></script>
 
     </div><!-- /#appWrapper -->
 
     <!-- ══════════════════════════════════════════════════════
          AUTH — Lógica de autenticación Firebase
          ══════════════════════════════════════════════════════ -->
-        <script src="js/auth.js?v=2.8"></script>
+        <script src="js/auth.js?v=2.9"></script>
 </body>
 </html>
