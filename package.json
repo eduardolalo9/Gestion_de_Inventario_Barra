@@ -3,8 +3,10 @@
   "private": true,
   "description": "Suite de pruebas REAL de firestore.rules contra el emulador oficial de Firestore (no simulación).",
   "scripts": {
-    "pretest": "node pruebas/prueba-integridad-split.js",
+    "pretest": "node pruebas/todas-locales.js",
     "test": "firebase emulators:exec --only firestore --project demo-barinventory \"node run-rules-tests.js\"",
+    "test:locales": "node pruebas/todas-locales.js",
+    "test:navegador": "node pruebas/todas-navegador.js",
     "test:split": "node pruebas/prueba-integridad-split.js",
     "test:reglas": "firebase emulators:exec --only firestore --project demo-barinventory \"node run-rules-tests.js\""
   },

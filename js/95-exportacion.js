@@ -196,8 +196,11 @@
             headerRow.push('Stock minimo');             colMeta.push({ tipo: 'compras' });
             headerRow.push('Conversion de producto');   colMeta.push({ tipo: 'compras' });
             headerRow.push('Proveedor');                colMeta.push({ tipo: 'compras' });
+            // R1 (regla 14) — sin esta columna el viaje exportar → editar → reimportar
+            // perderia el modo de conteo de cada producto.
+            headerRow.push('ConteoOz');                 colMeta.push({ tipo: 'compras' });
 
-            const FIXED_COLS = headerRow.length; // 10 (6 + los 4 de P0)
+            const FIXED_COLS = headerRow.length; // 11 (6 + los 4 de P0 + ConteoOz de R1)
 
             // — Columnas por área: Enteras | Abierta N (oz) | Total —
             areaKeys.forEach(area => {
@@ -241,6 +244,9 @@
                 cells.push(typeof p.stockMinimo === 'number' ? p.stockMinimo : '');
                 cells.push(typeof p.conversion  === 'number' ? p.conversion  : '');
                 cells.push(p.proveedor || '');
+                // R1 — usaConv ya resuelve el caso del producto anterior a R1, que no
+                // tiene la casilla y se cuenta en oz si tiene los datos.
+                cells.push(usaConv ? 'SI' : 'NO');
 
                 let totalGeneral = 0;
 

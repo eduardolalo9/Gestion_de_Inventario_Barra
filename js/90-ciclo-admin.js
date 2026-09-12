@@ -45,6 +45,11 @@
                         capacidadMl:        ['CapacidadML', 'capacidadMl', 'CapacidadMl', 'Capacidad_ML', 'CapML'],
                         pesoBotellaLlenaOz: ['PesoBotellaOz', 'pesoBotellaOz', 'PesoLlenaOz', 'PesoBotella_Oz', 'PesoOz'],
 
+                        // R1 (regla 14) — columna OPCIONAL. Si el Excel no la trae,
+                        // el modo se deduce de tener capacidad y peso, que es como se
+                        // ha comportado la app hasta ahora.
+                        conteoOz: ['ConteoOz', 'Conteo oz', 'ConteoBotellaOz', 'ContarEnOz', 'Habilitar conteo oz'],
+
                         // ── P0: cuatro columnas que el Excel del catalogo YA trae ──
                         // Estaban en Productos_Barra15.xlsx desde siempre y la importacion
                         // las ignoraba, asi que el producto guardado no tenia con que
@@ -203,6 +208,24 @@
                         // Solo añadir si tienen valor real (no null)
                         if (capacidadMl !== null)       product.capacidadMl       = capacidadMl;
                         if (pesoBotellaLlenaOz !== null) product.pesoBotellaLlenaOz = pesoBotellaLlenaOz;
+
+                        // ── R1 (regla 14): modo de conteo ─────────────────────
+                        // Sin capacidad y peso no hay conversion posible, asi que el
+                        // producto se cuenta con una sola cantidad, pase lo que pase
+                        // en la columna. Con los dos datos, manda la columna si viene;
+                        // si no viene, se deduce true, que es el comportamiento que la
+                        // app ha tenido siempre para un producto con esos datos.
+                        var _ozRaw = findCol(row, columnMap.conteoOz);
+                        if (capacidadMl === null || pesoBotellaLlenaOz === null) {
+                            product.conteoOzHabilitado = false;
+                        } else if (_ozRaw === undefined || _ozRaw === null || _ozRaw === '') {
+                            product.conteoOzHabilitado = true;
+                        } else {
+                            var _ozTxt = String(_ozRaw).trim().toLowerCase();
+                            product.conteoOzHabilitado =
+                                ['1', 'si', 'sí', 'true', 'x', 'y', 'yes', 'verdadero'].indexOf(_ozTxt) !== -1;
+                        }
+
                         // P0 — solo se guardan si traen valor real, igual que los de arriba.
                         if (precio      !== null) product.precio      = precio;
                         if (conversion  !== null) product.conversion  = conversion;

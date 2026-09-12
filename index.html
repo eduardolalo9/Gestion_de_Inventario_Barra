@@ -558,7 +558,7 @@ const firebaseConfig = {
             }
         })();
     </script>
-    <link rel="stylesheet" href="css/estilos.css?v=2.6">
+    <link rel="stylesheet" href="css/estilos.css?v=2.7">
 </head>
 <body class="min-h-screen">
 
@@ -855,22 +855,38 @@ const firebaseConfig = {
                 <div style="background:rgba(108,99,255,0.07);border:1px solid rgba(108,99,255,0.18);border-radius:14px;padding:14px 16px 10px;">
                     <!-- FIX #5: 'Syne' no está en el <link> de Google Fonts → el navegador cae a
                          sans-serif del sistema rompiendo la tipografía. Sustituido por IBM Plex Sans. -->
-                    <p style="font-family:'IBM Plex Sans',sans-serif;font-size:0.72rem;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:var(--accent);margin-bottom:10px;">⚗️ Conversión botellas abiertas (opcional)</p>
+                    <p style="font-family:'IBM Plex Sans',sans-serif;font-size:0.72rem;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:var(--accent);margin-bottom:10px;">⚗️ Conteo de botella en oz</p>
+
+                    <!-- R1 (regla 14) — La casilla decide COMO se cuenta el producto.
+                         Marcada:    botellas enteras + botella abierta pesada en oz.
+                         Sin marcar: una sola cantidad total, que admite decimales
+                                     (aceitunas 1.5 PZ, golos 0.490 KG).
+                         Un producto sin capacidad y peso no puede convertir oz, asi que
+                         la casilla se bloquea sola hasta que esos dos campos existan. -->
+                    <label for="productConteoOz" style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:12px;min-height:44px;padding:6px 0;">
+                        <input type="checkbox" id="productConteoOz" onchange="_sincronizarCasillaOz()"
+                            style="width:20px;height:20px;flex-shrink:0;margin-top:2px;accent-color:var(--accent);cursor:pointer;">
+                        <span>
+                            <span class="text-sm font-medium text-gray-700">Habilitar conteo de botella en oz</span>
+                            <span id="productConteoOzHint" class="block text-xs text-gray-400 mt-1">Requiere capacidad y peso lleno.</span>
+                        </span>
+                    </label>
+
                     <div class="flex gap-3">
                         <div style="flex:1">
                             <label for="productCapacidadMl" class="block text-sm font-medium text-gray-600 mb-2">Capacidad (ml)</label>
-                            <input type="number" id="productCapacidadMl" min="0" step="0.01"
+                            <input type="number" id="productCapacidadMl" min="0" step="0.01" oninput="_sincronizarCasillaOz()"
                                 class="w-full px-3 py-2 bg-white text-gray-900 border border-gray-200 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 placeholder="Ej: 750">
                         </div>
                         <div style="flex:1">
                             <label for="productPesoLlenaOz" class="block text-sm font-medium text-gray-600 mb-2">Peso llena (oz)</label>
-                            <input type="number" id="productPesoLlenaOz" min="0" step="0.01"
+                            <input type="number" id="productPesoLlenaOz" min="0" step="0.01" oninput="_sincronizarCasillaOz()"
                                 class="w-full px-3 py-2 bg-white text-gray-900 border border-gray-200 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 placeholder="Ej: 44.65">
                         </div>
                     </div>
-                    <p class="text-xs text-gray-400 mt-2">Cuando se llenen, las botellas abiertas se ingresan en oz y se convierten automáticamente a fracciones de botella.</p>
+                    <p class="text-xs text-gray-400 mt-2">Con la casilla marcada, la botella abierta se ingresa en oz y se convierte sola a fracción: 8 enteras + una abierta de 0.65 dan 8.65. Sin marcar, el producto se cuenta con una sola cantidad y admite decimales.</p>
                 </div>
 
                 <!-- P0 — COMPRAS Y REPOSICION
@@ -985,9 +1001,12 @@ const firebaseConfig = {
             <div class="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-4"></div>
             <h2 class="text-xl font-bold text-gray-900 mb-1" id="inventarioModalTitle">Contar botellas</h2>
             <p class="text-sm text-gray-500 mb-2" id="inventarioModalSubtitle"></p>
+            <!-- R1 (regla 14) — MODO BOTELLA: enteras + abiertas en oz.
+                 Solo visible cuando el producto tiene habilitado el conteo en oz. -->
+            <div id="inv_bloqueBotella">
             <div class="mb-4">
                 <label for="inv_enteras" class="block text-sm font-semibold text-gray-700 mb-2">🍾 Botellas Enteras</label>
-                <input type="number" id="inv_enteras" min="0" step="0.001" value="0" oninput="if(parseFloat(this.value)<0||isNaN(parseFloat(this.value)))this.value=0;" class="w-full px-4 py-2 bg-white text-gray-900 border-2 border-blue-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center text-base font-bold">
+                <input type="number" id="inv_enteras" min="0" step="1" value="0" inputmode="numeric" oninput="if(parseFloat(this.value)<0||isNaN(parseFloat(this.value)))this.value=0;" class="w-full px-4 py-2 bg-white text-gray-900 border-2 border-blue-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center text-base font-bold">
             </div>
             <div class="mb-4">
                 <div class="flex items-center justify-between mb-2">
@@ -1002,25 +1021,24 @@ const firebaseConfig = {
                 </div>
                 <div id="inv_abiertasContainer" class="space-y-2"></div>
             </div>
-            <!-- CORRECCIÓN 4: Campo "motivo" obligatorio para auditoría de cambios -->
-            <!-- Solo se muestra cuando hay un valor previo que se va a modificar    -->
-            <div id="inv_motivoContainer" class="mb-4" style="display:none;">
-                <label for="inv_motivo" class="block text-sm font-semibold text-gray-700 mb-2">
-                    📝 Motivo del cambio <span class="text-red-500">*</span>
+            </div><!-- /inv_bloqueBotella -->
+
+            <!-- R1 (regla 14) — MODO CANTIDAD: un solo campo, con decimales.
+                 Para productos que no se cuentan por botella: aceitunas 1.5 PZ,
+                 golos 0.490 KG, refresco 4.5 LTS. -->
+            <div id="inv_bloqueCantidad" class="mb-4" style="display:none;">
+                <label for="inv_cantidadTotal" class="block text-sm font-semibold text-gray-700 mb-2">
+                    📦 Cantidad total <span id="inv_cantidadUnidad" class="text-xs font-normal text-gray-500"></span>
                 </label>
-                <select id="inv_motivo" class="w-full px-4 py-2 bg-white text-gray-900 border-2 border-orange-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm font-medium">
-                    <option value="">— Selecciona un motivo —</option>
-                    <option value="Conteo inicial">Conteo inicial</option>
-                    <option value="Reconteo">Reconteo</option>
-                    <option value="Corrección de error">Corrección de error</option>
-                    <option value="Entrada de mercancía">Entrada de mercancía</option>
-                    <option value="Merma / rotura">Merma / rotura</option>
-                    <option value="Consumo de turno">Consumo de turno</option>
-                    <option value="Ajuste de inventario">Ajuste de inventario</option>
-                    <option value="Otro">Otro</option>
-                </select>
-                <p id="inv_motivoError" class="text-xs text-red-500 mt-1 hidden">⚠️ El motivo es obligatorio cuando se modifica un valor existente.</p>
+                <input type="number" id="inv_cantidadTotal" min="0" step="0.001" value="0" inputmode="decimal"
+                    oninput="if(parseFloat(this.value)<0||isNaN(parseFloat(this.value)))this.value=0;"
+                    class="w-full px-4 py-2 bg-white text-gray-900 border-2 border-blue-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center text-base font-bold">
+                <p class="text-xs text-gray-400 mt-2">Admite decimales. Ejemplos: 8.65 · 4.5 · 1.245</p>
             </div>
+
+            <!-- R1 (regla 16) — El selector "Motivo del cambio" se eliminó por completo.
+                 El historial sigue registrando cada cambio, pero no se le pide al
+                 bartender que justifique un conteo: frenaba la captura sin aportar. -->
             <div class="flex gap-3 pt-2" style="position:sticky;bottom:0;background:var(--modal-bg,#fff);padding-bottom:4px;z-index:1;">
                 <button type="button" onclick="closeInventarioModal()" style="flex:1;height:40px;border-radius:9999px;border:none;background:transparent;color:var(--txt-secondary);font-family:'IBM Plex Sans',sans-serif;font-size:.875rem;font-weight:500;cursor:pointer;" >Cancelar</button>
                 <button type="button" onclick="saveInventarioModal()" style="flex:1;height:40px;border-radius:9999px;border:none;background:var(--accent);color:var(--accent-on,#003063);font-family:'IBM Plex Sans',sans-serif;font-size:.875rem;font-weight:500;cursor:pointer;box-shadow:var(--shadow-card);">Guardar</button>
@@ -1028,28 +1046,28 @@ const firebaseConfig = {
         </div>
     </div>
 
-        <script src="js/00-nucleo.js?v=2.6"></script>
-    <script src="js/10-multiusuario.js?v=2.6"></script>
-    <script src="js/20-persistencia.js?v=2.6"></script>
-    <script src="js/30-indexeddb.js?v=2.6"></script>
-    <script src="js/40-firestore.js?v=2.6"></script>
-    <script src="js/45-inventario-datos.js?v=2.6"></script>
-    <script src="js/50-roles-permisos.js?v=2.6"></script>
-    <script src="js/60-arranque.js?v=2.6"></script>
-    <script src="js/70-conversion-render.js?v=2.6"></script>
-    <script src="js/75-auditoria-flujo.js?v=2.6"></script>
-    <script src="js/80-buscador.js?v=2.6"></script>
-    <script src="js/85-ui-inventario-fisico.js?v=2.6"></script>
-    <script src="js/88-compras.js?v=2.6"></script>
-    <script src="js/90-ciclo-admin.js?v=2.6"></script>
-    <script src="js/95-exportacion.js?v=2.6"></script>
-    <script src="js/99-window-arranque.js?v=2.6"></script>
+        <script src="js/00-nucleo.js?v=2.7"></script>
+    <script src="js/10-multiusuario.js?v=2.7"></script>
+    <script src="js/20-persistencia.js?v=2.7"></script>
+    <script src="js/30-indexeddb.js?v=2.7"></script>
+    <script src="js/40-firestore.js?v=2.7"></script>
+    <script src="js/45-inventario-datos.js?v=2.7"></script>
+    <script src="js/50-roles-permisos.js?v=2.7"></script>
+    <script src="js/60-arranque.js?v=2.7"></script>
+    <script src="js/70-conversion-render.js?v=2.7"></script>
+    <script src="js/75-auditoria-flujo.js?v=2.7"></script>
+    <script src="js/80-buscador.js?v=2.7"></script>
+    <script src="js/85-ui-inventario-fisico.js?v=2.7"></script>
+    <script src="js/88-compras.js?v=2.7"></script>
+    <script src="js/90-ciclo-admin.js?v=2.7"></script>
+    <script src="js/95-exportacion.js?v=2.7"></script>
+    <script src="js/99-window-arranque.js?v=2.7"></script>
 
     </div><!-- /#appWrapper -->
 
     <!-- ══════════════════════════════════════════════════════
          AUTH — Lógica de autenticación Firebase
          ══════════════════════════════════════════════════════ -->
-        <script src="js/auth.js?v=2.6"></script>
+        <script src="js/auth.js?v=2.7"></script>
 </body>
 </html>

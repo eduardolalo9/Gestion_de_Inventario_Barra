@@ -42,13 +42,39 @@
         }
 
         /**
-         * tieneConversion(product)
-         * Devuelve true si el producto tiene los datos para convertir oz→puntos.
+         * tieneDatosConversion(product)
+         * Devuelve true si el producto tiene los NÚMEROS para convertir oz→puntos.
+         * No dice si el producto debe contarse así — eso lo decide la casilla.
+         */
+        function tieneDatosConversion(product) {
+            return !!(product &&
+                   typeof product.capacidadMl === 'number' && product.capacidadMl > 0 &&
+                   typeof product.pesoBotellaLlenaOz === 'number' && product.pesoBotellaLlenaOz > 0);
+        }
+
+        /**
+         * tieneConversion(product)   — R1, regla 14
+         * ─────────────────────────────────────────
+         * Decide si ESTE producto se cuenta como botella (enteras + abierta en oz)
+         * o como una sola cantidad con decimales.
+         *
+         * Son dos condiciones y las dos tienen que cumplirse:
+         *   1. la casilla "Habilitar conteo de botella en oz" está marcada, y
+         *   2. existen capacidadMl y pesoBotellaLlenaOz.
+         * Sin (2) la conversión daría NaN, así que la casilla sola no basta.
+         *
+         * RETROCOMPATIBILIDAD — esto es lo delicado:
+         * los productos creados antes de R1 no tienen el campo. Para ellos la regla
+         * anterior era "si hay datos, se cuenta en oz", y se conserva exactamente.
+         * Un producto ya capturado NO puede cambiar de modo de conteo porque se
+         * actualizó la app: eso reinterpretaría conteos guardados y movería el
+         * inventario sin que nadie lo tocara.
          */
         function tieneConversion(product) {
-            return product &&
-                   typeof product.capacidadMl === 'number' && product.capacidadMl > 0 &&
-                   typeof product.pesoBotellaLlenaOz === 'number' && product.pesoBotellaLlenaOz > 0;
+            if (!tieneDatosConversion(product)) return false;
+            var casilla = product.conteoOzHabilitado;
+            if (casilla === undefined || casilla === null) return true;  // producto anterior a R1
+            return casilla === true;
         }
 
         /**
@@ -767,35 +793,35 @@ document.body.appendChild(overlay);
                 hintEl.textContent = tieneConversion(product) ? '— ingresa el peso en oz' : '';
             }
 
-            document.getElementById('inv_enteras').value = conteoSource.enteras || 0;
-            const container = document.getElementById('inv_abiertasContainer');
-            container.innerHTML = '';
-            const abiertas = (conteoSource.abiertas && conteoSource.abiertas.length > 0) ? conteoSource.abiertas : [0];
-            // Pasar si usa oz para el placeholder del input
-            abiertas.forEach((val, idx) => renderAbiertaInput(val, idx, tieneConversion(product)));
+            // ── R1 (regla 14): elegir el modo de captura ──────────────────────
+            // El modo lo decide el producto, no el usuario. Mostrar los dos bloques
+            // a la vez permitiría capturar la misma cantidad por dos caminos.
+            const usaBotella   = tieneConversion(product);
+            const bloqueBot    = document.getElementById('inv_bloqueBotella');
+            const bloqueCant   = document.getElementById('inv_bloqueCantidad');
+            if (bloqueBot)  bloqueBot.style.display  = usaBotella ? '' : 'none';
+            if (bloqueCant) bloqueCant.style.display = usaBotella ? 'none' : '';
 
-            // ── CORRECCIÓN 4: Motivo obligatorio cuando hay valor previo ──────
-            // Si ya existe un conteo para este producto/área, mostrar el selector de motivo.
-            // Para un primer conteo (sin valor previo), se auto-selecciona "Conteo inicial".
-            const motivoContainer = document.getElementById('inv_motivoContainer');
-            const motivoSelect    = document.getElementById('inv_motivo');
-            const prevEnteras     = conteoSource.enteras || 0;
-            const hasPrevData     = prevEnteras > 0 ||
-                                    (conteoSource.abiertas && conteoSource.abiertas.some(function(v) { return v > 0; }));
-            if (motivoContainer && motivoSelect) {
-                if (hasPrevData) {
-                    // Hay valor previo → mostrar selector y exigir elección
-                    motivoContainer.style.display = '';
-                    motivoSelect.value = '';
-                } else {
-                    // Primer conteo → ocultar selector, pre-seleccionar "Conteo inicial"
-                    motivoContainer.style.display = 'none';
-                    motivoSelect.value = 'Conteo inicial';
-                }
-                // Limpiar error previo
-                const errEl = document.getElementById('inv_motivoError');
-                if (errEl) errEl.classList.add('hidden');
+            if (usaBotella) {
+                document.getElementById('inv_enteras').value = conteoSource.enteras || 0;
+                const container = document.getElementById('inv_abiertasContainer');
+                container.innerHTML = '';
+                const abiertas = (conteoSource.abiertas && conteoSource.abiertas.length > 0) ? conteoSource.abiertas : [0];
+                abiertas.forEach((val, idx) => renderAbiertaInput(val, idx, true));
+            } else {
+                // Modo cantidad: un solo número. Si el producto venía con abiertas
+                // (porque el administrador acaba de desmarcar la casilla), se muestra
+                // el total ya convertido en vez de perder la fracción.
+                let total = conteoSource.enteras || 0;
+                (conteoSource.abiertas || []).forEach(function(v) { total += (v || 0); });
+                const inputCant = document.getElementById('inv_cantidadTotal');
+                if (inputCant) inputCant.value = Math.round(total * 1000) / 1000;
+                const unidadEl = document.getElementById('inv_cantidadUnidad');
+                if (unidadEl) unidadEl.textContent = product.unit ? '(' + product.unit + ')' : '';
             }
+
+            // R1 (regla 16): ya no hay selector de motivo. El historial lo registra
+            // solo; al bartender no se le pide que justifique un conteo.
 
             isInventarioModalOpen = true;
             disableAreaButtons(true);
@@ -879,57 +905,82 @@ document.body.appendChild(overlay);
                 return;
             }
 
-            // Validación: solo números positivos
-            const enterasRaw = parseFloat(document.getElementById('inv_enteras').value);
-            if (isNaN(enterasRaw) || enterasRaw < 0) {
-                showNotification('⚠️ Las botellas enteras deben ser un número mayor o igual a 0');
-                document.getElementById('inv_enteras').focus();
-                return;
-            }
-            // Bug #7 fix: enteras debe ser entero — fracciones van en la sección Abiertas
-            if (!Number.isInteger(enterasRaw)) {
-                showNotification('⚠️ Las botellas enteras deben ser número entero. Usa la sección "Abiertas" para fracciones.');
-                document.getElementById('inv_enteras').focus();
-                return;
-            }
-            // ── CORRECCIÓN 4: Validar motivo obligatorio ─────────────────────
-            const motivoSelect = document.getElementById('inv_motivo');
-            const motivoVal    = motivoSelect ? motivoSelect.value.trim() : 'Conteo inicial';
-            const motivoContainer = document.getElementById('inv_motivoContainer');
-            const isMotivVisible  = motivoContainer && motivoContainer.style.display !== 'none';
-            if (isMotivVisible && !motivoVal) {
-                const errEl = document.getElementById('inv_motivoError');
-                if (errEl) errEl.classList.remove('hidden');
-                motivoSelect.focus();
-                showNotification('⚠️ Debes seleccionar un motivo para modificar el conteo.');
-                return;
-            }
-            const motivoFinal = motivoVal || 'Conteo inicial';
+            // R1 (regla 16): el motivo del cambio ya no se le pide al usuario.
+            // El historial de auditoría lo sigue registrando con una etiqueta
+            // automática, para no perder la trazabilidad que ya existía.
+            const motivoFinal = 'Conteo';
 
-            // FIX-UPPER-BOUND: límite máximo razonable para evitar errores de tipeo (ej. 99 → 9999)
-            if (enterasRaw > 9999) {
-                showNotification('⚠️ Cantidad muy alta (' + enterasRaw + '). Verifica el valor antes de guardar.');
-                document.getElementById('inv_enteras').focus();
-                return;
-            }
-            const enteras = Math.max(0, enterasRaw);
-            const container = document.getElementById('inv_abiertasContainer');
+            // ── R1 (regla 14): el producto decide cómo se leyó el conteo ──────
+            const _prodModal = products.find(p => p.id === inventarioModalProductId);
+            const usaBotella = tieneConversion(_prodModal);
+
+            let enteras;
             const abiertas = [];
-            let invalidAbierta = false;
-            for (let i = 0; i < container.children.length; i++) {
-                const input = document.getElementById('inv_abierta_' + i);
-                if (input) {
-                    const raw = input.value.trim();
-                    // FIX-SCIENTIFIC: rechazar notación científica que parseFloat acepta (ej. 1e5 = 100000)
-                    if (/e/i.test(raw)) { invalidAbierta = true; break; }
-                    const v = parseFloat(raw);
-                    if (isNaN(v) || v < 0 || v > 9999) { invalidAbierta = true; break; }
-                    abiertas.push(v);
+
+            if (!usaBotella) {
+                // ── MODO CANTIDAD (regla 13): un solo número, con decimales ───
+                const inputCant = document.getElementById('inv_cantidadTotal');
+                const rawCant   = inputCant ? inputCant.value.trim() : '';
+                // Rechazar notación científica, que parseFloat acepta (1e5 = 100000)
+                if (/e/i.test(rawCant)) {
+                    showNotification('⚠️ Cantidad no válida. Escribe el número completo, por ejemplo 1.245');
+                    if (inputCant) inputCant.focus();
+                    return;
                 }
-            }
-            if (invalidAbierta) {
-                showNotification('⚠️ Los valores de botellas abiertas deben ser números positivos (máx. 9999)');
-                return;
+                const cant = parseFloat(rawCant);
+                if (isNaN(cant) || cant < 0) {
+                    showNotification('⚠️ La cantidad debe ser un número mayor o igual a 0');
+                    if (inputCant) inputCant.focus();
+                    return;
+                }
+                if (cant > 9999) {
+                    showNotification('⚠️ Cantidad muy alta (' + cant + '). Verifica el valor antes de guardar.');
+                    if (inputCant) inputCant.focus();
+                    return;
+                }
+                // 3 decimales: es lo que pide la operación (golos 0.490 KG) y evita
+                // que un 0.1 + 0.2 de punto flotante se guarde como 0.30000000000000004.
+                enteras = Math.round(cant * 1000) / 1000;
+            } else {
+                // ── MODO BOTELLA: enteras (entero) + abiertas en oz ───────────
+                const enterasRaw = parseFloat(document.getElementById('inv_enteras').value);
+                if (isNaN(enterasRaw) || enterasRaw < 0) {
+                    showNotification('⚠️ Las botellas enteras deben ser un número mayor o igual a 0');
+                    document.getElementById('inv_enteras').focus();
+                    return;
+                }
+                // Las enteras son botellas cerradas: no existe media botella cerrada.
+                // La fracción va en "Abiertas", que es lo que la báscula mide.
+                if (!Number.isInteger(enterasRaw)) {
+                    showNotification('⚠️ Las botellas enteras deben ser número entero. Usa la sección "Abiertas" para fracciones.');
+                    document.getElementById('inv_enteras').focus();
+                    return;
+                }
+                // FIX-UPPER-BOUND: límite razonable para atrapar errores de tipeo (99 → 9999)
+                if (enterasRaw > 9999) {
+                    showNotification('⚠️ Cantidad muy alta (' + enterasRaw + '). Verifica el valor antes de guardar.');
+                    document.getElementById('inv_enteras').focus();
+                    return;
+                }
+                enteras = Math.max(0, enterasRaw);
+
+                const container = document.getElementById('inv_abiertasContainer');
+                let invalidAbierta = false;
+                for (let i = 0; i < container.children.length; i++) {
+                    const input = document.getElementById('inv_abierta_' + i);
+                    if (input) {
+                        const raw = input.value.trim();
+                        // FIX-SCIENTIFIC: rechazar notación científica (ej. 1e5 = 100000)
+                        if (/e/i.test(raw)) { invalidAbierta = true; break; }
+                        const v = parseFloat(raw);
+                        if (isNaN(v) || v < 0 || v > 9999) { invalidAbierta = true; break; }
+                        abiertas.push(v);
+                    }
+                }
+                if (invalidAbierta) {
+                    showNotification('⚠️ Los valores de botellas abiertas deben ser números positivos (máx. 9999)');
+                    return;
+                }
             }
 
             // ── CORRECCIÓN 8: Detección de cambios anómalos ─────────────────

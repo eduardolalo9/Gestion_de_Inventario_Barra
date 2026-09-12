@@ -926,6 +926,55 @@
             return 'PRD-' + String(maxNum + 1).padStart(3, '0');
         }
 
+        // ── R1 (regla 14) — La casilla "Habilitar conteo de botella en oz" ─────
+        // Vive en el formulario de producto y decide como se contara ese producto.
+        // Estas dos funciones son todo su comportamiento en la interfaz.
+
+        /**
+         * Lee la casilla al guardar. Devuelve false —no lo que marque la casilla—
+         * cuando faltan capacidad o peso lleno: sin esos dos numeros la conversion
+         * no existe, y guardar true dejaria un producto que pide oz y no sabe
+         * convertirlos. La interfaz ya lo impide; esto lo impide tambien si el
+         * producto llega por importacion o por una version vieja de la pantalla.
+         */
+        function _leerCasillaOz(capacidadMl, pesoBotellaLlenaOz) {
+            if (capacidadMl === undefined || pesoBotellaLlenaOz === undefined) return false;
+            var el = document.getElementById('productConteoOz');
+            return !!(el && el.checked);
+        }
+
+        function _ponerCasillaOz(valor) {
+            var el = document.getElementById('productConteoOz');
+            if (el) el.checked = !!valor;
+        }
+
+        /**
+         * Mantiene la casilla coherente con los datos que hay capturados.
+         * Sin capacidad y peso lleno la conversion daria NaN, asi que la casilla
+         * se desactiva y se explica por que, en vez de dejar marcar algo que no
+         * puede funcionar y que fallaria despues, durante el conteo.
+         */
+        function _sincronizarCasillaOz() {
+            var chk  = document.getElementById('productConteoOz');
+            var hint = document.getElementById('productConteoOzHint');
+            if (!chk) return;
+            var cap  = parseFloat((document.getElementById('productCapacidadMl') || {}).value);
+            var peso = parseFloat((document.getElementById('productPesoLlenaOz') || {}).value);
+            var hayDatos = !isNaN(cap) && cap > 0 && !isNaN(peso) && peso > 0;
+
+            chk.disabled = !hayDatos;
+            if (!hayDatos && chk.checked) chk.checked = false;
+
+            if (!hint) return;
+            if (!hayDatos) {
+                hint.textContent = 'Llena capacidad y peso lleno para poder activarlo.';
+            } else if (chk.checked) {
+                hint.textContent = 'Se contara como botellas enteras + botella abierta en oz.';
+            } else {
+                hint.textContent = 'Se contara con una sola cantidad, con decimales.';
+            }
+        }
+
         function openProductModal(productId) {
             const modal = document.getElementById('productModal');
             const title = document.getElementById('productModalTitle');
@@ -956,6 +1005,11 @@
                     if (typeof product.conversion  === 'number') document.getElementById('productConversion').value  = product.conversion;
                     if (typeof product.stockMinimo === 'number') document.getElementById('productStockMinimo').value = product.stockMinimo;
                     if (product.proveedor) document.getElementById('productProveedor').value = product.proveedor;
+                    // R1 (regla 14) — poblar la casilla con el modo REAL del producto.
+                    // Es lo que evita el accidente silencioso: si no se poblara, abrir
+                    // y guardar un producto antiguo lo cambiaria de modo de conteo sin
+                    // que nadie tocara la casilla.
+                    _ponerCasillaOz(tieneConversion(product));
                 } else {
                     showNotification('Producto no encontrado');
                     return;
@@ -964,7 +1018,9 @@
                 editingProductId = null;
                 title.textContent = 'Agregar Producto';
                 document.getElementById('productId').value = generateProductId();
+                _ponerCasillaOz(false);
             }
+            _sincronizarCasillaOz();
             modal.classList.remove('hidden');
             document.body.classList.add('modal-open');
             setTimeout(() => {
@@ -1086,6 +1142,11 @@
                 else delete product.capacidadMl;
                 if (pesoBotellaLlenaOz !== undefined) product.pesoBotellaLlenaOz = pesoBotellaLlenaOz;
                 else delete product.pesoBotellaLlenaOz;
+                // R1 (regla 14) — se guarda SIEMPRE, true o false. Dejarlo sin
+                // escribir cuando es false lo devolveria al valor heredado de los
+                // productos anteriores a R1, que es true, y el administrador no
+                // podria desactivar el conteo en oz de un producto que ya lo tenia.
+                product.conteoOzHabilitado = _leerCasillaOz(capacidadMl, pesoBotellaLlenaOz);
                 // P0 — mismo criterio: si el campo se vacia, el dato se quita.
                 if (precio      !== undefined) product.precio      = precio;      else delete product.precio;
                 if (conversion  !== undefined) product.conversion  = conversion;  else delete product.conversion;
@@ -1116,6 +1177,8 @@
                 };
                 if (capacidadMl !== undefined)       newProduct.capacidadMl = capacidadMl;
                 if (pesoBotellaLlenaOz !== undefined) newProduct.pesoBotellaLlenaOz = pesoBotellaLlenaOz;
+                // R1 (regla 14)
+                newProduct.conteoOzHabilitado = _leerCasillaOz(capacidadMl, pesoBotellaLlenaOz);
                 // P0
                 if (precio      !== undefined) newProduct.precio      = precio;
                 if (conversion  !== undefined) newProduct.conversion  = conversion;

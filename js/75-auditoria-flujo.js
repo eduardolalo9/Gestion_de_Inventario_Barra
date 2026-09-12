@@ -129,6 +129,10 @@
                     grupo: p.grupo || p.categoria || '',
                     capacidadMl: (typeof p.capacidadMl === 'number') ? p.capacidadMl : null,
                     pesoBotellaLlenaOz: (typeof p.pesoBotellaLlenaOz === 'number') ? p.pesoBotellaLlenaOz : null,
+                    // R1 (regla 14) — el modo de conteo se congela junto con el stock.
+                    // Un cierre guardado tiene que poder releerse anos despues con la
+                    // misma interpretacion que tenia el dia que se cerro.
+                    conteoOzHabilitado: (typeof p.conteoOzHabilitado === 'boolean') ? p.conteoOzHabilitado : null,
                     // Fotografía del stock POR ÁREA tal como estaba en el momento
                     // del cierre — esto es lo que queda congelado; stockAreas en
                     // Firestore sigue existiendo y evolucionando después.
@@ -277,7 +281,7 @@
                 }
                 const productosCongelados = registros.filter(function(r) { return r.tipo === 'producto'; })
                     .map(function(r) {
-                        return { id: r.id, nombre: r.nombre, grupo: r.grupo, capacidadMl: r.capacidadMl, pesoBotellaLlenaOz: r.pesoBotellaLlenaOz, stockByArea: r.stockByArea };
+                        return { id: r.id, nombre: r.nombre, grupo: r.grupo, capacidadMl: r.capacidadMl, pesoBotellaLlenaOz: r.pesoBotellaLlenaOz, conteoOzHabilitado: r.conteoOzHabilitado, stockByArea: r.stockByArea };
                     });
                 const conteoData = {};
                 productosCongelados.forEach(function(p) { conteoData[p.id] = p.stockByArea || {}; });

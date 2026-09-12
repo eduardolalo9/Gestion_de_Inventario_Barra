@@ -1087,6 +1087,12 @@
                         grupo: p.group || 'General',
                         capacidadMl: p.capacidadMl || null,
                         pesoBotellaLlenaOz: p.pesoBotellaLlenaOz || null,
+                        // R1 (regla 14) — el modo de conteo viaja con el producto.
+                        // Sin esto, al reconstruir el reporte la casilla llegaria
+                        // undefined, se leeria como "producto anterior a R1" y un
+                        // producto configurado SIN conteo en oz se reinterpretaria
+                        // como si lo tuviera. null = no definido, y asi se conserva.
+                        conteoOzHabilitado: (typeof p.conteoOzHabilitado === 'boolean') ? p.conteoOzHabilitado : null,
                         porArea, totalEnteras, totalAbiertas
                     };
                 });
@@ -1140,7 +1146,11 @@
                     return Object.assign({}, catalog, {
                         id: p.id, name: p.nombre, unit: p.unidad, group: p.grupo,
                         capacidadMl:       p.capacidadMl       || catalog.capacidadMl,
-                        pesoBotellaLlenaOz: p.pesoBotellaLlenaOz || catalog.pesoBotellaLlenaOz
+                        pesoBotellaLlenaOz: p.pesoBotellaLlenaOz || catalog.pesoBotellaLlenaOz,
+                        // R1 — manda lo que quedo grabado en el reporte; el catalogo
+                        // pudo cambiar despues y el reporte es una fotografia.
+                        conteoOzHabilitado: (typeof p.conteoOzHabilitado === 'boolean')
+                                            ? p.conteoOzHabilitado : catalog.conteoOzHabilitado
                     });
                 });
 
