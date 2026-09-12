@@ -50,6 +50,11 @@
                         // ha comportado la app hasta ahora.
                         conteoOz: ['ConteoOz', 'Conteo oz', 'ConteoBotellaOz', 'ContarEnOz', 'Habilitar conteo oz'],
 
+                        // R2 (reglas 2 y 8) — el product_id de Parrot. En la hoja
+                        // "Venta" la columna se llama SKU, asi que se aceptan los
+                        // dos nombres: son el mismo dato.
+                        pv: ['PV', 'SKU', 'PV de venta', 'PVVenta', 'ProductId', 'product_id'],
+
                         // ── P0: cuatro columnas que el Excel del catalogo YA trae ──
                         // Estaban en Productos_Barra15.xlsx desde siempre y la importacion
                         // las ignoraba, asi que el producto guardado no tenia con que
@@ -232,13 +237,45 @@
                         if (stockMinimo !== null) product.stockMinimo = stockMinimo;
                         if (proveedor)            product.proveedor   = proveedor;
 
+                        // ── R2: PV de Parrot ──────────────────────────────────
+                        // Mayusculas y sin espacios, igual que en la captura manual:
+                        // un PV copiado de un Excel trae espacios al final mas veces
+                        // de las que parece, y ' PVA1001169' no cruza con 'PVA1001169'.
+                        var _pvRaw = findCol(row, columnMap.pv);
+                        var _pv = (_pvRaw !== undefined && _pvRaw !== null)
+                                  ? String(_pvRaw).toUpperCase().replace(/\s+/g, '') : '';
+                        if (_pv) product.pv = _pv;
+
                         toImport.push(product);
                     });
 
                     products = products.concat(toImport);
+
+                    // ── R2: avisar de PV repetidos ────────────────────────────
+                    // Un PV duplicado no da ningun error visible: reparte mal las
+                    // ventas y la desviacion sale torcida en los dos productos a la
+                    // vez. Es de los fallos que se descubren un mes despues, cuando
+                    // ya no se sabe de donde salio. Aqui no se borra nada —el
+                    // administrador decide cual esta mal— pero se dice cuales son.
+                    var _pvVistos = {}, _pvRepes = [];
+                    products.forEach(function(p) {
+                        if (!p.pv) return;
+                        var k = String(p.pv).toUpperCase();
+                        if (_pvVistos[k]) {
+                            if (_pvRepes.indexOf(k) === -1) _pvRepes.push(k);
+                        } else {
+                            _pvVistos[k] = true;
+                        }
+                    });
+                    if (_pvRepes.length) {
+                        console.warn('[R2] PV repetidos tras importar:', _pvRepes.join(', '));
+                    }
+
                     showNotification(toImport.length + ' productos importados.'
                         + (skipped ? ' ' + skipped + ' filas omitidas por falta de nombre.' : '')
-                        + (valoresCorregidos ? ' ⚠️ ' + valoresCorregidos + ' valor(es) no físico(s) (negativo/cero) descartado(s).' : ''));
+                        + (valoresCorregidos ? ' ⚠️ ' + valoresCorregidos + ' valor(es) no físico(s) (negativo/cero) descartado(s).' : '')
+                        + (_pvRepes.length ? ' ⚠️ ' + _pvRepes.length + ' PV repetido(s): ' + _pvRepes.slice(0, 3).join(', ')
+                           + (_pvRepes.length > 3 ? '…' : '') + '. Las ventas no cruzarán bien hasta corregirlos.' : ''));
                     activeTab = 'inicio';
                     selectedGroup = 'Todos';
                     searchTerm = '';

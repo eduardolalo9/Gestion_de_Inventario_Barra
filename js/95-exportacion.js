@@ -199,8 +199,9 @@
             // R1 (regla 14) — sin esta columna el viaje exportar → editar → reimportar
             // perderia el modo de conteo de cada producto.
             headerRow.push('ConteoOz');                 colMeta.push({ tipo: 'compras' });
+            headerRow.push('PV');                       colMeta.push({ tipo: 'compras' });  // R2
 
-            const FIXED_COLS = headerRow.length; // 11 (6 + los 4 de P0 + ConteoOz de R1)
+            const FIXED_COLS = headerRow.length; // 12 (6 + 4 de P0 + ConteoOz de R1 + PV de R2)
 
             // — Columnas por área: Enteras | Abierta N (oz) | Total —
             areaKeys.forEach(area => {
@@ -247,6 +248,7 @@
                 // R1 — usaConv ya resuelve el caso del producto anterior a R1, que no
                 // tiene la casilla y se cuenta en oz si tiene los datos.
                 cells.push(usaConv ? 'SI' : 'NO');
+                cells.push(p.pv || '');   // R2 — el PV de Parrot
 
                 let totalGeneral = 0;
 

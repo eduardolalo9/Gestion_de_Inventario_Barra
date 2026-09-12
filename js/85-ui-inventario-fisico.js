@@ -943,6 +943,61 @@
             return !!(el && el.checked);
         }
 
+        // ── R2 (reglas 2 y 8) — el PV de Parrot ───────────────────────────────
+        // Parrot genera un product_id por articulo de venta: PVA1001169. Es la
+        // llave con la que se cruzan las ventas contra el catalogo. Cruzar por
+        // nombre seria fragil: basta que cambien "Margarita" por "Margarita
+        // Clasica" en la carta para que las ventas dejen de encontrar su producto.
+
+        /**
+         * Normaliza el PV mientras se escribe: mayusculas y sin espacios.
+         * Un PV copiado de un Excel llega con espacios al final mas veces de las
+         * que parece, y " PVA1001169" no cruza con "PVA1001169".
+         */
+        function _normalizarPV(el) {
+            if (!el) return;
+            var pos   = el.selectionStart;
+            var antes = el.value;
+            var val   = antes.toUpperCase().replace(/\s+/g, '');
+            if (val !== antes) {
+                el.value = val;
+                // Conservar la posicion del cursor: sin esto, corregir una letra
+                // en medio del PV manda el cursor al final en cada tecla.
+                try { el.setSelectionRange(pos, pos); } catch (_) {}
+            }
+            _avisarPVDuplicado(val);
+        }
+
+        /**
+         * Busca si otro producto ya usa ese PV. Devuelve el producto en conflicto
+         * o null. Excluye el que se esta editando.
+         */
+        function _buscarPVDuplicado(pv) {
+            if (!pv) return null;
+            for (var i = 0; i < products.length; i++) {
+                var p = products[i];
+                if (!p.pv) continue;
+                if (p.id === editingProductId) continue;
+                if (String(p.pv).toUpperCase() === pv) return p;
+            }
+            return null;
+        }
+
+        // Aviso en vivo. No bloquea: avisar mientras se escribe y dejar seguir es
+        // menos molesto que pelearse con el campo. El bloqueo real va al guardar.
+        function _avisarPVDuplicado(pv) {
+            var aviso = document.getElementById('productPVAviso');
+            if (!aviso) return;
+            var choque = _buscarPVDuplicado(pv);
+            if (choque) {
+                aviso.textContent = 'Ese PV ya lo usa ' + (choque.name || choque.id) + '.';
+                aviso.style.color = '#dc2626';
+            } else {
+                aviso.textContent = 'Déjalo vacío si el producto no se vende tal cual en el punto de venta.';
+                aviso.style.color = '#9ca3af';
+            }
+        }
+
         function _ponerCasillaOz(valor) {
             var el = document.getElementById('productConteoOz');
             if (el) el.checked = !!valor;
@@ -985,7 +1040,7 @@
             document.getElementById('productCapacidadMl').value = '';
             document.getElementById('productPesoLlenaOz').value = '';
             // P0 — limpiar tambien los campos de compras
-            ['productPrecio','productStockMinimo','productConversion','productProveedor']
+            ['productPrecio','productStockMinimo','productConversion','productProveedor','productPV']
                 .forEach(function(id) { var el = document.getElementById(id); if (el) el.value = ''; });
             if (productId) {
                 const product = products.find(p => p.id === productId);
@@ -1005,6 +1060,7 @@
                     if (typeof product.conversion  === 'number') document.getElementById('productConversion').value  = product.conversion;
                     if (typeof product.stockMinimo === 'number') document.getElementById('productStockMinimo').value = product.stockMinimo;
                     if (product.proveedor) document.getElementById('productProveedor').value = product.proveedor;
+                    if (product.pv) document.getElementById('productPV').value = product.pv;   // R2
                     // R1 (regla 14) — poblar la casilla con el modo REAL del producto.
                     // Es lo que evita el accidente silencioso: si no se poblara, abrir
                     // y guardar un producto antiguo lo cambiaria de modo de conteo sin
@@ -1021,6 +1077,8 @@
                 _ponerCasillaOz(false);
             }
             _sincronizarCasillaOz();
+            // R2 — recalcular el aviso de PV: si no, queda el rojo de la edicion anterior.
+            _avisarPVDuplicado((document.getElementById('productPV') || {}).value || '');
             modal.classList.remove('hidden');
             document.body.classList.add('modal-open');
             setTimeout(() => {
@@ -1088,6 +1146,22 @@
             const provEl      = document.getElementById('productProveedor');
             const proveedor   = provEl ? provEl.value.trim() : '';
 
+            // ── R2 (reglas 2 y 8): PV de Parrot ──────────────────────────────
+            // Se bloquea el duplicado. Dos productos con el mismo PV no darian un
+            // error visible: repartirian mal las ventas y la desviacion saldria
+            // torcida en los dos, que es mucho peor que no guardar.
+            const pvEl = document.getElementById('productPV');
+            const pv   = pvEl ? pvEl.value.toUpperCase().replace(/\s+/g, '') : '';
+            if (pv) {
+                const choquePV = _buscarPVDuplicado(pv);
+                if (choquePV) {
+                    showNotification('⚠️ El PV ' + pv + ' ya lo usa ' + (choquePV.name || choquePV.id) +
+                                     '. Cada PV pertenece a un solo producto.');
+                    if (pvEl) pvEl.focus();
+                    return;
+                }
+            }
+
             // Bug #6 fix: validar coherencia física antes de guardar
             // pesoVidrio = pesoLleno - liquidoOz; si es negativo el usuario invirtió los campos
             if (capacidadMl !== undefined && pesoBotellaLlenaOz !== undefined) {
@@ -1152,6 +1226,8 @@
                 if (conversion  !== undefined) product.conversion  = conversion;  else delete product.conversion;
                 if (stockMinimo !== undefined) product.stockMinimo = stockMinimo; else delete product.stockMinimo;
                 if (proveedor)                 product.proveedor   = proveedor;   else delete product.proveedor;
+                // R2 — mismo criterio: si se vacia el campo, el dato se quita.
+                if (pv)                        product.pv          = pv;          else delete product.pv;
                 // stockByArea se recalcula
                 syncStockByAreaFromConteo();
                 // CORRECCIÓN 3: Auditoría obligatoria en modificación de producto
@@ -1184,6 +1260,7 @@
                 if (conversion  !== undefined) newProduct.conversion  = conversion;
                 if (stockMinimo !== undefined) newProduct.stockMinimo = stockMinimo;
                 if (proveedor)                 newProduct.proveedor   = proveedor;
+                if (pv)                        newProduct.pv          = pv;   // R2
                 products.push(newProduct);
                 // CORRECCIÓN 3: Auditoría de nuevo producto
                 _registrarEnSyncQueue({
