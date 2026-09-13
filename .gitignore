@@ -7,3 +7,8 @@ ui-debug.log
 dist/
 .DS_Store
 *.local
+
+
+# Instalación
+*.bundle
+aplicar-*.sh
