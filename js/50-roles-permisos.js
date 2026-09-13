@@ -1201,7 +1201,7 @@
          * @param {Array}   productsList Lista de productos a exportar
          * @param {string}  [fileName]   Nombre del archivo de salida (opcional)
          */
-function exportToExcelConDatos(modo, conteoData, productsList, fileName) {
+function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOverride) {
     if (!Array.isArray(productsList) || productsList.length === 0) {
         showNotification('⚠️ No hay productos para exportar');
         return;
@@ -1215,7 +1215,7 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName) {
     inventarioConteo = conteoData;
     products = productsList;
     try {
-        exportToExcel(modo, fileName);
+        exportToExcel(modo, fileName, areasOverride);
     } finally {
         inventarioConteo = _backupConteo;
         products = _backupProducts;

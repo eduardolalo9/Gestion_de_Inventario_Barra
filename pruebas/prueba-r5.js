@@ -61,11 +61,16 @@ chk('Una fila sin ID sigue recibiendo uno generado',
 chk('Ya no se hace concat ciego del lote',
     !/products = products\.concat\(toImport\)/.test(importa));
 
+// F1 reordenó este bloque para poder decidir el modo de conteo mirando el
+// producto que ya existe. El comportamiento que estas dos comprobaciones
+// defienden es el mismo de R5 y no cambió: ID desconocido se da de alta, ID
+// conocido se actualiza en su sitio.
 chk('Un ID desconocido se da de alta',
-    /if \(idx === undefined\) \{[\s\S]{0,200}?products\.push\(prod\)/.test(importa));
+    /var actual = \(idx === undefined\) \? null : products\[idx\];/.test(importa) &&
+    /if \(actual === null\) \{[\s\S]{0,200}?products\.push\(prod\)/.test(importa));
 
 chk('Un ID conocido actualiza el producto existente',
-    /var actual = products\[idx\];[\s\S]{0,300}?actual\[campo\] = prod\[campo\]/.test(importa));
+    /Object\.keys\(prod\)\.forEach\(function\(campo\) \{[\s\S]{0,200}?actual\[campo\] = prod\[campo\]/.test(importa));
 
 // El merge es selectivo a propósito, y las dos reglas importan:
 chk('Solo se tocan los campos que el Excel trae',

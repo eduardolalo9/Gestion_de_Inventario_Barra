@@ -140,8 +140,22 @@
                 registros.push({
                     tipo: 'producto',
                     id: p.id,
-                    nombre: p.nombre || '',
-                    grupo: p.grupo || p.categoria || '',
+                    // F1 — aqui se leia p.nombre y p.grupo, pero un producto del
+                    // catalogo usa p.name y p.group (ver saveProduct y la
+                    // importacion). El snapshot llevaba anos guardando cadena
+                    // vacia en los dos campos. Se leen ambos nombres para no
+                    // depender de cual use el objeto, y se guardan tambien como
+                    // name/unit/group, que es lo que el generador de Excel lee.
+                    nombre: p.name || p.nombre || '',
+                    name:   p.name || p.nombre || '',
+                    unit:   p.unit || '',
+                    grupo:  p.group || p.grupo || p.categoria || '',
+                    group:  p.group || p.grupo || p.categoria || '',
+                    precio:      (typeof p.precio      === 'number') ? p.precio      : null,
+                    stockMinimo: (typeof p.stockMinimo === 'number') ? p.stockMinimo : null,
+                    conversion:  (typeof p.conversion  === 'number') ? p.conversion  : null,
+                    proveedor:   p.proveedor || '',
+                    pv:          p.pv || '',
                     capacidadMl: (typeof p.capacidadMl === 'number') ? p.capacidadMl : null,
                     pesoBotellaLlenaOz: (typeof p.pesoBotellaLlenaOz === 'number') ? p.pesoBotellaLlenaOz : null,
                     // R1 (regla 14) — el modo de conteo se congela junto con el stock.
@@ -280,6 +294,71 @@
         // Exporta un inventario CERRADO reutilizando el motor Excel EXISTENTE
         // (exportToExcelConDatos) — nunca crea productos ni toca el catálogo
         // real (esa función ya restaura products/inventarioConteo al terminar).
+        // F1 — Reconstruye { producto: { area: {enteras, abiertas[]} } } a partir
+        // de los registros de usuario congelados en el snapshot, con la MISMA
+        // regla de consolidación que _recalcAdminAggregatedConteo usa en vivo:
+        //
+        //   1. Si algún ADMIN contó ese producto en esa área, manda el admin
+        //      (el más reciente por updatedAt). El admin ya resolvió el conflicto
+        //      al guardar su conteo final.
+        //   2. Si no, gana el conteo más reciente entre los usuarios regulares,
+        //      desempatando por el timestamp DEL PRODUCTO (_ts / _lastWrite), no
+        //      por el del documento del usuario.
+        //
+        // Reusar la regla, en vez de inventar otra, es lo que hace que el Excel
+        // diga lo mismo que el admin vio en pantalla el día del cierre.
+        // No modifica el snapshot: solo lee.
+        function _consolidarConteoCongelado(usuarios, areas, productos) {
+            var agregado  = {};
+            var admins    = usuarios.filter(function(u) { return u.isAdmin; });
+            var regulares = usuarios.filter(function(u) { return !u.isAdmin; });
+
+            // Todos los productos del inventario, aunque nadie los haya contado:
+            // una fila en cero es información, una fila ausente es un hueco.
+            var ids = {};
+            (productos || []).forEach(function(p) { ids[p.id] = true; });
+            usuarios.forEach(function(u) {
+                Object.keys(u.conteo || {}).forEach(function(id) { ids[id] = true; });
+            });
+
+            Object.keys(ids).forEach(function(prodId) {
+                agregado[prodId] = {};
+                areas.forEach(function(area) {
+                    function _entradas(lista) {
+                        return lista.map(function(u) {
+                            return { u: u, d: u.conteo && u.conteo[prodId] && u.conteo[prodId][area] };
+                        }).filter(function(e) { return e.d; });
+                    }
+
+                    var conAdmin = _entradas(admins);
+                    if (conAdmin.length > 0) {
+                        conAdmin.sort(function(a, b) { return (b.u.updatedAt || 0) - (a.u.updatedAt || 0); });
+                        agregado[prodId][area] = {
+                            enteras:  conAdmin[0].d.enteras  || 0,
+                            abiertas: conAdmin[0].d.abiertas || []
+                        };
+                        return;
+                    }
+
+                    var entradas = _entradas(regulares);
+                    if (entradas.length === 0) {
+                        agregado[prodId][area] = { enteras: 0, abiertas: [] };
+                        return;
+                    }
+                    entradas.sort(function(a, b) {
+                        var tsA = (a.d._ts || a.d._lastWrite || a.u.updatedAt || 0);
+                        var tsB = (b.d._ts || b.d._lastWrite || b.u.updatedAt || 0);
+                        return tsB - tsA;
+                    });
+                    agregado[prodId][area] = {
+                        enteras:  entradas[0].d.enteras  || 0,
+                        abiertas: entradas[0].d.abiertas || []
+                    };
+                });
+            });
+            return agregado;
+        }
+
         async function exportarInventarioCerrado(inventoryId, numero) {
             if (!hasPermission('inventory.export')) {
                 showNotification('⚠️ No tienes permiso para exportar');
@@ -294,14 +373,65 @@
                     showNotification('❌ No se encontró el snapshot de este inventario');
                     return;
                 }
+                // ── F1 — DEFECTO CRITICO 3 ────────────────────────────────
+                // Antes se entregaba `stockByArea` como si fuera el conteo. No lo
+                // es: stockByArea es UN NUMERO por area (el total ya convertido),
+                // mientras que el generador de Excel espera { enteras, abiertas[] }
+                // y lee `.enteras` de el. Un numero no tiene `.enteras`, asi que
+                // TODAS las cantidades salian en cero. Ademas el producto
+                // congelado guarda `nombre` y el generador lee `name`, asi que la
+                // columna Nombre salia vacia.
+                //
+                // El conteo fisico de verdad esta en los registros tipo 'usuario'.
+                // Se consolida con la MISMA regla que usa la pantalla del admin
+                // (admin manda; si no, gana el mas reciente), para que el Excel
+                // diga exactamente lo que el admin vio el dia que cerro.
+                const meta = registros.filter(function(r) { return r.tipo === 'meta'; })[0] || {};
+                const areasHistoricas = (Array.isArray(meta.warehousesSnapshot) && meta.warehousesSnapshot.length)
+                                        ? meta.warehousesSnapshot.slice()
+                                        : AREAS_CONTEO.slice();
+
+                var _sinNombre = 0;
                 const productosCongelados = registros.filter(function(r) { return r.tipo === 'producto'; })
                     .map(function(r) {
-                        return { id: r.id, nombre: r.nombre, grupo: r.grupo, capacidadMl: r.capacidadMl, pesoBotellaLlenaOz: r.pesoBotellaLlenaOz, conteoOzHabilitado: r.conteoOzHabilitado, stockByArea: r.stockByArea };
+                        // Los inventarios cerrados ANTES de F1 no tienen nombre
+                        // guardado (se grababa vacio). Para esos se recurre al
+                        // catalogo actual, que es la unica fuente que queda; se
+                        // cuenta cuantos fueron para avisarlo al terminar.
+                        var nom = r.name || r.nombre || '';
+                        if (!nom) {
+                            var vivo = products.filter(function(p) { return p.id === r.id; })[0];
+                            nom = vivo ? (vivo.name || '') : '';
+                            if (nom) _sinNombre++;
+                        }
+                        return {
+                            id: r.id,
+                            name: nom,
+                            unit: r.unit || '',
+                            group: r.group || r.grupo || '',
+                            capacidadMl: r.capacidadMl,
+                            pesoBotellaLlenaOz: r.pesoBotellaLlenaOz,
+                            conteoOzHabilitado: r.conteoOzHabilitado,
+                            precio:      (typeof r.precio      === 'number') ? r.precio      : undefined,
+                            stockMinimo: (typeof r.stockMinimo === 'number') ? r.stockMinimo : undefined,
+                            conversion:  (typeof r.conversion  === 'number') ? r.conversion  : undefined,
+                            proveedor:   r.proveedor || '',
+                            pv:          r.pv || '',
+                            stockByArea: r.stockByArea
+                        };
                     });
-                const conteoData = {};
-                productosCongelados.forEach(function(p) { conteoData[p.id] = p.stockByArea || {}; });
+
+                const usuariosCongelados = registros.filter(function(r) { return r.tipo === 'usuario'; });
+                const conteoData = _consolidarConteoCongelado(usuariosCongelados, areasHistoricas,
+                                                              productosCongelados);
+
                 const nombreArchivo = 'InventarioFisico_' + numero + '_' + new Date().toISOString().split('T')[0] + '.xlsx';
-                exportToExcelConDatos('completo', conteoData, productosCongelados, nombreArchivo);
+                exportToExcelConDatos('completo', conteoData, productosCongelados, nombreArchivo,
+                                      areasHistoricas);
+                if (_sinNombre > 0) {
+                    showNotification('ℹ️ ' + _sinNombre + ' nombre(s) se tomaron del catálogo actual: '
+                                   + 'este inventario se cerró antes de que el nombre quedara congelado.');
+                }
             } catch (err) {
                 console.error('[InventarioFisico] Error exportando:', err);
                 showNotification('❌ Error al exportar — revisa la conexión');

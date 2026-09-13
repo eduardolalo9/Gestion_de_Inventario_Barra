@@ -244,10 +244,34 @@
             return productId + '|' + area;
         }
 
+        // F1 — DEFECTO CRÍTICO 1: las tres funciones de abajo usaban una
+        // variable `docRef` que NO existe en este ámbito. Las únicas
+        // declaraciones de ese nombre en todo el proyecto son `const` locales
+        // DENTRO de otras funciones (_flushSyncQueueToFirestore,
+        // subscribeMainDoc, etc.), así que aquí resolvía a un identificador
+        // libre y lanzaba ReferenceError antes de intentar escribir nada.
+        //
+        // Consecuencia real, verificada ejecutando la función: cada conteo
+        // guardado desde la pestaña Inicio se quedaba en el dispositivo y el
+        // usuario veía "no se pudo subir — se reintentará". El reintento
+        // fallaba por lo mismo. El bug es anterior a la partición en 17
+        // archivos (ya estaba en el commit 0283ddd).
+        //
+        // Se corrige con un ayudante explícito en vez de declarar otra global:
+        // una global más sería una cuarta forma de nombrar lo mismo, y el
+        // origen del fallo fue justamente esa ambigüedad. Devuelve null si
+        // todavía no hay conexión a la base, que es la condición que las tres
+        // funciones ya comprobaban.
+        function _docPrincipal() {
+            if (!_db) return null;
+            return _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID);
+        }
+
         // Lee el documento actual de un producto/área directo de Firestore.
         // Devuelve null si nunca se ha escrito (primer conteo de ese producto
         // en esa área, desde ningún dispositivo).
         async function _leerConteoProducto(productId, area) {
+            const docRef = _docPrincipal();
             if (!_db || !docRef) return null;
             try {
                 const snap = await docRef.collection('stockAreas').doc(area)
@@ -276,6 +300,7 @@
          * lo confirmó como autoritativo.
          */
         async function syncConteoProductoAtomico(productId, area, enteras, abiertas) {
+            const docRef = _docPrincipal();
             if (!_db || !docRef) return { ok: false, motivo: 'sin_conexion_bd' };
             if (!navigator.onLine) return { ok: false, motivo: 'offline' };
 
@@ -381,6 +406,7 @@
         // existe. Pensada para ejecutarse una vez, por un admin, desde la
         // consola (migrarStockAreasAProductos()), no automáticamente.
         async function migrarStockAreasAProductos() {
+            const docRef = _docPrincipal();
             if (!_db || !docRef || !isAdmin()) {
                 console.warn('[Migración] Requiere admin autenticado con conexión.');
                 return { ok: false };

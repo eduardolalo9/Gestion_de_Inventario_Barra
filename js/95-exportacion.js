@@ -146,7 +146,12 @@
         }
         window.runDiagnostics = runDiagnostics;
 
-        function exportToExcel(modo, fileNameOverride) { // FIX: parámetro fileNameOverride para soporte de nombres personalizados
+        // F1 — `areasOverride` es OPCIONAL y solo lo usa la exportación de un
+        // Inventario Físico cerrado, que tiene que reconstruirse con las áreas
+        // que existían ESE día, no con las de hoy. Sin ese parámetro el
+        // comportamiento es exactamente el de siempre: todos los demás
+        // llamadores siguen usando AREAS_CONTEO.
+        function exportToExcel(modo, fileNameOverride, areasOverride) { // FIX: parámetro fileNameOverride para soporte de nombres personalizados
             // Guard: sin productos no hay nada que exportar
             if (!Array.isArray(products) || products.length === 0) {
                 showNotification('⚠️ No hay productos para exportar');
@@ -155,14 +160,32 @@
             // ══════════════════════════════════════════════════════════════════
             //  CONFIGURACIÓN DE ÁREAS
             // ══════════════════════════════════════════════════════════════════
-            const areaKeys  = AREAS_CONTEO;
+            const areaKeys  = (Array.isArray(areasOverride) && areasOverride.length)
+                              ? areasOverride.slice()
+                              : AREAS_CONTEO;
             const areaNames = modo === 'AUDITORIA'
                 ? { almacen: 'Almacén', barra1: 'Barra Restaurante', barra2: 'Barra Bar' }
                 : { almacen: 'Almacén', barra1: 'Barra1', barra2: 'Barra2' };
             const areaColor = { almacen: '7C3AED', barra1: '2563EB', barra2: 'EA580C' };
+            // F1 — un área que no sea una de las tres de sistema (creada con R6, o
+            // reconstruida de un inventario viejo) no tenía nombre ni color aquí y
+            // salía como "undefined" en el encabezado. Se completa con el nombre
+            // real si la app lo conoce, y si no, con el propio identificador.
+            areaKeys.forEach(function(a) {
+                if (!areaNames[a]) {
+                    areaNames[a] = (typeof areasAuditoria === 'object' && areasAuditoria && areasAuditoria[a])
+                                   ? areasAuditoria[a]
+                                   : (typeof areas === 'object' && areas && areas[a]) ? areas[a] : a;
+                }
+                if (!areaColor[a]) areaColor[a] = '64748B';
+            });
 
             // ── Calcular máximo de botellas abiertas por área ────────────────
-            const maxAbiertas = { almacen: 1, barra1: 1, barra2: 1 };
+            // F1 — se construye a partir de las áreas reales de esta exportación;
+            // antes eran las tres fijas y una cuarta área daba comparaciones
+            // contra undefined.
+            const maxAbiertas = {};
+            areaKeys.forEach(function(a) { maxAbiertas[a] = 1; });
             products.forEach(p => {
                 areaKeys.forEach(area => {
                     const d = inventarioConteo[p.id] && inventarioConteo[p.id][area];
