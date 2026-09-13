@@ -150,20 +150,90 @@
                  // _writeChunkedSubcollection) en vez de un wildcard genérico,
                  // precisamente para que ese wildcard no vuelva a anular las
                  // reglas específicas de stockAreas/userAuditoria de abajo.
+                 // ═══════════════════════════════════════════════════════════
+                 //  D · DEFECTO CRÍTICO — CUALQUIERA PODÍA BORRAR EL CONTEO
+                 //      DE TODOS SUS COMPAÑEROS
+                 //  ─────────────────────────────────────────────────────────
+                 //  Estas rutas decían `allow read, write: if request.auth
+                 //  != null`. Enumerarlas explícitamente resolvió en su
+                 //  momento un problema distinto (que un wildcard genérico
+                 //  anulara las reglas de stockAreas/userAuditoria), pero el
+                 //  permiso que se les dio era el de cualquier usuario
+                 //  autenticado sobre el documento entero.
+                 //
+                 //  conteoMultiUsuario/{area} es UN documento por área con el
+                 //  conteo de TODAS las personas dentro. Con esa regla, un
+                 //  bartender podía sobrescribirlo entero y dejar en cero el
+                 //  trabajo de la noche de sus cinco compañeros, sin dejar
+                 //  rastro. Y además anulaba en la práctica el aislamiento por
+                 //  uid de userAuditoria, que sí está bien hecho: el mismo
+                 //  conteo se duplicaba aquí, sin protección, al alcance de
+                 //  cualquiera.
+                 //
+                 //  Ahora cada quien escribe solo su bloque, identificado por
+                 //  su uid (ver syncConteoPorUsuarioToFirestore), y el borrado
+                 //  queda para el administrador, que es quien resetea el ciclo
+                 //  (resetConteoAtomicoEnFirestore).
+                 //
+                 //  NOTA — la LECTURA se deja como estaba a propósito. Quién
+                 //  puede ver el conteo de quién es una decisión de negocio
+                 //  todavía abierta (decisión 2 de la auditoría) y cerrarla
+                 //  aquí sin esa respuesta dejaría sin datos al arranque de
+                 //  los bartenders. Lo que esta etapa cierra es la pérdida de
+                 //  datos, que no depende de ninguna decisión.
+                 // ═══════════════════════════════════════════════════════════
                  match /conteoMultiUsuario/{area} {
-                   allow read, write: if request.auth != null;
+                   allow read: if request.auth != null;
+                   // El documento nace con un único bloque: el de quien escribe.
+                   allow create: if request.auth != null
+                     && request.resource.data.keys().hasOnly([request.auth.uid]);
+                   // Una actualización solo puede tocar el bloque propio. Los
+                   // bloques de los demás quedan intactos por construcción.
+                   allow update: if request.auth != null
+                     && request.resource.data.diff(resource.data)
+                          .affectedKeys().hasOnly([request.auth.uid]);
+                   // Borrar el área entera es parte de resetear el ciclo.
+                   allow delete: if isAdminUser();
                  }
                  match /conteoAreas/{area} {
-                   allow read, write: if request.auth != null;
+                   allow read: if request.auth != null;
+                   // Nadie escribe este documento padre: solo se borra al
+                   // resetear el ciclo (ver resetConteoAtomicoEnFirestore).
+                   allow write: if isAdminUser();
                    match /dispositivos/{deviceId} {
-                     allow read, write: if request.auth != null;
+                     allow read: if request.auth != null;
+                     // Cada dispositivo tiene su propio documento y nunca
+                     // compite con el de otro, pero nada impedía escribir en
+                     // el ajeno. El uid del autor ya viajaba en el payload
+                     // (_userUid); ahora el servidor lo comprueba.
+                     allow create, update: if request.auth != null
+                       && request.resource.data._userUid == request.auth.uid;
+                     allow delete: if isAdminUser();
                    }
                  }
+                 // Bitácora de conflictos y cola de cambios: se pueden seguir
+                 // escribiendo igual que antes, pero ya no se pueden borrar.
+                 // Quien queda registrado en una diferencia de conteo no debe
+                 // poder hacer desaparecer el registro de esa diferencia.
                  match /conflictos/{conflictoId} {
-                   allow read, write: if request.auth != null;
+                   allow read:   if request.auth != null;
+                   allow create: if request.auth != null;
+                   allow update: if request.auth != null;
+                   allow delete: if isAdminUser();
                  }
                  match /cambios/{cambioId} {
-                   allow read, write: if request.auth != null;
+                   allow read:   if request.auth != null;
+                   allow create: if request.auth != null;
+                   // Reescribir el evento de otro queda fuera. Se admite que
+                   // un evento sin uid (registrado antes de que la sesión
+                   // estuviera lista) se pueda completar, que es lo que hace
+                   // hoy _flushSyncQueueToFirestore al reintentar.
+                   allow update: if request.auth != null
+                     && ( isAdminUser()
+                       || !('uid' in resource.data)
+                       || resource.data.uid == null
+                       || resource.data.uid == request.auth.uid );
+                   allow delete: if isAdminUser();
                  }
                  match /ordersChunks/{chunkId} {
                    allow read, write: if request.auth != null;

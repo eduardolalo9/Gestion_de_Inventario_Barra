@@ -281,7 +281,11 @@
                     const totalProductos = products.filter(p => conteoRef[p.id] && conteoRef[p.id][area] &&
                         (conteoRef[p.id][area].enteras > 0 || (conteoRef[p.id][area].abiertas || []).some(a => a > 0))).length;
                     html += '<div style="font-size:0.63rem;color:var(--txt-muted);margin-top:3px;">' + totalProductos + ' producto(s) con cantidad';
-                    if (isAdmin()) {
+                    // D — el enlace se ofrece según el permiso, no según
+                    // isAdmin(): es el mismo criterio que ahora aplica
+                    // reabrirArea(), y así no se muestra una acción que el
+                    // servidor va a rechazar.
+                    if (hasPermission('inventory.reopenArea')) {
                         html += ' · <a href="#" onclick="event.stopPropagation();reabrirArea(\'' + area + '\');" style="color:var(--amber);text-decoration:underline;font-weight:600;">↩ Reabrir</a>';
                     } else if (tieneUnlock) {
                         html += ' · <span style="color:var(--amber);font-weight:600;">🔓 Corrección habilitada</span>';
@@ -1388,10 +1392,30 @@
                                 uid:      currentUserUid || null
                             });
 
+                            // D — la marca de purga es lo que hace que el
+                            // vaciado sea real. Las lápidas por producto se
+                            // siguen poniendo (sirven para el borrado suelto),
+                            // pero ya no son lo que sostiene esta operación:
+                            // con 424 productos y tope de 300, 124 se quedaban
+                            // sin lápida y volvían de la nube a los 900 ms.
+                            _marcarCatalogoPurgado(Date.now());
                             products.forEach(function(p) { _marcarComoBorrado('producto', p.id); }); // FIX-CONCURRENCIA
                             products = []; cart = []; inventarioConteo = {};
                             auditoriaConteo = {}; myAuditoriaConteo = {}; auditoriaConteoPorUsuario = {};
                             saveToLocalStorage();
+
+                            // D — la segunda copia del catálogo (catalogo/productos)
+                            // quedaba intacta con los 424 productos. Bastaba con que
+                            // un teléfono entrara por primera vez —con su contador de
+                            // versión local en cero— para que el listener le inyectara
+                            // el catálogo completo y, si ese teléfono era de un admin,
+                            // lo devolviera a la nube. Vaciarla aquí cierra esa puerta.
+                            _vaciarCatalogoPublicado().catch(function(e) {
+                                console.warn('[Catalogo] No se pudo vaciar el catálogo publicado:', e);
+                                showNotification('⚠️ El catálogo se borró aquí, pero no se pudo ' +
+                                    'vaciar en la nube. Vuelve a intentarlo con señal.');
+                            });
+
                             showNotification('Todos los productos han sido eliminados. Respaldo guardado.');
                             renderTab();
                         }

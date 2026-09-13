@@ -760,6 +760,49 @@ const usersList = Object.values(allUsersAuditoria);
         }
 
         /**
+         * _preservarConteosPendientes(deLaNube, local)
+         * ───────────────────────────────────────────
+         * Devuelve el conteo de la nube, pero conservando los productos/área
+         * que este dispositivo tiene anotados como pendientes de subir.
+         *
+         * Solo protege lo que está en el outbox, no todo lo local: un conteo
+         * ya confirmado por el servidor no tiene por qué ganarle a la nube,
+         * porque la nube ya lo incluye. Y un conteo que perdió un conflicto
+         * de versión tampoco, porque salió del outbox a propósito.
+         *
+         * Sin _db o sin outbox (por ejemplo en las pruebas del navegador) se
+         * comporta exactamente como antes: gana la nube.
+         */
+        function _preservarConteosPendientes(deLaNube, local) {
+            if (typeof _outboxPendientes !== 'function') return deLaNube;
+            const pendientes = _outboxPendientes();
+            if (!pendientes.length || !local) return deLaNube;
+
+            const resultado = deLaNube || {};
+            let conservados = 0;
+
+            pendientes.forEach(function(clave) {
+                const corte = clave.indexOf('|');
+                if (corte <= 0) return;
+                const pid  = clave.slice(0, corte);
+                const area = clave.slice(corte + 1);
+
+                const valorLocal = local[pid] && local[pid][area];
+                if (!valorLocal || typeof valorLocal.enteras === 'undefined') return;
+
+                if (!resultado[pid]) resultado[pid] = {};
+                resultado[pid][area] = valorLocal;
+                conservados++;
+            });
+
+            if (conservados > 0) {
+                console.info('[ConteoProducto]', conservados,
+                    'conteo(s) sin confirmar conservados frente a la nube.');
+            }
+            return resultado;
+        }
+
+        /**
          * _applyCloudData(data)
          * ──────────────────────
          * Aplica un snapshot de Firestore al estado en memoria y a localStorage.
@@ -848,7 +891,24 @@ const usersList = Object.values(allUsersAuditoria);
                 // gana para ids que ya existen en ambos lados (trae ediciones de
                 // otros dispositivos), pero se conservan los ids que solo existen
                 // localmente (alta reciente de este dispositivo, aún pendiente).
-                products    = _mergeArrayByIdPreferCloud(products,    validatedProducts);
+                // D — dos sentidos de la purga del catálogo:
+                //   • Si OTRO administrador vació el catálogo, su marca llega
+                //     con fecha más nueva que la nuestra: se adopta el vaciado
+                //     en vez de conservar los productos locales, que es lo que
+                //     hacía _mergeArrayByIdPreferCloud (conserva los ids que
+                //     solo existen en local — aquí serían los 424 enteros).
+                //   • Si la purga la hicimos NOSOTROS y la nube todavía no la
+                //     refleja, no se fusiona nada de la nube.
+                const _purgaNube = (data && data._catalogoPurgadoEn) || 0;
+                if (_purgaNube > (_catalogoPurgadoEn || 0)) {
+                    console.info('[Catalogo] Otro administrador vació el catálogo — se adopta el vaciado.');
+                    _marcarCatalogoPurgado(_purgaNube);
+                    products = validatedProducts.slice();
+                } else if (_purgaDeCatalogoVigente(data)) {
+                    console.info('[Catalogo] Purga local vigente — no se recuperan productos de la nube.');
+                } else {
+                    products = _mergeArrayByIdPreferCloud(products, validatedProducts);
+                }
                 orders      = _mergeArrayByIdPreferCloud(orders,      cloudOrders);
                 inventories = _mergeArrayByIdPreferCloud(inventories, cloudInventories);
                 cart        = data.cart        || [];
@@ -945,7 +1005,21 @@ const usersList = Object.values(allUsersAuditoria);
                         migrated[prodId] = val;
                     }
                 });
-                inventarioConteo = migrated;
+                // ── D · Preservar lo que todavía no se ha confirmado ──────────
+                // Antes esta línea era `inventarioConteo = migrated;` a secas:
+                // un reemplazo completo por lo que dice la nube. Si el
+                // bartender contaba sin señal y otro aparato sincronizaba
+                // entretanto, al reconectar este reemplazo borraba el conteo
+                // local antes de que nadie hubiera intentado subirlo. El aviso
+                // decía "Guardado en el dispositivo" y el dato desaparecía.
+                //
+                // Ahora los conteos anotados como pendientes sobreviven a la
+                // bajada. No es preferir lo local por gusto: es que ese valor
+                // aún no ha tenido su oportunidad de llegar al servidor, y
+                // quien decide si entra o choca con otro es
+                // syncConteoProductoAtomico con la versión real en la mano
+                // (drenarConteosPendientes lo llama justo después).
+                inventarioConteo = _preservarConteosPendientes(migrated, inventarioConteo);
 
                 // Actualizar stockByArea desde conteo
                 syncStockByAreaFromConteo();

@@ -666,6 +666,10 @@ function _idbPruneSyncedQueue() {
                 ['inventarioApp_products',                 JSON.stringify(products)],
                 ['inventarioApp_auditoriaStatus',          JSON.stringify(auditoriaStatus)],
                 ['inventarioApp_myAuditoriaStatus',        JSON.stringify(myAuditoriaStatus)],
+                // D — quién finalizó cada área y cuándo (acompaña al estado)
+                ['inventarioApp_myAuditoriaFinalizadas',   JSON.stringify(
+                    (typeof myAuditoriaFinalizadas !== 'undefined' && myAuditoriaFinalizadas)
+                        ? myAuditoriaFinalizadas : {})],
                 ['inventarioApp_myAuditoriaUnlocks',       JSON.stringify(myAuditoriaUnlocks)],
                 ['inventarioApp_auditoriaSessionId',       _auditoriaSessionId || ''],
                 // ── TIER 3: Estado de UI ─────────────────────────────────────────────────

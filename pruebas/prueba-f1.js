@@ -85,8 +85,16 @@ chk('_docPrincipal devuelve null sin base de datos',
     /function _docPrincipal\(\)\s*\{\s*\n\s*if \(!_db\) return null;/.test(firestore));
 chk('_leerConteoProducto lo usa',
     /async function _leerConteoProducto\(productId, area\)\s*\{\s*\n\s*const docRef = _docPrincipal\(\);/.test(firestore));
+// D — esta comprobación exigía que `const docRef = _docPrincipal();` fuera
+// literalmente la PRIMERA línea de la función. La etapa D antepone
+// _outboxAnotar(), que anota el conteo como pendiente antes de cualquier
+// intento de subida. Lo que F1 defiende —que docRef salga de _docPrincipal()
+// y no de una variable libre— sigue intacto, y la comprobación de arriba
+// ('Ninguna función usa docRef sin declararlo ni recibirlo') lo garantiza
+// para todas las funciones. Aquí se pasa a comprobar la sustancia en vez de
+// la posición de la línea.
 chk('syncConteoProductoAtomico lo usa',
-    /async function syncConteoProductoAtomico\([^)]*\)\s*\{\s*\n\s*const docRef = _docPrincipal\(\);/.test(firestore));
+    /async function syncConteoProductoAtomico\([^)]*\)\s*\{[\s\S]{0,600}?const docRef = _docPrincipal\(\);/.test(firestore));
 chk('migrarStockAreasAProductos lo usa',
     /async function migrarStockAreasAProductos\(\)\s*\{\s*\n\s*const docRef = _docPrincipal\(\);/.test(firestore));
 
@@ -347,10 +355,16 @@ chk('F1 subió la versión de caché por encima de 3.3',
 
 // ── Alcance: F1 no debía tocar nada más ───────────────────────────────────
 const reglas = fs.readFileSync(path.join(RAIZ, 'firestore.rules'), 'utf8');
-chk('Las reglas de Firestore NO se tocaron',
+// D cambió reglas (cerrar las colecciones abiertas), cosa que F1 tenía
+// prohibida. Lo que estas dos comprobaciones protegen de verdad no es que el
+// archivo esté intacto, sino que sigan en pie las dos garantías que F1 dejó:
+// un inventario CERRADO no se puede modificar ni siquiera siendo admin, y el
+// historial de cambios sigue teniendo su propia regla. Se renombra para que
+// diga lo que comprueba.
+chk('Las garantías de reglas que dejó F1 siguen en pie',
     /allow update: if isAdminUser\(\) && resource\.data\.estado != 'CERRADO';/.test(reglas) &&
     /match \/historialCambios\/\{docId\}/.test(reglas),
-    'F1 no autorizaba cambiar reglas');
+    'se perdió el bloqueo del inventario cerrado o la regla del historial');
 chk('Los permisos por rol NO se tocaron',
     /SUBJEFE_BARRA: \{[\s\S]{0,200}?permissions: \['inventory\.count', 'inventory\.viewOwn', 'inventory\.closeOwn', 'inventory\.history'\]/.test(roles),
     'F1 no autorizaba cambiar permisos');

@@ -28,6 +28,30 @@
             showConfirm('¿Finalizar conteo de ' + nombreArea + '?\n\nEsto guardará y bloqueará tu conteo del área. Solo el administrador podrá habilitar correcciones.', function() {
                 // Marcar MI área como completada (por usuario, no global)
                 myAuditoriaStatus[area] = 'completada';
+
+                // ── D · Quién la finalizó y cuándo ──────────────────────────
+                // Antes de esto, finalizar un área solo escribía la palabra
+                // 'completada'. No quedaba constancia de quién la cerró ni a
+                // qué hora: si el lunes el conteo de la barra no cuadraba, no
+                // había forma de saber quién lo dio por terminado ni cuándo.
+                // El único dato era un updatedAt a nivel de todo el documento
+                // del usuario, que cambia con cualquier cosa que haga.
+                //
+                // El registro vive en el documento del propio usuario
+                // (userAuditoria/{uid}), que ya está aislado por uid del lado
+                // del servidor y que el administrador sí puede leer.
+                if (typeof myAuditoriaFinalizadas === 'undefined' || !myAuditoriaFinalizadas) {
+                    myAuditoriaFinalizadas = {};
+                }
+                myAuditoriaFinalizadas[area] = {
+                    uid:    currentUserUid || null,
+                    nombre: ((_auth && _auth.currentUser && _auth.currentUser.email)
+                            || (auditCurrentUser && auditCurrentUser.userName)
+                            || currentUserUid || 'desconocido'),
+                    ts:     Date.now(),
+                    rol:    currentUserRole || 'user'
+                };
+
                 // Admin también actualiza el status global del área
                 if (isAdmin()) auditoriaStatus[area] = 'completada';
                 auditoriaView       = 'selection';
@@ -687,25 +711,127 @@
 
         /**
          * reabrirArea(area)
-         * FIX #7 — Permite al administrador reabrir un área completada para corrección.
-         * Los bartenders que ya contaron conservan sus datos; solo cambia el estado.
+         * ─────────────────
+         * Reabre un área completada para que se pueda corregir el conteo.
+         *
+         * D — ESTA FUNCIÓN NO REABRÍA NADA PARA EL BARTENDER.
+         *
+         * Había tres caminos distintos para reabrir un área, y estaban
+         * desalineados entre sí:
+         *
+         *   1. reabrirArea(area)          — esta, la que se ofrece en la
+         *      tarjeta del área. Solo comprobaba isAdmin(), no pedía el
+         *      permiso inventory.reopenArea, no miraba si el inventario ya
+         *      estaba cerrado, no dejaba rastro, y escribía en
+         *      `auditoriaStatus` del documento principal.
+         *   2. reabrirAlmacenAdmin(uid, area) — la correcta: pide permiso,
+         *      exige inventario SINCRONIZADO, deja rastro, y escribe en
+         *      `userAuditoria/{uid}.status`.
+         *   3. adminUnlockAreaUsuario(uid, area) — desbloqueo producto a
+         *      producto, otro mecanismo distinto.
+         *
+         * El problema de fondo: la puerta de entrada al conteo
+         * (auditoriaEntrarArea) mira `myAuditoriaStatus[area]`, que vive en el
+         * documento de CADA usuario. `auditoriaStatus` del documento principal
+         * no lo consulta nadie para decidir si se puede contar. O sea que el
+         * jefe de barra pulsaba "Reabrir", veía el área en pendiente en su
+         * pantalla, le decía al bartender que ya podía corregir — y al
+         * bartender le seguía saliendo bloqueada. Sin ningún mensaje de error:
+         * simplemente no pasaba nada.
+         *
+         * Ahora esta función es la única puerta y hace lo que promete: aplica
+         * las mismas comprobaciones que el camino correcto, y reabre el área
+         * para todas las personas que la tenían finalizada, no solo en la
+         * vista del administrador.
          */
-        function reabrirArea(area) {
-            if (!isAdmin()) {
-                showNotification('⚠️ Solo el administrador puede reabrir áreas');
+        async function reabrirArea(area) {
+            // Mismas comprobaciones que reabrirAlmacenAdmin, en vez de un
+            // isAdmin() suelto: el permiso existía y esta ruta lo ignoraba.
+            if (!hasPermission('inventory.reopenArea')) {
+                showNotification('⚠️ No tienes permiso para reabrir áreas');
                 return;
             }
+            if (_inventarioActivo && _inventarioActivo.estado !== 'SINCRONIZADO') {
+                showNotification('⚠️ El Inventario Físico está ' + _inventarioActivo.estado +
+                    ' — no se puede reabrir un área');
+                return;
+            }
+
             const nombreArea = areasAuditoria[area] || area;
-            showConfirm('¿Reabrir el área "' + nombreArea + '"?\n\nLos conteos existentes se conservan. Los bartenders podrán modificar sus datos.', function() {
+
+            // Personas que tienen ESTA área finalizada. Son a quienes hay que
+            // reabrírsela de verdad, en su propio documento.
+            const afectados = Object.keys(allUsersAuditoria || {}).filter(function(uid) {
+                const u = allUsersAuditoria[uid];
+                return u && u.status && u.status[area] === 'completada';
+            });
+
+            const detalleQuienes = afectados.length === 0
+                ? '\n\nAhora mismo nadie la tiene finalizada.'
+                : '\n\nSe reabrirá para ' + afectados.length + ' persona(s).';
+
+            showConfirm('¿Reabrir el área "' + nombreArea + '"?\n\n' +
+                'Los conteos existentes se conservan; solo se permite volver a modificarlos.' +
+                detalleQuienes,
+            async function() {
+                const docPrincipal = _db
+                    ? _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
+                    : null;
+
+                // 1) Estado agregado que ve el administrador.
                 auditoriaStatus[area] = 'pendiente';
-                saveToLocalStorage();
-                // Sincronizar nuevo estado a Firestore si hay conexión
-                if (_db && navigator.onLine) {
-                    _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
-                        .update({ ['auditoriaStatus.' + area]: 'pendiente' }) // FIX-2: campo anidado correcto para que _applyCloudData lo lea
-                        .catch(err => console.warn('[Reabrir] Error sync:', err));
+                // 2) Mi propio estado, si soy yo quien había finalizado.
+                if (myAuditoriaStatus[area] === 'completada') {
+                    myAuditoriaStatus[area] = 'pendiente';
+                    if (typeof myAuditoriaFinalizadas !== 'undefined' && myAuditoriaFinalizadas) {
+                        delete myAuditoriaFinalizadas[area];
+                    }
                 }
-                showNotification('↩️ Área "' + nombreArea + '" reabierta para corrección');
+                saveToLocalStorage();
+
+                if (!docPrincipal || !navigator.onLine) {
+                    showNotification('📴 Sin conexión — el área se reabrió aquí, ' +
+                        'pero los demás no lo verán hasta que vuelva la señal');
+                    renderTab();
+                    return;
+                }
+
+                let fallidos = 0;
+                try {
+                    await docPrincipal.update({ ['auditoriaStatus.' + area]: 'pendiente' });
+                } catch (err) {
+                    console.warn('[Reabrir] Error al sincronizar el estado agregado:', err);
+                }
+
+                // 3) Lo que de verdad desbloquea el conteo: el estado dentro
+                //    del documento de cada persona.
+                for (const uid of afectados) {
+                    try {
+                        await docPrincipal.collection('userAuditoria').doc(uid)
+                            .update({ ['status.' + area]: 'pendiente', updatedAt: Date.now() });
+                    } catch (err) {
+                        fallidos++;
+                        console.warn('[Reabrir] No se pudo reabrir para', uid, err);
+                    }
+                }
+
+                // 4) Rastro. Reabrir un área permite cambiar cantidades ya
+                //    contadas; tiene que quedar escrito quién lo autorizó.
+                _registrarEnSyncQueue({
+                    tipo:         'reapertura_almacen',
+                    detalle:      'Área "' + nombreArea + '" reabierta para ' +
+                                  afectados.length + ' persona(s) por ' + (currentUserUid || 'admin'),
+                    valorAntes:   JSON.stringify({ area: area, status: 'completada', usuarios: afectados }),
+                    valorDespues: JSON.stringify({ area: area, status: 'pendiente' }),
+                    motivo:       'Reapertura de área por administrador'
+                });
+
+                if (fallidos > 0) {
+                    showNotification('⚠️ "' + nombreArea + '" se reabrió, pero ' + fallidos +
+                        ' persona(s) no recibieron el cambio — reintenta con señal');
+                } else {
+                    showNotification('↩️ Área "' + nombreArea + '" reabierta para corrección');
+                }
                 renderTab();
             });
         }
@@ -822,7 +948,7 @@
                 renderTab();
             }, 180);
         }
-
+
         // ══════════════════════════════════════════════════════════════════════
         //  R7 — FORMULARIO DE NUEVO INVENTARIO FÍSICO
         //  ────────────────────────────────────────────────────────────────────

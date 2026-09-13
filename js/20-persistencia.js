@@ -472,6 +472,55 @@
         let _deletedInventoryIds  = [];
         const _TOMBSTONE_MAX = 300;
 
+        // ══════════════════════════════════════════════════════════════════════
+        //  D · DEFECTO CRÍTICO — "ELIMINAR TODO EL CATÁLOGO" NO BORRABA TODO
+        //  ────────────────────────────────────────────────────────────────────
+        //  Las lápidas de arriba están limitadas a 300 (_TOMBSTONE_MAX), y con
+        //  razón: son una lista en localStorage y no puede crecer sin freno.
+        //  Pero el catálogo del bar tiene 424 productos. Al borrarlos todos se
+        //  generaban 424 lápidas y el recorte se quedaba con las ÚLTIMAS 300:
+        //  las 124 primeras se caían de la lista.
+        //
+        //  Novecientos milisegundos después, la sincronización fusionaba el
+        //  catálogo local (vacío) con el de la nube (424) filtrando por
+        //  lápidas. Los 124 sin lápida no se filtraban y volvían a escribirse.
+        //  El administrador leía "Todos los productos han sido eliminados" y
+        //  el catálogo reaparecía con 124 productos.
+        //
+        //  Una lista de identificadores es la herramienta equivocada para
+        //  "bórralo todo": no escala y por eso tiene tope. Lo correcto es una
+        //  marca de purga — una fecha que dice "el catálogo se vació aquí".
+        //  Ocupa un número, no crece nunca, y cubre cualquier tamaño de
+        //  catálogo. Todo lo de la nube anterior a esa fecha se descarta
+        //  entero, sin necesitar una lápida por producto.
+        //
+        //  Las lápidas siguen intactas para el caso normal: borrar un producto
+        //  suelto, donde sí son la herramienta adecuada.
+        // ══════════════════════════════════════════════════════════════════════
+        let _catalogoPurgadoEn = 0;
+
+        function _marcarCatalogoPurgado(ts) {
+            _catalogoPurgadoEn = ts || Date.now();
+            try {
+                localStorage.setItem('inventarioApp_catalogoPurgadoEn', String(_catalogoPurgadoEn));
+            } catch(_) {}
+            return _catalogoPurgadoEn;
+        }
+
+        /**
+         * _purgaDeCatalogoVigente(datosNube)
+         * ──────────────────────────────────
+         * ¿Este dispositivo tiene una purga que la nube todavía no refleja?
+         * Si la respuesta es sí, el catálogo de la nube es anterior al vaciado
+         * y no debe fusionarse: sería justamente la resurrección que se quiere
+         * evitar.
+         */
+        function _purgaDeCatalogoVigente(datosNube) {
+            if (!_catalogoPurgadoEn) return false;
+            const purgaNube = (datosNube && datosNube._catalogoPurgadoEn) || 0;
+            return _catalogoPurgadoEn > purgaNube;
+        }
+
         function _marcarComoBorrado(listName, id) {
             if (!id) return;
             const list = ({

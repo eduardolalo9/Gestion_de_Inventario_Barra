@@ -136,26 +136,25 @@
                     }
                 } catch(_) {}
 
-                // MIGRACIÓN MÍNIMA — reintentar conteos por producto que
-                // quedaron sin confirmar contra el servidor al cerrar la
-                // sesión anterior (ver beforeunload). El valor local ya es
-                // correcto (viene de inventarioConteo, ya restaurado arriba);
-                // esto solo reintenta la confirmación contra Firestore.
+                // D — Conteos que quedaron sin confirmar contra el servidor:
+                // sin señal, por batería, o porque la app se cerró antes de
+                // que el envío saliera. El valor local ya es correcto (viene
+                // de inventarioConteo, restaurado arriba); esto solo recupera
+                // la lista y reintenta la confirmación.
+                //
+                // Antes esto solo cubría el caso de cerrar la pestaña, y
+                // borraba la lista ANTES de reintentar: si el reintento
+                // fallaba, la anotación ya no existía y nadie volvía a
+                // intentarlo nunca. Ahora cada clave sale de la lista
+                // únicamente cuando el servidor confirma.
                 try {
-                    const pendientesRaw = localStorage.getItem('inventarioApp_conteoProductoPendiente');
-                    if (pendientesRaw) {
-                        localStorage.removeItem('inventarioApp_conteoProductoPendiente');
-                        const claves = JSON.parse(pendientesRaw);
-                        if (Array.isArray(claves) && claves.length > 0 && _db) {
-                            claves.forEach(function(clave) {
-                                const partes = clave.split('|');
-                                const pid = partes[0], area = partes[1];
-                                const valor = inventarioConteo[pid] && inventarioConteo[pid][area];
-                                if (valor) {
-                                    syncConteoProductoAtomico(pid, area, valor.enteras, valor.abiertas);
-                                }
-                            });
-                            console.info('[ConteoProducto]', claves.length, 'conteo(s) pendiente(s) reintentado(s) al arrancar.');
+                    const pendientes = _outboxCargar();
+                    const cuantos = Object.keys(pendientes).length;
+                    if (cuantos > 0) {
+                        console.info('[ConteoProducto]', cuantos,
+                            'conteo(s) sin confirmar recuperados al arrancar.');
+                        if (typeof updateCloudSyncBadge === 'function') {
+                            updateCloudSyncBadge('pending');
                         }
                     }
                 } catch(_) {}
@@ -176,7 +175,14 @@
                             console.info('[Init] Sin sesion — no se consulta la nube.');
                             return;
                         }
-                        loadFromCloud().catch(err => console.warn('[Firebase] loadFromCloud silenciado:', err));
+                        loadFromCloud()
+                            .then(function() {
+                                // D — el drenaje va DESPUÉS de loadFromCloud,
+                                // nunca antes: así compara contra la versión
+                                // recién bajada y no contra una de ayer.
+                                return drenarConteosPendientes();
+                            })
+                            .catch(err => console.warn('[Firebase] loadFromCloud silenciado:', err));
                         loadConflictosDesdeFirestore().catch(() => {});
                         loadConteoPorUsuarioFromFirestore().catch(err =>
                             console.warn('[MultiUser] loadConteoPorUsuarioFromFirestore silenciado:', err)
@@ -208,15 +214,22 @@ window.addEventListener('beforeunload', function() {
             try { localStorage.setItem('inventarioApp_auditSyncPending', '1'); } catch(_) {}
         }
 
-        // MIGRACIÓN MÍNIMA — cualquier conteo por producto cuyo debounce de
-        // 800ms no alcanzó a dispararse queda registrado como pendiente.
-        // El dato ya está seguro en localStorage/IndexedDB (líneas de arriba);
-        // esto solo asegura que la próxima carga sepa que faltó confirmar
-        // contra el servidor y lo reintente en vez de darlo por sincronizado.
+        // D — cualquier conteo cuyo debounce de 800 ms no alcanzó a
+        // dispararse queda anotado como pendiente. El dato ya está seguro en
+        // localStorage/IndexedDB (líneas de arriba); esto solo asegura que la
+        // próxima carga sepa que faltó confirmar contra el servidor.
+        //
+        // Ahora se anota en el mismo registro que usa todo lo demás, en vez
+        // de en una clave aparte que solo se leía al arrancar.
         var clavesPendientes = Object.keys(_conteoProductoSyncTimers || {});
         if (clavesPendientes.length > 0) {
-            clavesPendientes.forEach(function(clave) { clearTimeout(_conteoProductoSyncTimers[clave]); });
-            try { localStorage.setItem('inventarioApp_conteoProductoPendiente', JSON.stringify(clavesPendientes)); } catch(_) {}
+            clavesPendientes.forEach(function(clave) {
+                clearTimeout(_conteoProductoSyncTimers[clave]);
+                var corte = clave.indexOf('|');
+                if (corte > 0) {
+                    try { _outboxAnotar(clave.slice(0, corte), clave.slice(corte + 1)); } catch(_) {}
+                }
+            });
         }
     });
             window.addEventListener('online',  updateNetworkStatus);
@@ -226,9 +239,18 @@ window.addEventListener('beforeunload', function() {
             // ── Sync periódico de recuperación: cada 3 min, solo si hay pendientes ──
             // ═══ FIX #6a: Guardar referencia para cleanup en logout ═══
             window._syncPeriodicInterval = setInterval(() => {
-                if (navigator.onLine && _db && !_syncInProgress && _cloudSyncPending) {
+                if (!navigator.onLine || !_db) return;
+                if (!_syncInProgress && _cloudSyncPending) {
                     console.info('[Firebase] Sync periódico — había cambios pendientes.');
                     syncToCloud();
+                }
+                // D — red de seguridad: si un conteo quedó sin confirmar y no
+                // hubo ni reconexión ni reinicio (por ejemplo, un fallo suelto
+                // del servidor con la señal intacta), esto lo recoge igual.
+                if (_outboxPendientes().length > 0) {
+                    drenarConteosPendientes().catch(function(e) {
+                        console.warn('[ConteoProducto] Drenaje periódico silenciado:', e);
+                    });
                 }
             }, 3 * 60 * 1000);
         }

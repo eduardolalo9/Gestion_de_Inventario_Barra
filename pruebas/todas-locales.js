@@ -38,6 +38,7 @@ const PRUEBAS = [
     'prueba-r6.js',                 // R6 — áreas de conteo configurables
     'prueba-r7.js',                 // R7 — crear inventario desde formulario
     'prueba-f1.js',                 // F1 — los tres defectos criticos de la auditoria
+    'prueba-d.js',                  // D  — sincronizacion y defectos criticos
 ];
 
 let fallaron = [];

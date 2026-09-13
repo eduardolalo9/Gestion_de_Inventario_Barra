@@ -490,6 +490,224 @@ async function main() {
         await assertSucceeds(bt1.doc('notificaciones/n4').update({ leido: true }));
     });
 
+    // ══════════════════════════════════════════════════════════════════
+    //  PARTE D — LAS COLECCIONES QUE ESTABAN ABIERTAS
+    //  ────────────────────────────────────────────────────────────────
+    //  Antes de la etapa D, cinco rutas decían
+    //  `allow read, write: if request.auth != null`. En la práctica eso
+    //  significaba que cualquier bartender podía vaciar el conteo de
+    //  todos sus compañeros en una sola escritura, y borrar después la
+    //  bitácora donde habría quedado constancia.
+    //
+    //  Cada prueba de abajo FALLA contra las reglas anteriores. Es la
+    //  única forma de saber que la regla nueva hace algo de verdad.
+    // ══════════════════════════════════════════════════════════════════
+
+    const rutaMulti = (db, area) =>
+        db.doc('inventarioApp/barra-principal/conteoMultiUsuario/' + area);
+    const rutaDisp = (db, area, dev) =>
+        db.doc('inventarioApp/barra-principal/conteoAreas/' + area + '/dispositivos/' + dev);
+
+    await prueba('D1. Un bartender puede crear SU propio bloque de conteo', async () => {
+        await reiniciarConDatosBase();
+        await assertSucceeds(rutaMulti(bt1, 'barra1').set({
+            bartender1: { userId: 'usr-x', userName: 'Ana', uid: 'bartender1', ts: Date.now(), productos: {} }
+        }));
+    });
+
+    await prueba('D2. Un bartender NO puede crear el bloque de OTRO', async () => {
+        await reiniciarConDatosBase();
+        await assertFails(rutaMulti(bt1, 'barra1').set({
+            bartender2: { userId: 'usr-y', userName: 'Luis', uid: 'bartender2', ts: Date.now(), productos: {} }
+        }));
+    });
+
+    await prueba('D3. Un bartender NO puede sobrescribir el documento y borrar a los demás', async () => {
+        await reiniciarConDatosBase();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await rutaMulti(ctx.firestore(), 'barra1').set({
+                bartender1: { userId: 'a', uid: 'bartender1', ts: 1, productos: { P1: { enteras: 4 } } },
+                bartender2: { userId: 'b', uid: 'bartender2', ts: 1, productos: { P1: { enteras: 9 } } }
+            });
+        });
+        // Este es exactamente el ataque: escribir solo lo mío, sin merge,
+        // dejando fuera el bloque del compañero. Antes pasaba sin problema.
+        await assertFails(rutaMulti(bt1, 'barra1').set({
+            bartender1: { userId: 'a', uid: 'bartender1', ts: 2, productos: {} }
+        }));
+    });
+
+    await prueba('D4. Un bartender SÍ puede actualizar su bloque sin tocar el del otro', async () => {
+        await reiniciarConDatosBase();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await rutaMulti(ctx.firestore(), 'barra1').set({
+                bartender1: { userId: 'a', uid: 'bartender1', ts: 1, productos: {} },
+                bartender2: { userId: 'b', uid: 'bartender2', ts: 1, productos: {} }
+            });
+        });
+        await assertSucceeds(rutaMulti(bt1, 'barra1').set({
+            bartender1: { userId: 'a', uid: 'bartender1', ts: 2, productos: { P1: { enteras: 3 } } }
+        }, { merge: true }));
+    });
+
+    await prueba('D5. Un bartender NO puede modificar el bloque de otro ni con merge', async () => {
+        await reiniciarConDatosBase();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await rutaMulti(ctx.firestore(), 'barra1').set({
+                bartender2: { userId: 'b', uid: 'bartender2', ts: 1, productos: { P1: { enteras: 9 } } }
+            });
+        });
+        await assertFails(rutaMulti(bt1, 'barra1').set({
+            bartender2: { userId: 'b', uid: 'bartender2', ts: 2, productos: {} }
+        }, { merge: true }));
+    });
+
+    await prueba('D6. Un bartender NO puede borrar el conteo del área', async () => {
+        await reiniciarConDatosBase();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await rutaMulti(ctx.firestore(), 'barra1').set({ bartender1: { uid: 'bartender1', productos: {} } });
+        });
+        await assertFails(rutaMulti(bt1, 'barra1').delete());
+    });
+
+    await prueba('D7. El admin SÍ puede borrarlo (resetear el ciclo)', async () => {
+        await reiniciarConDatosBase();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await rutaMulti(ctx.firestore(), 'barra1').set({ bartender1: { uid: 'bartender1', productos: {} } });
+        });
+        await assertSucceeds(rutaMulti(admin1, 'barra1').delete());
+    });
+
+    await prueba('D8. Un dispositivo solo escribe con SU propio uid', async () => {
+        await reiniciarConDatosBase();
+        await assertSucceeds(rutaDisp(bt1, 'barra1', 'dev-a').set({
+            _deviceId: 'dev-a', _lastWrite: Date.now(), _area: 'barra1', _userUid: 'bartender1'
+        }));
+    });
+
+    await prueba('D9. Un dispositivo NO puede escribir firmando como otro usuario', async () => {
+        await reiniciarConDatosBase();
+        await assertFails(rutaDisp(bt1, 'barra1', 'dev-b').set({
+            _deviceId: 'dev-b', _lastWrite: Date.now(), _area: 'barra1', _userUid: 'bartender2'
+        }));
+    });
+
+    await prueba('D10. Un bartender NO puede borrar el documento de otro dispositivo', async () => {
+        await reiniciarConDatosBase();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await rutaDisp(ctx.firestore(), 'barra1', 'dev-c').set({ _userUid: 'bartender2' });
+        });
+        await assertFails(rutaDisp(bt1, 'barra1', 'dev-c').delete());
+    });
+
+    await prueba('D11. El admin SÍ puede borrar documentos de dispositivo (reset)', async () => {
+        await reiniciarConDatosBase();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await rutaDisp(ctx.firestore(), 'barra1', 'dev-d').set({ _userUid: 'bartender2' });
+        });
+        await assertSucceeds(rutaDisp(admin1, 'barra1', 'dev-d').delete());
+    });
+
+    await prueba('D12. Un bartender NO puede borrar el documento padre del área', async () => {
+        await reiniciarConDatosBase();
+        await assertFails(bt1.doc('inventarioApp/barra-principal/conteoAreas/barra1').delete());
+    });
+
+    await prueba('D13. Un bartender NO puede borrar un conflicto registrado', async () => {
+        await reiniciarConDatosBase();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await ctx.firestore().doc('inventarioApp/barra-principal/conflictos/c1')
+                .set({ tipo: 'version_mismatch', uid: 'bartender1' });
+        });
+        await assertFails(bt1.doc('inventarioApp/barra-principal/conflictos/c1').delete());
+    });
+
+    await prueba('D14. Un bartender SÍ puede registrar un conflicto', async () => {
+        await reiniciarConDatosBase();
+        await assertSucceeds(bt1.doc('inventarioApp/barra-principal/conflictos/c2')
+            .set({ tipo: 'version_mismatch', uid: 'bartender1', ts: Date.now() }));
+    });
+
+    await prueba('D15. Un bartender NO puede borrar un evento de la cola de cambios', async () => {
+        await reiniciarConDatosBase();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await ctx.firestore().doc('inventarioApp/barra-principal/cambios/e1')
+                .set({ tipo: 'inventario', uid: 'bartender1' });
+        });
+        await assertFails(bt1.doc('inventarioApp/barra-principal/cambios/e1').delete());
+    });
+
+    await prueba('D16. Un bartender NO puede reescribir el evento de otro', async () => {
+        await reiniciarConDatosBase();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await ctx.firestore().doc('inventarioApp/barra-principal/cambios/e2')
+                .set({ tipo: 'inventario', uid: 'bartender2', valorDespues: 9 });
+        });
+        await assertFails(bt1.doc('inventarioApp/barra-principal/cambios/e2').update({ valorDespues: 0 }));
+    });
+
+    await prueba('D17. Reintentar el envío del evento propio sigue funcionando', async () => {
+        await reiniciarConDatosBase();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await ctx.firestore().doc('inventarioApp/barra-principal/cambios/e3')
+                .set({ tipo: 'inventario', uid: 'bartender1', estado: 'pendiente' });
+        });
+        await assertSucceeds(bt1.doc('inventarioApp/barra-principal/cambios/e3')
+            .set({ tipo: 'inventario', uid: 'bartender1', estado: 'sincronizado' }));
+    });
+
+    await prueba('D18. Un evento sin uid todavía se puede completar', async () => {
+        await reiniciarConDatosBase();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await ctx.firestore().doc('inventarioApp/barra-principal/cambios/e4')
+                .set({ tipo: 'inventario', estado: 'pendiente' });
+        });
+        await assertSucceeds(bt1.doc('inventarioApp/barra-principal/cambios/e4')
+            .update({ uid: 'bartender1', estado: 'sincronizado' }));
+    });
+
+    await prueba('D19. El conteo del área se sigue pudiendo leer al arrancar', async () => {
+        await reiniciarConDatosBase();
+        await assertSucceeds(rutaMulti(bt1, 'barra1').get());
+    });
+
+    await prueba('D20. El admin puede reabrir el área en el documento de un bartender', async () => {
+        await reiniciarConDatosBase();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await rutaAuditoria(ctx.firestore(), 'bartender1')
+                .set({ sessionId: 'inv-activo', status: { barra1: 'completada' }, conteo: {} });
+        });
+        await assertSucceeds(rutaAuditoria(admin1, 'bartender1')
+            .update({ 'status.barra1': 'pendiente', updatedAt: Date.now() }));
+    });
+
+    await prueba('D21. Reabrir sigue prohibido si el inventario está CERRADO', async () => {
+        await reiniciarConDatosBase();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await rutaAuditoria(ctx.firestore(), 'bartender1')
+                .set({ sessionId: 'inv-cerrado', status: { barra1: 'completada' }, conteo: {} });
+        });
+        await assertFails(rutaAuditoria(admin1, 'bartender1')
+            .update({ 'status.barra1': 'pendiente', updatedAt: Date.now() }));
+    });
+
+    await prueba('D22. El rastro de finalización cabe en el documento del usuario', async () => {
+        await reiniciarConDatosBase();
+        await assertSucceeds(rutaAuditoria(bt1, 'bartender1').set({
+            uid: 'bartender1', sessionId: 'inv-activo', conteo: {},
+            status: { barra1: 'completada' },
+            finalizadas: { barra1: { uid: 'bartender1', nombre: 'ana@bar.mx', ts: Date.now(), rol: 'user' } }
+        }));
+    });
+
+    await prueba('D23. Un bartender NO puede escribir el rastro en el documento de otro', async () => {
+        await reiniciarConDatosBase();
+        await assertFails(rutaAuditoria(bt1, 'bartender2').set({
+            uid: 'bartender2', sessionId: 'inv-activo', conteo: {},
+            finalizadas: { barra1: { uid: 'bartender1', ts: Date.now() } }
+        }));
+    });
+
     await testEnv.cleanup();
 
     console.log('\n── Resumen ──');

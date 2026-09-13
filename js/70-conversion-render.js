@@ -1295,6 +1295,13 @@ document.body.appendChild(overlay);
                     const clave = pid + '|' + area;
                     clearTimeout(_conteoProductoSyncTimers[clave]);
                     _conteoProductoSyncTimers[clave] = setTimeout(function() {
+                        // D — la clave se borra al dispararse. Antes se
+                        // quedaba para siempre, así que al cerrar la pestaña
+                        // se marcaba como pendiente TODO lo tocado en la
+                        // sesión, ya subido o no, y al arrancar se reenviaba
+                        // entero: versiones incrementadas sobre valores que
+                        // podían ser más nuevos de otro aparato.
+                        delete _conteoProductoSyncTimers[clave];
                         // C1: el resultado ya NO se descarta.
                         updateCloudSyncBadge('syncing');
                         syncConteoProductoAtomico(pid, area, ent, abi)
