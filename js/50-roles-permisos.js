@@ -90,17 +90,148 @@
             // es requisito para que la pestana pueda existir siquiera.
             'purchases.read', 'purchases.create', 'purchases.import', 'purchases.delete',
             'settings.read', 'settings.update',
-            'adminLog.read'
+            'adminLog.read',
+            // FASE 2 — permisos nuevos. Los IDs tecnicos se escriben en ingles
+            // por decision explicita del propietario (D1): renombrar el
+            // catalogo a espanol obligaria a migrar los documentos roles/* ya
+            // sembrados en Firestore y cualquier permissionOverrides guardado,
+            // sin ganancia funcional. El espanol vive en PERMISOS_METADATOS.
+            //
+            //   inventory.post   — "Contabilizar": convertir el resultado
+            //                      fisico de un inventario CERRADO en el
+            //                      inventario inicial del siguiente ciclo.
+            //                      Se registra AHORA (catalogo cerrado: sin
+            //                      esto la FASE 3 no podria ni declararlo),
+            //                      pero la operacion NO existe todavia.
+            //   data.exportFull  — Exportacion del respaldo COMPLETO en JSON.
+            //                      Es un permiso distinto de inventory.export
+            //                      a proposito: el Excel de inventario lleva
+            //                      el conteo consolidado, mientras que
+            //                      exportFullData() arrastra ademas
+            //                      auditoriaConteoPorUsuario, es decir el
+            //                      conteo individual de OTRAS personas.
+            'inventory.post',
+            'data.exportFull'
         ];
         const PERMISOS_CATALOGO_SET = new Set(PERMISOS_CATALOGO);
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  FASE 2 — PERMISOS_METADATOS
+        //  ────────────────────────────────────────────────────────────────────
+        //  Presentacion en espanol de cada permiso del catalogo. Es un mapa
+        //  PURAMENTE DE INTERFAZ: no participa en ninguna decision de
+        //  autorizacion (esa sigue siendo competencia exclusiva de
+        //  hasPermission()). Separar ID tecnico de nombre visible es lo que
+        //  permite cumplir "toda la interfaz en espanol" sin tocar un solo
+        //  dato ya guardado en Firestore.
+        //
+        //  Campos:
+        //    nombre      — etiqueta corta del checkbox
+        //    descripcion — que habilita exactamente, en lenguaje de operacion
+        //    grupo       — encabezado bajo el que se agrupa en la pantalla
+        //    delegable   — si un ADMIN puede concederlo a Subjefe/Bartender
+        //    sensible    — si conceder/revocar exige confirmacion explicita
+        //    efectivo    — si HOY existe al menos un punto del codigo que lo
+        //                  consulte. Un permiso con efectivo:false se dibuja
+        //                  deshabilitado y rotulado: marcar una casilla que no
+        //                  controla nada es exactamente el "ocultar el boton"
+        //                  que la regla 4 del propietario prohibe.
+        // ══════════════════════════════════════════════════════════════════════
+        const PERMISOS_METADATOS = {
+            // ── Usuarios, roles y permisos ──────────────────────────────────
+            'users.read':            { nombre: 'Ver usuarios',                 descripcion: 'Consultar la lista de usuarios del sistema.',                                  grupo: 'Usuarios y permisos', delegable: false, sensible: true,  efectivo: true  },
+            'users.create':          { nombre: 'Crear usuarios',               descripcion: 'Dar de alta cuentas nuevas.',                                                  grupo: 'Usuarios y permisos', delegable: false, sensible: true,  efectivo: false },
+            'users.update':          { nombre: 'Modificar usuarios',           descripcion: 'Cambiar el rol o los datos de una cuenta.',                                    grupo: 'Usuarios y permisos', delegable: false, sensible: true,  efectivo: true  },
+            'users.disable':         { nombre: 'Desactivar usuarios',          descripcion: 'Dar de baja una cuenta sin eliminarla.',                                       grupo: 'Usuarios y permisos', delegable: false, sensible: true,  efectivo: true  },
+            'roles.read':            { nombre: 'Ver roles',                    descripcion: 'Consultar la definicion de los roles del sistema.',                            grupo: 'Usuarios y permisos', delegable: false, sensible: false, efectivo: true  },
+            'roles.update':          { nombre: 'Modificar roles',              descripcion: 'Cambiar los permisos que hereda un rol completo.',                             grupo: 'Usuarios y permisos', delegable: false, sensible: true,  efectivo: true  },
+            'permissions.read':      { nombre: 'Ver permisos efectivos',       descripcion: 'Consultar los permisos que tiene cada usuario.',                               grupo: 'Usuarios y permisos', delegable: false, sensible: true,  efectivo: true  },
+            'permissions.update':    { nombre: 'Administrar permisos',         descripcion: 'Conceder o revocar permisos individuales a un usuario.',                       grupo: 'Usuarios y permisos', delegable: false, sensible: true,  efectivo: true  },
+
+            // ── Inventario fisico ───────────────────────────────────────────
+            'inventory.create':      { nombre: 'Crear inventario',             descripcion: 'Abrir un inventario fisico nuevo para el ciclo.',                              grupo: 'Inventario fisico',   delegable: true,  sensible: true,  efectivo: true  },
+            'inventory.count':       { nombre: 'Contar',                       descripcion: 'Capturar cantidades en las areas asignadas.',                                  grupo: 'Inventario fisico',   delegable: true,  sensible: false, efectivo: true  },
+            'inventory.viewOwn':     { nombre: 'Ver mi conteo',                descripcion: 'Consultar unicamente el conteo propio.',                                       grupo: 'Inventario fisico',   delegable: true,  sensible: false, efectivo: true  },
+            'inventory.viewAll':     { nombre: 'Ver todos los conteos',        descripcion: 'Consultar la consolidacion y el conteo individual de cada persona. Rompe el conteo ciego: concedelo solo a supervision.', grupo: 'Inventario fisico', delegable: true, sensible: true, efectivo: true },
+            'inventory.closeOwn':    { nombre: 'Finalizar conteo propio',      descripcion: 'Dar por terminado el conteo propio de un area.',                               grupo: 'Inventario fisico',   delegable: true,  sensible: false, efectivo: true  },
+            'inventory.closeOther':  { nombre: 'Cerrar area completa',         descripcion: 'Marcar un area como terminada para TODAS las personas que cuentan en ella.',   grupo: 'Inventario fisico',   delegable: true,  sensible: true,  efectivo: true  },
+            'inventory.closeGlobal': { nombre: 'Cerrar inventario',            descripcion: 'Cerrar el inventario completo y congelar el historico.',                       grupo: 'Inventario fisico',   delegable: true,  sensible: true,  efectivo: true  },
+            'inventory.reopenArea':  { nombre: 'Reabrir area',                 descripcion: 'Devolver un area cerrada al estado de captura.',                               grupo: 'Inventario fisico',   delegable: true,  sensible: true,  efectivo: true  },
+            'inventory.post':        { nombre: 'Contabilizar inventario',      descripcion: 'Convertir el resultado de un inventario cerrado en el inventario inicial del siguiente ciclo. Reservado a administracion.', grupo: 'Inventario fisico', delegable: true, sensible: true, efectivo: false },
+            'inventory.export':      { nombre: 'Exportar inventario',          descripcion: 'Descargar el Excel del inventario.',                                           grupo: 'Inventario fisico',   delegable: true,  sensible: false, efectivo: true  },
+            'inventory.history':     { nombre: 'Ver historial',                descripcion: 'Consultar inventarios de ciclos anteriores.',                                  grupo: 'Inventario fisico',   delegable: true,  sensible: false, efectivo: true  },
+
+            // ── Catalogo ────────────────────────────────────────────────────
+            'catalog.read':          { nombre: 'Ver catalogo',                 descripcion: 'Consultar los productos del catalogo.',                                        grupo: 'Catalogo',            delegable: true,  sensible: false, efectivo: true  },
+            'catalog.edit':          { nombre: 'Editar productos',             descripcion: 'Crear, modificar y eliminar productos del catalogo.',                          grupo: 'Catalogo',            delegable: true,  sensible: true,  efectivo: true  },
+            'catalog.publish':       { nombre: 'Importar y publicar catalogo', descripcion: 'Importar el Excel de productos y publicar el catalogo a todos los dispositivos.', grupo: 'Catalogo',          delegable: true,  sensible: true,  efectivo: true  },
+
+            // ── Areas de conteo ─────────────────────────────────────────────
+            'warehouses.read':       { nombre: 'Ver areas',                    descripcion: 'Consultar las areas de conteo configuradas.',                                  grupo: 'Areas de conteo',     delegable: true,  sensible: false, efectivo: true  },
+            'warehouses.create':     { nombre: 'Crear areas',                  descripcion: 'Dar de alta un area de conteo nueva.',                                         grupo: 'Areas de conteo',     delegable: false, sensible: true,  efectivo: true  },
+            'warehouses.update':     { nombre: 'Editar areas',                 descripcion: 'Cambiar el nombre visible o el icono de un area.',                             grupo: 'Areas de conteo',     delegable: false, sensible: true,  efectivo: true  },
+            'warehouses.disable':    { nombre: 'Eliminar areas',               descripcion: 'Retirar un area de conteo que no sea de sistema.',                             grupo: 'Areas de conteo',     delegable: false, sensible: true,  efectivo: true  },
+
+            // ── Compras ─────────────────────────────────────────────────────
+            'purchases.read':        { nombre: 'Ver compras',                  descripcion: 'Consultar la pestana de compras.',                                             grupo: 'Compras',             delegable: true,  sensible: false, efectivo: true  },
+            'purchases.create':      { nombre: 'Registrar compras',            descripcion: 'Capturar una compra manualmente.',                                             grupo: 'Compras',             delegable: true,  sensible: false, efectivo: true  },
+            'purchases.import':      { nombre: 'Importar compras',             descripcion: 'Cargar compras desde un archivo.',                                             grupo: 'Compras',             delegable: true,  sensible: true,  efectivo: true  },
+            'purchases.delete':      { nombre: 'Eliminar compras',             descripcion: 'Borrar registros de compra.',                                                  grupo: 'Compras',             delegable: false, sensible: true,  efectivo: false },
+
+            // ── Reportes y datos ────────────────────────────────────────────
+            'reports.read':          { nombre: 'Ver reportes',                 descripcion: 'Consultar los reportes globales publicados.',                                  grupo: 'Reportes y datos',    delegable: true,  sensible: false, efectivo: true  },
+            'reports.export':        { nombre: 'Generar reportes',             descripcion: 'Generar y publicar el reporte global del inventario.',                         grupo: 'Reportes y datos',    delegable: true,  sensible: true,  efectivo: true  },
+            'data.exportFull':       { nombre: 'Exportar respaldo completo',   descripcion: 'Descargar el respaldo JSON con TODOS los datos, incluido el conteo individual de cada persona.', grupo: 'Reportes y datos', delegable: false, sensible: true, efectivo: true },
+
+            // ── Configuracion ───────────────────────────────────────────────
+            'settings.read':         { nombre: 'Ver configuracion',            descripcion: 'Consultar la configuracion del sistema y el diagnostico.',                     grupo: 'Configuracion',       delegable: true,  sensible: false, efectivo: true  },
+            'settings.update':       { nombre: 'Cambiar configuracion',        descripcion: 'Modificar configuracion, restaurar respaldos y pausar la sincronizacion.',     grupo: 'Configuracion',       delegable: false, sensible: true,  efectivo: true  },
+            'adminLog.read':         { nombre: 'Ver historial de cambios',     descripcion: 'Consultar la bitacora de cambios administrativos.',                            grupo: 'Configuracion',       delegable: true,  sensible: true,  efectivo: false },
+
+            // ── Sucursales (sin materia todavia) ────────────────────────────
+            'branches.read':         { nombre: 'Ver sucursales',               descripcion: 'Reservado: el sistema todavia no maneja varias sucursales.',                   grupo: 'Sucursales',          delegable: false, sensible: false, efectivo: false },
+            'branches.create':       { nombre: 'Crear sucursales',             descripcion: 'Reservado: el sistema todavia no maneja varias sucursales.',                   grupo: 'Sucursales',          delegable: false, sensible: true,  efectivo: false },
+            'branches.update':       { nombre: 'Editar sucursales',            descripcion: 'Reservado: el sistema todavia no maneja varias sucursales.',                   grupo: 'Sucursales',          delegable: false, sensible: true,  efectivo: false },
+            'branches.disable':      { nombre: 'Eliminar sucursales',          descripcion: 'Reservado: el sistema todavia no maneja varias sucursales.',                   grupo: 'Sucursales',          delegable: false, sensible: true,  efectivo: false }
+        };
+
+        // Orden de los grupos en la pantalla de administracion.
+        const PERMISOS_GRUPOS_ORDEN = [
+            'Inventario fisico', 'Catalogo', 'Areas de conteo', 'Compras',
+            'Reportes y datos', 'Configuracion', 'Usuarios y permisos', 'Sucursales'
+        ];
+
+        function permisoMeta(permiso) {
+            return PERMISOS_METADATOS[permiso] || {
+                nombre: permiso, descripcion: '', grupo: 'Otros',
+                delegable: false, sensible: true, efectivo: false
+            };
+        }
+        window.permisoMeta = permisoMeta;
 
         // Roles de sistema — semilla y fallback si Firestore no tiene (todavía)
         // los documentos roles/{roleId}, o si no hay conexión. ADMIN usa '*'
         // (comodín: todos los permisos del catálogo, presentes y futuros).
-        // SUBJEFE_BARRA y BARTENDER arrancan con la MISMA base técnica a
-        // propósito (así lo pide esta etapa) — diferenciarlos es
-        // responsabilidad de una etapa posterior, agregando permisos, no de
-        // esta.
+        //
+        // FASE 2 — SUBJEFE_BARRA y BARTENDER YA NO SON IDENTICOS. Hasta la
+        // etapa 14.1 ambos compartian exactamente el mismo array, de modo que
+        // el rol "Subjefe de Barra" no tenia ningun efecto real: existia como
+        // etiqueta y nada mas. La diferencia minima que se adopta aqui:
+        //
+        //   Bartender  → cuenta lo suyo y consulta historico.
+        //   Subjefe    → todo lo del bartender, MAS cerrar el area completa
+        //                (inventory.closeOther) y exportar el Excel del
+        //                inventario (inventory.export).
+        //
+        // Cerrar el area completa es la operacion de supervision natural del
+        // subjefe: da por terminada un area para TODAS las personas que
+        // cuentan en ella, sin necesidad de ver el conteo individual de
+        // nadie (inventory.viewAll sigue siendo exclusivo de administracion,
+        // asi que el conteo ciego se mantiene intacto).
+        //
+        // Estos son solo los VALORES POR DEFECTO: desde la pantalla de
+        // Usuarios y permisos el administrador puede conceder o revocar
+        // cualquiera de ellos por usuario sin tocar codigo.
         const ROLES_SISTEMA_DEFECTO = {
             ADMIN: {
                 nombre: 'Administrador',
@@ -109,12 +240,19 @@
             },
             SUBJEFE_BARRA: {
                 nombre: 'Subjefe de Barra',
-                permissions: ['inventory.count', 'inventory.viewOwn', 'inventory.closeOwn', 'inventory.history'],
+                permissions: [
+                    'inventory.count', 'inventory.viewOwn', 'inventory.closeOwn',
+                    'inventory.history', 'catalog.read', 'warehouses.read',
+                    'inventory.closeOther', 'inventory.export'
+                ],
                 esSistema: true
             },
             BARTENDER: {
                 nombre: 'Bartender',
-                permissions: ['inventory.count', 'inventory.viewOwn', 'inventory.closeOwn', 'inventory.history'],
+                permissions: [
+                    'inventory.count', 'inventory.viewOwn', 'inventory.closeOwn',
+                    'inventory.history', 'catalog.read', 'warehouses.read'
+                ],
                 esSistema: true
             }
         };
@@ -267,6 +405,91 @@
             return _authzState.permissions.has(permission);
         }
         window.hasPermission = hasPermission; // testeable desde consola — mismo patrón que window._db/_auth
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  FASE 2 — permisosEfectivos(userData)
+        //  ────────────────────────────────────────────────────────────────────
+        //  Resuelve los permisos efectivos de CUALQUIER usuario a partir de su
+        //  documento, aplicando EXACTAMENTE la misma precedencia que
+        //  hasPermission() aplica sobre el usuario de la sesion. Existe para
+        //  que la pantalla de administracion pueda mostrar "que tiene
+        //  realmente esta persona" sin reimplementar la regla — si hubiera dos
+        //  implementaciones, la pantalla podria ensenar algo distinto de lo que
+        //  el sistema aplica, que es justo lo que el principio de fuente de
+        //  verdad unica prohibe.
+        //
+        //  Devuelve, por permiso del catalogo, uno de estos estados:
+        //    'heredado'  — lo da el rol
+        //    'asignado'  — override 'allow' individual
+        //    'revocado'  — override 'deny' individual
+        //    'ninguno'   — no lo tiene
+        //    'comodin'   — el rol es ADMIN ('*'): lo tiene todo y ningun
+        //                  override puede degradarlo
+        // ══════════════════════════════════════════════════════════════════════
+        function permisosEfectivos(userData) {
+            const legacyRole = (userData && userData.role) || 'user';
+            const roleId     = _roleCanonico(legacyRole);
+            const activo     = ((userData && userData.status) || 'activo') !== 'inactivo';
+            const delRol     = _rolesCache[roleId] ||
+                (ROLES_SISTEMA_DEFECTO[roleId] || ROLES_SISTEMA_DEFECTO.BARTENDER).permissions;
+            const setRol     = new Set(activo ? delRol : []);
+            const overrides  = activo ? _sanitizarOverrides(userData && userData.permissionOverrides) : {};
+            const comodin    = setRol.has('*');
+
+            const estados = {};
+            PERMISOS_CATALOGO.forEach(function(p) {
+                if (comodin)                      estados[p] = 'comodin';
+                else if (overrides[p] === 'deny')  estados[p] = 'revocado';
+                else if (overrides[p] === 'allow') estados[p] = 'asignado';
+                else if (setRol.has(p))            estados[p] = 'heredado';
+                else                               estados[p] = 'ninguno';
+            });
+
+            return {
+                roleId:      roleId,
+                legacyRole:  legacyRole,
+                activo:      activo,
+                comodin:     comodin,
+                permisosRol: Array.from(setRol),
+                overrides:   overrides,
+                estados:     estados,
+                concedidos:  PERMISOS_CATALOGO.filter(function(p) {
+                    return estados[p] === 'comodin' || estados[p] === 'asignado' || estados[p] === 'heredado';
+                })
+            };
+        }
+        window.permisosEfectivos = permisosEfectivos;
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  FASE 2 (D3) — AREAS ASIGNADAS POR USUARIO
+        //  ────────────────────────────────────────────────────────────────────
+        //  Decision del propietario: el campo AUSENTE significa TODAS las
+        //  areas, nunca "ninguna". Cualquier otra interpretacion dejaria sin
+        //  poder contar, el dia del despliegue, a todo el personal existente
+        //  —ningun documento usuarios/{uid} tiene hoy este campo—.
+        //  La restriccion solo empieza a existir cuando un administrador fija
+        //  una lista explicita.
+        //
+        //  Un array vacio SI significa "ninguna area": es una decision
+        //  deliberada del administrador, distinta de la ausencia del campo.
+        // ══════════════════════════════════════════════════════════════════════
+        function areasDeUsuario(userData) {
+            const raw = userData && userData.areasAsignadas;
+            if (!Array.isArray(raw)) return null; // null = sin restriccion = todas
+            return raw.filter(function(a) { return typeof a === 'string' && a; });
+        }
+        window.areasDeUsuario = areasDeUsuario;
+
+        // ¿Puede el usuario de ESTA sesion operar sobre el area indicada?
+        // Un administrador (comodin) nunca queda restringido por areas.
+        function puedeOperarArea(area) {
+            if (!area) return false;
+            if (isAdmin()) return true;
+            const permitidas = areasDeUsuario(_lastUserData);
+            if (permitidas === null) return true; // campo ausente = todas
+            return permitidas.indexOf(area) !== -1;
+        }
+        window.puedeOperarArea = puedeOperarArea;
 
         // ══════════════════════════════════════════════════════════════════════
         //  ETAPA 14.1.1 — SINCRONIZACIÓN EN TIEMPO REAL DEL CONTEXTO DE
@@ -1371,8 +1594,591 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
         }
 
         // ── RENDER: PANEL ADMIN ────────────────────────────────────────────
+        // ══════════════════════════════════════════════════════════════════════
+        //  FASE 2A — PANTALLA "USUARIOS Y PERMISOS"
+        //  ────────────────────────────────────────────────────────────────────
+        //  Primera ruta de ESCRITURA que existe para usuarios/{uid}.role,
+        //  .permissionOverrides, .status y .areasAsignadas. Hasta ahora el
+        //  motor de permisos leía esos campos y las reglas los protegían, pero
+        //  ninguna parte de la aplicación podía modificarlos: la única vía era
+        //  editar el documento a mano en la consola de Firebase.
+        //
+        //  Semántica de cada casilla (el ciclo importa): marcar y desmarcar dos
+        //  veces devuelve el permiso a lo que dicta el rol, nunca deja un
+        //  override residual.
+        //
+        //    heredado  + desmarcar → override 'deny'   (revocado)
+        //    revocado  + marcar    → se BORRA el override (vuelve a heredado)
+        //    ninguno   + marcar    → override 'allow'  (asignado)
+        //    asignado  + desmarcar → se BORRA el override (vuelve a ninguno)
+        //
+        //  Nada de lo que se ve aquí decide autorización: la pantalla lee el
+        //  estado con permisosEfectivos(), que aplica la misma precedencia que
+        //  hasPermission(). Una segunda implementación de la regla sería una
+        //  segunda fuente de verdad.
+        // ══════════════════════════════════════════════════════════════════════
+        let _permUsuarios  = null;   // null = todavía no cargados
+        let _permCargando  = false;
+        let _permError     = null;
+        let _permUidSel    = null;
+        let _permEdicion   = null;   // { roleId, overrides:{}, areas:null|[], status }
+
+        function abrirUsuariosPermisos() {
+            if (!hasPermission('permissions.read')) {
+                showNotification('⚠️ No tienes permiso para ver la administración de permisos');
+                return;
+            }
+            _adminSubvista = 'permisos';
+            _permUidSel  = null;
+            _permEdicion = null;
+            renderTab();
+            _cargarUsuariosParaPermisos();
+        }
+        window.abrirUsuariosPermisos = abrirUsuariosPermisos;
+
+        function cerrarUsuariosPermisos() {
+            _adminSubvista = 'panel';
+            _permUidSel  = null;
+            _permEdicion = null;
+            renderTab();
+        }
+        window.cerrarUsuariosPermisos = cerrarUsuariosPermisos;
+
+        async function _cargarUsuariosParaPermisos(forzar) {
+            if (_permCargando) return;
+            if (_permUsuarios && !forzar) return;
+            if (!_db) { _permError = 'Sin conexión a Firestore'; renderTab(); return; }
+            _permCargando = true;
+            _permError    = null;
+            try {
+                const snap = await _db.collection('usuarios').get();
+                const lista = [];
+                snap.forEach(function(d) {
+                    const data = d.data() || {};
+                    lista.push(Object.assign({ uid: d.id }, data));
+                });
+                lista.sort(function(a, b) {
+                    return String(a.email || a.uid).localeCompare(String(b.email || b.uid));
+                });
+                _permUsuarios = lista;
+            } catch (e) {
+                console.warn('[Permisos] No se pudo listar usuarios:', e);
+                _permError = 'No se pudo leer la lista de usuarios. Revisa la conexión y tus permisos.';
+            } finally {
+                _permCargando = false;
+                if (_adminSubvista === 'permisos') renderTab();
+            }
+        }
+        window._cargarUsuariosParaPermisos = _cargarUsuariosParaPermisos;
+
+        function _permUsuarioPorUid(uid) {
+            if (!_permUsuarios) return null;
+            for (let i = 0; i < _permUsuarios.length; i++) {
+                if (_permUsuarios[i].uid === uid) return _permUsuarios[i];
+            }
+            return null;
+        }
+
+        // Documento "efectivo" = el guardado + los cambios todavía sin guardar.
+        // Todo lo que la pantalla muestra se deriva de aquí, para que el
+        // resumen de permisos efectivos refleje la edición en curso.
+        function _permDocEditado() {
+            const base = _permUsuarioPorUid(_permUidSel);
+            if (!base) return null;
+            if (!_permEdicion) return base;
+            return Object.assign({}, base, {
+                role:               _permEdicion.roleId,
+                permissionOverrides: _permEdicion.overrides,
+                status:             _permEdicion.status,
+                areasAsignadas:     _permEdicion.areas === null ? undefined : _permEdicion.areas
+            });
+        }
+
+        function permSeleccionarUsuario(uid) {
+            const u = _permUsuarioPorUid(uid);
+            if (!u) return;
+            _permUidSel  = uid;
+            _permEdicion = {
+                roleId:    _roleCanonico(u.role),
+                overrides: Object.assign({}, _sanitizarOverrides(u.permissionOverrides)),
+                areas:     areasDeUsuario(u),            // null = todas
+                status:    u.status || 'activo'
+            };
+            renderTab();
+        }
+        window.permSeleccionarUsuario = permSeleccionarUsuario;
+
+        function permCambiarRol(roleId) {
+            if (!_permEdicion) return;
+            _permEdicion.roleId = roleId;
+            renderTab();
+        }
+        window.permCambiarRol = permCambiarRol;
+
+        function permToggleEstado() {
+            if (!_permEdicion) return;
+            _permEdicion.status = (_permEdicion.status === 'inactivo') ? 'activo' : 'inactivo';
+            renderTab();
+        }
+        window.permToggleEstado = permToggleEstado;
+
+        function permToggleArea(area) {
+            if (!_permEdicion) return;
+            if (_permEdicion.areas === null) {
+                // Pasa de "todas" (campo ausente) a una lista explícita que
+                // contiene todo MENOS la que se acaba de desmarcar.
+                _permEdicion.areas = AREAS_CONTEO.filter(function(a) { return a !== area; });
+            } else {
+                const i = _permEdicion.areas.indexOf(area);
+                if (i === -1) _permEdicion.areas.push(area);
+                else          _permEdicion.areas.splice(i, 1);
+                // Si vuelven a quedar TODAS marcadas, se restaura la ausencia
+                // del campo: es más limpio que guardar la lista completa, y
+                // significa exactamente lo mismo (D3).
+                if (_permEdicion.areas.length === AREAS_CONTEO.length) _permEdicion.areas = null;
+            }
+            renderTab();
+        }
+        window.permToggleArea = permToggleArea;
+
+        function permToggle(permiso) {
+            if (!_permEdicion) return;
+            if (!PERMISOS_CATALOGO_SET.has(permiso)) return;
+            const doc    = _permDocEditado();
+            const efec   = permisosEfectivos(doc);
+            const estado = efec.estados[permiso];
+            if (estado === 'comodin') return; // ADMIN: autoridad absoluta, no se toca
+            if (estado === 'heredado')      _permEdicion.overrides[permiso] = 'deny';
+            else if (estado === 'revocado') delete _permEdicion.overrides[permiso];
+            else if (estado === 'ninguno')  _permEdicion.overrides[permiso] = 'allow';
+            else if (estado === 'asignado') delete _permEdicion.overrides[permiso];
+            renderTab();
+        }
+        window.permToggle = permToggle;
+
+        // ── Protección de auto-bloqueo (principios 8 y 9 del propietario) ───
+        // Dos garantías distintas:
+        //   1. Un administrador no puede quitarse a sí mismo la autoridad.
+        //   2. El sistema nunca puede quedarse sin ningún administrador.
+        // La segunda se comprueba contra la lista real de usuarios, no contra
+        // una suposición.
+        function _permValidarNoAutobloqueo(uid, roleIdNuevo, statusNuevo) {
+            const eraAdmin = _roleCanonico((_permUsuarioPorUid(uid) || {}).role) === 'ADMIN';
+            const seraAdmin = roleIdNuevo === 'ADMIN' && statusNuevo !== 'inactivo';
+            if (eraAdmin && !seraAdmin) {
+                if (uid === currentUserUid) {
+                    return 'No puedes quitarte a ti mismo la autoridad de administrador. ' +
+                           'Pídele a otro administrador que lo haga.';
+                }
+                const otrosAdmins = (_permUsuarios || []).filter(function(u) {
+                    return u.uid !== uid &&
+                           _roleCanonico(u.role) === 'ADMIN' &&
+                           (u.status || 'activo') !== 'inactivo';
+                });
+                if (otrosAdmins.length === 0) {
+                    return 'Es el único administrador activo del sistema. ' +
+                           'Nombra antes a otro administrador.';
+                }
+            }
+            return null;
+        }
+
+        // ── Auditoría del cambio ────────────────────────────────────────────
+        function registrarCambioPermisos(datos) {
+            return _registrarEnSyncQueue({
+                tipo:    'permisos',
+                detalle: datos.usuarioAfectado + ': ' + datos.rolAnterior + ' → ' + datos.rolNuevo,
+                estadoPermiso:       datos.estadoPermiso || 'APLICADO',
+                usuarioAfectado:     datos.usuarioAfectado,
+                emailAfectado:       datos.emailAfectado || null,
+                rolAnterior:         datos.rolAnterior,
+                rolNuevo:            datos.rolNuevo,
+                permisosAnteriores:  datos.permisosAnteriores,
+                permisosNuevos:      datos.permisosNuevos,
+                overridesAnteriores: datos.overridesAnteriores,
+                overridesNuevos:     datos.overridesNuevos,
+                areasAnteriores:     datos.areasAnteriores,
+                areasNuevas:         datos.areasNuevas,
+                statusAnterior:      datos.statusAnterior,
+                statusNuevo:         datos.statusNuevo,
+                motivo:              datos.motivo || null
+            });
+        }
+        window.registrarCambioPermisos = registrarCambioPermisos;
+
+        async function permGuardar() {
+            if (!_permEdicion || !_permUidSel) return;
+            if (!hasPermission('permissions.update')) {
+                showNotification('⚠️ No tienes permiso para modificar permisos');
+                return;
+            }
+            if (!_db)              { showNotification('📴 Sin conexión a Firestore'); return; }
+            if (!navigator.onLine) { showNotification('📴 Sin conexión — intenta de nuevo con internet'); return; }
+
+            const original = _permUsuarioPorUid(_permUidSel);
+            if (!original) return;
+
+            const bloqueo = _permValidarNoAutobloqueo(_permUidSel, _permEdicion.roleId, _permEdicion.status);
+            if (bloqueo) { showNotification('🛑 ' + bloqueo); return; }
+
+            const efecAntes = permisosEfectivos(original);
+            const efecAhora = permisosEfectivos(_permDocEditado());
+
+            // ── Resumen del cambio, para que el administrador confirme sobre
+            //    hechos y no sobre una sensación ────────────────────────────
+            const lineas = [];
+            if (efecAntes.roleId !== efecAhora.roleId) {
+                lineas.push('• Rol: ' + efecAntes.roleId + ' → ' + efecAhora.roleId);
+            }
+            if ((original.status || 'activo') !== _permEdicion.status) {
+                lineas.push('• Estado de la cuenta: ' + (original.status || 'activo') + ' → ' + _permEdicion.status);
+            }
+            const areasAntes = areasDeUsuario(original);
+            const areasDesp  = _permEdicion.areas;
+            const txtAreas = function(a) {
+                return a === null ? 'todas las áreas'
+                                  : (a.length ? a.map(function(x) { return areasAuditoria[x] || x; }).join(', ')
+                                              : 'ninguna área');
+            };
+            if (JSON.stringify(areasAntes) !== JSON.stringify(areasDesp)) {
+                lineas.push('• Áreas: ' + txtAreas(areasAntes) + ' → ' + txtAreas(areasDesp));
+            }
+            let sensibles = 0;
+            PERMISOS_CATALOGO.forEach(function(p) {
+                const a = efecAntes.estados[p], b = efecAhora.estados[p];
+                if (a === b) return;
+                const teniaA = (a === 'comodin' || a === 'asignado' || a === 'heredado');
+                const teniaB = (b === 'comodin' || b === 'asignado' || b === 'heredado');
+                if (teniaA === teniaB) return; // cambió el origen, no la capacidad real
+                const meta = permisoMeta(p);
+                if (meta.sensible) sensibles++;
+                lineas.push('• ' + (teniaB ? 'CONCEDE' : 'RETIRA') + ': ' + meta.nombre +
+                            (meta.sensible ? '  ⚠️ sensible' : ''));
+            });
+
+            if (lineas.length === 0) { showNotification('Sin cambios que guardar'); return; }
+
+            const quien = original.email || original.displayName || _permUidSel.slice(0, 8);
+            showConfirm(
+                '🔐 Confirmar cambios de permisos\n\n' +
+                'Usuario: ' + quien + '\n\n' +
+                lineas.join('\n') + '\n\n' +
+                (sensibles > 0
+                    ? '⚠️ ' + sensibles + ' de estos permisos son sensibles.\n\n'
+                    : '') +
+                'El cambio quedará registrado en el historial permanente y se aplicará ' +
+                'al dispositivo del usuario en cuanto tenga conexión.\n\n¿Continuar?',
+                async function() {
+                    try {
+                        const payload = {
+                            role:                _permEdicion.roleId,
+                            permissionOverrides: _permEdicion.overrides,
+                            status:              _permEdicion.status,
+                            actualizadoEn:       Date.now(),
+                            actualizadoPor:      currentUserUid
+                        };
+                        // D3: "todas las áreas" se representa por AUSENCIA del
+                        // campo, así que se elimina en vez de escribir la lista
+                        // completa. Son estados equivalentes y este es el
+                        // canónico.
+                        if (_permEdicion.areas === null) {
+                            payload.areasAsignadas = firebase.firestore.FieldValue.delete();
+                        } else {
+                            payload.areasAsignadas = _permEdicion.areas.slice();
+                        }
+
+                        await _db.collection('usuarios').doc(_permUidSel).update(payload);
+
+                        registrarCambioPermisos({
+                            usuarioAfectado:     _permUidSel,
+                            emailAfectado:       original.email || null,
+                            rolAnterior:         efecAntes.roleId,
+                            rolNuevo:            efecAhora.roleId,
+                            permisosAnteriores:  efecAntes.concedidos,
+                            permisosNuevos:      efecAhora.concedidos,
+                            overridesAnteriores: efecAntes.overrides,
+                            overridesNuevos:     efecAhora.overrides,
+                            areasAnteriores:     areasAntes,
+                            areasNuevas:         areasDesp,
+                            statusAnterior:      original.status || 'activo',
+                            statusNuevo:         _permEdicion.status,
+                            estadoPermiso:       'APLICADO'
+                        });
+
+                        showNotification('✅ Permisos actualizados para ' + quien);
+                        await _cargarUsuariosParaPermisos(true);
+                        permSeleccionarUsuario(_permUidSel);
+                    } catch (err) {
+                        console.error('[Permisos] Error guardando:', err);
+                        registrarCambioPermisos({
+                            usuarioAfectado: _permUidSel,
+                            emailAfectado:   original.email || null,
+                            rolAnterior:     efecAntes.roleId,
+                            rolNuevo:        _permEdicion.roleId,
+                            permisosAnteriores: efecAntes.concedidos,
+                            permisosNuevos:     efecAhora.concedidos,
+                            estadoPermiso:   'RECHAZADO',
+                            motivo:          String(err && err.code || err)
+                        });
+                        showNotification('❌ No se pudieron guardar los permisos — ' +
+                                         (err && err.code === 'permission-denied'
+                                            ? 'el servidor rechazó el cambio'
+                                            : 'revisa la conexión'));
+                    }
+                }
+            );
+        }
+        window.permGuardar = permGuardar;
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  sincronizarRolesSistema() — acción administrativa EXPLÍCITA.
+        //  _asegurarRolesSistemaEnFirestore() solo crea los roles que faltan;
+        //  nunca actualiza uno existente, y con razón: sobrescribir en
+        //  silencio la configuración de producción sería una modificación de
+        //  datos sin autorización. Pero eso significa que un despliegue que ya
+        //  tenga roles/BARTENDER sembrado con los valores antiguos no vería
+        //  nunca los valores por defecto nuevos. Este botón cierra esa brecha
+        //  mostrando primero, exactamente, qué cambiaría.
+        // ══════════════════════════════════════════════════════════════════════
+        async function sincronizarRolesSistema() {
+            if (!hasPermission('roles.update')) {
+                showNotification('⚠️ No tienes permiso para modificar roles');
+                return;
+            }
+            if (!_db || !navigator.onLine) { showNotification('📴 Sin conexión'); return; }
+            try {
+                const cambios = [];
+                for (const roleId of Object.keys(ROLES_SISTEMA_DEFECTO)) {
+                    const snap = await _db.collection('roles').doc(roleId).get();
+                    const actual = (snap.exists && Array.isArray(snap.data().permissions))
+                                   ? snap.data().permissions : null;
+                    const nuevo  = ROLES_SISTEMA_DEFECTO[roleId].permissions;
+                    if (!actual) { cambios.push({ roleId: roleId, de: '(no existe)', a: nuevo, nuevo: nuevo }); continue; }
+                    if (actual.slice().sort().join(',') !== nuevo.slice().sort().join(',')) {
+                        cambios.push({ roleId: roleId, de: actual, a: nuevo, nuevo: nuevo });
+                    }
+                }
+                if (cambios.length === 0) { showNotification('✅ Los roles ya coinciden con los valores por defecto'); return; }
+
+                const detalle = cambios.map(function(c) {
+                    const de = Array.isArray(c.de) ? (c.de.length + ' permiso(s)') : c.de;
+                    return '• ' + c.roleId + ': ' + de + ' → ' + c.a.length + ' permiso(s)';
+                }).join('\n');
+
+                showConfirm(
+                    '🔁 Actualizar roles de sistema\n\n' +
+                    'Se reemplazarán los permisos heredados de estos roles por los valores ' +
+                    'por defecto de esta versión:\n\n' + detalle + '\n\n' +
+                    'Los permisos individuales de cada usuario (allow/deny) NO se tocan.\n\n¿Continuar?',
+                    async function() {
+                        try {
+                            const batch = _db.batch();
+                            cambios.forEach(function(c) {
+                                batch.set(_db.collection('roles').doc(c.roleId), {
+                                    roleId:        c.roleId,
+                                    nombre:        ROLES_SISTEMA_DEFECTO[c.roleId].nombre,
+                                    permissions:   c.nuevo,
+                                    esSistema:     true,
+                                    actualizadoEn: Date.now()
+                                }, { merge: true });
+                            });
+                            await batch.commit();
+                            _rolesCache = {};
+                            cambios.forEach(function(c) {
+                                registrarCambioPermisos({
+                                    usuarioAfectado:    'rol:' + c.roleId,
+                                    rolAnterior:        c.roleId,
+                                    rolNuevo:           c.roleId,
+                                    permisosAnteriores: Array.isArray(c.de) ? c.de : [],
+                                    permisosNuevos:     c.nuevo,
+                                    estadoPermiso:      'APLICADO',
+                                    motivo:             'Sincronización de roles de sistema'
+                                });
+                            });
+                            showNotification('✅ Roles de sistema actualizados');
+                            renderTab();
+                        } catch (e) {
+                            console.error('[Permisos] Error sincronizando roles:', e);
+                            showNotification('❌ No se pudieron actualizar los roles');
+                        }
+                    }
+                );
+            } catch (e) {
+                console.warn('[Permisos] Error leyendo roles:', e);
+                showNotification('❌ No se pudieron leer los roles');
+            }
+        }
+        window.sincronizarRolesSistema = sincronizarRolesSistema;
+
+        // ── Render de la pantalla ──────────────────────────────────────────
+        function _permBadgeEstado(estado) {
+            const mapa = {
+                comodin:  ['Todos', 'var(--green)'],
+                heredado: ['Del rol', 'var(--txt-muted)'],
+                asignado: ['Asignado', 'var(--blue)'],
+                revocado: ['Revocado', 'var(--red)'],
+                ninguno:  ['—', 'var(--txt-muted)']
+            };
+            const m = mapa[estado] || mapa.ninguno;
+            return '<span style="font-size:.65rem;font-weight:600;color:' + m[1] + ';">' + m[0] + '</span>';
+        }
+
+        function renderUsuariosPermisosTab() {
+            if (!hasPermission('permissions.read')) {
+                return '<p style="color:var(--txt-muted)">Acceso restringido</p>';
+            }
+            let html = '<div class="max-w-2xl mx-auto">';
+            html += '<div class="adm-card">';
+            html += '<button class="adm-btn" style="margin-bottom:10px" onclick="cerrarUsuariosPermisos()">'
+                  + '<i class="fa-solid fa-arrow-left"></i> Volver al panel</button>';
+            html += '<h3>🔐 Usuarios y permisos</h3>';
+
+            if (_permCargando && !_permUsuarios) {
+                html += '<p style="color:var(--txt-muted);font-size:.85rem">Cargando usuarios…</p></div></div>';
+                return html;
+            }
+            if (_permError) {
+                html += '<p style="color:var(--red);font-size:.85rem">' + escapeHtml(_permError) + '</p>';
+                html += '<button class="adm-btn" onclick="_cargarUsuariosParaPermisos(true)">Reintentar</button>';
+                html += '</div></div>';
+                return html;
+            }
+
+            // ── Selector de usuario ─────────────────────────────────────────
+            html += '<label style="display:block;font-size:.75rem;color:var(--txt-muted);margin-bottom:4px">Usuario</label>';
+            html += '<select id="permUserSel" onchange="permSeleccionarUsuario(this.value)" '
+                  + 'style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);'
+                  + 'background:var(--bg-card);color:var(--txt);margin-bottom:10px">';
+            html += '<option value="">— Selecciona un usuario —</option>';
+            (_permUsuarios || []).forEach(function(u) {
+                const etiqueta = (u.email || u.displayName || u.uid) +
+                                 '  ·  ' + _roleCanonico(u.role) +
+                                 ((u.status === 'inactivo') ? '  ·  INACTIVO' : '');
+                html += '<option value="' + escapeHtml(u.uid) + '"' +
+                        (u.uid === _permUidSel ? ' selected' : '') + '>' +
+                        escapeHtml(etiqueta) + '</option>';
+            });
+            html += '</select>';
+            html += '<button class="adm-btn" onclick="_cargarUsuariosParaPermisos(true)">'
+                  + '<i class="fa-solid fa-arrows-rotate"></i> Recargar lista</button>';
+            html += '</div>';
+
+            if (!_permUidSel || !_permEdicion) {
+                html += '<div class="adm-card"><p style="color:var(--txt-muted);font-size:.85rem">'
+                      + 'Selecciona un usuario para ver y modificar sus permisos.</p></div></div>';
+                return html;
+            }
+
+            const doc  = _permDocEditado();
+            const efec = permisosEfectivos(doc);
+            const base = _permUsuarioPorUid(_permUidSel);
+
+            // ── Rol, estado y áreas ─────────────────────────────────────────
+            html += '<div class="adm-card">';
+            html += '<h3>👤 ' + escapeHtml(base.email || base.displayName || base.uid) + '</h3>';
+            html += '<label style="display:block;font-size:.75rem;color:var(--txt-muted);margin:6px 0 4px">Rol base</label>';
+            html += '<select onchange="permCambiarRol(this.value)" '
+                  + 'style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);'
+                  + 'background:var(--bg-card);color:var(--txt)">';
+            Object.keys(ROLES_SISTEMA_DEFECTO).forEach(function(rid) {
+                html += '<option value="' + rid + '"' + (rid === _permEdicion.roleId ? ' selected' : '') + '>'
+                      + escapeHtml(ROLES_SISTEMA_DEFECTO[rid].nombre) + ' (' + rid + ')</option>';
+            });
+            html += '</select>';
+
+            html += '<div class="adm-stat" style="margin-top:8px"><span>Estado de la cuenta</span>'
+                  + '<b style="color:' + (_permEdicion.status === 'inactivo' ? 'var(--red)' : 'var(--green)') + '">'
+                  + (_permEdicion.status === 'inactivo' ? 'Inactiva' : 'Activa') + '</b></div>';
+            html += '<button class="adm-btn ' + (_permEdicion.status === 'inactivo' ? 'success' : 'warn') + '" '
+                  + 'onclick="permToggleEstado()">'
+                  + (_permEdicion.status === 'inactivo' ? 'Reactivar cuenta' : 'Desactivar cuenta') + '</button>';
+
+            html += '<h3 style="margin-top:14px">📍 Áreas autorizadas</h3>';
+            html += '<p style="font-size:.72rem;color:var(--txt-muted);margin:0 0 6px">'
+                  + (_permEdicion.areas === null
+                      ? 'Sin restricción: puede contar en todas las áreas.'
+                      : 'Restringido a las áreas marcadas.') + '</p>';
+            AREAS_CONTEO.forEach(function(a) {
+                const marcada = (_permEdicion.areas === null) || (_permEdicion.areas.indexOf(a) !== -1);
+                html += '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:.85rem;cursor:pointer">'
+                      + '<input type="checkbox" ' + (marcada ? 'checked' : '') + ' '
+                      + 'onchange="permToggleArea(\'' + escapeHtml(a) + '\')"> '
+                      + escapeHtml(areasAuditoria[a] || a) + '</label>';
+            });
+            html += '</div>';
+
+            // ── Permisos efectivos, agrupados ───────────────────────────────
+            html += '<div class="adm-card">';
+            html += '<h3>✅ Permisos</h3>';
+            if (efec.comodin) {
+                html += '<p style="font-size:.78rem;color:var(--green);margin:0 0 8px">'
+                      + 'Este usuario es administrador: tiene autoridad absoluta sobre todos los permisos '
+                      + 'y ninguna casilla individual puede degradarlo. Para limitarlo, cámbiale el rol.</p>';
+            }
+            html += '<div class="adm-stat"><span>Permisos concedidos</span><b>'
+                  + (efec.comodin ? 'Todos' : efec.concedidos.length) + '</b></div>';
+
+            const porGrupo = {};
+            PERMISOS_CATALOGO.forEach(function(p) {
+                const g = permisoMeta(p).grupo;
+                (porGrupo[g] = porGrupo[g] || []).push(p);
+            });
+            const grupos = PERMISOS_GRUPOS_ORDEN.filter(function(g) { return porGrupo[g]; })
+                .concat(Object.keys(porGrupo).filter(function(g) { return PERMISOS_GRUPOS_ORDEN.indexOf(g) === -1; }));
+
+            grupos.forEach(function(g) {
+                html += '<h4 style="margin:12px 0 4px;font-size:.8rem;color:var(--txt-muted);'
+                      + 'text-transform:uppercase;letter-spacing:.04em">' + escapeHtml(g) + '</h4>';
+                porGrupo[g].forEach(function(p) {
+                    const meta   = permisoMeta(p);
+                    const estado = efec.estados[p];
+                    const tiene  = (estado === 'comodin' || estado === 'asignado' || estado === 'heredado');
+                    // Motivos por los que la casilla no se puede tocar. Se
+                    // muestran explícitamente: una casilla inerte sin
+                    // explicación es peor que no tenerla.
+                    let bloqueo = null;
+                    if (estado === 'comodin')                          bloqueo = 'Administrador: autoridad absoluta';
+                    else if (!meta.efectivo)                           bloqueo = 'Sin efecto todavía en esta versión';
+                    else if (!meta.delegable && efec.roleId !== 'ADMIN') bloqueo = 'No delegable fuera de administración';
+
+                    html += '<label style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;'
+                          + 'border-bottom:1px solid var(--border);' + (bloqueo ? 'opacity:.55;' : 'cursor:pointer;') + '">';
+                    html += '<input type="checkbox" style="margin-top:3px" ' + (tiene ? 'checked' : '')
+                          + (bloqueo ? ' disabled' : '')
+                          + ' onchange="permToggle(\'' + escapeHtml(p) + '\')">';
+                    html += '<span style="flex:1;min-width:0">';
+                    html += '<span style="font-size:.85rem;font-weight:600">' + escapeHtml(meta.nombre) + '</span> '
+                          + _permBadgeEstado(estado);
+                    if (meta.sensible) html += ' <span style="font-size:.62rem;color:var(--amber)">⚠️ sensible</span>';
+                    html += '<br><span style="font-size:.72rem;color:var(--txt-muted)">'
+                          + escapeHtml(meta.descripcion) + '</span>';
+                    if (bloqueo) {
+                        html += '<br><span style="font-size:.68rem;color:var(--amber)">🔒 ' + escapeHtml(bloqueo) + '</span>';
+                    }
+                    html += '<br><code style="font-size:.62rem;color:var(--txt-muted);opacity:.7">' + escapeHtml(p) + '</code>';
+                    html += '</span></label>';
+                });
+            });
+            html += '</div>';
+
+            html += '<div class="adm-card">';
+            html += '<button class="adm-btn success" onclick="permGuardar()">'
+                  + '<i class="fa-solid fa-floppy-disk"></i> Guardar cambios</button>';
+            html += '<button class="adm-btn" onclick="permSeleccionarUsuario(\'' + escapeHtml(_permUidSel) + '\')">'
+                  + '<i class="fa-solid fa-rotate-left"></i> Descartar cambios</button>';
+            html += '</div>';
+
+            html += '</div>';
+            return html;
+        }
+        window.renderUsuariosPermisosTab = renderUsuariosPermisosTab;
+
+        // Subvista activa dentro de la pestaña Admin: 'panel' | 'permisos'
+        let _adminSubvista = 'panel';
+
         function renderAdminTab() {
             if (!isAdmin()) return '<p style="color:var(--txt-muted)">Acceso restringido</p>';
+            if (_adminSubvista === 'permisos') return renderUsuariosPermisosTab();
             const pendAjustes = _ajustes.filter(function(a) { return a.estado === 'pendiente'; }).length;
             let html = '<div class="max-w-2xl mx-auto">';
             html += '<div class="adm-card">';
@@ -1391,7 +2197,9 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
             html += '<div class="adm-stat"><span>Tu rol resuelto</span><b>' + escapeHtml(_authzState.roleId || '—') + '</b></div>';
             html += '<div class="adm-stat"><span>Rol legacy en Firestore</span><b>' + escapeHtml(_authzState.legacyRole || '—') + '</b></div>';
             html += '<div class="adm-stat"><span>Permisos activos</span><b>' + (_authzState.permissions ? (_authzState.permissions.has('*') ? 'Todos (*)' : _authzState.permissions.size) : 0) + '</b></div>';
+            html += '<button class="adm-btn primary" onclick="abrirUsuariosPermisos()"><i class="fa-solid fa-user-shield"></i> Usuarios y permisos</button>';
             html += '<button class="adm-btn warn" onclick="migrarRolesExistentes()"><i class="fa-solid fa-arrows-rotate"></i> Migrar roles legacy a nuevo modelo</button>';
+            html += '<button class="adm-btn" onclick="sincronizarRolesSistema()"><i class="fa-solid fa-code-branch"></i> Actualizar roles de sistema</button>';
             html += '</div>';
 
             // Acciones admin

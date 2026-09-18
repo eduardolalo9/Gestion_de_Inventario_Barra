@@ -610,7 +610,14 @@
             'reapertura_almacen',         // reapertura de un área a un usuario
             'ciclo_estado',               // cambio de estado del ciclo
             'restauracion_backup',        // restauración de un respaldo
-            'reset_auditoria'             // inicio de una nueva sesión de conteo
+            'reset_auditoria',            // inicio de una nueva sesión de conteo
+            // FASE 2 — la auditoría de cambios de permisos NO estrena una
+            // tubería propia: reutiliza esta, que ya es append-only y que las
+            // reglas hacen imborrable (historialCambios: allow update, delete:
+            // if false). Un tipo nuevo aquí basta para que el evento viaje a
+            // Firestore por el mismo camino que todo lo demás.
+            'permisos',                   // cambio de rol/permisos/áreas de un usuario
+            'candado_local'               // desbloqueo del candado local de captura (D6)
         ];
 
         function _registrarEnSyncQueue(evento) {
