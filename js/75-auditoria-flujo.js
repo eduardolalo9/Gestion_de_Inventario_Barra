@@ -20,10 +20,47 @@
         //  AUDITORÍA FÍSICA CIEGA — Funciones de control de flujo
         // ══════════════════════════════════════════════════════════════════════
 
+        // ══════════════════════════════════════════════════════════════════════
+        //  FASE 2A — FINALIZAR CONTEO PROPIO ≠ CERRAR EL ÁREA
+        //  ────────────────────────────────────────────────────────────────────
+        //  Hasta ahora esta única función hacía DOS cosas distintas según
+        //  quién pulsaba el botón: marcaba el conteo propio como terminado
+        //  y, si el que pulsaba era administrador, marcaba ADEMÁS el área
+        //  como completada para TODAS las personas (la línea
+        //  `if (isAdmin()) auditoriaStatus[area] = 'completada';`).
+        //
+        //  Esa mezcla ya causó un defecto documentado más abajo en este
+        //  mismo archivo (la puerta de entrada miraba myAuditoriaStatus
+        //  mientras el administrador operaba sobre auditoriaStatus, de modo
+        //  que "Reabrir" no desbloqueaba a nadie).
+        //
+        //  Ahora son dos operaciones con dos permisos:
+        //    auditoriaFinalizarConteo()  → inventory.closeOwn
+        //    auditoriaCerrarArea(area)   → inventory.closeOther
+        //
+        //  Para el bartender el camino es idéntico al de antes: la línea
+        //  retirada solo se ejecutaba para administradores.
+        // ══════════════════════════════════════════════════════════════════════
         function auditoriaFinalizarConteo() {
             if (!auditoriaAreaActiva) return;
             const area = auditoriaAreaActiva;
             const nombreArea = areasAuditoria[area];
+
+            // FASE 2A — esta función no verificaba NADA: ni permiso, ni
+            // estado del inventario. Cualquier usuario autenticado que
+            // llegara a la pantalla podía finalizar.
+            if (!hasPermission('inventory.closeOwn')) {
+                showNotification('⚠️ No tienes permiso para finalizar el conteo');
+                return;
+            }
+            if (!puedeOperarArea(area)) {
+                showNotification('⚠️ No tienes asignada el área ' + nombreArea);
+                return;
+            }
+            if (_inventarioActivo && _inventarioActivo.estado === 'CERRADO') {
+                showNotification('🔒 El inventario está cerrado');
+                return;
+            }
 
             showConfirm('¿Finalizar conteo de ' + nombreArea + '?\n\nEsto guardará y bloqueará tu conteo del área. Solo el administrador podrá habilitar correcciones.', function() {
                 // Marcar MI área como completada (por usuario, no global)
@@ -52,8 +89,9 @@
                     rol:    currentUserRole || 'user'
                 };
 
-                // Admin también actualiza el status global del área
-                if (isAdmin()) auditoriaStatus[area] = 'completada';
+                // FASE 2A — aquí vivía `if (isAdmin()) auditoriaStatus[area] =
+                // 'completada';`. Cerrar el área para todas las personas es
+                // ahora una acción propia y explícita: auditoriaCerrarArea().
                 auditoriaView       = 'selection';
                 auditoriaAreaActiva = null;
                 isAuditoriaMode     = false;
@@ -97,6 +135,52 @@
                 renderTab();
             });
         }
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  auditoriaCerrarArea(area) — FASE 2A
+        //  ────────────────────────────────────────────────────────────────────
+        //  Da por terminada un área para TODAS las personas que cuentan en
+        //  ella. No es "finalizar mi conteo" ni es "cerrar el inventario":
+        //  es el escalón intermedio que hasta ahora existía escondido como
+        //  efecto secundario del botón de finalizar.
+        //
+        //  No toca el conteo de nadie: solo marca el estado global del área.
+        //  Reabrirla sigue siendo competencia de inventory.reopenArea.
+        // ══════════════════════════════════════════════════════════════════════
+        function auditoriaCerrarArea(area) {
+            if (!area) return;
+            if (!hasPermission('inventory.closeOther')) {
+                showNotification('⚠️ No tienes permiso para cerrar el área completa');
+                return;
+            }
+            if (_inventarioActivo && _inventarioActivo.estado === 'CERRADO') {
+                showNotification('🔒 El inventario está cerrado');
+                return;
+            }
+            const nombreArea = areasAuditoria[area] || area;
+            if (auditoriaStatus[area] === 'completada') {
+                showNotification('El área ' + nombreArea + ' ya estaba cerrada');
+                return;
+            }
+            showConfirm(
+                '¿Cerrar el área ' + nombreArea + ' para TODAS las personas?\n\n' +
+                'Nadie podrá seguir capturando en esta área hasta que se reabra. ' +
+                'Los conteos ya guardados no se modifican.\n\n¿Continuar?',
+                function() {
+                    auditoriaStatus[area] = 'completada';
+                    saveToLocalStorage();
+                    _registrarEnSyncQueue({
+                        tipo:    'reapertura_almacen',
+                        detalle: 'Cierre de área ' + area + ' para todos los usuarios',
+                        area:    area,
+                        accion:  'cierre_area'
+                    });
+                    showNotification('🔒 Área ' + nombreArea + ' cerrada para todos');
+                    renderTab();
+                }
+            );
+        }
+        window.auditoriaCerrarArea = auditoriaCerrarArea;
 
         function auditoriaVolverSeleccion() {
             auditoriaView = 'selection';

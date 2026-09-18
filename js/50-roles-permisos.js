@@ -492,6 +492,82 @@
         window.puedeOperarArea = puedeOperarArea;
 
         // ══════════════════════════════════════════════════════════════════════
+        //  FASE 2B — CONTEO CIEGO
+        //  ────────────────────────────────────────────────────────────────────
+        //  Predicado ÚNICO de privacidad. Todo render, toda consulta y todo
+        //  volcado de datos que pueda contener el conteo de OTRA persona pasa
+        //  por aquí. Antes esa decisión estaba repartida en una docena de
+        //  isAdmin() sueltos, y algunos sitios simplemente no la tomaban.
+        //
+        //  Un administrador lo cumple siempre por el comodín '*'. Puede
+        //  delegarse a un supervisor concediéndole inventory.viewAll, que la
+        //  pantalla de permisos marca como sensible justamente porque rompe el
+        //  conteo ciego.
+        // ══════════════════════════════════════════════════════════════════════
+        function puedeVerConteosAjenos() {
+            return hasPermission('inventory.viewAll');
+        }
+        window.puedeVerConteosAjenos = puedeVerConteosAjenos;
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  _purgarConteosAjenosLocales()
+        //  ────────────────────────────────────────────────────────────────────
+        //  Cerrar las reglas de Firestore no basta. Los conteos ajenos ya
+        //  viajaron al teléfono de cada bartender y quedaron guardados en
+        //  localStorage y en IndexedDB, donde sobreviven a reinicios y de donde
+        //  el respaldo JSON los podía sacar. Mientras esa copia siga ahí, la
+        //  privacidad sería solo visual.
+        //
+        //  Se ejecuta en cada resolución del contexto de autorización y es
+        //  idempotente: si el usuario SÍ puede ver conteos ajenos, no hace
+        //  nada. Mismo patrón que el vaciado de allUsersAuditoria que ya
+        //  existía en _reconciliarListenersPorAutorizacion().
+        // ══════════════════════════════════════════════════════════════════════
+        function _purgarConteosAjenosLocales() {
+            if (!_authzState.loaded) return;   // sin contexto resuelto no se decide nada
+            if (puedeVerConteosAjenos()) return;
+
+            let habia = false;
+            try {
+                if (typeof auditoriaConteoPorUsuario !== 'undefined' &&
+                    auditoriaConteoPorUsuario && Object.keys(auditoriaConteoPorUsuario).length) {
+                    habia = true;
+                    Object.keys(auditoriaConteoPorUsuario).forEach(function(k) {
+                        delete auditoriaConteoPorUsuario[k];
+                    });
+                }
+                // auditoriaConteo es el agregado de TODOS los dispositivos. Un
+                // no-admin nunca lo muestra (siempre lee myAuditoriaConteo),
+                // así que vaciarlo no le quita nada propio.
+                if (typeof auditoriaConteo !== 'undefined' &&
+                    auditoriaConteo && Object.keys(auditoriaConteo).length) {
+                    habia = true;
+                    Object.keys(auditoriaConteo).forEach(function(k) {
+                        delete auditoriaConteo[k];
+                    });
+                }
+            } catch (_) {}
+
+            try {
+                localStorage.removeItem('inventarioApp_auditoriaConteoPorUsuario');
+                localStorage.removeItem('inventarioApp_auditoriaConteo');
+            } catch (_) {}
+
+            try {
+                if (typeof _idbSet === 'function') {
+                    _idbSet('auditoriaConteoPorUsuario', {}).catch(function() {});
+                    _idbSet('auditoriaConteo', {}).catch(function() {});
+                }
+            } catch (_) {}
+
+            if (habia) {
+                console.info('[Privacidad] Conteos ajenos purgados del dispositivo ' +
+                             '(este usuario no tiene inventory.viewAll).');
+            }
+        }
+        window._purgarConteosAjenosLocales = _purgarConteosAjenosLocales;
+
+        // ══════════════════════════════════════════════════════════════════════
         //  ETAPA 14.1.1 — SINCRONIZACIÓN EN TIEMPO REAL DEL CONTEXTO DE
         //  AUTORIZACIÓN
         //  ────────────────────────────────────────────────────────────────────
@@ -573,6 +649,12 @@
                 overrides:   overridesEfectivos,
                 disabled:    !cuentaActiva
             };
+
+            // FASE 2B — la purga va ANTES de la salida temprana: es
+            // idempotente y barata, y tiene que ejecutarse aunque la huella
+            // no haya cambiado (p. ej. al rehidratar la sesión con conteos
+            // ajenos ya cacheados de una versión anterior de la app).
+            _purgarConteosAjenosLocales();
 
             if (_huellaAuthz(_authzState) === huellaAnterior) return; // nada cambió de verdad → no re-renderizar
 
@@ -660,6 +742,10 @@
                 // _ajustes) aunque los listeners ya estén apagados.
                 allUsersAuditoria = {};
                 _ajustes = [];
+                // FASE 2B — allUsersAuditoria ya se vaciaba aquí, pero los
+                // conteos ajenos también vivían en auditoriaConteo y
+                // auditoriaConteoPorUsuario, que sí se persisten.
+                _purgarConteosAjenosLocales();
 
                 subscribeCatalogoUsuario();
                 subscribeNotificacionesUsuario();
@@ -887,6 +973,11 @@
                 overrides:   cuentaActivaInicial ? _sanitizarOverrides(userData && userData.permissionOverrides) : {},
                 disabled:    !cuentaActivaInicial
             };
+
+            // FASE 2B — en cuanto se sabe qué puede ver este usuario, se
+            // borran del dispositivo los conteos ajenos que pudieran haber
+            // quedado cacheados de una sesión anterior.
+            _purgarConteosAjenosLocales();
 
             // Asegurar (perezoso, idempotente) que los 3 roles de sistema
             // existan en Firestore — solo si este usuario es ADMIN.

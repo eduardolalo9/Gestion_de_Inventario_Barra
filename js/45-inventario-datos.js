@@ -685,6 +685,11 @@ const usersList = Object.values(allUsersAuditoria);
          */
         async function loadConflictosDesdeFirestore() {
             if (!_db || !navigator.onLine || !_haySesionFirebase()) return; // M2a
+            // FASE 2B — se invoca en el arranque sin ninguna guarda de rol y
+            // agrega los conteos de todos los dispositivos. La guarda real
+            // vive dentro de _cargarYAgeregarConteos(), pero se corta también
+            // aquí para no lanzar una consulta por área que no llevará a nada.
+            if (!puedeVerConteosAjenos()) return;
             try {
                 // R6: una por cada area definida, no tres fijas. Con las areas
                 // escritas a mano, una cuarta area se contaba en el telefono y
@@ -1114,4 +1119,4 @@ const usersList = Object.values(allUsersAuditoria);
             }
         }
 
-        // BUG-FIX m3: updateNetworkStatus definida a nivel global
+        // BUG-FIX m3: updateNetworkStatus definida a nivel global

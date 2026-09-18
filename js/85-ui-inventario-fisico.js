@@ -251,8 +251,8 @@
 
             html += renderAuditUserPanel();
 
-            // ── Panel de usuarios (solo admin) ────────────────────────────────
-            if (isAdmin()) {
+            // ── Panel de usuarios (solo quien puede ver conteos ajenos) ───────
+            if (puedeVerConteosAjenos()) {
                 html += _renderAdminUsersPanel();
             }
 
@@ -277,7 +277,10 @@
                     : '<span style="width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;"></span> Pendiente';
                 html += '</div>';
                 if (isCompleta) {
-                    const conteoRef = isAdmin() ? auditoriaConteo : myAuditoriaConteo;
+                    // FASE 2B — auditoriaConteo es el agregado de TODAS las
+                    // personas; myAuditoriaConteo es el propio. El criterio
+                    // pasa a ser el permiso de privacidad, no el rol.
+                    const conteoRef = puedeVerConteosAjenos() ? auditoriaConteo : myAuditoriaConteo;
                     const totalProductos = products.filter(p => conteoRef[p.id] && conteoRef[p.id][area] &&
                         (conteoRef[p.id][area].enteras > 0 || (conteoRef[p.id][area].abiertas || []).some(a => a > 0))).length;
                     html += '<div style="font-size:0.63rem;color:var(--txt-muted);margin-top:3px;">' + totalProductos + ' producto(s) con cantidad';
@@ -293,6 +296,14 @@
                         html += ' · <span style="color:var(--green);font-weight:600;">🔒 Bloqueada</span>';
                     }
                     html += '</div>';
+                } else if (hasPermission('inventory.closeOther')) {
+                    // FASE 2A — cerrar el área para TODAS las personas deja
+                    // de ser un efecto secundario de "finalizar mi conteo" y
+                    // pasa a ser una acción visible y propia.
+                    html += '<div style="font-size:0.63rem;margin-top:3px;">'
+                          + '<a href="#" onclick="event.stopPropagation();auditoriaCerrarArea(\'' + area + '\');" '
+                          + 'style="color:var(--amber);text-decoration:underline;font-weight:600;">'
+                          + '🔒 Cerrar área para todos</a></div>';
                 }
                 html += '</div>';
                 html += '<svg class="audit-area-arrow" width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 18l6-6-6-6"/></svg>';
@@ -533,7 +544,10 @@
                 .some(k => k.endsWith('__' + area) && !myAuditoriaUnlocks[k].used);
             const soloLectura = estaCompleta && !isAdmin() && !tieneUnlocksPendientes;
             // Conteo a mostrar en las tarjetas
-            const conteoRef = isAdmin() ? auditoriaConteo : myAuditoriaConteo;
+            // FASE 2B — el criterio deja de ser el rol y pasa a ser el
+            // permiso de privacidad: auditoriaConteo agrega el conteo de
+            // todas las personas, myAuditoriaConteo es solo el propio.
+            const conteoRef = puedeVerConteosAjenos() ? auditoriaConteo : myAuditoriaConteo;
 
             let html = '<div class="audit-screen">';
 
@@ -627,7 +641,13 @@
 
             // ── Barra de estado multiusuario para el área actual ─────────────────
             // FIX-06: bloque { } limpio en lugar de IIFE innecesario
-            {
+            // FASE 2B — esta barra dice cuántos dispositivos contaron el área y
+            // cuántas diferencias hay entre ellos. Es información agregada, pero
+            // sigue siendo información DERIVADA del conteo de otras personas y no
+            // tenía ninguna guarda de rol: un bartender sabía en tiempo real si su
+            // cifra discrepaba de la de su compañero, que es justo lo que el
+            // conteo ciego debe impedir.
+            if (puedeVerConteosAjenos()) {
                 const auditUniqUsers = new Set();
                 let   auditNConf     = 0;
                 products.forEach(p => {

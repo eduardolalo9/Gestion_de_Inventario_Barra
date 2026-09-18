@@ -1,5 +1,12 @@
         async function loadConteoPorUsuarioFromFirestore() {
             if (!_db || !navigator.onLine || !_haySesionFirebase()) return; // M2a
+            // ── FASE 2B — CONTEO CIEGO ────────────────────────────────────
+            // conteoMultiUsuario/{area} es UN SOLO documento que contiene
+            // dentro el bloque de cada persona, con su nombre y sus
+            // cantidades. Firestore no permite leer un documento a medias:
+            // o se lee entero o nada. Por eso esta ruta no admite término
+            // medio y queda reservada a quien puede ver conteos ajenos.
+            if (!puedeVerConteosAjenos()) return;
             try {
                 let changed = false;
                 const AUDIT_AREAS = AREAS_CONTEO; // FIX-05: array declarado una sola vez

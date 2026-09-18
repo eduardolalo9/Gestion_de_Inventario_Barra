@@ -392,7 +392,10 @@
          */
         function _getAuditConteoParaProducto(prodId) {
             // Misma fuente de verdad que renderAuditoriaConteo
-            const conteoFuente = isAdmin() ? auditoriaConteo : myAuditoriaConteo;
+            // FASE 2B — el criterio deja de ser el rol y pasa a ser el
+            // permiso de privacidad: auditoriaConteo agrega el conteo de
+            // todas las personas, myAuditoriaConteo es solo el propio.
+            const conteoFuente = puedeVerConteosAjenos() ? auditoriaConteo : myAuditoriaConteo;
             const AREAS        = AREAS_CONTEO;
             var result         = { _hayDatos: false };
             // FIX: buscar el producto para aplicar conversión oz→puntos si corresponde.
@@ -1321,4 +1324,4 @@ document.body.appendChild(overlay);
         }
 
 
-        // Toggle expansión de tarjeta de inventario (botellas abiertas adicionales)
+        // Toggle expansión de tarjeta de inventario (botellas abiertas adicionales)

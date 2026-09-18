@@ -1109,6 +1109,11 @@
             try {
                 // FIX 1 CRÍTICO: Leer de myAuditoriaConteo (conteo propio del usuario)
                 // y NO de auditoriaConteo (vista agregada del admin, calculada en memoria).
+                // FASE 2B — AQUÍ SE DEJA isAdmin() A PROPÓSITO. Esta no es una
+                // ruta de lectura sino de ESCRITURA: decide qué sube este
+                // dispositivo a su propio documento. Cambiar el criterio no
+                // aportaría privacidad (nadie lee datos ajenos aquí) y sí
+                // alteraría qué se guarda para un supervisor con viewAll.
                 const conteoFuente = isAdmin() ? auditoriaConteo : myAuditoriaConteo;
                 const productosConDatos = products.filter(p =>
                     conteoFuente[p.id] && conteoFuente[p.id][area]
@@ -1167,6 +1172,17 @@
          */
         async function _cargarYAgeregarConteos(area) {
             if (!_db || !navigator.onLine) return;
+            // ── FASE 2B — CONTEO CIEGO ────────────────────────────────────
+            // Esta función descarga el conteo de TODOS los dispositivos, es
+            // decir el de otras personas. Hasta ahora se ejecutaba para
+            // cualquier usuario: un bartender se bajaba el conteo de sus
+            // compañeros al arranque y después de subir su área, y no lo
+            // mostraba en ninguna parte — lo descargaba para nada.
+            //
+            // Se corta AQUÍ, en la consulta, no solo en la regla: si se
+            // dejara correr, la regla nueva la rechazaría y el dispositivo
+            // acumularía errores de permisos en cada arranque.
+            if (!puedeVerConteosAjenos()) return;
             try {
                 const dispositivosSnap = await _db
                     .collection('inventarioApp')
