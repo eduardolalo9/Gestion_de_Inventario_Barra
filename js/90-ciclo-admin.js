@@ -9,8 +9,13 @@
             // local del catálogo. Firestore frenaría la sincronización después,
             // pero el bartender se quedaría trabajando sobre un catálogo
             // corrompido y sin entender por qué.
-            if (!isAdmin()) {
-                showNotification('⚠️ Solo el administrador puede importar el catálogo');
+            // FASE 2A — la barrera deja de ser "eres admin" y pasa a ser un
+            // permiso concreto y delegable. Para un ADMIN no cambia nada:
+            // hasPermission() resuelve el comodín '*' antes que cualquier otra
+            // regla. Lo que sí cambia es que ahora un Subjefe puede recibir
+            // esta capacidad desde la pantalla de permisos, sin tocar código.
+            if (!hasPermission('catalog.publish')) {
+                showNotification('⚠️ No tienes permiso para importar el catálogo');
                 event.target.value = '';
                 return;
             }

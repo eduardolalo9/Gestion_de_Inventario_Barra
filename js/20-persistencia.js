@@ -394,7 +394,10 @@
          * Solo admin puede llamar esta función.
          */
         function restaurarBackup(key) {
-            if (!isAdmin()) { showNotification('⚠️ Solo el administrador puede restaurar respaldos'); return; }
+            // FASE 2A — settings.update no es delegable fuera de administración
+            // (ver PERMISOS_METADATOS): restaurar un respaldo sobreescribe el
+            // estado completo del dispositivo.
+            if (!hasPermission('settings.update')) { showNotification('⚠️ No tienes permiso para restaurar respaldos'); return; }
             try {
                 const raw = localStorage.getItem(key);
                 if (!raw) { showNotification('❌ Respaldo no encontrado'); return; }
@@ -828,4 +831,4 @@
 /**
  * FIX-10: _idbPruneSyncedQueue()
  * Elimina eventos ya sincronizados del store IDB.
- */
+ */

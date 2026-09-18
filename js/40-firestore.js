@@ -691,8 +691,8 @@
         // consola (migrarStockAreasAProductos()), no automáticamente.
         async function migrarStockAreasAProductos() {
             const docRef = _docPrincipal();
-            if (!_db || !docRef || !isAdmin()) {
-                console.warn('[Migración] Requiere admin autenticado con conexión.');
+            if (!_db || !docRef || !hasPermission('settings.update')) {
+                console.warn('[Migración] Requiere permiso settings.update y conexión.');
                 return { ok: false };
             }
             const areasConocidas = AREAS_CONTEO;
@@ -1368,4 +1368,4 @@
          * para detectar desbloqueos otorgados por el admin en tiempo real.
          */
 
-        /** Helper: reiniciar el conteo propio del usuario (FIX 9) */
+        /** Helper: reiniciar el conteo propio del usuario (FIX 9) */

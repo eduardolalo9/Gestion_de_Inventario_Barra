@@ -12,6 +12,13 @@
          * NO modifica datos reales. Es completamente no-destructivo.
          */
         async function runDiagnostics() {
+            // FASE 2A — este archivo no tenía NINGUNA validación: 525 líneas de
+            // exportación accesibles a cualquier usuario autenticado. El
+            // diagnóstico vuelca configuración y estado interno del sistema.
+            if (typeof hasPermission === 'function' && !hasPermission('settings.read')) {
+                if (typeof showNotification === 'function') showNotification('⚠️ No tienes permiso para ejecutar el diagnóstico');
+                return { ok: false, motivo: 'sin-permiso' };
+            }
             console.group('🔬 DIAGNÓSTICO BARINVENTORY — ' + APP_VERSION + ' (DB v' + DB_VERSION + ')');
             const results = [];
             let passed = 0, failed = 0;
@@ -152,6 +159,13 @@
         // comportamiento es exactamente el de siempre: todos los demás
         // llamadores siguen usando AREAS_CONTEO.
         function exportToExcel(modo, fileNameOverride, areasOverride) { // FIX: parámetro fileNameOverride para soporte de nombres personalizados
+            // FASE 2A — el Excel lleva el conteo consolidado del inventario:
+            // exige inventory.export, igual que el resto de las salidas de
+            // inventario. Antes no exigía nada.
+            if (!hasPermission('inventory.export')) {
+                showNotification('⚠️ No tienes permiso para exportar el inventario');
+                return;
+            }
             // Guard: sin productos no hay nada que exportar
             if (!Array.isArray(products) || products.length === 0) {
                 showNotification('⚠️ No hay productos para exportar');
@@ -488,14 +502,25 @@
 
         // ==================== NUEVAS FUNCIONES PARA RESPALDO JSON ====================
         function exportFullData() {
+            // ══════════════════════════════════════════════════════════════
+            //  FASE 2A/2B — El respaldo completo arrastra
+            //  auditoriaConteoPorUsuario, que contiene el NOMBRE y las
+            //  CANTIDADES contadas por cada compañero. Hasta ahora cualquier
+            //  usuario autenticado podía descargarlo: era la fuga de
+            //  privacidad más directa del sistema, y ni siquiera hacía falta
+            //  manipular el cliente, bastaba con pulsar el botón.
+            //
+            //  No se retira la función a quien no tiene el permiso: se le
+            //  entrega un respaldo REDUCIDO, con sus propios datos y sin los
+            //  de nadie más. Un bartender sigue pudiendo respaldar su trabajo.
+            // ══════════════════════════════════════════════════════════════
+            const completo = hasPermission('data.exportFull');
             const data = {
                 products,
                 orders,
                 inventories,
                 cart,
                 inventarioConteo,
-                auditoriaConteo,             // Bug #3 fix: incluir conteo de auditoría
-                auditoriaConteoPorUsuario,   // Multiusuario: conteos de todos los dispositivos
                 auditoriaStatus,             // Bug #3 fix: incluir estado por área
                 auditoriaView,               // Bug #3 fix: incluir vista activa
                 auditoriaAreaActiva,         // Bug #3 fix: incluir área activa
@@ -509,8 +534,14 @@
                 myAuditoriaConteo,
                 myAuditoriaStatus,
                 myAuditoriaUnlocks,
-                _auditoriaSessionId
+                _auditoriaSessionId,
+                _respaldoCompleto: completo
             };
+            if (completo) {
+                // Solo con data.exportFull viajan los conteos de OTRAS personas.
+                data.auditoriaConteo           = auditoriaConteo;
+                data.auditoriaConteoPorUsuario = auditoriaConteoPorUsuario;
+            }
             const json = JSON.stringify(data, null, 2);
             const blob = new Blob([json], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
@@ -521,6 +552,8 @@
             a.click();
             document.body.removeChild(a);
             setTimeout(() => URL.revokeObjectURL(url), 1000);
-            showNotification('Datos exportados correctamente');
+            showNotification(completo
+                ? 'Respaldo completo exportado correctamente'
+                : 'Respaldo exportado (solo tus datos — no incluye conteos de otras personas)');
         }
-
+

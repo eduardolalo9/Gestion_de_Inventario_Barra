@@ -1148,7 +1148,10 @@
         }
 
         function saveProduct() {
-            if (!isAdmin()) { showNotification('⚠️ Solo el administrador puede modificar productos'); return; }
+            // FASE 2A — catalog.edit sustituye a la comprobación de rol. Sin
+            // cambio para el administrador (comodín '*'); delegable a Subjefe
+            // desde la pantalla de permisos.
+            if (!hasPermission('catalog.edit')) { showNotification('⚠️ No tienes permiso para modificar productos'); return; }
             const name = document.getElementById('productName').value.trim();
             if (!name) { showNotification('La descripción es requerida'); return; }
             let productId = document.getElementById('productId').value.trim();
@@ -1320,10 +1323,10 @@
             renderTab();
         }
 
-        function editProduct(id) { if (!isAdmin()) { showNotification('⚠️ Solo el administrador puede editar productos'); return; } openProductModal(id); }
+        function editProduct(id) { if (!hasPermission('catalog.edit')) { showNotification('⚠️ No tienes permiso para editar productos'); return; } openProductModal(id); }
 
         function deleteProduct(id) {
-            if (!isAdmin()) { showNotification('⚠️ Solo el administrador puede eliminar productos'); return; }
+            if (!hasPermission('catalog.edit')) { showNotification('⚠️ No tienes permiso para eliminar productos'); return; }
             if (isCicloBloqueado()) { showNotification('🔒 No se puede eliminar: el inventario está CERRADO.'); return; }
             const product = products.find(function(p) { return p.id === id; });
             const prodName = product ? product.name : id;
@@ -1368,7 +1371,7 @@
         }
 
         function deleteAllProducts() {
-            if (!isAdmin()) { showNotification('⚠️ Solo el administrador puede eliminar productos'); return; }
+            if (!hasPermission('catalog.edit')) { showNotification('⚠️ No tienes permiso para eliminar productos'); return; }
             if (products.length === 0) { showNotification('No hay productos para eliminar'); return; }
             if (isCicloBloqueado()) { showNotification('🔒 No se puede eliminar: el inventario está CERRADO.'); return; }
             // PROTECCIÓN: doble confirmación para eliminación masiva del catálogo
@@ -1693,4 +1696,4 @@
             // Formato estándar o ya limpio
             return parseFloat(str) || 0;
         }
-
+

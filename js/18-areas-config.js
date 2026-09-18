@@ -174,7 +174,8 @@
         }
 
         function crearAreaConteo(datos) {
-            if (!isAdmin()) return { ok: false, error: 'Solo el administrador puede crear áreas de conteo.' };
+            // FASE 2A — permiso granular en lugar de la comprobación de rol.
+            if (!hasPermission('warehouses.create')) return { ok: false, error: 'No tienes permiso para crear áreas de conteo.' };
             datos = datos || {};
             var nombre = String(datos.nombre || '').trim();
             if (!nombre) return { ok: false, error: 'El área necesita un nombre.' };
@@ -202,7 +203,7 @@
         }
 
         function editarAreaConteo(id, cambios) {
-            if (!isAdmin()) return { ok: false, error: 'Solo el administrador puede editar áreas de conteo.' };
+            if (!hasPermission('warehouses.update')) return { ok: false, error: 'No tienes permiso para editar áreas de conteo.' };
             var i = -1;
             for (var k = 0; k < areasConteoDef.length; k++) if (areasConteoDef[k].id === id) { i = k; break; }
             if (i === -1) return { ok: false, error: 'No existe esa área.' };
@@ -253,7 +254,7 @@
         }
 
         function eliminarAreaConteo(id) {
-            if (!isAdmin()) return { ok: false, error: 'Solo el administrador puede eliminar áreas de conteo.' };
+            if (!hasPermission('warehouses.disable')) return { ok: false, error: 'No tienes permiso para eliminar áreas de conteo.' };
 
             // Las tres de producción no se borran. Sus identificadores están
             // dentro de cada inventario cerrado; quitarlas dejaría el histórico
@@ -345,7 +346,7 @@
         }
 
         function renderAreasConteoAdmin() {
-            if (!isAdmin()) return '';
+            if (!hasPermission('warehouses.read')) return '';
             var def = areasDefinidas();
             var inp = 'width:100%;padding:8px;border-radius:6px;border:1px solid var(--border-mid);'
                     + 'background:var(--surface);color:var(--txt-primary);font-family:inherit;font-size:.82rem;';

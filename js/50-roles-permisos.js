@@ -1020,9 +1020,10 @@
 
         // ── Toggle sincronización ──────────────────────────────────────────
         function toggleSyncEnabled() {
-            // Solo el admin puede pausar/reanudar la sincronización
-            if (!isAdmin()) {
-                showNotification('⚠️ Solo el administrador puede pausar la sincronización');
+            // FASE 2A — settings.update. No delegable fuera de administración:
+            // pausar la sincronización deja conteos sin subir sin que nadie lo note.
+            if (!hasPermission('settings.update')) {
+                showNotification('⚠️ No tienes permiso para pausar la sincronización');
                 return;
             }
             _syncEnabled = !_syncEnabled;
@@ -1038,7 +1039,7 @@
 
         // ── MÓDULO: CATÁLOGO (admin publica, usuarios reciben) ────────────
         async function publicarCatalogoFirestore() {
-            if (!_db || !isAdmin()) return;
+            if (!_db || !hasPermission('catalog.publish')) return;
             try {
                 await _db.collection('catalogo').doc('productos').set({
                     productos:        products,
@@ -1068,7 +1069,7 @@
          * entiende.
          */
         async function _vaciarCatalogoPublicado() {
-            if (!_db || !isAdmin()) return false;
+            if (!_db || !hasPermission('catalog.publish')) return false;
             const version = Date.now();
             await _db.collection('catalogo').doc('productos').set({
                 productos:    [],
@@ -1275,6 +1276,12 @@
         }
 
         async function resolverAjuste(ajusteId, accion) {
+            // FASE 2A — SE DEJA DELIBERADAMENTE EN isAdmin(). Resolver una
+            // solicitud de ajuste no tiene ningún permiso equivalente en el
+            // catálogo, y protegerla con uno existente (closeOther, que el
+            // Subjefe recibe por defecto) ampliaría en silencio lo que un
+            // Subjefe puede hacer. Queda documentado como pendiente de
+            // permiso propio; hasta entonces, administración exclusiva.
             if (!_db || !isAdmin()) return;
             try {
                 await _db.collection('ajustes').doc(ajusteId).update({ estado: accion, resolvidoEn: Date.now(), resolvidoPor: currentUserUid });
@@ -1292,7 +1299,7 @@
 
         // ── MÓDULO: REPORTES ──────────────────────────────────────────────
         async function generarYPublicarReporte() {
-            if (!isAdmin()) return;
+            if (!hasPermission('reports.export')) return;
             showNotification('⏳ Generando reporte global…');
             try {
                 // Leer conteos de todos los dispositivos desde conteoAreas
@@ -1464,8 +1471,8 @@
          * Pide confirmación antes de borrar y recarga la lista al terminar.
          */
         async function eliminarReporte(reporteId) {
-            if (!isAdmin()) {
-                showNotification('⚠️ Solo el administrador puede eliminar reportes');
+            if (!hasPermission('reports.export')) {
+                showNotification('⚠️ No tienes permiso para eliminar reportes');
                 return;
             }
             if (!_db) { showNotification('❌ Sin conexión a base de datos'); return; }
@@ -2243,4 +2250,4 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
 
         // ── RENDER: HISTORIA — agregar reportes publicados ─────────────────
         // (se inyecta en renderHistoriaTab vía función wrapper)
-
+
