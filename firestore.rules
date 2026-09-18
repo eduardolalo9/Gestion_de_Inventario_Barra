@@ -20,6 +20,85 @@
                    exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) &&
                    get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role in ['admin', 'ADMIN'];
                }
+               // ══════════════════════════════════════════════════════════════
+               //  FASE 2A — PERMISOS GRANULARES EN EL SERVIDOR
+               //  ────────────────────────────────────────────────────────────
+               //  Hasta ahora estas reglas solo distinguían admin de no-admin:
+               //  ninguno de los 38 permisos del catálogo se validaba aquí, así
+               //  que todo permiso granular era, en la práctica, una decisión
+               //  del cliente. Ocultar un botón no es una validación.
+               //
+               //  hasPerm() replica EXACTAMENTE la precedencia de
+               //  hasPermission() en js/50-roles-permisos.js. El orden importa y
+               //  no es negociable: si cliente y servidor resolvieran distinto,
+               //  el sistema tendría dos verdades y la pantalla podría mostrar
+               //  algo que el servidor rechaza (o al revés). Hay una prueba
+               //  dedicada de paridad que recorre la matriz rol × permiso ×
+               //  override en los dos motores.
+               //
+               //    1. cuenta inactiva                    → DENEGADO
+               //    2. el rol tiene '*'                   → PERMITIDO
+               //       (antes que los overrides: un ADMIN no es degradable)
+               //    3. override 'allow' del usuario       → PERMITIDO
+               //    4. override 'deny'  del usuario       → DENEGADO
+               //    5. el permiso está en la lista del rol→ PERMITIDO
+               //    6. cualquier otro caso                → DENEGADO
+               //
+               //  Coste: 2 accesos a documento (usuarios/{uid} y roles/{roleId}).
+               //  Firestore cachea get()/exists() repetidos sobre la MISMA ruta
+               //  dentro de una evaluación, y el límite es de 10 por petición de
+               //  documento único. Por eso hasPerm() se aplica solo donde aporta
+               //  algo; el resto conserva isAdminUser(), que cuesta 1.
+               // ══════════════════════════════════════════════════════════════
+               function _rolCanonico(raw) {
+                 return raw == 'admin' ? 'ADMIN' : (raw == 'user' ? 'BARTENDER' : raw);
+               }
+               // Mismo fallback que ROLES_SISTEMA_DEFECTO en el cliente, para
+               // el caso en que roles/{roleId} todavía no exista en Firestore
+               // (se siembra de forma perezosa la primera vez que entra un
+               // admin). Un roleId desconocido cae a BARTENDER, nunca a '*'.
+               function _permisosDefecto(roleId) {
+                 return roleId == 'ADMIN'
+                   ? ['*']
+                   : (roleId == 'SUBJEFE_BARRA'
+                       ? ['inventory.count','inventory.viewOwn','inventory.closeOwn',
+                          'inventory.history','catalog.read','warehouses.read',
+                          'inventory.closeOther','inventory.export']
+                       : ['inventory.count','inventory.viewOwn','inventory.closeOwn',
+                          'inventory.history','catalog.read','warehouses.read']);
+               }
+               function _permisosDeRol(roleId) {
+                 return exists(/databases/$(database)/documents/roles/$(roleId))
+                   ? get(/databases/$(database)/documents/roles/$(roleId)).data.get('permissions', _permisosDefecto(roleId))
+                   : _permisosDefecto(roleId);
+               }
+               function _perfil() {
+                 return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
+               }
+               // Cuenta desactivada por un administrador. Hasta ahora
+               // usuarios/{uid}.status solo se respetaba en el cliente: un
+               // empleado dado de baja conservaba acceso de ESCRITURA mientras
+               // su token siguiera vivo. El valor por defecto es 'activo', así
+               // que los usuarios que no tienen el campo no quedan bloqueados y
+               // no hace falta migrar nada antes de desplegar esta regla.
+               function _cuentaActiva() {
+                 return request.auth != null &&
+                   exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) &&
+                   _perfil().get('status', 'activo') != 'inactivo';
+               }
+               function _permisosPropios() {
+                 return _permisosDeRol(_rolCanonico(_perfil().get('role', 'user')));
+               }
+               function _override(p) {
+                 return _perfil().get('permissionOverrides', {}).get(p, '');
+               }
+               function hasPerm(p) {
+                 return _cuentaActiva() && (
+                   _permisosPropios().hasAny(['*'])
+                   || _override(p) == 'allow'
+                   || (_override(p) != 'deny' && _permisosPropios().hasAny([p]))
+                 );
+               }
                // FIX MICROFASE P0.2: valida la forma exacta que
                // syncConteoProductoAtomico() y migrarStockAreasAProductos()
                // ya escriben hoy (verificado contra el código real, no
@@ -53,17 +132,28 @@
                  // overrides quedan reservados a un admin vía 'update'.
                  allow create: if request.auth != null && request.auth.uid == uid
                                   && request.resource.data.role in ['user', 'BARTENDER']
-                                  && !request.resource.data.keys().hasAny(['permissionOverrides'])
+                                  && !request.resource.data.keys().hasAny(['permissionOverrides', 'areasAsignadas'])
                                   && (!('status' in request.resource.data)
                                       || request.resource.data.status == 'activo');
+                 // FASE 2A — dos cambios:
+                 //  1. 'areasAsignadas' se suma a la lista de campos que un
+                 //     usuario NO puede tocar en su propio documento. Sin esto,
+                 //     un bartender restringido a la Barra 1 se ampliaría el
+                 //     alcance desde la consola en una línea.
+                 //  2. La administración de permisos puede DELEGARSE
+                 //     (permissions.update), pero nunca sobre uno mismo: quien
+                 //     la recibe no puede usarla para auto-ascenderse. Esto es
+                 //     deliberadamente MÁS estricto que el cliente.
                  allow update: if request.auth != null && (
                                   // Admin puede cambiar cualquier campo
                                   isAdminUser()
-                                  // Usuario solo puede actualizar si NO cambia role, permissionOverrides ni status
+                                  || (request.auth.uid != uid && hasPerm('permissions.update'))
+                                  // Usuario solo puede actualizar si NO cambia role, permissionOverrides, status ni areasAsignadas
                                   || (request.auth.uid == uid
                                       && !('role' in request.resource.data.diff(resource.data).affectedKeys())
                                       && !('permissionOverrides' in request.resource.data.diff(resource.data).affectedKeys())
-                                      && !('status' in request.resource.data.diff(resource.data).affectedKeys()))
+                                      && !('status' in request.resource.data.diff(resource.data).affectedKeys())
+                                      && !('areasAsignadas' in request.resource.data.diff(resource.data).affectedKeys()))
                                );
                  allow delete: if isAdminUser();
                }
@@ -72,14 +162,18 @@
                // los permisos de SU PROPIO rol); escritura solo admin.
                match /roles/{roleId} {
                  allow read:   if request.auth != null;
-                 allow create: if isAdminUser();
-                 allow update: if isAdminUser() &&
+                 allow create: if isAdminUser() || hasPerm('roles.update');
+                 // FASE 2A — la protección del comodín de ADMIN se conserva
+                 // intacta: es la segunda capa que impide dejar el sistema sin
+                 // ninguna autoridad administrativa.
+                 allow update: if (isAdminUser() || hasPerm('roles.update')) &&
                                   !(roleId == 'ADMIN' && !('*' in request.resource.data.permissions));
                  allow delete: if false; // los roles de sistema no se eliminan en esta etapa
                }
                match /catalogo/{docId} {
                  allow read:  if request.auth != null;
-                 allow write: if isAdminUser();
+                 // FASE 2A — catalog.publish en vez de "eres admin".
+                 allow write: if hasPerm('catalog.publish');
                }
                match /inventarioApp/{docId} {
                  // FASE 0 — VULNERABILIDAD S-1 (CRÍTICA)
@@ -175,38 +269,58 @@
                  //  queda para el administrador, que es quien resetea el ciclo
                  //  (resetConteoAtomicoEnFirestore).
                  //
-                 //  NOTA — la LECTURA se deja como estaba a propósito. Quién
-                 //  puede ver el conteo de quién es una decisión de negocio
-                 //  todavía abierta (decisión 2 de la auditoría) y cerrarla
-                 //  aquí sin esa respuesta dejaría sin datos al arranque de
-                 //  los bartenders. Lo que esta etapa cierra es la pérdida de
-                 //  datos, que no depende de ninguna decisión.
+                 //  FASE 2B — la decisión de negocio que esta nota dejaba
+                 //  abierta YA ESTÁ TOMADA: durante la captura nadie ve el
+                 //  conteo de otra persona, ni siquiera agregado.
+                 //
+                 //  Este documento es UNO POR ÁREA y lleva dentro el bloque de
+                 //  cada persona, con su nombre y sus cantidades. Firestore no
+                 //  permite leer un documento a medias —o se lee entero o
+                 //  nada—, así que aquí no cabe un término medio: o se abre a
+                 //  todos, o se reserva a quien puede ver conteos ajenos. Se
+                 //  reserva. El cliente deja de consultarla en
+                 //  loadConteoPorUsuarioFromFirestore() para que un bartender
+                 //  ni siquiera lance la petición.
                  // ═══════════════════════════════════════════════════════════
                  match /conteoMultiUsuario/{area} {
-                   allow read: if request.auth != null;
+                   allow read: if hasPerm('inventory.viewAll');
                    // El documento nace con un único bloque: el de quien escribe.
                    allow create: if request.auth != null
+                     && _cuentaActiva()
                      && request.resource.data.keys().hasOnly([request.auth.uid]);
                    // Una actualización solo puede tocar el bloque propio. Los
                    // bloques de los demás quedan intactos por construcción.
                    allow update: if request.auth != null
+                     && _cuentaActiva()
                      && request.resource.data.diff(resource.data)
                           .affectedKeys().hasOnly([request.auth.uid]);
                    // Borrar el área entera es parte de resetear el ciclo.
                    allow delete: if isAdminUser();
                  }
                  match /conteoAreas/{area} {
-                   allow read: if request.auth != null;
+                   allow read: if hasPerm('inventory.viewAll');
                    // Nadie escribe este documento padre: solo se borra al
                    // resetear el ciclo (ver resetConteoAtomicoEnFirestore).
                    allow write: if isAdminUser();
                    match /dispositivos/{deviceId} {
-                     allow read: if request.auth != null;
+                     // FASE 2B — cada documento lleva dentro el uid de su autor
+                     // (_userUid), así que aquí SÍ cabe cerrar por persona en
+                     // vez de por rol.
+                     //
+                     // Se cierra por UID y NO por deviceId, y la diferencia es
+                     // esencial: un mismo bartender con teléfono y tablet tiene
+                     // DOS deviceId y UN solo uid. Cerrar por dispositivo le
+                     // impediría leer lo que él mismo escribió desde su otro
+                     // aparato; cerrar por usuario no.
+                     allow read: if request.auth != null
+                       && (resource.data.get('_userUid', '') == request.auth.uid
+                           || hasPerm('inventory.viewAll'));
                      // Cada dispositivo tiene su propio documento y nunca
                      // compite con el de otro, pero nada impedía escribir en
                      // el ajeno. El uid del autor ya viajaba en el payload
                      // (_userUid); ahora el servidor lo comprueba.
                      allow create, update: if request.auth != null
+                       && _cuentaActiva()
                        && request.resource.data._userUid == request.auth.uid;
                      allow delete: if isAdminUser();
                    }
@@ -313,7 +427,12 @@
                    // operaciones de negocio distintas y no deben compartir esta
                    // condición.
                    allow delete: if request.auth != null && (request.auth.uid == uid || isAdminUser());
-                   allow create, update: if request.auth != null && (
+                   // FASE 2A — se suma _cuentaActiva(): un empleado dado de
+                   // baja conservaba acceso de escritura mientras su token
+                   // siguiera vivo, porque 'status' solo se respetaba en el
+                   // cliente. Los usuarios sin el campo siguen siendo activos
+                   // por defecto, así que nadie queda bloqueado al desplegar.
+                   allow create, update: if request.auth != null && _cuentaActiva() && (
                      request.auth.uid == uid
                      || (
                        isAdminUser() &&

@@ -666,9 +666,15 @@ async function main() {
             .update({ uid: 'bartender1', estado: 'sincronizado' }));
     });
 
-    await prueba('D19. El conteo del área se sigue pudiendo leer al arrancar', async () => {
+    // FASE 2B — esta prueba afirmaba que un bartender podía leer
+    // conteoMultiUsuario/{area} al arrancar. Esa lectura ERA la fuga de
+    // privacidad: ese documento contiene el bloque de cada persona, con su
+    // nombre y sus cantidades. La garantía que sustituye a la anterior es que
+    // cerrar esa ruta NO rompe el arranque, porque el conteo propio vive en
+    // userAuditoria/{uid}, que sigue siendo legible por su dueño.
+    await prueba('D19. El conteo PROPIO se sigue pudiendo leer al arrancar', async () => {
         await reiniciarConDatosBase();
-        await assertSucceeds(rutaMulti(bt1, 'barra1').get());
+        await assertSucceeds(rutaAuditoria(bt1, 'bartender1').get());
     });
 
     await prueba('D20. El admin puede reabrir el área en el documento de un bartender', async () => {
@@ -706,6 +712,291 @@ async function main() {
             uid: 'bartender2', sessionId: 'inv-activo', conteo: {},
             finalizadas: { barra1: { uid: 'bartender1', ts: Date.now() } }
         }));
+    });
+
+
+    // ══════════════════════════════════════════════════════════════════
+    //  FASE 2 — PERMISOS, PRIVACIDAD Y SEGURIDAD DE SERVIDOR
+    //  ────────────────────────────────────────────────────────────────
+    //  Todas estas pruebas atacan Firestore DIRECTAMENTE, sin pasar por la
+    //  interfaz. Es el requisito explícito del propietario: "probar acceso
+    //  autorizado y no autorizado directamente contra las operaciones y
+    //  reglas, no únicamente mediante la interfaz".
+    // ══════════════════════════════════════════════════════════════════
+
+    // Siembra ampliada: un subjefe, un admin adicional y los roles de sistema
+    // con los permisos por defecto de esta versión.
+    async function sembrarFase2(extra) {
+        await reiniciarConDatosBase();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            const db = ctx.firestore();
+            await db.doc('roles/ADMIN').set({ roleId: 'ADMIN', nombre: 'Administrador', permissions: ['*'], esSistema: true });
+            await db.doc('roles/SUBJEFE_BARRA').set({
+                roleId: 'SUBJEFE_BARRA', nombre: 'Subjefe de Barra', esSistema: true,
+                permissions: ['inventory.count','inventory.viewOwn','inventory.closeOwn',
+                              'inventory.history','catalog.read','warehouses.read',
+                              'inventory.closeOther','inventory.export']
+            });
+            await db.doc('roles/BARTENDER').set({
+                roleId: 'BARTENDER', nombre: 'Bartender', esSistema: true,
+                permissions: ['inventory.count','inventory.viewOwn','inventory.closeOwn',
+                              'inventory.history','catalog.read','warehouses.read']
+            });
+            await db.doc('usuarios/subjefe1').set({ uid: 'subjefe1', role: 'SUBJEFE_BARRA' });
+            await db.doc('usuarios/admin2').set({ uid: 'admin2', role: 'ADMIN' });
+            // Conteo ajeno ya presente, para poder intentar leerlo.
+            await db.doc('inventarioApp/barra-principal/conteoMultiUsuario/barra1').set({
+                bartender2: { userId: 'bartender2', userName: 'luis@bar.mx', uid: 'bartender2',
+                              ts: Date.now(), productos: { 'PRD-001': { enteras: 3, abiertas: [], ts: Date.now() } } }
+            });
+            await db.doc('inventarioApp/barra-principal/conteoAreas/barra1/dispositivos/dev-de-bartender2').set({
+                _deviceId: 'dev-de-bartender2', _userUid: 'bartender2', _area: 'barra1',
+                _lastWrite: Date.now(), 'PRD-001': { enteras: 3, abiertas: [], _lastWrite: Date.now() }
+            });
+            await db.doc('inventarioApp/barra-principal/conteoAreas/barra1/dispositivos/tablet-de-bartender1').set({
+                _deviceId: 'tablet-de-bartender1', _userUid: 'bartender1', _area: 'barra1',
+                _lastWrite: Date.now(), 'PRD-001': { enteras: 1, abiertas: [], _lastWrite: Date.now() }
+            });
+            if (extra) await extra(db);
+        });
+    }
+
+    const subjefe1 = testEnv.authenticatedContext('subjefe1').firestore();
+    const admin2   = testEnv.authenticatedContext('admin2').firestore();
+    const rutaCatalogo = (db) => db.doc('catalogo/productos');
+
+    // ── P1 ───────────────────────────────────────────────────────────
+    await prueba('P1. Un bartender puede contar en su propio inventario', async () => {
+        await sembrarFase2();
+        await assertSucceeds(rutaAuditoria(bt1, 'bartender1').set({
+            uid: 'bartender1', sessionId: 'inv-activo',
+            conteo: { 'PRD-001': { barra1: { enteras: 2, abiertas: [], _ts: Date.now() } } }
+        }));
+    });
+
+    // ── P2 ───────────────────────────────────────────────────────────
+    await prueba('P2. Un bartender NO puede leer el conteo individual de otro', async () => {
+        await sembrarFase2();
+        await assertFails(rutaAuditoria(bt1, 'bartender2').get());
+        await assertFails(rutaMulti(bt1, 'barra1').get());
+        await assertFails(rutaDisp(bt1, 'barra1', 'dev-de-bartender2').get());
+    });
+
+    // ── P3 ───────────────────────────────────────────────────────────
+    await prueba('P3. Un subjefe NO puede leer el conteo individual de otro', async () => {
+        await sembrarFase2();
+        await assertFails(rutaAuditoria(subjefe1, 'bartender2').get());
+        await assertFails(rutaMulti(subjefe1, 'barra1').get());
+        await assertFails(rutaDisp(subjefe1, 'barra1', 'dev-de-bartender2').get());
+    });
+
+    // ── P4 ───────────────────────────────────────────────────────────
+    await prueba('P4. El admin SÍ puede consultar la consolidación', async () => {
+        await sembrarFase2();
+        await assertSucceeds(rutaAuditoria(admin1, 'bartender2').get());
+        await assertSucceeds(rutaMulti(admin1, 'barra1').get());
+        await assertSucceeds(rutaDisp(admin1, 'barra1', 'dev-de-bartender2').get());
+    });
+
+    // ── P5 ───────────────────────────────────────────────────────────
+    await prueba('P5. Sin permiso no se puede ejecutar la operación DIRECTAMENTE', async () => {
+        await sembrarFase2();
+        // catalogo/productos exige catalog.publish, que ni bartender ni
+        // subjefe tienen. No hay interfaz de por medio: es la escritura cruda.
+        await assertFails(rutaCatalogo(bt1).set({ productos: [], version: Date.now() }));
+        await assertFails(rutaCatalogo(subjefe1).set({ productos: [], version: Date.now() }));
+        await assertSucceeds(rutaCatalogo(admin1).set({ productos: [], version: Date.now() }));
+    });
+
+    // ── P6 ───────────────────────────────────────────────────────────
+    await prueba('P6. Marcar la casilla concede la capacidad real (override allow)', async () => {
+        await sembrarFase2(async (db) => {
+            await db.doc('usuarios/bartender1').set({
+                uid: 'bartender1', role: 'BARTENDER',
+                permissionOverrides: { 'catalog.publish': 'allow' }
+            });
+        });
+        await assertSucceeds(rutaCatalogo(bt1).set({ productos: [], version: Date.now() }));
+    });
+
+    // ── P7 ───────────────────────────────────────────────────────────
+    await prueba('P7. Revocar la casilla elimina la capacidad real (override deny)', async () => {
+        await sembrarFase2(async (db) => {
+            // inventory.closeOther lo hereda el subjefe de su rol; el override
+            // 'deny' individual tiene que ganarle.
+            await db.doc('usuarios/subjefe1').set({
+                uid: 'subjefe1', role: 'SUBJEFE_BARRA',
+                permissionOverrides: { 'inventory.viewAll': 'deny' }
+            });
+            await db.doc('roles/SUBJEFE_BARRA').set({
+                roleId: 'SUBJEFE_BARRA', nombre: 'Subjefe de Barra', esSistema: true,
+                permissions: ['inventory.count','inventory.viewAll']
+            });
+        });
+        // El rol se lo daba, el override se lo quita.
+        await assertFails(rutaMulti(subjefe1, 'barra1').get());
+    });
+
+    // ── P8 ───────────────────────────────────────────────────────────
+    await prueba('P8. Manipular el cliente no escala privilegios', async () => {
+        await sembrarFase2();
+        // a) no puede darse overrides a sí mismo
+        await assertFails(bt1.doc('usuarios/bartender1')
+            .update({ permissionOverrides: { 'catalog.publish': 'allow' } }));
+        // b) no puede cambiarse el rol
+        await assertFails(bt1.doc('usuarios/bartender1').update({ role: 'ADMIN' }));
+        // c) no puede reactivarse ni desactivar a otro
+        await assertFails(bt1.doc('usuarios/bartender1').update({ status: 'activo' }));
+        // d) FASE 2 — tampoco puede ampliarse las áreas asignadas
+        await assertFails(bt1.doc('usuarios/bartender1')
+            .update({ areasAsignadas: ['almacen', 'barra1', 'barra2'] }));
+        // e) no puede reescribir el rol del sistema para regalarse el comodín
+        await assertFails(bt1.doc('roles/BARTENDER').update({ permissions: ['*'] }));
+    });
+
+    // ── P18 ──────────────────────────────────────────────────────────
+    await prueba('P18. Dos usuarios cuentan a la vez sin mezclar sus datos', async () => {
+        await sembrarFase2();
+        await assertSucceeds(rutaAuditoria(bt1, 'bartender1').set({
+            uid: 'bartender1', sessionId: 'inv-activo',
+            conteo: { 'PRD-001': { barra1: { enteras: 2, abiertas: [], _ts: Date.now() } } }
+        }));
+        await assertSucceeds(rutaAuditoria(bt2, 'bartender2').set({
+            uid: 'bartender2', sessionId: 'inv-activo',
+            conteo: { 'PRD-001': { barra1: { enteras: 9, abiertas: [], _ts: Date.now() } } }
+        }));
+        // Ninguno puede pisar el documento del otro…
+        await assertFails(rutaAuditoria(bt1, 'bartender2').update({ conteo: {} }));
+        // …ni leerlo.
+        await assertFails(rutaAuditoria(bt2, 'bartender1').get());
+    });
+
+    // ── P19 ──────────────────────────────────────────────────────────
+    await prueba('P19. Mismo UID en dos dispositivos conserva su conteo propio', async () => {
+        await sembrarFase2();
+        // El teléfono y la tablet del MISMO bartender son dos deviceId con un
+        // solo uid. La regla cierra por USUARIO, no por dispositivo: si
+        // cerrara por dispositivo, la tablet no podría leer lo que escribió el
+        // teléfono y el mismo empleado perdería su propio conteo al cambiar de
+        // aparato.
+        await assertSucceeds(rutaDisp(bt1, 'barra1', 'tablet-de-bartender1').get());
+        await assertFails(rutaDisp(bt1, 'barra1', 'dev-de-bartender2').get());
+        // Y su documento de conteo propio es compartido por ambos aparatos.
+        await assertSucceeds(rutaAuditoria(bt1, 'bartender1').get());
+    });
+
+    // ── P22 ──────────────────────────────────────────────────────────
+    await prueba('P22. Un usuario INACTIVO no puede escribir (servidor)', async () => {
+        await sembrarFase2(async (db) => {
+            await db.doc('usuarios/bartender1').set({
+                uid: 'bartender1', role: 'BARTENDER', status: 'inactivo'
+            });
+        });
+        // Hasta FASE 2, 'status' solo se respetaba en el cliente: un empleado
+        // dado de baja conservaba acceso de escritura mientras su token
+        // siguiera vivo.
+        await assertFails(rutaAuditoria(bt1, 'bartender1').set({
+            uid: 'bartender1', sessionId: 'inv-activo', conteo: {}
+        }));
+        await assertFails(rutaDisp(bt1, 'barra1', 'dev-nuevo').set({
+            _deviceId: 'dev-nuevo', _userUid: 'bartender1', _area: 'barra1', _lastWrite: Date.now()
+        }));
+    });
+
+    await prueba('P22b. Un usuario SIN campo status sigue pudiendo escribir', async () => {
+        await sembrarFase2();
+        // Garantía de despliegue: ningún documento usuarios/* tiene hoy el
+        // campo 'status'. Si la regla lo exigiera en vez de asumir 'activo'
+        // por defecto, el despliegue dejaría fuera a toda la plantilla.
+        await assertSucceeds(rutaAuditoria(bt1, 'bartender1').set({
+            uid: 'bartender1', sessionId: 'inv-activo', conteo: {}
+        }));
+    });
+
+    // ── P26 ──────────────────────────────────────────────────────────
+    await prueba('P26. No se puede dejar al rol ADMIN sin el comodín', async () => {
+        await sembrarFase2();
+        await assertFails(admin1.doc('roles/ADMIN').update({ permissions: ['inventory.count'] }));
+        await assertSucceeds(admin1.doc('roles/ADMIN').update({ permissions: ['*', 'inventory.count'] }));
+    });
+
+    // ── Delegación de la administración de permisos ──────────────────
+    await prueba('P26b. Quien recibe permissions.update no puede usarlo sobre sí mismo', async () => {
+        await sembrarFase2(async (db) => {
+            await db.doc('usuarios/subjefe1').set({
+                uid: 'subjefe1', role: 'SUBJEFE_BARRA',
+                permissionOverrides: { 'permissions.update': 'allow' }
+            });
+        });
+        // Puede administrar a otros…
+        await assertSucceeds(subjefe1.doc('usuarios/bartender1')
+            .update({ permissionOverrides: { 'inventory.export': 'allow' } }));
+        // …pero no auto-ascenderse.
+        await assertFails(subjefe1.doc('usuarios/subjefe1')
+            .update({ permissionOverrides: { 'permissions.update': 'allow', 'catalog.publish': 'allow' } }));
+    });
+
+    // ── P21b — paridad servidor (la mitad de cliente vive en prueba-f2) ──
+    await prueba('P21b. El servidor resuelve la precedencia igual que el cliente', async () => {
+        // Matriz rol × override × estado evaluada contra una operación
+        // gateada por hasPerm('catalog.publish'). El resultado esperado sale
+        // de la MISMA tabla que prueba-f2.js aplica sobre permisosEfectivos()
+        // del cliente; si los dos motores divergieran, una de las dos suites
+        // fallaría.
+        const P = 'catalog.publish';
+        const casos = [
+            // [rol,            override,  status,     esperado]
+            ['ADMIN',           null,      'activo',   true ],
+            ['ADMIN',           'deny',    'activo',   true ],  // el comodín gana
+            ['ADMIN',           null,      'inactivo', false],
+            ['SUBJEFE_BARRA',   null,      'activo',   false],
+            ['SUBJEFE_BARRA',   'allow',   'activo',   true ],
+            ['SUBJEFE_BARRA',   'deny',    'activo',   false],
+            ['BARTENDER',       null,      'activo',   false],
+            ['BARTENDER',       'allow',   'activo',   true ],
+            ['BARTENDER',       'allow',   'inactivo', false],
+            ['BARTENDER',       'deny',    'activo',   false],
+            ['ROL_DESCONOCIDO', null,      'activo',   false],
+            ['ROL_DESCONOCIDO', 'allow',   'activo',   true ]
+        ];
+        for (const [rol, ov, status, esperado] of casos) {
+            await sembrarFase2(async (db) => {
+                const doc = { uid: 'bartender1', role: rol, status: status };
+                if (ov) doc.permissionOverrides = { [P]: ov };
+                await db.doc('usuarios/bartender1').set(doc);
+            });
+            const intento = rutaCatalogo(bt1).set({ productos: [], version: Date.now() });
+            if (esperado) await assertSucceeds(intento);
+            else          await assertFails(intento);
+        }
+    });
+
+    await prueba('P21c. El permiso HEREDADO del rol funciona sin override', async () => {
+        // Sin esta prueba, la matriz de P21b no distinguiría "denegado por
+        // regla" de "denegado por error de evaluación": todos sus casos sin
+        // override esperan false. Aquí el permiso llega SOLO por el rol, sin
+        // ningún override de por medio, así que la rama 5 de la precedencia
+        // (el permiso está en la lista del rol) queda comprobada de verdad.
+        await sembrarFase2(async (db) => {
+            await db.doc('roles/SUBJEFE_BARRA').set({
+                roleId: 'SUBJEFE_BARRA', nombre: 'Subjefe de Barra', esSistema: true,
+                permissions: ['inventory.count', 'catalog.publish']
+            });
+            await db.doc('usuarios/subjefe1').set({ uid: 'subjefe1', role: 'SUBJEFE_BARRA' });
+        });
+        await assertSucceeds(rutaCatalogo(subjefe1).set({ productos: [], version: Date.now() }));
+    });
+
+    await prueba('P21d. El rol legacy "user" se resuelve igual que en el cliente', async () => {
+        // _roleCanonico() del cliente mapea 'user'→BARTENDER y 'admin'→ADMIN.
+        // Las reglas tienen que hacer lo mismo o un usuario sin migrar se
+        // comportaría distinto en el servidor que en la pantalla.
+        await sembrarFase2(async (db) => {
+            await db.doc('usuarios/bartender1').set({ uid: 'bartender1', role: 'user' });
+            await db.doc('usuarios/admin2').set({ uid: 'admin2', role: 'admin' });
+        });
+        await assertFails(rutaCatalogo(bt1).set({ productos: [], version: Date.now() }));
+        await assertSucceeds(rutaCatalogo(admin2).set({ productos: [], version: Date.now() }));
     });
 
     await testEnv.cleanup();
