@@ -396,7 +396,7 @@
         // ══════════════════════════════════════════════════════════════════════
 
         function iniciarCapturaInventario() {
-            if (!isAdmin()) { showNotification('⚠️ Solo el administrador puede iniciar la captura'); return; }
+            if (!hasPermission('settings.update')) { showNotification('⚠️ No tienes permiso para iniciar la captura'); return; }
             if (inventarioCicloEstado === 'EN_CAPTURA') { showNotification('ℹ️ La captura ya está en progreso'); return; }
             if (inventarioCicloEstado === 'CERRADO') { showNotification('🔒 El inventario está cerrado. Reabre el ciclo primero.'); return; }
             showConfirm('¿Iniciar captura de inventario?\n\nTodos los usuarios podrán registrar conteos.', function() {
@@ -405,7 +405,7 @@
         }
 
         function finalizarCapturaInventario() {
-            if (!isAdmin()) { showNotification('⚠️ Solo el administrador puede finalizar la captura'); return; }
+            if (!hasPermission('settings.update')) { showNotification('⚠️ No tienes permiso para finalizar la captura'); return; }
             if (inventarioCicloEstado !== 'EN_CAPTURA') { showNotification('ℹ️ La captura no está activa'); return; }
             showConfirm('¿Finalizar la captura?\n\nPodrás revisar los resultados antes de cerrar el ciclo.', function() {
                 setCicloEstado('FINALIZADO');
@@ -413,7 +413,7 @@
         }
 
         function cerrarCicloInventario() {
-            if (!isAdmin()) { showNotification('⚠️ Solo el administrador puede cerrar el ciclo'); return; }
+            if (!hasPermission('settings.update')) { showNotification('⚠️ No tienes permiso para cerrar el ciclo'); return; }
             if (inventarioCicloEstado !== 'FINALIZADO') { showNotification('ℹ️ El ciclo debe estar FINALIZADO para cerrarlo'); return; }
             showConfirm(
                 '🔒 ¿CERRAR el ciclo de inventario?\n\nSe bloqueará cualquier modificación.\nSolo el administrador podrá reabrir.\nSe exportará un respaldo automático.',
@@ -426,7 +426,7 @@
         }
 
         function reabrirCicloInventario() {
-            if (!isAdmin()) { showNotification('⚠️ Solo el administrador puede reabrir el ciclo'); return; }
+            if (!hasPermission('settings.update')) { showNotification('⚠️ No tienes permiso para reabrir el ciclo'); return; }
             if (inventarioCicloEstado !== 'CERRADO') { showNotification('ℹ️ El ciclo debe estar CERRADO para reabrir'); return; }
             showConfirm(
                 '🔓 ¿Reabrir el ciclo de inventario?\n\nSe iniciará un nuevo ciclo (v' + ((inventarioCicloInfo.version || 1) + 1) + ').\nLos datos anteriores se conservan en los respaldos.',
@@ -437,6 +437,81 @@
             );
         }
 
+        // ══════════════════════════════════════════════════════════════════════
+        //  D6 — CANDADO LOCAL DE CAPTURA
+        //  ────────────────────────────────────────────────────────────────────
+        //  QUÉ ES. 'inventarioCicloEstado' NO es el estado del Inventario
+        //  Físico. Es un candado de escritura de una etapa anterior del
+        //  producto que vive SOLO en este dispositivo (localStorage +
+        //  IndexedDB) y que, cuando vale 'CERRADO', impide guardar conteos
+        //  desde el modal (js/70-conversion-render.js, isCicloBloqueado()).
+        //
+        //  POR QUÉ HACE FALTA ESTO. La investigación de FASE 2 refutó la
+        //  conclusión de auditorías anteriores: no es código muerto, tiene tres
+        //  consumidores reales en producción. Pero NO existe ninguna interfaz
+        //  para moverlo — las cuatro funciones de ciclo solo estaban expuestas
+        //  en window, sin un solo botón. Un dispositivo que quedara en
+        //  'CERRADO' no podía guardar conteos y nadie podía desbloquearlo desde
+        //  la aplicación: un modo de fallo silencioso en plena noche de
+        //  servicio.
+        //
+        //  LO QUE ESTA OPERACIÓN NO HACE, y es lo importante:
+        //   · NO toca inventories/{id}.estado ni ningún dato de Firestore.
+        //   · NO reabre un inventario cerrado ni lo hace editable.
+        //   · NO es inventory.reopenArea: eso devuelve un ÁREA del Inventario
+        //     Físico a captura para uno o varios usuarios, en la nube, y tiene
+        //     su propio permiso. Esto solo levanta un candado local.
+        //  Por eso se protege con settings.update (configuración del
+        //  dispositivo) y no con ningún permiso de inventario: confundirlos
+        //  sería exactamente el error que este bloque viene a evitar.
+        // ══════════════════════════════════════════════════════════════════════
+        function estadoCandadoLocal() {
+            return {
+                estado:     inventarioCicloEstado,
+                bloqueado:  isCicloBloqueado(),
+                cerradoPor: inventarioCicloInfo ? inventarioCicloInfo.cerradoPor : null,
+                cerradoTs:  inventarioCicloInfo ? inventarioCicloInfo.cerradoTs  : null,
+                version:    inventarioCicloInfo ? inventarioCicloInfo.version    : null
+            };
+        }
+
+        function desbloquearCandadoLocal() {
+            if (!hasPermission('settings.update')) {
+                showNotification('⚠️ No tienes permiso para desbloquear la captura');
+                return;
+            }
+            if (!isCicloBloqueado()) {
+                showNotification('ℹ️ La captura ya está desbloqueada en este dispositivo');
+                return;
+            }
+            const info = estadoCandadoLocal();
+            showConfirm(
+                '🔓 ¿Desbloquear la captura en ESTE dispositivo?\n\n' +
+                'Esto levanta el candado local que impide guardar conteos aquí.\n\n' +
+                'NO reabre ningún inventario cerrado, NO modifica el histórico y ' +
+                'NO afecta a otros dispositivos: cada aparato tiene su propio candado.\n\n' +
+                (info.cerradoTs ? 'Bloqueado desde: ' + new Date(info.cerradoTs).toLocaleString() + '\n\n' : '') +
+                '¿Continuar?',
+                function() {
+                    // Reutiliza la transición existente; no se inventa otra ruta
+                    // para mover el mismo estado.
+                    setCicloEstado('ABIERTO');
+                    _registrarEnSyncQueue({
+                        tipo:    'candado_local',
+                        detalle: 'Desbloqueo del candado local de captura',
+                        accion:  'desbloqueo',
+                        estadoAnterior: 'CERRADO',
+                        estadoNuevo:    'ABIERTO',
+                        deviceId: (typeof _deviceId !== 'undefined') ? _deviceId : null
+                    });
+                    showNotification('🔓 Captura desbloqueada en este dispositivo');
+                    renderTab();
+                }
+            );
+        }
+
+        window.estadoCandadoLocal         = estadoCandadoLocal;
+        window.desbloquearCandadoLocal    = desbloquearCandadoLocal;
         window.iniciarCapturaInventario   = iniciarCapturaInventario;
         window.finalizarCapturaInventario = finalizarCapturaInventario;
         window.cerrarCicloInventario      = cerrarCicloInventario;
@@ -506,4 +581,4 @@
             showNotification('✅ Log de ' + log.length + ' cambios exportado: ' + fileName);
         }
         // Exponer en window para acceso desde consola de debugging
-        window.exportChangeLogExcel = exportChangeLogExcel;
+        window.exportChangeLogExcel = exportChangeLogExcel;

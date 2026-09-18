@@ -2308,6 +2308,32 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
             html += '<button class="adm-btn warn" onclick="switchTab(\'ajustes\')"><i class="fa-solid fa-list-check"></i> Revisar ajustes (' + pendAjustes + ' pendientes)</button>';
             html += '</div>';
 
+            // ── D6 · CANDADO LOCAL DE CAPTURA ───────────────────────────
+            // Hasta ahora este estado no se mostraba en ninguna parte y no
+            // había forma de moverlo desde la aplicación. Un dispositivo
+            // bloqueado no podía guardar conteos y nadie sabía por qué.
+            if (typeof estadoCandadoLocal === 'function') {
+                const cand = estadoCandadoLocal();
+                html += '<div class="adm-card">';
+                html += '<h3>🔐 Candado local de captura</h3>';
+                html += '<p style="font-size:.72rem;color:var(--txt-muted);margin:0 0 8px">'
+                      + 'Candado propio de ESTE dispositivo. No es el estado del Inventario '
+                      + 'Físico ni afecta al histórico ni a otros aparatos.</p>';
+                html += '<div class="adm-stat"><span>Estado en este dispositivo</span><b style="color:'
+                      + (cand.bloqueado ? 'var(--red)' : 'var(--green)') + '">'
+                      + escapeHtml(cand.estado || '—') + '</b></div>';
+                if (cand.bloqueado) {
+                    html += '<div class="adm-stat"><span>Bloqueado desde</span><b>'
+                          + (cand.cerradoTs ? escapeHtml(new Date(cand.cerradoTs).toLocaleString()) : '—')
+                          + '</b></div>';
+                    html += '<p style="font-size:.72rem;color:var(--red);margin:6px 0">'
+                          + '⚠️ Este dispositivo no puede guardar conteos mientras el candado esté cerrado.</p>';
+                    html += '<button class="adm-btn warn" onclick="desbloquearCandadoLocal()">'
+                          + '<i class="fa-solid fa-unlock"></i> Desbloquear captura en este dispositivo</button>';
+                }
+                html += '</div>';
+            }
+
             // Reportes publicados
             html += '<div class="adm-card">';
             html += '<h3>📊 Reportes publicados</h3>';

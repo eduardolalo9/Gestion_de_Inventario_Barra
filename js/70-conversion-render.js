@@ -1057,8 +1057,15 @@ document.body.appendChild(overlay);
             // ── CICLO CERRADO: bloquear cualquier modificación ───────────────
             // El administrador cierra el ciclo cuando el inventario está listo;
             // después de eso nadie puede modificar conteos hasta que se reabra.
+            // D6 — el mensaje decía "el inventario está CERRADO", lo que hacía
+            // pensar en el Inventario Físico de Firestore. No es eso: es el
+            // candado LOCAL de captura de este dispositivo, un mecanismo de una
+            // etapa anterior del producto que vive en localStorage. Confundir
+            // los dos llevaba a buscar la solución donde no estaba.
             if (isCicloBloqueado()) {
-                showNotification('🔒 El inventario está CERRADO. Solo el administrador puede reabrir el ciclo.');
+                showNotification('🔒 La captura está bloqueada en ESTE dispositivo '
+                    + '(candado local). Un administrador puede desbloquearla desde '
+                    + 'Administración → Candado local de captura.');
                 closeInventarioModal();
                 return;
             }
