@@ -91,13 +91,18 @@ chk('Se siguen contando las filas descartadas por no traer nombre',
 // ═══ 2 · Permiso real, no solo un botón escondido ════════════════════════
 const iniImp = importa.indexOf('function handleFileImport(event) {');
 const cabeza = iniImp !== -1 ? importa.slice(iniImp, iniImp + 2200) : '';
-chk('handleFileImport comprueba isAdmin()', /if \(!isAdmin\(\)\)/.test(cabeza),
+// FASE 2A — la guarda sigue existiendo y sigue yendo primero; lo que cambió
+// es que ya no pregunta "¿eres admin?" sino "¿tienes catalog.publish?".
+// Para un administrador es exactamente lo mismo (hasPermission resuelve el
+// comodín '*' antes que nada), y además la capacidad pasa a ser delegable.
+chk('handleFileImport comprueba el permiso de catálogo',
+    /if \(!hasPermission\('catalog\.publish'\)\)/.test(cabeza),
     'sin esto, cualquiera podía llamarla desde la consola');
 chk('El guard va antes de tocar nada',
-    cabeza.indexOf('if (!isAdmin())') < cabeza.indexOf('_crearBackupNombrado'),
+    cabeza.indexOf("if (!hasPermission('catalog.publish'))") < cabeza.indexOf('_crearBackupNombrado'),
     'comprobar después de empezar deja el trabajo a medias');
 chk('Al rechazar se limpia el input de archivo',
-    /if \(!isAdmin\(\)\) \{[\s\S]{0,300}?event\.target\.value = '';[\s\S]{0,60}?return;/.test(cabeza),
+    /if \(!hasPermission\('catalog\.publish'\)\) \{[\s\S]{0,300}?event\.target\.value = '';[\s\S]{0,60}?return;/.test(cabeza),
     'si no, el mismo archivo no se puede volver a elegir');
 chk('Se sigue creando el respaldo previo a importar',
     /_crearBackupNombrado\('pre_importacion_/.test(importa));

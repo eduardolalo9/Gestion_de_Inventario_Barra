@@ -272,8 +272,10 @@ chk('conteoMultiUsuario ya no acepta escritura libre',
 chk('Cada quien solo puede tocar su propio bloque',
     /match \/conteoMultiUsuario\/\{area\} \{[\s\S]{0,900}?affectedKeys\(\)\.hasOnly\(\[request\.auth\.uid\]\)/.test(reglas));
 
+// FASE 2 — la garantía no cambia; la regla ahora exige ADEMÁS que la cuenta
+// esté activa, así que el patrón lleva _cuentaActiva() de por medio.
 chk('Crear el documento también exige que sea el bloque propio',
-    /allow create: if request\.auth != null\s*\n\s*&& request\.resource\.data\.keys\(\)\.hasOnly\(\[request\.auth\.uid\]\);/.test(reglas));
+    /allow create: if request\.auth != null\s*\n\s*&& _cuentaActiva\(\)\s*\n\s*&& request\.resource\.data\.keys\(\)\.hasOnly\(\[request\.auth\.uid\]\);/.test(reglas));
 
 chk('Borrar el área es cosa del administrador',
     /match \/conteoMultiUsuario\/\{area\} \{[\s\S]{0,1100}?allow delete: if isAdminUser\(\);/.test(reglas));
@@ -289,7 +291,7 @@ chk('El lector sigue indexando por userId (no se duplican personas)',
     /auditoriaConteoPorUsuario\[prodId\]\[area\]\[ud\.userId\]/.test(persistencia));
 
 chk('El documento por dispositivo exige que el uid coincida',
-    /allow create, update: if request\.auth != null\s*\n\s*&& request\.resource\.data\._userUid == request\.auth\.uid;/.test(reglas));
+    /allow create, update: if request\.auth != null\s*\n\s*&& _cuentaActiva\(\)\s*\n\s*&& request\.resource\.data\._userUid == request\.auth\.uid;/.test(reglas));
 
 chk('Ese uid ya viajaba en el payload',
     /_userUid:\s*currentUserUid \|\| 'anonymous',/.test(firestore));
@@ -307,8 +309,13 @@ chk('Un evento sin uid todavía se puede completar',
     /!\('uid' in resource\.data\)/.test(reglas),
     'los eventos anteriores a la sesión nacen sin uid y hay que poder subirlos');
 
-chk('La lectura se dejó como estaba, a la espera de la decisión 2',
-    /match \/conteoMultiUsuario\/\{area\} \{\s*\n\s*allow read: if request\.auth != null;/.test(reglas));
+// FASE 2B — la decisión 2 que esta comprobación estaba esperando YA SE TOMÓ:
+// durante la captura nadie ve el conteo de otra persona. La guarda se invierte
+// en consecuencia: lo que ahora hay que vigilar es que esa lectura NO vuelva
+// a quedar abierta a cualquier autenticado.
+chk('La lectura del conteo ajeno está cerrada por permiso',
+    /match \/conteoMultiUsuario\/\{area\} \{\s*\n\s*allow read: if hasPerm\('inventory\.viewAll'\);/.test(reglas),
+    'ese documento lleva dentro el nombre y las cantidades de cada persona');
 
 chk('Sigue en pie el aislamiento por uid de userAuditoria',
     /match \/userAuditoria\/\{uid\}/.test(reglas) &&
@@ -385,9 +392,12 @@ chk('D subió la versión de caché por encima de 3.4',
     })(),
     'sin subirla, los teléfonos siguen con el código viejo en caché');
 
-chk('Los permisos por rol NO se tocaron',
-    /SUBJEFE_BARRA: \{[\s\S]{0,200}?permissions: \['inventory\.count', 'inventory\.viewOwn', 'inventory\.closeOwn', 'inventory\.history'\]/.test(roles),
-    'los roles son etapa F5');
+// FASE 2 — misma reorientación que en prueba-f1.js: los roles YA se podían
+// diferenciar en esta fase, con autorización expresa. Lo que se sigue
+// vigilando es el conteo ciego.
+chk('Un Bartender no recibe por defecto ver los conteos de otros',
+    !/BARTENDER:\s*\{[\s\S]{0,400}?'inventory\.viewAll'/.test(roles),
+    'sería romper el conteo ciego por configuración de fábrica');
 
 chk('Los identificadores de área NO se tocaron',
     /const AREAS_SISTEMA = \['almacen', 'barra1', 'barra2'\]/.test(leer('js/18-areas-config.js')),

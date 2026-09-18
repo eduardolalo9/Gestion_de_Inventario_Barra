@@ -365,9 +365,15 @@ chk('Las garantías de reglas que dejó F1 siguen en pie',
     /allow update: if isAdminUser\(\) && resource\.data\.estado != 'CERRADO';/.test(reglas) &&
     /match \/historialCambios\/\{docId\}/.test(reglas),
     'se perdió el bloqueo del inventario cerrado o la regla del historial');
-chk('Los permisos por rol NO se tocaron',
-    /SUBJEFE_BARRA: \{[\s\S]{0,200}?permissions: \['inventory\.count', 'inventory\.viewOwn', 'inventory\.closeOwn', 'inventory\.history'\]/.test(roles),
-    'F1 no autorizaba cambiar permisos');
+// FASE 2 — esta comprobación afirmaba que Subjefe y Bartender seguían
+// teniendo permisos IDÉNTICOS, porque en su momento cambiarlos estaba fuera
+// de alcance. La FASE 2 los diferenció con autorización expresa del
+// propietario, así que la guarda se reorienta: lo que ahora hay que vigilar
+// no es que nadie los toque, sino que nadie le regale a un bartender la
+// capacidad de ver el conteo de sus compañeros.
+chk('Un Bartender no recibe por defecto ver los conteos de otros',
+    !/BARTENDER:\s*\{[\s\S]{0,400}?'inventory\.viewAll'/.test(roles),
+    'sería romper el conteo ciego por configuración de fábrica');
 
 // ── Resumen ───────────────────────────────────────────────────────────────
 const ancho = Math.max(...casos.map(c => c.nombre.length));
