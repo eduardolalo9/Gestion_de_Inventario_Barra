@@ -999,6 +999,76 @@ async function main() {
         await assertSucceeds(rutaCatalogo(admin2).set({ productos: [], version: Date.now() }));
     });
 
+
+    // ══════════════════════════════════════════════════════════════════
+    //  PASO PREVIO A FASE 3 — CIERRE ATÓMICO E INMUTABILIDAD DEL SNAPSHOT
+    //  ────────────────────────────────────────────────────────────────
+    //  X4 es la prueba que sostiene todo el diseño del cierre atómico: si
+    //  las reglas NO evaluaran cada escritura del batch contra el estado ya
+    //  confirmado, el propio batch que cierra el inventario se rechazaría a
+    //  sí mismo y el cierre sería imposible. Se comprueba contra el motor
+    //  real de Firestore, no se deduce de la documentación.
+    // ══════════════════════════════════════════════════════════════════
+
+    const rutaChunk = (db, invId, chunkId) =>
+        db.doc('inventarioApp/barra-principal/inventories/' + invId + '/snapshotChunks/' + chunkId);
+    const chunkDemo = (i, n) => ({ items: [{ tipo: 'producto', id: 'PRD-' + i }], chunkIndex: i, totalChunks: n, _updatedAt: Date.now() });
+
+    await prueba('X1. Se pueden crear fragmentos mientras el inventario está abierto', async () => {
+        await reiniciarConDatosBase();
+        await assertSucceeds(rutaChunk(admin1, 'inv-activo', 'chunk_0').set(chunkDemo(0, 1)));
+    });
+
+    await prueba('X2. NO se puede crear un fragmento en un inventario CERRADO', async () => {
+        await reiniciarConDatosBase();
+        // Este era el hueco H-2: la regla no miraba el estado del padre, así
+        // que un admin podía AÑADIR registros a un snapshot ya cerrado y el
+        // lector los concatenaba sin distinguirlos de los originales.
+        await assertFails(rutaChunk(admin1, 'inv-cerrado', 'chunk_0').set(chunkDemo(0, 1)));
+        await assertFails(rutaChunk(admin1, 'inv-cerrado', 'chunk_extra').set(chunkDemo(0, 1)));
+    });
+
+    await prueba('X3. Un fragmento existente sigue sin poder actualizarse ni borrarse', async () => {
+        await reiniciarConDatosBase();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await rutaChunk(ctx.firestore(), 'inv-activo', 'chunk_0').set(chunkDemo(0, 1));
+        });
+        await assertFails(rutaChunk(admin1, 'inv-activo', 'chunk_0').set(chunkDemo(9, 1)));
+        await assertFails(rutaChunk(admin1, 'inv-activo', 'chunk_0').delete());
+    });
+
+    await prueba('X4. ★ El batch atómico de cierre (fragmentos + CERRADO) se confirma entero', async () => {
+        await reiniciarConDatosBase();
+        const batch = admin1.batch();
+        for (let i = 0; i < 3; i++) {
+            batch.set(rutaChunk(admin1, 'inv-activo', 'chunk_' + i), chunkDemo(i, 3));
+        }
+        batch.update(rutaInventario(admin1, 'inv-activo'), {
+            estado: 'CERRADO', fechaCierre: Date.now(), cerradoPorUid: 'admin1',
+            semanaId: '2026-W38', semanaIdOrigen: 'fechaRecuento'
+        });
+        await assertSucceeds(batch.commit());
+    });
+
+    await prueba('X5. Tras el cierre atómico ya no se puede ampliar el snapshot', async () => {
+        await reiniciarConDatosBase();
+        const batch = admin1.batch();
+        batch.set(rutaChunk(admin1, 'inv-activo', 'chunk_0'), chunkDemo(0, 1));
+        batch.update(rutaInventario(admin1, 'inv-activo'), { estado: 'CERRADO', fechaCierre: Date.now() });
+        await assertSucceeds(batch.commit());
+        // El inventario ya está cerrado: el snapshot queda sellado.
+        await assertFails(rutaChunk(admin1, 'inv-activo', 'chunk_1').set(chunkDemo(1, 2)));
+        await assertFails(rutaChunk(admin1, 'inv-activo', 'chunk_0').set(chunkDemo(0, 1)));
+        // Y el inventario sigue siendo inmutable e imborrable.
+        await assertFails(rutaInventario(admin1, 'inv-activo').update({ estado: 'SINCRONIZADO' }));
+        await assertFails(rutaInventario(admin1, 'inv-activo').delete());
+    });
+
+    await prueba('X5b. Un bartender no puede crear fragmentos ni con el inventario abierto', async () => {
+        await reiniciarConDatosBase();
+        await assertFails(rutaChunk(bt1, 'inv-activo', 'chunk_0').set(chunkDemo(0, 1)));
+    });
+
     await testEnv.cleanup();
 
     console.log('\n── Resumen ──');

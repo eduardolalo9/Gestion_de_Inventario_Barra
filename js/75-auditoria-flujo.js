@@ -218,14 +218,53 @@
         // para _writeChunkedSubcollection (que chunkea por CANTIDAD de items,
         // no por tamaño de un objeto único — por eso se aplana en vez de
         // escribir un solo objeto grande).
+        // ══════════════════════════════════════════════════════════════════════
+        //  _semanaIdDelInventario(inv)
+        //  PASO PREVIO A FASE 3 — defecto H-3
+        //  ────────────────────────────────────────────────────────────────────
+        //  La semana del cierre se calculaba con clasificarRecuento(new Date()),
+        //  es decir con el RELOJ DEL DISPOSITIVO en el instante de pulsar
+        //  cerrar. Cerrar el lunes de madrugada un inventario contado el domingo
+        //  asignaba la semana siguiente. Como "contabilizar" se apoyará en ese
+        //  identificador para arrastrar el stock inicial, el error se heredaría
+        //  desde el primer ciclo y nadie lo notaría hasta cuadrar la semana.
+        //
+        //  Orden de preferencia:
+        //    1. inv.fechaRecuento — la fecha que el administrador eligió en el
+        //       formulario. Es un hecho de negocio, no un accidente del reloj.
+        //    2. La fecha del cierre, como respaldo para el camino antiguo (sin
+        //       formulario), donde fechaRecuento nace en null.
+        //
+        //  Devuelve también el ORIGEN, para que dentro de un año se pueda saber
+        //  de dónde salió la semana de un inventario concreto sin adivinarlo.
+        // ══════════════════════════════════════════════════════════════════════
+        function _semanaIdDelInventario(inv) {
+            if (typeof clasificarRecuento !== 'function') {
+                return { clase: null, origen: 'no_disponible' };
+            }
+            const fechaForm = inv && inv.fechaRecuento;
+            if (fechaForm) {
+                const clase = clasificarRecuento(fechaForm);
+                if (clase && clase.semanaId) return { clase: clase, origen: 'fechaRecuento' };
+            }
+            // Respaldo explícito: queda registrado que NO se usó la fecha del
+            // formulario, en vez de fingir que sí.
+            return { clase: clasificarRecuento(new Date()), origen: 'fechaCierre' };
+        }
+        window._semanaIdDelInventario = _semanaIdDelInventario;
+
         function _construirSnapshotInventario() {
             const registros = [];
             // R4 (reglas 4 y 5) — a qué semana pertenece este cierre.
             // Se calcula UNA vez, aquí, y se congela. Volver a deducirlo después
             // a partir del timestamp daría un resultado distinto si alguien abre
             // el histórico desde un dispositivo en otro huso horario.
-            var _claseR4 = (typeof clasificarRecuento === 'function')
-                           ? clasificarRecuento(new Date()) : null;
+            //
+            // H-3: la fecha ya NO es new Date(). Sale de la fecha de recuento
+            // que eligió el administrador; el reloj del dispositivo es solo el
+            // respaldo, y queda constancia de cuál se usó.
+            var _semana  = _semanaIdDelInventario(_inventarioActivo);
+            var _claseR4 = _semana.clase;
 
             registros.push({
                 tipo: 'meta',
@@ -236,6 +275,8 @@
                 // arrastre del inicial (regla 5) se activa cuando esté lista la
                 // pantalla de inventario físico.
                 semanaId:       _claseR4 ? _claseR4.semanaId : null,
+                // H-3 — 'fechaRecuento' (lo normal) o 'fechaCierre' (respaldo).
+                semanaIdOrigen: _semana.origen,
                 fechaLocal:     _claseR4 ? _claseR4.fecha : null,
                 tipoRecuento:   _claseR4 ? _claseR4.tipo : null,
                 cierraSemana:   _claseR4 ? _claseR4.cierraSemana : null,
@@ -369,20 +410,57 @@
                         const inventoryRef = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
                                                  .collection('inventories').doc(_auditoriaSessionId);
                         const registros = _construirSnapshotInventario();
-                        // El snapshot se escribe ANTES de marcar CERRADO — si
-                        // esto falla, el inventario sigue SINCRONIZADO y el
-                        // admin puede reintentar con seguridad (escribir los
-                        // chunks de nuevo es seguro: _writeChunkedSubcollection
-                        // borra los anteriores antes de escribir).
-                        await _writeChunkedSubcollection(inventoryRef, 'snapshotChunks', registros);
-                        await inventoryRef.update({
+                        const _semanaCierre = _semanaIdDelInventario(_inventarioActivo);
+
+                        // ══════════════════════════════════════════════════════
+                        //  H-1 — CIERRE ATÓMICO
+                        //  ────────────────────────────────────────────────────
+                        //  Antes eran dos await independientes (los fragmentos y
+                        //  luego el cambio de estado), y el escritor de
+                        //  fragmentos eran a su vez dos batches más. Si fallaba
+                        //  entre medias, el inventario quedaba SINCRONIZADO con
+                        //  el snapshot ya escrito. Y el comentario que había
+                        //  aquí afirmaba que reintentar era seguro: NO lo era.
+                        //  Reescribir un fragmento existente es un 'update' para
+                        //  Firestore, y las reglas lo prohíben, así que el
+                        //  reintento moría con permission-denied y el inventario
+                        //  quedaba atascado: ni cerrado ni reabrible.
+                        //
+                        //  Ahora los fragmentos y el paso a CERRADO viajan en UN
+                        //  SOLO batch: o queda todo escrito, o no queda nada.
+                        //  Un fallo deja el inventario exactamente como estaba y
+                        //  el reintento parte de cero.
+                        //
+                        //  Las reglas evalúan cada escritura del batch contra el
+                        //  estado YA CONFIRMADO, así que durante el cierre el
+                        //  inventario todavía es SINCRONIZADO y los fragmentos
+                        //  se crean; en cuanto el batch se confirma, pasa a
+                        //  CERRADO y ya no se le puede añadir nada (H-2).
+                        //  Comprobado contra el emulador real.
+                        // ══════════════════════════════════════════════════════
+                        const batch = _db.batch();
+                        const resSnap = _escribirSnapshotEnBatch(batch, inventoryRef, registros);
+                        if (!resSnap.ok) {
+                            console.error('[InventarioFisico] No se pudo preparar el snapshot:', resSnap);
+                            showNotification(resSnap.motivo === 'demasiados_fragmentos'
+                                ? '❌ El inventario es demasiado grande para cerrarse en una sola operación. Avisa a soporte.'
+                                : '❌ No se pudo preparar el cierre — revisa la conexión');
+                            return;
+                        }
+                        batch.update(inventoryRef, {
                             estado:           'CERRADO',
                             fechaCierre:      Date.now(),
                             cerradoPorUid:    currentUserUid,
                             cerradoPorNombre: (_auth && _auth.currentUser) ? _auth.currentUser.email : currentUserUid,
                             totalProductos:   products.length,
-                            participantesUids: Object.keys(allUsersAuditoria) // ETAPA 15: para filtrar "mis inventarios" barato en el historial, sin leer el snapshot
+                            participantesUids: Object.keys(allUsersAuditoria), // ETAPA 15: para filtrar "mis inventarios" barato en el historial, sin leer el snapshot
+                            // H-3 — la semana queda también en la CABECERA, no
+                            // solo dentro del snapshot: contabilizar necesita
+                            // leerla sin abrir los fragmentos.
+                            semanaId:         _semanaCierre.clase ? _semanaCierre.clase.semanaId : null,
+                            semanaIdOrigen:   _semanaCierre.origen
                         });
+                        await batch.commit();
                         _registrarEnSyncQueue({
                             tipo:         'cierre_inventario_fisico',
                             detalle:      'Inventario Físico #' + numeroParaLog + ' cerrado' + (hayPendientes ? ' (forzoso, con pendientes)' : ''),

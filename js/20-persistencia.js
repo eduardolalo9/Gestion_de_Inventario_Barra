@@ -80,7 +80,7 @@
          *               Incrementar solo cuando cambia la estructura de los datos
          *               (no en cambios visuales). Se usa para ejecutar migraciones.
          */
-        const APP_VERSION = '1.1.0';
+        const APP_VERSION = '1.1.1';
         const DB_VERSION  = 2;     // v1: esquema original  v2: IDB + sync queue + ciclo
 
         /**

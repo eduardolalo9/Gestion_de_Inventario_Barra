@@ -196,6 +196,61 @@
             console.info('[Firebase][Chunk] ' + subcollName + ' → ' + totalChunks + ' chunk(s) escritos correctamente.');
         }
 
+        // ══════════════════════════════════════════════════════════════════════
+        //  _escribirSnapshotEnBatch(batch, docRef, registros)
+        //  PASO PREVIO A FASE 3 — defecto H-1
+        //  ────────────────────────────────────────────────────────────────────
+        //  El snapshot del Inventario Físico NO puede usar
+        //  _writeChunkedSubcollection(). Esa función sirve a ordersChunks e
+        //  inventoriesChunks, donde sobrescribir es legítimo, y hace dos cosas
+        //  que en snapshotChunks son ilegales: set() sobre documentos que ya
+        //  existen (en Firestore eso es un 'update', prohibido por
+        //  firestore.rules) y un segundo batch de borrado (también prohibido).
+        //
+        //  El resultado era un defecto silencioso y grave: si el cierre fallaba
+        //  a mitad, el comentario del código afirmaba que reintentar era
+        //  seguro, y NO lo era. El reintento chocaba con permission-denied y el
+        //  inventario quedaba atascado —ni cerrado ni reabrible— con un
+        //  snapshot parcial.
+        //
+        //  Esta función no escribe: AÑADE las operaciones a un batch que
+        //  construye quien llama, para que los fragmentos y el cambio de estado
+        //  a CERRADO viajen en una sola operación atómica. Así un fallo no deja
+        //  nada escrito y el reintento parte siempre de cero.
+        //
+        //  Solo crea. Nunca borra, nunca sobrescribe.
+        // ══════════════════════════════════════════════════════════════════════
+        const SNAPSHOT_CHUNK_SIZE = 80;   // mismo tamaño que el resto del sistema
+        const SNAPSHOT_MAX_OPS    = 450;  // margen bajo el límite de 500 de Firestore
+
+        function _escribirSnapshotEnBatch(batch, docRef, registros) {
+            if (!_db || !docRef || !batch) return { ok: false, motivo: 'sin_referencia' };
+            if (!Array.isArray(registros)) registros = [];
+
+            const colRef      = docRef.collection('snapshotChunks');
+            const totalChunks = Math.max(1, Math.ceil(registros.length / SNAPSHOT_CHUNK_SIZE));
+
+            // El batch lleva además el update del inventario a CERRADO, por eso
+            // se reserva una operación. Con 424 productos salen 6 fragmentos;
+            // el margen alcanza para unas 36.000 filas de snapshot. Si alguna
+            // vez se superara, es mejor fallar aquí con un motivo claro que
+            // recibir un error opaco de Firestore a mitad del cierre.
+            if (totalChunks + 1 > SNAPSHOT_MAX_OPS) {
+                return { ok: false, motivo: 'demasiados_fragmentos', totalChunks: totalChunks };
+            }
+
+            for (let i = 0; i < totalChunks; i++) {
+                const chunk = registros.slice(i * SNAPSHOT_CHUNK_SIZE, (i + 1) * SNAPSHOT_CHUNK_SIZE);
+                batch.set(colRef.doc('chunk_' + i), {
+                    items:       chunk,
+                    chunkIndex:  i,
+                    totalChunks: totalChunks,
+                    _updatedAt:  Date.now()
+                });
+            }
+            return { ok: true, totalChunks: totalChunks, totalRegistros: registros.length };
+        }
+
         /**
          * Lee todos los chunks de una subcolección y reconstruye el array original
          * ordenado por chunkIndex.

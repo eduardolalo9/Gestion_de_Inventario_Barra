@@ -40,6 +40,7 @@ const PRUEBAS = [
     'prueba-f1.js',                 // F1 — los tres defectos criticos de la auditoria
     'prueba-d.js',                  // D  — sincronizacion y defectos criticos
     'prueba-f2.js',                 // F2 — permisos, privacidad y seguridad de servidor
+    'prueba-f3prev.js',             // Paso previo a F3 — cierre atomico e inmutabilidad
 ];
 
 let fallaron = [];

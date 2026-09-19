@@ -455,14 +455,29 @@
                    allow create: if isAdminUser();
                    allow update: if isAdminUser() && resource.data.estado != 'CERRADO';
                    allow delete: if false;
-                   // Snapshot final fragmentado (mismo patrón que
-                   // ordersChunks/inventoriesChunks) — una vez escrito, es
-                   // tan inmutable como el doc padre: solo se crea DURANTE
-                   // el cierre (cuando el padre pasa a CERRADO en el MISMO
-                   // batch), nunca se actualiza después.
+                   // Snapshot final fragmentado. Una vez escrito es tan
+                   // inmutable como el doc padre.
+                   //
+                   // PASO PREVIO A FASE 3 (defecto H-2) — 'create' NO miraba el
+                   // estado del padre. Eso permitía a un admin AÑADIR
+                   // fragmentos nuevos a un inventario ya CERRADO: los
+                   // existentes no se podían alterar, pero el conjunto sí se
+                   // podía ampliar, y el lector (_readChunkedSubcollection)
+                   // concatena todo lo que encuentra ordenado por chunkIndex.
+                   // La inmutabilidad era de los documentos, no del snapshot.
+                   //
+                   // Ahora el fragmento solo nace mientras el inventario sigue
+                   // abierto. Esto convive con el cierre atómico porque las
+                   // reglas evalúan cada escritura de un batch contra el estado
+                   // YA CONFIRMADO: durante el batch de cierre el padre todavía
+                   // es SINCRONIZADO, así que los fragmentos se crean; una vez
+                   // confirmado, es CERRADO y no cabe añadir nada más.
+                   // Comprobado contra el emulador real, no deducido de la
+                   // documentación (pruebas X1-X5 de run-rules-tests.js).
                    match /snapshotChunks/{chunkId} {
                      allow read:   if request.auth != null;
-                     allow create: if isAdminUser();
+                     allow create: if isAdminUser() &&
+                       get(/databases/$(database)/documents/inventarioApp/$(docId)/inventories/$(inventoryId)).data.estado != 'CERRADO';
                      allow update, delete: if false;
                    }
                  }

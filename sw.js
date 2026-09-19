@@ -29,7 +29,7 @@
 // pruebas/prueba-integridad-split.js falla si se desincronizan: un index.html
 // nuevo sirviendo un .js viejo desde cache es el fallo mas dificil de
 // diagnosticar que puede tener una PWA partida en archivos.
-const APP_VERSION = '3.6';
+const APP_VERSION = '3.7';
 const CACHE_NAME  = 'barinventory-v' + APP_VERSION;
 
 // SW8 FIX: OFFLINE_URL calculado desde el scope del SW en tiempo de ejecución.
