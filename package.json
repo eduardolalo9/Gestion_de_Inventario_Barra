@@ -12,7 +12,9 @@
     "test:f1": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-f1-integracion.js\"",
     "test:d": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-d-integracion.js\"",
     "test:f3": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-f3-integracion.js\"",
-    "test:f3nav": "node pruebas/prueba-f3-navegador.js"
+    "test:f3nav": "node pruebas/prueba-f3-navegador.js",
+    "test:p2": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-p2-integracion.js\"",
+    "test:p2nav": "node pruebas/prueba-p2-navegador.js"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5",

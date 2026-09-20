@@ -30,6 +30,7 @@ const PRUEBAS = [
     'prueba-p0.js',    // P0  — campos de compras en el catálogo (necesita cdnjs)
     'prueba-p1.js',    // P1  — la pestaña de compras
     'prueba-f3-navegador.js',  // F3 — contabilizar: humo en la app real
+    'prueba-p2-navegador.js',  // FASE 4 — importación de compras: parseo, vista previa, incidencias
 ];
 
 function esperarServidor(intentos) {

@@ -6,10 +6,14 @@
  * de permiso y de estado, el batch por folio, el id determinista, que
  * escapeHtml envuelve todo lo que viene del Excel, y el ALCANCE de la fase.
  *
- * El comportamiento contra el motor real de reglas está en run-rules-tests.js
- * (C1-C14). Una integración de punta a punta contra Firestore real —al
- * estilo de prueba-f3-integracion.js— queda pendiente como trabajo de
- * seguimiento (ver el informe de cierre de FASE 4).
+ * El comportamiento se prueba ejecutando, en otras tres suites:
+ *
+ *   run-rules-tests.js                 → C1-C14 contra el motor real de reglas
+ *   pruebas/prueba-p2-integracion.js   → 49 comprobaciones contra Firestore real
+ *                                         (guardarCompra de verdad: idempotencia,
+ *                                          batch atómico, asientos, merge de costos)
+ *   pruebas/prueba-p2-navegador.js     → 28 comprobaciones en Chromium
+ *                                         (parseo, vista previa, incidencias, escapado)
  * ═══════════════════════════════════════════════════════════════════════════
  */
 'use strict';
