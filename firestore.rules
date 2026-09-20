@@ -570,6 +570,66 @@
                    allow write:  if isAdminUser();
                  }
                }
+               // ══════════════════════════════════════════════════════════
+               //  FASE 4 — COMPRAS (el hecho) + MOVIMIENTOS (el efecto)
+               //  ────────────────────────────────────────────────────────
+               //  Mismo patrón que inventariosIniciales: id determinista +
+               //  create sin update ni delete. Importar dos veces el mismo
+               //  documento de SAP lo rechaza el servidor, no un `if` del
+               //  cliente que una carrera podría saltarse.
+               //
+               //  compraId es el Doc SAP cuando existe (una entrada ya
+               //  sincronizada y confirmada), o el folio del portal como
+               //  respaldo para una captura manual que aún no sincronizó.
+               //  Ver claude/fase4-anexo-excel-real-2026-09-20.md.
+               //
+               //  El libro de movimientos nace con un SOLO tipo permitido:
+               //  'compra'. Abrir hoy 'consumo_venta' o 'ajuste' sería
+               //  conceder por adelantado una capacidad que nadie ha
+               //  diseñado todavía — el mismo error que P12 cazó en FASE 3
+               //  antes de desplegarse. Cada tipo se habilita en su fase,
+               //  con su propio permiso.
+               //
+               //  La lectura de 'compras' exige purchases.read, a diferencia
+               //  de inventariosIniciales (legible por cualquier
+               //  autenticado): una compra lleva proveedor, costo unitario e
+               //  importe — información comercial, no solo cantidades.
+               // ══════════════════════════════════════════════════════════
+               match /compras/{compraId} {
+                 allow read:   if hasPerm('purchases.read');
+                 allow create: if hasPerm('purchases.create')
+                                  && request.resource.data.compraId == compraId
+                                  && request.resource.data.fecha is string
+                                  && request.resource.data.lineas is list
+                                  && request.resource.data.lineas.size() > 0
+                                  && request.resource.data.lineas.size() <= 400;
+                 allow update, delete: if false;
+               }
+               match /movimientos/{movId} {
+                 allow read:   if request.auth != null;
+                 allow create: if hasPerm('purchases.create')
+                                  && request.resource.data.movId == movId
+                                  && request.resource.data.tipo == 'compra'
+                                  && request.resource.data.productoId is string
+                                  && request.resource.data.cantidad is number
+                                  && request.resource.data.origen.compraId is string;
+                 allow update, delete: if false;
+               }
+               // El match de contadores/inventarios (dentro de inventarioApp)
+               // es literal, no comodín, así que este folio necesita su
+               // propia regla — no queda cubierto por aquel.
+               match /contadores/compras {
+                 allow read:  if request.auth != null;
+                 allow write: if hasPerm('purchases.create');
+               }
+               // Único documento mutable de la fase, y lo es a propósito: el
+               // último costo es por definición un valor que cambia. Su
+               // historia queda en las líneas de compra, que sí son
+               // inmutables.
+               match /costos/{docId} {
+                 allow read:  if request.auth != null;
+                 allow write: if hasPerm('purchases.import') || hasPerm('purchases.create');
+               }
                match /ajustes/{ajusteId} {
                  allow read:   if request.auth != null;
                  allow create: if request.auth != null;

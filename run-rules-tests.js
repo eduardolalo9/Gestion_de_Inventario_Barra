@@ -1222,6 +1222,136 @@ async function main() {
         await assertSucceeds(rutaInicial(bt1, '2026-09-14').get());
     });
 
+    // ══════════════════════════════════════════════════════════════════
+    //  FASE 4 — COMPRAS (el hecho) + MOVIMIENTOS (el efecto)
+    //  ────────────────────────────────────────────────────────────────
+    //  Mismo patrón de idempotencia que inventariosIniciales: id
+    //  determinista + create sin update ni delete. Estas pruebas atacan
+    //  Firestore directamente, sin pasar por la interfaz.
+    // ══════════════════════════════════════════════════════════════════
+
+    const rutaCompra = (db, compraId) =>
+        db.doc('compras/' + compraId);
+    const rutaMovimiento = (db, movId) =>
+        db.doc('movimientos/' + movId);
+    const compraDemo = (compraId, overrides) => Object.assign({
+        compraId: compraId, folio: '3646', docSap: '27615', fecha: '2026-09-19',
+        semanaId: '2026-09-14', proveedorCodigo: 'P00106', proveedorNombre: 'VINOTECA MEXICO',
+        importe: 4587.72, origen: 'excel', creadoPor: 'admin1', creadoEn: Date.now(),
+        lineas: [{ productoId: '1180015', cantidadInventario: 1, costoUnitario: 661.33, importe: 661.33 }]
+    }, overrides || {});
+    const movimientoDemo = (movId, compraId, overrides) => Object.assign({
+        movId: movId, tipo: 'compra', productoId: '1180015', cantidad: 1,
+        fecha: '2026-09-19', semanaId: '2026-09-14',
+        origen: { tipo: 'compra', compraId: compraId, folio: '3646', proveedorNombre: 'VINOTECA MEXICO' },
+        costoUnitario: 661.33, creadoPor: 'admin1', creadoEn: Date.now()
+    }, overrides || {});
+
+    async function sembrarFase4(extra) {
+        await sembrarFase2(async (db) => {
+            // Un usuario de compras: BARTENDER + los tres permisos delegados,
+            // igual que P10b delegó inventory.post a un subjefe.
+            await db.doc('usuarios/comprador1').set({
+                uid: 'comprador1', role: 'BARTENDER',
+                permissionOverrides: {
+                    'purchases.read': 'allow', 'purchases.create': 'allow', 'purchases.import': 'allow'
+                }
+            });
+            if (extra) await extra(db);
+        });
+    }
+    const comprador1 = testEnv.authenticatedContext('comprador1').firestore();
+
+    await prueba('C1. Con purchases.create se puede registrar una compra', async () => {
+        await sembrarFase4();
+        await assertSucceeds(rutaCompra(comprador1, 'sap-27615').set(compraDemo('sap-27615')));
+    });
+
+    await prueba('C2. ★ Importar dos veces el mismo documento SAP es imposible', async () => {
+        await sembrarFase4();
+        await assertSucceeds(rutaCompra(comprador1, 'sap-27615').set(compraDemo('sap-27615')));
+        await assertFails(rutaCompra(comprador1, 'sap-27615').set(compraDemo('sap-27615')));
+    });
+
+    await prueba('C3. El documento no puede declarar un compraId distinto de su ruta', async () => {
+        await sembrarFase4();
+        await assertFails(rutaCompra(comprador1, 'sap-27615').set(compraDemo('otro-id')));
+    });
+
+    await prueba('C4. Un bartender sin el permiso NO puede registrar una compra', async () => {
+        await sembrarFase4();
+        await assertFails(rutaCompra(bt1, 'sap-27615').set(compraDemo('sap-27615')));
+    });
+
+    await prueba('C5. Una compra ya creada no admite update', async () => {
+        await sembrarFase4();
+        await assertSucceeds(rutaCompra(comprador1, 'sap-27615').set(compraDemo('sap-27615')));
+        await assertFails(rutaCompra(comprador1, 'sap-27615').update({ importe: 1 }));
+    });
+
+    await prueba('C6. Una compra ya creada no admite delete', async () => {
+        await sembrarFase4();
+        await assertSucceeds(rutaCompra(comprador1, 'sap-27615').set(compraDemo('sap-27615')));
+        await assertFails(rutaCompra(comprador1, 'sap-27615').delete());
+    });
+
+    await prueba('C7. ★ Sin purchases.read (bartender normal) no se puede leer una compra', async () => {
+        await sembrarFase4();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await rutaCompra(ctx.firestore(), 'sap-27615').set(compraDemo('sap-27615'));
+        });
+        await assertFails(rutaCompra(bt1, 'sap-27615').get());
+        await assertSucceeds(rutaCompra(comprador1, 'sap-27615').get());
+    });
+
+    await prueba('C8. ★ El libro de movimientos NO admite tipo distinto de compra', async () => {
+        await sembrarFase4();
+        await assertFails(rutaMovimiento(comprador1, 'compra_sap-27615_1180015')
+            .set(movimientoDemo('compra_sap-27615_1180015', 'sap-27615', { tipo: 'consumo_venta' })));
+        await assertFails(rutaMovimiento(comprador1, 'ajuste_1')
+            .set(movimientoDemo('ajuste_1', 'sap-27615', { tipo: 'ajuste' })));
+    });
+
+    await prueba('C9. Un movimiento de compra exige origen.compraId', async () => {
+        await sembrarFase4();
+        const sinOrigen = movimientoDemo('compra_sap-27615_1180015', 'sap-27615');
+        delete sinOrigen.origen;
+        await assertFails(rutaMovimiento(comprador1, 'compra_sap-27615_1180015').set(sinOrigen));
+    });
+
+    await prueba('C10. Una compra con 0 líneas se rechaza', async () => {
+        await sembrarFase4();
+        await assertFails(rutaCompra(comprador1, 'sap-27615').set(compraDemo('sap-27615', { lineas: [] })));
+    });
+
+    await prueba('C11. Una compra con más de 400 líneas se rechaza', async () => {
+        await sembrarFase4();
+        const muchasLineas = Array.from({ length: 401 }, (_, i) => ({ productoId: 'P' + i, cantidadInventario: 1, costoUnitario: 1, importe: 1 }));
+        await assertFails(rutaCompra(comprador1, 'sap-27615').set(compraDemo('sap-27615', { lineas: muchasLineas })));
+    });
+
+    await prueba('C12. contadores/compras exige el permiso, no cualquier autenticado', async () => {
+        await sembrarFase4();
+        await assertFails(bt1.doc('contadores/compras').set({ ultimoNumero: 1 }));
+        await assertSucceeds(comprador1.doc('contadores/compras').set({ ultimoNumero: 1 }));
+    });
+
+    await prueba('C13. costos/ultimos se escribe con purchases.import', async () => {
+        await sembrarFase4();
+        await assertSucceeds(comprador1.doc('costos/ultimos').set({ productos: { '1180015': { costo: 661.33 } } }));
+    });
+
+    await prueba('C14. Las garantías de FASE 3 siguen en pie tras estos cambios', async () => {
+        await sembrarFase2();
+        await assertSucceeds(rutaInicial(admin1, '2026-09-14').set(inicialDemo('2026-09-14', 'inv-cerrado', 100)));
+        await assertFails(rutaInicial(admin1, '2026-09-14').update({ totalProductos: 99 }));
+        await assertSucceeds(rutaInventario(admin1, 'inv-cerrado').update({
+            estado: 'CONTABILIZADO', contabilizadoEn: Date.now(),
+            contabilizadoPor: 'admin1', semanaDestino: '2026-09-14'
+        }));
+        await assertFails(rutaInventario(admin1, 'inv-cerrado').update({ estado: 'CERRADO' }));
+    });
+
     await testEnv.cleanup();
 
     console.log('\n── Resumen ──');
