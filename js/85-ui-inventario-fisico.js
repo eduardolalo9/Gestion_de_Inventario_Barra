@@ -140,9 +140,19 @@
                     html += '<div onclick="_detalleInventarioCerradoId=\'' + inv.inventoryId + '\'; _detalleInventarioCerradoData=null; auditoriaView=\'detalle_cerrado\'; renderTab();" style="cursor:pointer;padding:10px 12px;border:1px solid var(--border-soft);border-radius:var(--r-md);margin-bottom:8px;">';
                     html += '<div class="flex items-center justify-between">';
                     html += '<span style="font-weight:700;font-size:0.82rem;">#' + inv.numero + ' | Inventario Barra</span>';
-                    html += '<span style="font-size:0.68rem;font-weight:700;color:#16a34a;">CERRADO</span>';
+                    // FASE 3 — un inventario contabilizado ya no es solo
+                    // "cerrado": su resultado pasó a ser el inicial de la
+                    // semana siguiente, y eso se ve de un vistazo.
+                    var _contab = (inv.estado === 'CONTABILIZADO');
+                    html += '<span style="font-size:0.68rem;font-weight:700;color:'
+                         +  (_contab ? '#2563eb' : '#16a34a') + ';">'
+                         +  (_contab ? 'CONTABILIZADO' : 'CERRADO') + '</span>';
                     html += '</div>';
                     html += '<p style="font-size:0.72rem;color:var(--txt-muted);">Fecha: ' + new Date(inv.fechaCreacion).toLocaleDateString('es-MX') + ' &nbsp;·&nbsp; Artículos: ' + (inv.totalProductos || '—') + '</p>';
+                    if (_contab && inv.semanaDestino) {
+                        html += '<p style="font-size:0.7rem;color:#2563eb;font-weight:600;">📘 Inicial de la semana '
+                             +  escapeHtml(inv.semanaDestino) + '</p>';
+                    }
                     html += '</div>';
                 });
             }
@@ -193,6 +203,43 @@
 
             if (hasPermission('inventory.export')) {
                 html += '<button onclick="exportarInventarioCerrado(\'' + _detalleInventarioCerradoId + '\', ' + meta.numero + ')" style="padding:7px 14px;border-radius:var(--r-md);background:var(--accent);color:#fff;font-size:0.75rem;font-weight:700;cursor:pointer;margin-bottom:10px;">📥 Exportar Excel</button>';
+            }
+
+            // ── FASE 3 · CONTABILIZAR ────────────────────────────────────────
+            // El botón no se limita a estar o no estar: cuando no se puede, dice
+            // POR QUÉ. Un control gris sin explicación manda al administrador a
+            // adivinar, y aquí las tres razones posibles son muy distintas
+            // entre sí.
+            if (meta.estado === 'CONTABILIZADO') {
+                html += '<div style="padding:9px 12px;border-radius:var(--r-md);background:#eff6ff;'
+                     +  'border-left:3px solid #2563eb;margin-bottom:10px;">'
+                     +  '<p style="font-size:0.75rem;font-weight:700;color:#1d4ed8;margin:0;">📘 Contabilizado</p>'
+                     +  '<p style="font-size:0.7rem;color:var(--txt-muted);margin:2px 0 0;">'
+                     +  'Su resultado es el stock inicial de la semana ' + escapeHtml(meta.semanaDestino || '—')
+                     +  (meta.contabilizadoEn ? ' · ' + new Date(meta.contabilizadoEn).toLocaleDateString('es-MX') : '')
+                     +  '</p></div>';
+            } else if (hasPermission('inventory.post')) {
+                var _cl = (typeof clasificarRecuento === 'function' && meta.fechaRecuento)
+                          ? clasificarRecuento(meta.fechaRecuento) : null;
+                var _motivo = null;
+                if (!meta.semanaId) {
+                    _motivo = 'Este inventario se cerró antes de que se guardara la semana en su cabecera.';
+                } else if (!_cl || !_cl.cierraSemana) {
+                    _motivo = 'Solo se contabiliza un recuento fechado en DOMINGO. Este está fechado '
+                            + (meta.fechaRecuento || 'sin fecha de recuento')
+                            + ', y un corte a media semana partiría el ciclo en dos.';
+                }
+                if (_motivo) {
+                    html += '<div style="padding:9px 12px;border-radius:var(--r-md);background:var(--bg-soft);'
+                         +  'border-left:3px solid var(--amber,#f59e0b);margin-bottom:10px;">'
+                         +  '<p style="font-size:0.72rem;color:var(--txt-muted);margin:0;">'
+                         +  '📘 No se puede contabilizar. ' + escapeHtml(_motivo) + '</p></div>';
+                } else {
+                    html += '<button onclick="contabilizarInventario(\'' + _detalleInventarioCerradoId + '\', ' + meta.numero + ')" '
+                         +  'style="padding:7px 14px;border-radius:var(--r-md);background:#2563eb;color:#fff;'
+                         +  'font-size:0.75rem;font-weight:700;cursor:pointer;margin-bottom:10px;margin-left:6px;">'
+                         +  '📘 Contabilizar</button>';
+                }
             }
 
             html += '<div style="max-height:320px;overflow-y:auto;border-top:1px solid var(--border-soft);padding-top:8px;">';

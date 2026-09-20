@@ -545,6 +545,280 @@
             return agregado;
         }
 
+        // ══════════════════════════════════════════════════════════════════════
+        //  FASE 3 — CONTABILIZAR
+        //  ────────────────────────────────────────────────────────────────────
+        //  Convierte el resultado físico de un inventario CERRADO en el stock
+        //  inicial del ciclo siguiente.
+        //
+        //  Lo que NO hace, y es la mitad del diseño:
+        //   · NO toca el snapshot congelado. Ni un byte.
+        //   · NO toca stockAreas, que es el stock operativo continuo.
+        //   · NO recalcula nada con el catálogo actual: usa los valores que
+        //     quedaron congelados el día del cierre.
+        //
+        //  La idempotencia NO la comprueba el cliente: la garantiza el servidor.
+        //  El documento del inicial se llama como la semana destino y las reglas
+        //  solo permiten crearlo, nunca actualizarlo. Dos administradores
+        //  pulsando a la vez, el segundo recibe permission-denied de Firestore.
+        // ══════════════════════════════════════════════════════════════════════
+
+        // ── Saldos por producto desde el snapshot congelado ──────────────────
+        // Tres pasos: consolidar entre usuarios con la MISMA regla que usa el
+        // Excel del cierre (admin manda; si no, el más reciente), convertir las
+        // onzas a fracción de botella con los datos CONGELADOS, y sumar las
+        // áreas. Decisión D-1: un total por producto, sin desglose de área.
+        //
+        // Usar los datos congelados y no el catálogo actual no es un detalle:
+        // si alguien corrige el peso de una botella en marzo, un inicial de
+        // enero recalculado con el peso nuevo daría otro número.
+        function _saldosDesdeSnapshot(registros) {
+            const meta = (registros || []).filter(function(r) { return r.tipo === 'meta'; })[0] || {};
+            const areas = (Array.isArray(meta.warehousesSnapshot) && meta.warehousesSnapshot.length)
+                          ? meta.warehousesSnapshot.slice()
+                          : AREAS_CONTEO.slice();
+            const productosCongelados = (registros || []).filter(function(r) { return r.tipo === 'producto'; });
+            const usuarios            = (registros || []).filter(function(r) { return r.tipo === 'usuario'; });
+
+            if (productosCongelados.length === 0) {
+                return { ok: false, motivo: 'snapshot_sin_productos' };
+            }
+
+            const conteo = _consolidarConteoCongelado(usuarios, areas, productosCongelados);
+
+            let enCero = 0;
+            const productos = productosCongelados.map(function(p) {
+                let total = 0;
+                areas.forEach(function(area) {
+                    const d = (conteo[p.id] && conteo[p.id][area]) || { enteras: 0, abiertas: [] };
+                    let suma = d.enteras || 0;
+                    const abiertas = d.abiertas || [];
+                    if (tieneConversion(p)) {
+                        abiertas.forEach(function(pesoOz) {
+                            suma += convertirOzAPuntos(pesoOz, p.capacidadMl, p.pesoBotellaLlenaOz);
+                        });
+                    } else {
+                        // Mismo respaldo que el resto del sistema: sin datos de
+                        // conversión, las abiertas ya vienen como fracción.
+                        abiertas.forEach(function(v) { suma += (v || 0); });
+                    }
+                    total += suma;
+                });
+                if (total === 0) enCero++;
+                return { id: p.id, total: total };
+            });
+
+            return {
+                ok: true,
+                productos: productos,
+                areas: areas,
+                enCero: enCero,
+                totalProductos: productos.length
+            };
+        }
+
+        // ── ¿Esta semana ya tiene un inicial? ────────────────────────────────
+        // Distingue dos cosas que NO son lo mismo: "ya lo contabilicé yo"
+        // (éxito, no hay nada que hacer) de "otro inventario ocupa esa semana"
+        // (conflicto real, que se muestra y no se resuelve en silencio).
+        async function _verificarInicialExistente(semanaId, inventoryId) {
+            try {
+                const snap = await _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
+                                      .collection('inventariosIniciales').doc(semanaId).get();
+                if (!snap.exists) return { existe: false };
+                const d = snap.data() || {};
+                const origenId = (d.origen && d.origen.inventoryId) || null;
+                return {
+                    existe: true,
+                    mismoOrigen: origenId === inventoryId,
+                    origenId: origenId,
+                    origenNumero: (d.origen && d.origen.numero) || null,
+                    datos: d
+                };
+            } catch (e) {
+                console.warn('[Contabilizar] No se pudo leer el inicial existente:', e);
+                return { existe: false, error: true };
+            }
+        }
+
+        async function contabilizarInventario(inventoryId, numero) {
+            if (!hasPermission('inventory.post')) {
+                showNotification('⚠️ No tienes permiso para contabilizar inventarios');
+                return;
+            }
+            if (!_db)              { showNotification('📴 Sin conexión a Firestore'); return; }
+            if (!navigator.onLine) { showNotification('📴 Sin conexión — conecta a internet antes de contabilizar'); return; }
+
+            showNotification('⏳ Preparando la contabilización…');
+            const inventoryRef = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
+                                    .collection('inventories').doc(inventoryId);
+            try {
+                const invSnap = await inventoryRef.get();
+                if (!invSnap.exists) { showNotification('❌ No se encontró el inventario'); return; }
+                const inv = invSnap.data() || {};
+
+                if (inv.estado === 'CONTABILIZADO') {
+                    showNotification('ℹ️ Este inventario ya estaba contabilizado'
+                        + (inv.semanaDestino ? ' — semana ' + inv.semanaDestino : ''));
+                    return;
+                }
+                if (inv.estado !== 'CERRADO') {
+                    showNotification('⚠️ Solo se puede contabilizar un inventario CERRADO');
+                    return;
+                }
+
+                // ── La semana destino ────────────────────────────────────────
+                // Decisión N-4: FASE 3 opera sobre inventarios cerrados a partir
+                // del paso previo, que es cuando semanaId empezó a guardarse en
+                // la cabecera. Un inventario anterior se bloquea con un motivo
+                // legible en vez de inventarle una semana.
+                if (!inv.semanaId) {
+                    showNotification('⚠️ Este inventario se cerró antes de que se guardara la semana '
+                        + 'en su cabecera, así que no se puede contabilizar.');
+                    return;
+                }
+                // Decisión N-1: solo un recuento fechado en domingo arrastra.
+                // La regla ya existía en clasificarRecuento(); aquí se explica.
+                const clase = (typeof clasificarRecuento === 'function' && inv.fechaRecuento)
+                              ? clasificarRecuento(inv.fechaRecuento) : null;
+                if (!clase || !clase.cierraSemana) {
+                    showNotification('⚠️ Solo se contabiliza un recuento fechado en DOMINGO. '
+                        + 'Este está fechado ' + (inv.fechaRecuento || 'sin fecha de recuento')
+                        + ', y un corte a media semana partiría el ciclo en dos.');
+                    return;
+                }
+
+                const semanaDestino = (typeof semanaSiguiente === 'function')
+                                      ? semanaSiguiente(inv.fechaRecuento) : null;
+                if (!semanaDestino) { showNotification('❌ No se pudo calcular la semana destino'); return; }
+
+                // ── ¿Ya está hecho? ──────────────────────────────────────────
+                const previo = await _verificarInicialExistente(semanaDestino, inventoryId);
+                if (previo.existe && previo.mismoOrigen) {
+                    showNotification('ℹ️ Este inventario ya generó el inicial de la semana ' + semanaDestino);
+                    return;
+                }
+                if (previo.existe && !previo.mismoOrigen) {
+                    showNotification('🛑 La semana ' + semanaDestino + ' ya tiene un inicial generado por el '
+                        + 'Inventario Físico #' + (previo.origenNumero || previo.origenId)
+                        + '. No se sobrescribe nada.');
+                    return;
+                }
+
+                // ── El físico congelado ──────────────────────────────────────
+                const registros = await _readChunkedSubcollection(inventoryRef, 'snapshotChunks');
+                if (!registros || registros.length === 0) {
+                    showNotification('❌ No se encontró el snapshot de este inventario');
+                    return;
+                }
+                const saldos = _saldosDesdeSnapshot(registros);
+                if (!saldos.ok) {
+                    showNotification('❌ El snapshot no contiene productos — no se puede contabilizar');
+                    return;
+                }
+
+                const inicial = inicialDesdeCierre({
+                    fecha:       inv.fechaRecuento,
+                    inventoryId: inventoryId,
+                    numero:      inv.numero,
+                    productos:   saldos.productos
+                });
+                if (!inicial) {
+                    showNotification('⚠️ El cierre no arrastra a la semana siguiente (no cierra semana)');
+                    return;
+                }
+
+                const totalUnidades = saldos.productos.reduce(function(a, p) { return a + p.total; }, 0);
+
+                showConfirm(
+                    '📘 CONTABILIZAR INVENTARIO FÍSICO #' + (inv.numero || numero) + '\n\n' +
+                    'Recuento: ' + inv.fechaRecuento + '\n' +
+                    'Semana destino: ' + inicial.semanaId + '\n' +
+                    'Productos: ' + inicial.totalProductos +
+                    (saldos.enCero ? '  (' + saldos.enCero + ' en cero)' : '') + '\n' +
+                    'Total de unidades: ' + (Math.round(totalUnidades * 1000) / 1000) + '\n\n' +
+                    'El resultado físico pasará a ser el stock inicial de esa semana.\n\n' +
+                    'El inventario cerrado NO se modifica: su conteo queda intacto.\n' +
+                    'El inicial es INMUTABLE — una vez creado no se puede corregir ni deshacer.\n\n' +
+                    '¿Confirmar?',
+                    async function() {
+                        showNotification('⏳ Contabilizando…');
+                        const inicialRef = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
+                                              .collection('inventariosIniciales').doc(inicial.semanaId);
+                        try {
+                            // Un solo batch: o queda todo, o no queda nada.
+                            const batch = _db.batch();
+                            batch.set(inicialRef, {
+                                semanaId:         inicial.semanaId,
+                                origen:           inicial.origen,
+                                saldos:           inicial.saldos,
+                                totalProductos:   inicial.totalProductos,
+                                productosEnCero:  saldos.enCero,
+                                areas:            saldos.areas,
+                                contabilizadoPor: currentUserUid,
+                                contabilizadoEn:  Date.now(),
+                                semanaOrigenDato: inv.semanaIdOrigen || 'cabecera'
+                            });
+                            batch.update(inventoryRef, {
+                                estado:           'CONTABILIZADO',
+                                contabilizadoEn:  Date.now(),
+                                contabilizadoPor: currentUserUid,
+                                semanaDestino:    inicial.semanaId
+                            });
+                            await batch.commit();
+
+                            _registrarEnSyncQueue({
+                                tipo:         'contabilizacion',
+                                detalle:      'Inventario Físico #' + (inv.numero || numero)
+                                              + ' contabilizado → inicial de la semana ' + inicial.semanaId,
+                                inventoryId:  inventoryId,
+                                numero:       inv.numero || numero,
+                                semanaOrigen: inicial.origen.semanaCerrada,
+                                semanaDestino: inicial.semanaId,
+                                totalProductos: inicial.totalProductos,
+                                motivo:       'Contabilización de Inventario Físico'
+                            });
+
+                            showNotification('✅ Contabilizado — el inicial de la semana '
+                                + inicial.semanaId + ' quedó registrado');
+                            _historialInventarios = null;
+                            renderTab();
+                        } catch (err) {
+                            // ── El manejo que hace que la idempotencia funcione ──
+                            // Un permission-denied aquí NO es necesariamente un
+                            // fallo: puede ser que la operación ya se completara
+                            // en un intento anterior cuya confirmación se perdió.
+                            // Se distingue leyendo el documento.
+                            console.error('[Contabilizar] Error:', err);
+                            if (err && err.code === 'permission-denied') {
+                                const post = await _verificarInicialExistente(inicial.semanaId, inventoryId);
+                                if (post.existe && post.mismoOrigen) {
+                                    showNotification('✅ Ya estaba contabilizado — la operación se había '
+                                        + 'completado antes. No se duplicó nada.');
+                                    _historialInventarios = null;
+                                    renderTab();
+                                    return;
+                                }
+                                if (post.existe && !post.mismoOrigen) {
+                                    showNotification('🛑 Otro inventario ocupó la semana ' + inicial.semanaId
+                                        + ' mientras confirmabas. No se sobrescribió nada.');
+                                    return;
+                                }
+                                showNotification('❌ El servidor rechazó la contabilización — revisa tus permisos');
+                                return;
+                            }
+                            showNotification('❌ No se pudo contabilizar — revisa la conexión e inténtalo de nuevo');
+                        }
+                    }
+                );
+            } catch (err) {
+                console.error('[Contabilizar] Error preparando:', err);
+                showNotification('❌ No se pudo preparar la contabilización — revisa la conexión');
+            }
+        }
+        window.contabilizarInventario = contabilizarInventario;
+        window._saldosDesdeSnapshot   = _saldosDesdeSnapshot;
+
         async function exportarInventarioCerrado(inventoryId, numero) {
             if (!hasPermission('inventory.export')) {
                 showNotification('⚠️ No tienes permiso para exportar');
@@ -1248,6 +1522,16 @@
                 color:    '#4ade80',
                 fondo:    'rgba(74,222,128,.12)',
                 texto:    'Cerrado e inmutable. Queda como histórico y nadie puede modificarlo, ni el administrador.'
+            },
+            // FASE 3 — el estado nuevo TAMBIÉN va aquí. Sin esta entrada el
+            // historial mostraba "CONTABILIZADO" y el glosario seguía
+            // explicando solo dos estados: la pantalla decía una cosa y la
+            // ayuda otra. Lo detectó la comprobación de alcance de R7.
+            CONTABILIZADO: {
+                etiqueta: 'Contabilizado',
+                color:    '#818cf8',
+                fondo:    'rgba(129,140,248,.12)',
+                texto:    'Su resultado ya es el stock inicial de la semana siguiente. Además de inmutable, no se puede volver a contabilizar.'
             }
         };
 

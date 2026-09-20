@@ -29,6 +29,7 @@ const PRUEBAS = [
     'prueba-c1.js',    // C1  — el aviso de guardado no miente
     'prueba-p0.js',    // P0  — campos de compras en el catálogo (necesita cdnjs)
     'prueba-p1.js',    // P1  — la pestaña de compras
+    'prueba-f3-navegador.js',  // F3 — contabilizar: humo en la app real
 ];
 
 function esperarServidor(intentos) {

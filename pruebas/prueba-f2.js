@@ -408,9 +408,13 @@ chk('Todo permiso del catálogo tiene nombre visible en español',
     'una casilla sin nombre legible no es una interfaz en español');
 chk('Los permisos nuevos de FASE 2 están registrados',
     /'inventory\.post'/.test(roles) && /'data\.exportFull'/.test(roles));
-chk('inventory.post queda declarado pero SIN implementar (es FASE 3)',
-    !/function contabilizarInventario/.test(roles + flujo + firest + invDatos),
-    'la fase 3 no está autorizada todavía');
+// Esta comprobación exigía que la operación NO existiera: FASE 2 solo
+// declaraba el permiso. Con FASE 3 autorizada, lo que queda por vigilar es
+// que la operación viva en UN solo sitio —el módulo de flujo— y no se haya
+// esparcido por la capa de datos ni por el catálogo de permisos.
+chk('contabilizarInventario() vive solo en el módulo de flujo',
+    /function contabilizarInventario/.test(flujo) &&
+    !/function contabilizarInventario/.test(roles + firest + invDatos));
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  Áreas asignadas (D3)
@@ -457,15 +461,19 @@ chk('ALCANCE · no se tocó el campo pv del catálogo',
     /pv: \['PV', 'SKU', 'PV de venta', 'PVVenta', 'ProductId', 'product_id'\]/.test(ciclo) &&
     !/pvParrot/.test(ciclo + uiProd + roles),
     'D5: conservar pv exactamente como está, sin reinterpretarlo');
-chk('ALCANCE · no se implementó contabilizar (FASE 3)',
-    !/inventory\.post'\)/.test(flujo + uiProd + firest),
-    'el permiso queda declarado, la operación no');
+// Igual que arriba: el alcance que protege hoy es que el permiso se exija
+// desde el módulo de flujo y en ningún otro, no que no se exija en ninguno.
+chk('ALCANCE · inventory.post se exige en el flujo, no en la capa de datos',
+    /hasPermission\('inventory\.post'\)/.test(flujo) &&
+    !/inventory\.post/.test(firest + invDatos),
+    'la interfaz puede consultarlo para pintar el botón; quien lo EXIGE es el flujo');
 chk('ALCANCE · no se implementó stock teórico ni desviación',
     !/stockTeorico|calcularDesviacion/.test(firest + invDatos + flujo + uiProd));
 chk('ALCANCE · los identificadores de área siguen intactos',
     /const AREAS_SISTEMA = \['almacen', 'barra1', 'barra2'\]/.test(areasCfg));
 chk('ALCANCE · la inmutabilidad del inventario cerrado sigue en pie',
-    /allow update: if isAdminUser\(\) && resource\.data\.estado != 'CERRADO';/.test(reglas) &&
+    (/allow update: if isAdminUser\(\) && \(\s*\n\s*\(resource\.data\.estado != 'CERRADO' && resource\.data\.estado != 'CONTABILIZADO'/.test(reglas) &&
+     /\.hasOnly\(\['estado','contabilizadoEn','contabilizadoPor','semanaDestino'\]\)/.test(reglas)) &&
     /allow update, delete: if false;/.test(reglas));
 
 // ═══════════════════════════════════════════════════════════════════════════

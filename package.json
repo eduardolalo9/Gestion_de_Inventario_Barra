@@ -10,7 +10,9 @@
     "test:split": "node pruebas/prueba-integridad-split.js",
     "test:reglas": "firebase emulators:exec --only firestore --project demo-barinventory \"node run-rules-tests.js\"",
     "test:f1": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-f1-integracion.js\"",
-    "test:d": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-d-integracion.js\""
+    "test:d": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-d-integracion.js\"",
+    "test:f3": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-f3-integracion.js\"",
+    "test:f3nav": "node pruebas/prueba-f3-navegador.js"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5",

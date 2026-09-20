@@ -80,7 +80,7 @@
          *               Incrementar solo cuando cambia la estructura de los datos
          *               (no en cambios visuales). Se usa para ejecutar migraciones.
          */
-        const APP_VERSION = '1.1.1';
+        const APP_VERSION = '1.2.0';
         const DB_VERSION  = 2;     // v1: esquema original  v2: IDB + sync queue + ciclo
 
         /**
@@ -627,6 +627,7 @@
             // if false). Un tipo nuevo aquí basta para que el evento viaje a
             // Firestore por el mismo camino que todo lo demás.
             'permisos',                   // cambio de rol/permisos/áreas de un usuario
+            'contabilizacion',            // FASE 3 — inventario cerrado → inicial del ciclo siguiente
             'candado_local'               // desbloqueo del candado local de captura (D6)
         ];
 

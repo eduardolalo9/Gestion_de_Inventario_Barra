@@ -324,8 +324,11 @@ chk('Sigue en pie el aislamiento por uid de userAuditoria',
 chk('Sigue en pie el bloqueo optimista del conteo',
     /request\.resource\.data\.version ==\s*\n\s*\(\('version' in resource\.data\) \? resource\.data\.version : 0\) \+ 1;/.test(reglas));
 
+// FASE 3 endureció esta regla (ver prueba-f1.js). La inmutabilidad que D
+// protegía sigue intacta: se comprueba la garantía, no el texto literal.
 chk('Sigue en pie la inmutabilidad del inventario cerrado',
-    /allow update: if isAdminUser\(\) && resource\.data\.estado != 'CERRADO';/.test(reglas));
+    (/allow update: if isAdminUser\(\) && \(\s*\n\s*\(resource\.data\.estado != 'CERRADO' && resource\.data\.estado != 'CONTABILIZADO'/.test(reglas) &&
+     /\.hasOnly\(\['estado','contabilizadoEn','contabilizadoPor','semanaDestino'\]\)/.test(reglas)));
 
 // ───────────────────────────────────────────────────────────────────────────
 //  D4 · RASTRO AL FINALIZAR ÁREA

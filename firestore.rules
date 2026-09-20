@@ -453,7 +453,40 @@
                  match /inventories/{inventoryId} {
                    allow read:   if request.auth != null;
                    allow create: if isAdminUser();
-                   allow update: if isAdminUser() && resource.data.estado != 'CERRADO';
+                   // ══════════════════════════════════════════════════════════
+                   //  FASE 3 — CERRADO → CONTABILIZADO
+                   //  ────────────────────────────────────────────────────────
+                   //  OJO CON EL AGUJERO QUE ESTO CIERRA. La regla anterior era
+                   //  `resource.data.estado != 'CERRADO'`. En cuanto un
+                   //  inventario pasara a CONTABILIZADO esa condición se
+                   //  volvería VERDADERA —CONTABILIZADO no es CERRADO— y un
+                   //  admin podría modificar libremente un inventario que ya
+                   //  estaba sellado. Añadir el estado nuevo sin tocar esta
+                   //  regla habría ABIERTO el histórico, no protegido.
+                   //
+                   //  Ahora los dos estados finales están bloqueados, y la
+                   //  única excepción es la transición concreta, con cuatro
+                   //  campos en lista blanca. El contenido físico no entra:
+                   //  snapshotChunks sigue con update/delete en false, así que
+                   //  el conteo no se puede tocar ni con esta excepción.
+                   // ══════════════════════════════════════════════════════════
+                   //  Y OJO CON LA PRIMERA RAMA. Su primera versión permitía
+                   //  cualquier update mientras el estado no fuera final, lo que
+                   //  incluía saltar de SINCRONIZADO directamente a
+                   //  CONTABILIZADO: un inventario "contabilizado" cuyo snapshot
+                   //  nunca se escribió, es decir un stock inicial sin ninguna
+                   //  evidencia física detrás. Lo detectó la prueba P12 antes de
+                   //  desplegarse. Ahora CONTABILIZADO solo se alcanza desde
+                   //  CERRADO, por la segunda rama.
+                   allow update: if isAdminUser() && (
+                        (resource.data.estado != 'CERRADO' && resource.data.estado != 'CONTABILIZADO'
+                         && request.resource.data.estado != 'CONTABILIZADO')
+                     || ( resource.data.estado == 'CERRADO'
+                          && request.resource.data.estado == 'CONTABILIZADO'
+                          && request.resource.data.diff(resource.data).affectedKeys()
+                               .hasOnly(['estado','contabilizadoEn','contabilizadoPor','semanaDestino'])
+                          && hasPerm('inventory.post') )
+                   );
                    allow delete: if false;
                    // Snapshot final fragmentado. Una vez escrito es tan
                    // inmutable como el doc padre.
@@ -476,10 +509,55 @@
                    // documentación (pruebas X1-X5 de run-rules-tests.js).
                    match /snapshotChunks/{chunkId} {
                      allow read:   if request.auth != null;
+                   //
+                   // FASE 3 — hay que bloquear TAMBIÉN 'CONTABILIZADO'. Con la
+                   // condición anterior, que solo miraba 'CERRADO', el snapshot
+                   // volvía a ser ampliable en cuanto el inventario se
+                   // contabilizaba: CONTABILIZADO no es CERRADO. El agujero H-2
+                   // se reabría justo en el momento en que el inventario pasa a
+                   // ser la base del stock inicial, que es cuando más importa.
+                   // Lo detectó la prueba F4 antes de desplegarse.
                      allow create: if isAdminUser() &&
-                       get(/databases/$(database)/documents/inventarioApp/$(docId)/inventories/$(inventoryId)).data.estado != 'CERRADO';
+                       get(/databases/$(database)/documents/inventarioApp/$(docId)/inventories/$(inventoryId)).data.estado != 'CERRADO' &&
+                       get(/databases/$(database)/documents/inventarioApp/$(docId)/inventories/$(inventoryId)).data.estado != 'CONTABILIZADO';
                      allow update, delete: if false;
                    }
+                 }
+
+                 // ══════════════════════════════════════════════════════════
+                 //  FASE 3 — INVENTARIOS INICIALES (contabilizar)
+                 //  ────────────────────────────────────────────────────────
+                 //  El id del documento ES la semana destino. Combinado con
+                 //  create-sin-update-ni-delete, el documento es único e
+                 //  inmutable por semana, y la IDEMPOTENCIA la garantiza el
+                 //  servidor, no una comprobación del cliente que una carrera
+                 //  podría saltarse:
+                 //
+                 //    · contabilizar dos veces el mismo inventario → el segundo
+                 //      intento es rechazado; el cliente lee el documento, ve su
+                 //      propio origen y reporta "ya estaba hecho";
+                 //    · dos inventarios distintos a la misma semana → rechazado
+                 //      también, pero el origen NO coincide y se muestra como
+                 //      conflicto en vez de resolverse en silencio;
+                 //    · un reintento tras caída de red no duplica nada.
+                 //
+                 //  La comprobación semanaId == semanaId no es redundante:
+                 //  impide crear un documento cuyo contenido declare una semana
+                 //  distinta de la de su ruta, que sería un saldo imposible de
+                 //  encontrar después.
+                 //
+                 //  La inmutabilidad es deliberada (decisión N-2): un inicial
+                 //  equivocado NO se reescribe. Se corrige añadiendo un ajuste
+                 //  al libro de movimientos, igual que el inventario cerrado y
+                 //  que historialCambios.
+                 // ══════════════════════════════════════════════════════════
+                 match /inventariosIniciales/{semanaId} {
+                   allow read:   if request.auth != null;
+                   allow create: if hasPerm('inventory.post')
+                                    && request.resource.data.semanaId == semanaId
+                                    && request.resource.data.origen.inventoryId is string
+                                    && request.resource.data.saldos is map;
+                   allow update, delete: if false;
                  }
 
                  // Contador atómico para el número visible (#101, #102...).

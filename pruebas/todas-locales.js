@@ -41,6 +41,7 @@ const PRUEBAS = [
     'prueba-d.js',                  // D  — sincronizacion y defectos criticos
     'prueba-f2.js',                 // F2 — permisos, privacidad y seguridad de servidor
     'prueba-f3prev.js',             // Paso previo a F3 — cierre atomico e inmutabilidad
+    'prueba-f3.js',                 // F3 — contabilizar: inicial inmutable y alcance
 ];
 
 let fallaron = [];

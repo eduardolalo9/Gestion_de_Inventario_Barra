@@ -197,13 +197,31 @@ if (fnSemana) {
 // ═══════════════════════════════════════════════════════════════════════════
 //  X11 · H-2 en las reglas
 // ═══════════════════════════════════════════════════════════════════════════
+// Estas tres medían la distancia en caracteres desde la cabecera del match.
+// Era fragil: los comentarios que FASE 3 añadió para documentar los defectos
+// P12 y F4 empujaron las guardas más allá del límite. Ahora se mira DENTRO
+// del bloque que toca, y se comprueba la garantía endurecida: los dos
+// estados finales bloqueados, y CONTABILIZADO alcanzable solo desde CERRADO
+// con cuatro campos en lista blanca.
+function bloqueReglas(cabecera) {
+    const i = reglas.indexOf(cabecera);
+    if (i === -1) return '';
+    const j = reglas.indexOf('match /', i + cabecera.length);
+    return reglas.slice(i, j === -1 ? reglas.length : j);
+}
+const _chunks = bloqueReglas('match /snapshotChunks/{chunkId} {');
+const _inv    = bloqueReglas('match /inventories/{inventoryId} {');
+
 chk('X11 · crear un fragmento exige que el inventario NO esté cerrado',
-    /match \/snapshotChunks\/\{chunkId\} \{[\s\S]{0,400}?allow create: if isAdminUser\(\) &&[\s\S]{0,300}?inventories\/\$\(inventoryId\)\)\.data\.estado != 'CERRADO'/.test(reglas));
+    /allow create: if isAdminUser\(\) &&[\s\S]{0,400}?\.data\.estado != 'CERRADO'/.test(_chunks) &&
+    /\.data\.estado != 'CONTABILIZADO'/.test(_chunks),
+    'FASE 3 tuvo que bloquear también el estado nuevo: CONTABILIZADO no es CERRADO');
 chk('X11 · update y delete de un fragmento siguen prohibidos',
-    /match \/snapshotChunks\/\{chunkId\} \{[\s\S]{0,700}?allow update, delete: if false;/.test(reglas));
+    /allow update, delete: if false;/.test(_chunks));
 chk('X11 · el inventario cerrado sigue siendo inmutable e imborrable',
-    /allow update: if isAdminUser\(\) && resource\.data\.estado != 'CERRADO';/.test(reglas) &&
-    /match \/inventories\/\{inventoryId\} \{[\s\S]{0,400}?allow delete: if false;/.test(reglas));
+    /resource\.data\.estado != 'CERRADO' && resource\.data\.estado != 'CONTABILIZADO'/.test(_inv) &&
+    /\.hasOnly\(\['estado','contabilizadoEn','contabilizadoPor','semanaDestino'\]\)/.test(_inv) &&
+    /allow delete: if false;/.test(_inv));
 chk('X11 · el comentario de las reglas ya no afirma algo falso sobre el batch',
     !/cuando el padre pasa a CERRADO en el MISMO\s*\n?\s*\/\/\s*batch\), nunca se actualiza después/.test(reglas),
     'ese comentario describía un batch único que el código no hacía');
@@ -212,10 +230,17 @@ chk('X11 · el comentario de las reglas ya no afirma algo falso sobre el batch',
 //  X12 · Alcance — esto es el paso previo, no FASE 3
 // ═══════════════════════════════════════════════════════════════════════════
 const todo = flujo + firest + ciclo + leer('js/45-inventario-datos.js') + leer('js/50-roles-permisos.js');
-chk('X12 · no se implementó contabilizar',
-    !/function contabilizarInventario/.test(todo));
-chk('X12 · no se creó la colección de inventarios iniciales',
-    !/inventariosIniciales/.test(todo));
+// Estas dos exigían que FASE 3 no existiera todavía. Ya está autorizada e
+// implementada, así que lo que protegen ahora es que siga confinada: la
+// operación y la colección viven en el módulo de flujo, no en la capa de
+// datos, el catálogo ni el ciclo semanal.
+const _fueraDeFlujo = firest + ciclo + leer('js/45-inventario-datos.js') + leer('js/50-roles-permisos.js');
+chk('X12 · contabilizar no se filtró fuera del módulo de flujo',
+    /function contabilizarInventario/.test(flujo) &&
+    !/function contabilizarInventario/.test(_fueraDeFlujo));
+chk('X12 · la colección de iniciales solo se toca desde el flujo',
+    /inventariosIniciales/.test(flujo) &&
+    !/inventariosIniciales/.test(_fueraDeFlujo));
 chk('X12 · no se implementaron recetas',
     !/collection\('recetas'\)/.test(todo));
 chk('X12 · no se implementaron ventas ni movimientos',
@@ -225,10 +250,14 @@ chk('X12 · no se implementó stock teórico ni desviación',
 // La función vive en js/15-ciclo-semanal.js y allí aparece dos veces: en su
 // comentario de cabecera y en su definición. Lo que hay que vigilar es que
 // NADIE la invoque desde el resto de la aplicación — conectarla es FASE 3.
-chk('X12 · inicialDesdeCierre() sigue sin conectarse',
-    !/inicialDesdeCierre\(/.test(flujo + firest + leer('js/45-inventario-datos.js') +
+// Decía 'sigue sin conectarse': conectarla era justo el trabajo de FASE 3.
+// Lo que queda por vigilar es que tenga UN solo llamador y que la función en
+// sí no se haya tocado para encajarla.
+chk('X12 · inicialDesdeCierre() tiene exactamente un llamador',
+    (flujo.match(/inicialDesdeCierre\(/g) || []).length === 1 &&
+    !/inicialDesdeCierre\(/.test(firest + leer('js/45-inventario-datos.js') +
                                  leer('js/50-roles-permisos.js') + leer('js/85-ui-inventario-fisico.js')),
-    'solo existe en el módulo de ciclo semanal; conectarla es FASE 3');
+    'su definición vive en el ciclo semanal y no se modificó');
 chk('X12 · stockAreas sigue sin tocarse en el cierre',
     !!cerrar && !/stockAreas/.test(cerrar),
     'es el stock operativo continuo: el cierre nunca lo modifica');

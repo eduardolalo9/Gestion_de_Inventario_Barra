@@ -1069,6 +1069,159 @@ async function main() {
         await assertFails(rutaChunk(bt1, 'inv-activo', 'chunk_0').set(chunkDemo(0, 1)));
     });
 
+
+    // ══════════════════════════════════════════════════════════════════
+    //  FASE 3 — CONTABILIZAR
+    //  ────────────────────────────────────────────────────────────────
+    //  La idempotencia la garantiza el SERVIDOR: id determinista +
+    //  documento inmutable. Estas pruebas atacan Firestore directamente.
+    // ══════════════════════════════════════════════════════════════════
+
+    const rutaInicial = (db, semana) =>
+        db.doc('inventarioApp/barra-principal/inventariosIniciales/' + semana);
+    const inicialDemo = (semana, invId, numero) => ({
+        semanaId: semana,
+        origen: { tipo: 'cierre_inventario', inventoryId: invId, numero: numero,
+                  fechaCierre: '2026-09-13', semanaCerrada: '2026-09-07' },
+        saldos: { 'PRD-001': 12.5, 'PRD-002': 0 },
+        totalProductos: 2,
+        contabilizadoPor: 'admin1',
+        contabilizadoEn: Date.now()
+    });
+
+    await prueba('P9. Un bartender NO puede contabilizar', async () => {
+        await sembrarFase2();
+        await assertFails(rutaInicial(bt1, '2026-09-14').set(inicialDemo('2026-09-14', 'inv-cerrado', 100)));
+    });
+
+    await prueba('P10. Un subjefe NO puede contabilizar por defecto', async () => {
+        await sembrarFase2();
+        await assertFails(rutaInicial(subjefe1, '2026-09-14').set(inicialDemo('2026-09-14', 'inv-cerrado', 100)));
+    });
+
+    await prueba('P10b. Un subjefe CON inventory.post delegado sí puede', async () => {
+        await sembrarFase2(async (db) => {
+            await db.doc('usuarios/subjefe1').set({
+                uid: 'subjefe1', role: 'SUBJEFE_BARRA',
+                permissionOverrides: { 'inventory.post': 'allow' }
+            });
+        });
+        await assertSucceeds(rutaInicial(subjefe1, '2026-09-14').set(inicialDemo('2026-09-14', 'inv-cerrado', 100)));
+    });
+
+    await prueba('P11. El admin SÍ puede crear el inicial', async () => {
+        await sembrarFase2();
+        await assertSucceeds(rutaInicial(admin1, '2026-09-14').set(inicialDemo('2026-09-14', 'inv-cerrado', 100)));
+    });
+
+    await prueba('P14. ★ Crear dos veces el inicial de la misma semana es imposible', async () => {
+        await sembrarFase2();
+        await assertSucceeds(rutaInicial(admin1, '2026-09-14').set(inicialDemo('2026-09-14', 'inv-cerrado', 100)));
+        // La idempotencia no depende de que el cliente se acuerde de comprobar:
+        // el servidor rechaza el segundo intento, venga de donde venga.
+        await assertFails(rutaInicial(admin1, '2026-09-14').set(inicialDemo('2026-09-14', 'inv-cerrado', 100)));
+        await assertFails(rutaInicial(admin1, '2026-09-14').update({ totalProductos: 99 }));
+        await assertFails(rutaInicial(admin1, '2026-09-14').delete());
+    });
+
+    await prueba('F5. Otro inventario tampoco puede ocupar una semana ya usada', async () => {
+        await sembrarFase2();
+        await assertSucceeds(rutaInicial(admin1, '2026-09-14').set(inicialDemo('2026-09-14', 'inv-cerrado', 100)));
+        // Mismo rechazo; lo que cambia es que el cliente, al leer el documento,
+        // verá un origen distinto del suyo y lo reportará como conflicto.
+        await assertFails(rutaInicial(admin1, '2026-09-14').set(inicialDemo('2026-09-14', 'otro-inventario', 200)));
+    });
+
+    await prueba('F6. El documento no puede declarar una semana distinta de su ruta', async () => {
+        await sembrarFase2();
+        await assertFails(rutaInicial(admin1, '2026-09-14').set(inicialDemo('2026-09-21', 'inv-cerrado', 100)));
+    });
+
+    await prueba('F6b. El inicial exige origen e importes con la forma correcta', async () => {
+        await sembrarFase2();
+        await assertFails(rutaInicial(admin1, '2026-09-14').set({ semanaId: '2026-09-14' }));
+        await assertFails(rutaInicial(admin1, '2026-09-14').set({
+            semanaId: '2026-09-14', origen: { tipo: 'cierre_inventario' }, saldos: {}
+        }));
+    });
+
+    await prueba('P12. Un inventario NO cerrado no puede pasar a CONTABILIZADO', async () => {
+        await sembrarFase2();
+        await assertFails(rutaInventario(admin1, 'inv-activo').update({
+            estado: 'CONTABILIZADO', contabilizadoEn: Date.now(),
+            contabilizadoPor: 'admin1', semanaDestino: '2026-09-14'
+        }));
+    });
+
+    await prueba('P13. Un inventario CERRADO sí puede pasar a CONTABILIZADO', async () => {
+        await sembrarFase2();
+        await assertSucceeds(rutaInventario(admin1, 'inv-cerrado').update({
+            estado: 'CONTABILIZADO', contabilizadoEn: Date.now(),
+            contabilizadoPor: 'admin1', semanaDestino: '2026-09-14'
+        }));
+    });
+
+    await prueba('F2. La transición solo admite los cuatro campos de la lista blanca', async () => {
+        await sembrarFase2();
+        await assertFails(rutaInventario(admin1, 'inv-cerrado').update({
+            estado: 'CONTABILIZADO', contabilizadoEn: Date.now(),
+            contabilizadoPor: 'admin1', semanaDestino: '2026-09-14',
+            totalProductos: 999          // ← un campo de más y se cae entero
+        }));
+        await assertFails(rutaInventario(admin1, 'inv-cerrado').update({
+            estado: 'CONTABILIZADO', contabilizadoEn: Date.now(),
+            contabilizadoPor: 'admin1', semanaDestino: '2026-09-14',
+            fechaCierre: 1                // ← tocar el cierre queda prohibido
+        }));
+    });
+
+    await prueba('F1. ★ Un inventario CONTABILIZADO ya no se puede modificar', async () => {
+        await sembrarFase2();
+        await assertSucceeds(rutaInventario(admin1, 'inv-cerrado').update({
+            estado: 'CONTABILIZADO', contabilizadoEn: Date.now(),
+            contabilizadoPor: 'admin1', semanaDestino: '2026-09-14'
+        }));
+        // Este era el agujero: con la regla anterior (estado != 'CERRADO'),
+        // CONTABILIZADO habría quedado ABIERTO a cualquier modificación.
+        await assertFails(rutaInventario(admin1, 'inv-cerrado').update({ totalProductos: 1 }));
+        await assertFails(rutaInventario(admin1, 'inv-cerrado').update({ numero: 999 }));
+        await assertFails(rutaInventario(admin1, 'inv-cerrado').delete());
+    });
+
+    await prueba('F3. No se puede volver de CONTABILIZADO a CERRADO ni a SINCRONIZADO', async () => {
+        await sembrarFase2();
+        await assertSucceeds(rutaInventario(admin1, 'inv-cerrado').update({
+            estado: 'CONTABILIZADO', contabilizadoEn: Date.now(),
+            contabilizadoPor: 'admin1', semanaDestino: '2026-09-14'
+        }));
+        await assertFails(rutaInventario(admin1, 'inv-cerrado').update({ estado: 'CERRADO' }));
+        await assertFails(rutaInventario(admin1, 'inv-cerrado').update({ estado: 'SINCRONIZADO' }));
+    });
+
+    await prueba('F4. El snapshot sigue siendo inmutable tras contabilizar', async () => {
+        await sembrarFase2();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await rutaChunk(ctx.firestore(), 'inv-cerrado', 'chunk_0').set(chunkDemo(0, 1));
+        });
+        await assertSucceeds(rutaInventario(admin1, 'inv-cerrado').update({
+            estado: 'CONTABILIZADO', contabilizadoEn: Date.now(),
+            contabilizadoPor: 'admin1', semanaDestino: '2026-09-14'
+        }));
+        await assertFails(rutaChunk(admin1, 'inv-cerrado', 'chunk_0').set(chunkDemo(9, 1)));
+        await assertFails(rutaChunk(admin1, 'inv-cerrado', 'chunk_1').set(chunkDemo(1, 2)));
+        await assertFails(rutaChunk(admin1, 'inv-cerrado', 'chunk_0').delete());
+    });
+
+    await prueba('P20. Los inventarios contabilizados siguen siendo consultables', async () => {
+        await sembrarFase2();
+        await assertSucceeds(rutaInventario(admin1, 'inv-cerrado').update({
+            estado: 'CONTABILIZADO', contabilizadoEn: Date.now(),
+            contabilizadoPor: 'admin1', semanaDestino: '2026-09-14'
+        }));
+        await assertSucceeds(rutaInventario(bt1, 'inv-cerrado').get());
+        await assertSucceeds(rutaInicial(bt1, '2026-09-14').get());
+    });
+
     await testEnv.cleanup();
 
     console.log('\n── Resumen ──');
