@@ -630,7 +630,8 @@
             'contabilizacion',            // FASE 3 — inventario cerrado → inicial del ciclo siguiente
             'candado_local',              // desbloqueo del candado local de captura (D6)
             'compra_importada',           // FASE 4 — entrada de mercancía importada desde Excel
-            'compra_manual'               // FASE 4 — entrada de mercancía capturada a mano
+            'compra_manual',              // FASE 4 — entrada de mercancía capturada a mano
+            'conteo_auditoria_huerfano'   // FASE 5 — conteo de auditoría archivado por cambio de sesión
         ];
 
         function _registrarEnSyncQueue(evento) {

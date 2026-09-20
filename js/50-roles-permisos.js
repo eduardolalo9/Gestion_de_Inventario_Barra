@@ -21,6 +21,13 @@
                             console.warn('[AuditUser] Reintento fallido:', e)
                         );
                     }
+                    // FASE 5 (5B): reintentar el archivo de conteos huérfanos
+                    // que quedaron pendientes por falta de señal.
+                    if (typeof reintentarConteosHuerfanosPendientes === 'function') {
+                        reintentarConteosHuerfanosPendientes().catch(e =>
+                            console.warn('[AuditHuerfano] Reintento fallido:', e)
+                        );
+                    }
                     // FIX 3: Reintentar syncs de área que fallaron en auditoriaFinalizarConteo
                     if (window._pendingAreaSyncs && window._pendingAreaSyncs.size > 0) {
                         console.info('[Atomico] Reintentando ' + window._pendingAreaSyncs.size + ' área(s) pendiente(s)…');

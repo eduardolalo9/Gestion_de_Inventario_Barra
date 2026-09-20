@@ -1352,6 +1352,79 @@ async function main() {
         await assertFails(rutaInventario(admin1, 'inv-cerrado').update({ estado: 'CERRADO' }));
     });
 
+    // ══════════════════════════════════════════════════════════════════
+    //  FASE 5 (5B) — CONTEO DE AUDITORÍA HUÉRFANO
+    //  ────────────────────────────────────────────────────────────────
+    //  Mismo patrón de inmutabilidad que 'compras': id determinista
+    //  (uid + '_' + sessionId) + create sin update ni delete. La lectura
+    //  está gateada por inventory.reopenArea, no por ser el propio dueño.
+    // ══════════════════════════════════════════════════════════════════
+
+    const rutaHuerfano = (db, huerfanoId) =>
+        db.doc('inventarioApp/barra-principal/conteosAuditoriaHuerfanos/' + huerfanoId);
+    const huerfanoDemo = (overrides) => Object.assign({
+        uid: 'bartender1', sessionId: '1788115846917',
+        conteo: { almacen: { PRD001: { enteras: 3, abiertas: [] } } },
+        status: { almacen: 'completada', barra1: 'pendiente', barra2: 'pendiente' },
+        finalizadas: { almacen: { finalizadoEn: Date.now(), finalizadoPor: 'bartender1' } },
+        capturadoEn: Date.now()
+    }, overrides || {});
+
+    async function sembrarFase5(extra) {
+        await sembrarFase2(async (db) => {
+            // Un usuario con permiso de reabrir área, delegado igual que
+            // C1 delegó purchases.* a un bartender normal.
+            await db.doc('usuarios/reabridor1').set({
+                uid: 'reabridor1', role: 'BARTENDER',
+                permissionOverrides: { 'inventory.reopenArea': 'allow' }
+            });
+            if (extra) await extra(db);
+        });
+    }
+    const reabridor1 = testEnv.authenticatedContext('reabridor1').firestore();
+
+    await prueba('H1. Un usuario puede archivar su propio conteo huérfano', async () => {
+        await sembrarFase5();
+        await assertSucceeds(rutaHuerfano(bt1, 'bartender1_1788115846917').set(huerfanoDemo()));
+    });
+
+    await prueba('H2. Un usuario NO puede archivar un conteo huérfano a nombre de OTRO uid', async () => {
+        await sembrarFase5();
+        await assertFails(rutaHuerfano(bt1, 'bartender2_1788115846917')
+            .set(huerfanoDemo({ uid: 'bartender2' })));
+    });
+
+    await prueba('H3. El id del documento debe coincidir exactamente con uid_sessionId del payload', async () => {
+        await sembrarFase5();
+        await assertFails(rutaHuerfano(bt1, 'bartender1_otraSesion')
+            .set(huerfanoDemo({ sessionId: '1788115846917' })));
+    });
+
+    await prueba('H4. ★ Ni siquiera el propio dueño puede update ni delete sobre un huérfano ya creado', async () => {
+        await sembrarFase5();
+        await assertSucceeds(rutaHuerfano(bt1, 'bartender1_1788115846917').set(huerfanoDemo()));
+        await assertFails(rutaHuerfano(bt1, 'bartender1_1788115846917').update({ sessionId: 'otro' }));
+        await assertFails(rutaHuerfano(bt1, 'bartender1_1788115846917').delete());
+    });
+
+    await prueba('H5. Leer conteosAuditoriaHuerfanos exige inventory.reopenArea', async () => {
+        await sembrarFase5();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await rutaHuerfano(ctx.firestore(), 'bartender1_1788115846917').set(huerfanoDemo());
+        });
+        await assertFails(rutaHuerfano(bt1, 'bartender1_1788115846917').get());
+        await assertSucceeds(rutaHuerfano(reabridor1, 'bartender1_1788115846917').get());
+        await assertSucceeds(rutaHuerfano(admin1, 'bartender1_1788115846917').get());
+    });
+
+    await prueba('H6. Falta un campo requerido (sessionId no string o capturadoEn no number) se rechaza', async () => {
+        await sembrarFase5();
+        await assertFails(rutaHuerfano(bt1, 'bartender1_1788115846917')
+            .set(huerfanoDemo({ sessionId: 1788115846917 })));
+        await assertFails(rutaHuerfano(bt1, 'bartender1_1788115846917')
+            .set(huerfanoDemo({ capturadoEn: '' + Date.now() })));
+    });
+
     await testEnv.cleanup();
 
     console.log('\n── Resumen ──');

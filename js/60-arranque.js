@@ -195,6 +195,14 @@
                                 console.warn('[Compras] cargarComprasIniciales silenciado:', err)
                             );
                         }
+                        // FASE 5 (5B) — reintentar al arrancar cualquier conteo
+                        // huérfano que quedó sin subir (app cerrada offline
+                        // antes de que el reintento de reconexión pudiera correr).
+                        if (typeof reintentarConteosHuerfanosPendientes === 'function') {
+                            reintentarConteosHuerfanosPendientes().catch(err =>
+                                console.warn('[AuditHuerfano] Reintento al arrancar silenciado:', err)
+                            );
+                        }
                     });
                 }
             });

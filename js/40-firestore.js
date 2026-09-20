@@ -1520,6 +1520,136 @@
     }
 }
 
+// ══════════════════════════════════════════════════════════════════════
+//  FASE 5 (5B) — CONTEO DE AUDITORÍA HUÉRFANO
+//  ────────────────────────────────────────────────────────────────────
+//  Escenario: el admin abre un Inventario Físico nuevo mientras este
+//  dispositivo todavía tiene conteo sin confirmar contra el servidor
+//  (_auditSyncPending === true). Ese conteo NO se puede simplemente
+//  subir a userAuditoria/{uid} en ese momento: handleAuditSessionChange
+//  ya reasignó _auditoriaSessionId a la sesión NUEVA antes de llegar
+//  aquí, así que un set() con esa variable mezclaría conteo de la
+//  semana anterior con el inventario recién abierto — un error de
+//  negocio, no solo técnico.
+//
+//  En vez de eso, se archiva aparte, con el sessionId VIEJO explícito
+//  (siempre el que el llamador pasa, nunca _auditoriaSessionId), en un
+//  documento inmutable que solo puede leer quien tiene permiso de
+//  reabrir áreas (firestore.rules: conteosAuditoriaHuerfanos). Nunca se
+//  mezcla automáticamente con el inventario nuevo — mezclar conteos de
+//  dos inventarios distintos sería un error de negocio incluso si fuera
+//  técnicamente posible.
+// ══════════════════════════════════════════════════════════════════════
+const AUDIT_HUERFANO_KEY = 'inventarioApp_conteoHuerfanoPendiente';
+
+function _construirConteoHuerfano(sessionIdViejo) {
+    return {
+        uid:         currentUserUid,
+        sessionId:   sessionIdViejo,
+        conteo:      JSON.parse(JSON.stringify(myAuditoriaConteo || {})),
+        status:      JSON.parse(JSON.stringify(myAuditoriaStatus || {})),
+        finalizadas: (typeof myAuditoriaFinalizadas !== 'undefined' && myAuditoriaFinalizadas)
+                     ? JSON.parse(JSON.stringify(myAuditoriaFinalizadas)) : {},
+        capturadoEn: Date.now()
+    };
+}
+
+function _conteoHuerfanoTieneContenido(payload) {
+    if (!payload) return false;
+    if (payload.conteo && Object.keys(payload.conteo).length > 0) return true;
+    if (payload.status && Object.keys(payload.status).some(function(k) { return payload.status[k] === 'completada'; })) return true;
+    if (payload.finalizadas && Object.keys(payload.finalizadas).length > 0) return true;
+    return false;
+}
+
+/**
+ * Punto de entrada llamado por handleAuditSessionChange() justo antes de
+ * vaciar myAuditoriaConteo. No bloquea el reset: es responsabilidad del
+ * llamador seguir adelante pase lo que pase aquí — la preservación del
+ * dato no debe retrasar que el bartender pueda empezar a contar la
+ * sesión nueva.
+ */
+async function _archivarConteoHuerfanoSiAplica(sessionIdViejo) {
+    if (!currentUserUid || !sessionIdViejo) return;
+    // Solo archivar si había algo sin confirmar. Sin esta guarda, cada
+    // primer arranque (o cada cambio de sesión ya sincronizado a tiempo)
+    // crearía un documento huérfano vacío.
+    if (!_auditSyncPending) return;
+
+    const payload = _construirConteoHuerfano(sessionIdViejo);
+    if (!_conteoHuerfanoTieneContenido(payload)) return;
+
+    showNotification('⚠️ Se abrió un nuevo inventario antes de confirmar tu conteo anterior — se guardó aparte. Avísale al administrador.');
+
+    if (typeof _registrarEnSyncQueue === 'function') {
+        _registrarEnSyncQueue({
+            tipo:         'conteo_auditoria_huerfano',
+            detalle:      'Conteo de la sesión ' + sessionIdViejo + ' no se confirmó antes de que se abriera una nueva',
+            valorAntes:   null,
+            valorDespues: JSON.stringify({ sessionId: sessionIdViejo, uid: currentUserUid }),
+            motivo:       'Cambio de sesión de auditoría con sincronización pendiente'
+        });
+    }
+
+    await _intentarSubirConteoHuerfano(payload);
+}
+
+async function _intentarSubirConteoHuerfano(payload) {
+    if (!_db || !navigator.onLine) {
+        _encolarConteoHuerfanoLocal(payload);
+        return;
+    }
+    try {
+        const ref = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
+                       .collection('conteosAuditoriaHuerfanos')
+                       .doc(payload.uid + '_' + payload.sessionId);
+        await ref.set(payload);
+        _quitarConteoHuerfanoLocal(payload);
+        console.info('[AuditHuerfano] Conteo huérfano archivado ✓ sesión', payload.sessionId);
+    } catch (err) {
+        console.warn('[AuditHuerfano] No se pudo archivar de inmediato, se reintentará:', err);
+        _encolarConteoHuerfanoLocal(payload);
+    }
+}
+
+function _leerColaConteosHuerfanos() {
+    try {
+        const raw = localStorage.getItem(AUDIT_HUERFANO_KEY);
+        return raw ? JSON.parse(raw) : [];
+    } catch (_) { return []; }
+}
+
+function _encolarConteoHuerfanoLocal(payload) {
+    try {
+        const cola = _leerColaConteosHuerfanos();
+        const clave = payload.uid + '_' + payload.sessionId;
+        if (!cola.some(function(p) { return (p.uid + '_' + p.sessionId) === clave; })) {
+            cola.push(payload);
+            localStorage.setItem(AUDIT_HUERFANO_KEY, JSON.stringify(cola));
+        }
+    } catch (_) {}
+}
+
+function _quitarConteoHuerfanoLocal(payload) {
+    try {
+        const clave = payload.uid + '_' + payload.sessionId;
+        const cola = _leerColaConteosHuerfanos().filter(function(p) {
+            return (p.uid + '_' + p.sessionId) !== clave;
+        });
+        localStorage.setItem(AUDIT_HUERFANO_KEY, JSON.stringify(cola));
+    } catch (_) {}
+}
+
+/** Reintenta subir cualquier conteo huérfano que quedó pendiente de una
+ *  sesión anterior del navegador (offline en el momento del archivo).
+ *  Se llama al reconectar y al arrancar — mismo patrón que _auditSyncPending. */
+async function reintentarConteosHuerfanosPendientes() {
+    const cola = _leerColaConteosHuerfanos();
+    for (const payload of cola) {
+        await _intentarSubirConteoHuerfano(payload);
+    }
+}
+
     /**
      * Escucha el doc propio del usuario en userAuditoria/{myUid}
          * para detectar desbloqueos otorgados por el admin en tiempo real.

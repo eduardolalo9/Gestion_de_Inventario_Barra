@@ -441,6 +441,32 @@
                    );
                  }
 
+                 // ══════════════════════════════════════════════════════════
+                 //  FASE 5 (5B) — CONTEO DE AUDITORÍA HUÉRFANO
+                 //  ──────────────────────────────────────────────────────
+                 //  Cuando el admin abre un Inventario Físico nuevo mientras
+                 //  un dispositivo todavía tiene conteo de auditoría sin
+                 //  confirmar, ese conteo se archiva aquí en vez de perderse
+                 //  o mezclarse con la sesión nueva (ver
+                 //  _archivarConteoHuerfanoSiAplica, js/40-firestore.js).
+                 //
+                 //  Mismo patrón de inmutabilidad que 'compras': create sí,
+                 //  update/delete no. El id del documento fija uid+sessionId
+                 //  para que nadie pueda archivar a nombre de otro ni
+                 //  reescribir un archivo ya creado. Solo quien tiene permiso
+                 //  de reabrir áreas puede leerlos — son la misma persona que
+                 //  necesita saber que existe un conteo sin confirmar.
+                 // ══════════════════════════════════════════════════════════
+                 match /conteosAuditoriaHuerfanos/{huerfanoId} {
+                   allow read:   if hasPerm('inventory.reopenArea');
+                   allow create: if request.auth != null
+                                    && request.resource.data.uid == request.auth.uid
+                                    && huerfanoId == (request.resource.data.uid + '_' + request.resource.data.sessionId)
+                                    && request.resource.data.sessionId is string
+                                    && request.resource.data.capturadoEn is number;
+                   allow update, delete: if false;
+                 }
+
                  // ETAPA 15 — INVENTARIO FÍSICO
                  // inventoryId === _auditoriaSessionId (mismo identificador,
                  // sin duplicar la noción de "sesión" — ver informe). Solo
