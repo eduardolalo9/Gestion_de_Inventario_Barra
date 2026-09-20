@@ -13,6 +13,14 @@
             orders     = safeGet('inventarioApp_orders',     []);
             inventories = safeGet('inventarioApp_inventories', []);
             cart       = safeGet('inventarioApp_cart',       []);
+            // FASE 4 — compras (el hecho), movimientos (el efecto) y el último
+            // costo conocido por producto. Ver js/00-nucleo.js para la forma de
+            // cada uno; se recargan de Firestore al arrancar (cargarComprasIniciales,
+            // js/88-compras.js) así que esto es solo el respaldo local mientras
+            // esa carga termina o si arranca sin red.
+            compras       = safeGet('inventarioApp_compras',       []);
+            movimientos   = safeGet('inventarioApp_movimientos',   []);
+            costosUltimos = safeGet('inventarioApp_costosUltimos', {});
 
             // FIX-CONCURRENCIA: restaurar tombstones de borrado (ver _mergeArrayByIdPreferLocal)
             const rawDelProd = safeGet('inventarioApp_deletedProductIds',   []);
@@ -249,6 +257,84 @@
                 });
             }
             return { ok: true, totalChunks: totalChunks, totalRegistros: registros.length };
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  FASE 4 — COMPRAS: contador, batch por folio, último costo
+        //  ────────────────────────────────────────────────────────────────────
+        //  compras/{compraId} y movimientos/{movId} viven a nivel RAÍZ de
+        //  Firestore (no bajo inventarioApp/{FIRESTORE_DOC_ID}): no son datos
+        //  por sucursal, son el libro único del negocio. contadores/compras y
+        //  costos/ultimos siguen el mismo criterio — ver firestore.rules y
+        //  claude/fase4-diseno-compras-2026-09-20.md §2.1.
+        // ══════════════════════════════════════════════════════════════════════
+        const COMPRA_MAX_OPS = 450; // mismo margen que SNAPSHOT_MAX_OPS
+
+        /**
+         * _obtenerSiguienteFolioCompra()
+         * Solo para captura MANUAL: un folio interno correlativo cuando no hay
+         * uno de SAP que copiar. La importación de Excel nunca la usa — ese
+         * folio ya viene en el archivo. Mismo patrón que
+         * _obtenerSiguienteNumeroInventario (js/45-inventario-datos.js:493):
+         * runTransaction() hace que dos capturas casi simultáneas nunca
+         * reciban el mismo número.
+         */
+        async function _obtenerSiguienteFolioCompra() {
+            const contadorRef = _db.collection('contadores').doc('compras');
+            return _db.runTransaction(async function(tx) {
+                const snap = await tx.get(contadorRef);
+                const anterior = (snap.exists && typeof snap.data().ultimoNumero === 'number')
+                    ? snap.data().ultimoNumero : 0;
+                const nuevo = anterior + 1;
+                tx.set(contadorRef, { ultimoNumero: nuevo }, { merge: true });
+                return nuevo;
+            });
+        }
+
+        /**
+         * _escribirCompraEnBatch(batch, compra, asientos)
+         * Solo AÑADE operaciones al batch que arma quien llama — nunca hace
+         * commit. Mismo contrato que _escribirSnapshotEnBatch: si el batch
+         * falla, no queda nada escrito a medias, y reintentar es seguro porque
+         * el id de la compra y el de cada asiento son deterministas — el
+         * servidor rechaza los que ya existen (firestore.rules, "compras" y
+         * "movimientos": create sin update ni delete).
+         */
+        function _escribirCompraEnBatch(batch, compra, asientos) {
+            if (!_db || !batch || !compra || !compra.compraId) {
+                return { ok: false, motivo: 'sin_referencia' };
+            }
+            if (!Array.isArray(asientos)) asientos = [];
+
+            const totalOps = 1 + asientos.length; // el documento de compra + un asiento por línea
+            if (totalOps > COMPRA_MAX_OPS) {
+                return { ok: false, motivo: 'demasiadas_lineas', totalOps: totalOps };
+            }
+
+            batch.set(_db.collection('compras').doc(compra.compraId), compra);
+            asientos.forEach(function(asiento) {
+                batch.set(_db.collection('movimientos').doc(asiento.movId), asiento);
+            });
+
+            return { ok: true, totalOps: totalOps };
+        }
+
+        /**
+         * _actualizarUltimosCostos(mapa)
+         * Una sola escritura con merge sobre costos/ultimos — nunca reescribe
+         * el catálogo (§2.5 del diseño de FASE 4). `mapa` es
+         * { productoId: { costo, fecha, folio, compraId } }; con merge, cada
+         * importación solo toca los productos que trajo, sin pisar el resto
+         * (Firestore hace merge recursivo de mapas anidados con set(...,{merge:true})).
+         */
+        async function _actualizarUltimosCostos(mapa) {
+            if (!_db || !mapa || typeof mapa !== 'object') return;
+            const claves = Object.keys(mapa);
+            if (claves.length === 0) return;
+            const datos = {};
+            claves.forEach(function(pid) { datos[pid] = mapa[pid]; });
+            await _db.collection('costos').doc('ultimos').set({ productos: datos }, { merge: true });
+            costosUltimos = Object.assign({}, costosUltimos, datos);
         }
 
         /**

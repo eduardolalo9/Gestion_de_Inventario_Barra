@@ -187,6 +187,14 @@
                         loadConteoPorUsuarioFromFirestore().catch(err =>
                             console.warn('[MultiUser] loadConteoPorUsuarioFromFirestore silenciado:', err)
                         );
+                        // FASE 4A — compras de la semana en curso y la anterior.
+                        // Acotada a propósito (nunca "todas las compras"); ver
+                        // cargarComprasIniciales() en js/88-compras.js.
+                        if (typeof cargarComprasIniciales === 'function') {
+                            cargarComprasIniciales().catch(err =>
+                                console.warn('[Compras] cargarComprasIniciales silenciado:', err)
+                            );
+                        }
                     });
                 }
             });

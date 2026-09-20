@@ -42,6 +42,7 @@ const PRUEBAS = [
     'prueba-f2.js',                 // F2 — permisos, privacidad y seguridad de servidor
     'prueba-f3prev.js',             // Paso previo a F3 — cierre atomico e inmutabilidad
     'prueba-f3.js',                 // F3 — contabilizar: inicial inmutable y alcance
+    'prueba-p2.js',                 // FASE 4 — compras: persistencia e importacion desde Excel
 ];
 
 let fallaron = [];

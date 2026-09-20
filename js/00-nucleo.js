@@ -68,9 +68,31 @@
         let inventories = [];
         // P1 — COMPRAS. Vacio hasta que se importe o capture la primera.
         // Se declara aqui, junto al resto del estado, para que renderTab() lo vea
-        // igual que a products u orders. Todavia NO se sincroniza a Firestore:
-        // eso es P4, y hasta entonces vive solo en este dispositivo.
+        // igual que a products u orders.
+        // FASE 4 — ya se persiste (localStorage + IndexedDB + Firestore, colección
+        // propia `compras/{compraId}`, ver js/40-firestore.js). Cada elemento es
+        // EL HECHO tal cual lo trajo el origen (Excel o captura manual): folio,
+        // proveedor, fecha, importe y sus líneas. Inmutable una vez guardado.
         let compras = [];
+        // FASE 4 — el libro de movimientos. Un asiento por línea de compra,
+        // id determinista `compra_{compraId}_{productoId}`. Es EL EFECTO, separado
+        // del hecho para que ventas y ajustes (fases futuras) sumen sobre una sola
+        // forma de documento. Ver claude/fase4-diseno-compras-2026-09-20.md §2.1-2.2.
+        let movimientos = [];
+        // FASE 4 — último costo conocido por producto, espejo local del documento
+        // único costos/ultimos de Firestore: { productoId: { costo, fecha, folio, compraId } }.
+        // NO reescribe product.precio (ver §2.5 del diseño): es solo la señal para
+        // el aviso de diferencia de costo en la importación.
+        let costosUltimos = {};
+        // FASE 4B — estado de la pantalla de importación de compras (js/88-compras.js).
+        // 'lista' | 'vista_previa' | 'incidencias' | 'incidencias_previa'.
+        let comprasImportView = 'lista';
+        // Resultado sin confirmar de _parsearExcelCompras(), pendiente de que el
+        // usuario revise la vista previa y confirme o cancele.
+        let _comprasImportPendiente = null;
+        // Resultado YA guardado (o con errores) de confirmarImportacionCompras(),
+        // para la pantalla de incidencias (D-4).
+        let _comprasImportResultado = null;
         let activeTab = 'inicio';
         let editingProductId = null;
         let searchTerm = '';

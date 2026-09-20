@@ -228,16 +228,26 @@ const todo = flujo + ui + firest + persis + roles + leer('js/45-inventario-datos
 // .js), aunque solo muestra, no importa ni escribe. Lo que FASE 3 garantiza
 // no es que no haya compras, sino que no las tocó ni las conectó: el módulo
 // no aparece en el diff y contabilizar no lee ni escribe compras.
-chk('ALCANCE · FASE 3 no conectó el módulo de compras (sigue siendo P1: solo muestra)',
-    !/collection\('compras'\)/.test(todo) && !/tipo:\s*'compra'/.test(todo) &&
+// OJO CON ESTAS DOS COMPROBACIONES TAMBIÉN. FASE 4 (posterior a FASE 3) SÍ
+// implementó compras y el libro de movimientos de verdad — legítimamente, y
+// en su propio módulo (js/88-compras.js) más las funciones de soporte que
+// añadió a js/40-firestore.js (_escribirCompraEnBatch, etc.), que por eso ya
+// no pueden usarse para probar esta ausencia: `todo` incluye `firest` y
+// ahora SÍ menciona 'compras' y 'movimientos'. Lo que este archivo protegía
+// de verdad —que el FLUJO DE CONTABILIZACIÓN de FASE 3 no leyera ni
+// escribiera compras— sigue siendo cierto y es lo que se vigila ahora,
+// acotado a `flujo`/`contab` en vez de a todo el conjunto.
+chk('ALCANCE · contabilizar (FASE 3) no conectó el módulo de compras',
+    !/collection\('compras'\)/.test(flujo) && !/tipo:\s*'compra'/.test(flujo) &&
     !/compras/.test(contab || ''),
-    'la pestaña existía antes de FASE 3; lo que se vigila es que no se cableara');
+    'la pestaña existía antes de FASE 3 (P1) y el libro de movimientos llegó después (FASE 4); '
+    + 'lo que se vigila es que la contabilización de FASE 3 nunca los tocara');
 chk('ALCANCE · no se implementaron ventas',
     !/collection\('ventas'\)/.test(todo) && !/\bventas\b/.test(contab || ''));
 chk('ALCANCE · no se implementaron recetas',
     !/collection\('recetas'\)/.test(todo));
-chk('ALCANCE · no se implementó el libro de movimientos',
-    !/collection\('movimientos'\)/.test(todo));
+chk('ALCANCE · contabilizar (FASE 3) no escribe en el libro de movimientos',
+    !/collection\('movimientos'\)/.test(flujo) && !/movimientos/.test(contab || ''));
 chk('ALCANCE · no se implementó stock teórico ni desviación',
     !/stockTeorico|calcularDesviacion/.test(todo));
 chk('ALCANCE · no se tocó el campo pv ni se crearon sku/pvParrot',

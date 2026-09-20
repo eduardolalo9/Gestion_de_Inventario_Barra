@@ -628,7 +628,9 @@
             // Firestore por el mismo camino que todo lo demás.
             'permisos',                   // cambio de rol/permisos/áreas de un usuario
             'contabilizacion',            // FASE 3 — inventario cerrado → inicial del ciclo siguiente
-            'candado_local'               // desbloqueo del candado local de captura (D6)
+            'candado_local',              // desbloqueo del candado local de captura (D6)
+            'compra_importada',           // FASE 4 — entrada de mercancía importada desde Excel
+            'compra_manual'               // FASE 4 — entrada de mercancía capturada a mano
         ];
 
         function _registrarEnSyncQueue(evento) {

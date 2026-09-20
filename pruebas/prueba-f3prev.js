@@ -243,8 +243,16 @@ chk('X12 · la colección de iniciales solo se toca desde el flujo',
     !/inventariosIniciales/.test(_fueraDeFlujo));
 chk('X12 · no se implementaron recetas',
     !/collection\('recetas'\)/.test(todo));
-chk('X12 · no se implementaron ventas ni movimientos',
-    !/collection\('ventas'\)/.test(todo) && !/collection\('movimientos'\)/.test(todo));
+chk('X12 · no se implementaron ventas',
+    !/collection\('ventas'\)/.test(todo));
+// 'movimientos' SÍ existe desde FASE 4 (compras es su primer productor —
+// js/40-firestore.js: _escribirCompraEnBatch, js/88-compras.js). Lo que este
+// paso previo protegía era que NO llegara en el paso previo a FASE 3 mismo;
+// esa garantía se conserva: las referencias a 'movimientos' que hay hoy en
+// `todo` llegaron en una fase posterior a la que este archivo vigila, nunca
+// aquí. Se reorienta la comprobación en vez de dejarla fallando para siempre.
+chk('X12 · el libro de movimientos sigue sin ventas ni ajustes conectados',
+    !/tipo\s*:\s*'consumo_venta'/.test(todo) && !/tipo\s*:\s*'ajuste'/.test(todo));
 chk('X12 · no se implementó stock teórico ni desviación',
     !/stockTeorico|calcularDesviacion/.test(todo));
 // La función vive en js/15-ciclo-semanal.js y allí aparece dos veces: en su

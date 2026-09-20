@@ -38,18 +38,34 @@ const C=[]; const chk=(n,ok,d)=>C.push({n,ok,d});
       JSON.stringify(vacio.botones));
 
   // ── Con compras: totaliza bien ──
+  // FASE 4: `lineas` dejó de ser un conteo (número) y pasó a ser el ARRAY real
+  // de renglones — {productoId, cantidadInventario, costoUnitario, importe,
+  // enCatalogo} — porque así es como lo exige firestore.rules (lineas is
+  // list) y como lo guarda guardarCompra(). El número de unidades ya no es un
+  // campo aparte: se calcula sumando cantidadInventario (_unidadesCompra).
   const conDatos = await p.evaluate(()=>{
     compras=[
       {folio:'1898',docSap:'27113',proveedorCodigo:'P00164',proveedorNombre:'STANDARD FOODS',
-       fecha:'2026-09-09',lineas:3,unidades:432,importe:8482.68,origen:'excel'},
+       fecha:'2026-09-09',importe:8482.68,origen:'excel',
+       lineas:[
+         {productoId:'P1',cantidadInventario:100,costoUnitario:10,importe:1000,enCatalogo:true},
+         {productoId:'P2',cantidadInventario:200,costoUnitario:20,importe:4000,enCatalogo:true},
+         {productoId:'P3',cantidadInventario:132,costoUnitario:26.38,importe:3482.68,enCatalogo:true}
+       ]},
       {folio:'M-0001',proveedorNombre:'FRESCO DEL VALLE',fecha:'2026-09-10',
-       lineas:2,unidades:15,importe:1200.50,origen:'manual'}
+       importe:1200.50,origen:'manual',
+       lineas:[
+         {productoId:'P4',cantidadInventario:10,costoUnitario:80.05,importe:800.50,enCatalogo:true},
+         {productoId:'P5',cantidadInventario:5,costoUnitario:80,importe:400,enCatalogo:true}
+       ]}
     ];
     renderTab();
     return document.getElementById('tabContent').innerText;
   });
   chk('Suma los importes de las dos compras', conDatos.includes('9,683.18'), conDatos.slice(0,160));
   chk('Cuenta 5 líneas en total', /\b5\b/.test(conDatos), '');
+  chk('Cada tarjeta muestra sus unidades sumadas desde las líneas (432 y 15)',
+      conDatos.includes('432 unidades') && conDatos.includes('15 unidades'), conDatos.slice(0,400));
   chk('Cuenta 2 proveedores distintos', conDatos.includes('2'), '');
   chk('La fecha sale en castellano y sin corrimiento de día',
       conDatos.includes('9 de septiembre de 2026'), conDatos.slice(0,200));
