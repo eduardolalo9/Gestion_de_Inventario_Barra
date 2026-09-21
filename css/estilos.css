@@ -1570,6 +1570,200 @@ html[data-theme="light"] .csb-match  { background: rgba(29,78,216,0.13); color: 
 html[data-theme="light"] .csb-tag--ok   { color: #16a34a; }
 html[data-theme="light"] .csb-tag--none { color: #dc2626; }
 
+/* ══════════════════════════════════════════════════════════════════════
+   FASE 6 — BARRA DE BÚSQUEDA UNIFICADA (.sbx)
+   Reemplaza visualmente a .csb-* en las cinco vistas con buscador. Usa
+   los mismos tokens del tema (Material 3, IBM Plex) para que claro y
+   oscuro salgan solos.
+   ══════════════════════════════════════════════════════════════════════ */
+.sbx-sr {
+    position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+}
+.sbx { position: relative; margin-bottom: 10px; }
+.sbx--sticky { z-index: 20; }
+@media (max-width: 767px) {
+    /* En el teléfono la barra queda a mano del pulgar al hacer scroll. */
+    .sbx--sticky {
+        position: sticky; top: var(--sbx-top, 0px);
+        padding: 6px 0; margin: -6px 0 4px;
+        background: var(--bg);
+    }
+    .sbx--sticky .sbx__icono { top: calc(50%); }
+}
+.sbx__icono {
+    position: absolute; left: 13px; top: 50%; transform: translateY(-50%);
+    width: 17px; height: 17px; stroke: var(--txt-muted); pointer-events: none;
+    transition: stroke .18s;
+}
+.sbx__input {
+    width: 100%;
+    padding: 12px 84px 12px 40px;
+    background: var(--card);
+    border: 1.5px solid var(--border-mid);
+    border-radius: var(--r-lg);
+    color: var(--txt-primary);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 16px;               /* 16px: iOS no hace zoom al enfocar */
+    line-height: 1.2;
+    outline: none;
+    -webkit-appearance: none; appearance: none;
+    transition: border-color .18s, box-shadow .18s, background .18s;
+}
+.sbx__input::-webkit-search-cancel-button,
+.sbx__input::-webkit-search-decoration { display: none; }
+.sbx__input::placeholder { color: var(--txt-muted); font-size: .88rem; }
+.sbx__input:focus,
+.sbx--texto .sbx__input {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-dim2);
+    background: var(--surface);
+}
+.sbx__input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sbx--texto .sbx__icono,
+.sbx__input:focus ~ .sbx__icono { stroke: var(--accent); }
+
+.sbx__limpiar, .sbx__modo {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    border: none; cursor: pointer; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    min-height: unset !important;
+    font-family: 'IBM Plex Mono', monospace;
+}
+.sbx__limpiar {
+    right: 8px; width: 30px; height: 30px; border-radius: 50%;
+    background: var(--border-mid); color: var(--txt-secondary);
+    opacity: 0; pointer-events: none; transform: translateY(-50%) scale(.7);
+    transition: opacity .16s, transform .18s var(--ease-spring), background .14s;
+}
+.sbx__limpiar svg { width: 14px; height: 14px; stroke: currentColor; }
+.sbx--texto .sbx__limpiar { opacity: 1; pointer-events: auto; transform: translateY(-50%) scale(1); }
+.sbx__limpiar:hover, .sbx__limpiar:focus-visible { background: var(--accent); color: var(--accent-on); outline: none; }
+.sbx__modo {
+    right: 44px; height: 26px; padding: 0 7px; border-radius: 6px;
+    font-size: .66rem; font-weight: 700; letter-spacing: .02em;
+    background: transparent; color: var(--txt-muted);
+    border: 1px solid var(--border-mid);
+}
+.sbx__modo--on { background: var(--accent-dim2); color: var(--accent); border-color: var(--accent); }
+.sbx__modo:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* Con ratón y teclado físico el teclado numérico no aplica. */
+@media (hover: hover) and (pointer: fine) {
+    .sbx__modo { display: none; }
+    .sbx__input { padding-right: 46px; }
+}
+
+.sbx__recientes {
+    position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 30;
+    background: var(--card-high); border: 1px solid var(--border-mid);
+    border-radius: var(--r-md); box-shadow: var(--shadow-elev3);
+    padding: 4px; max-height: 320px; overflow-y: auto;
+    animation: sbxAparece .14s var(--ease-out);
+}
+.sbx__recientes[hidden] { display: none !important; }
+.sbx__rec-cab {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 6px 8px 4px; font-size: .66rem; font-weight: 700; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--txt-muted);
+}
+.sbx__rec-borrar {
+    background: none; border: none; color: var(--accent); cursor: pointer;
+    font-size: .7rem; font-weight: 600; text-transform: none; letter-spacing: 0;
+    min-height: unset !important; padding: 2px 4px;
+}
+.sbx__rec-item {
+    display: flex; align-items: center; gap: 8px; width: 100%;
+    padding: 10px 10px; border: none; border-radius: 8px; background: none;
+    color: var(--txt-primary); font-size: .88rem; text-align: left; cursor: pointer;
+    min-height: 44px;
+}
+.sbx__rec-item span { color: var(--txt-muted); }
+.sbx__rec-item:hover, .sbx__rec-item.sbx-activo { background: var(--accent-dim); }
+
+.sbx-chips {
+    display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 8px;
+    scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.sbx-chips::-webkit-scrollbar { display: none; }
+.sbx-chip {
+    flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px;
+    padding: 0 12px; min-height: 34px !important; border-radius: 99px;
+    background: var(--surface); border: 1px solid var(--border-mid);
+    color: var(--txt-secondary); font-size: .76rem; font-weight: 600; cursor: pointer;
+    transition: background .14s, border-color .14s, color .14s;
+}
+.sbx-chip:hover { border-color: var(--border-strong); }
+.sbx-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sbx-chip--on { background: var(--accent-dim2); border-color: var(--accent); color: var(--accent); }
+.sbx-chip__n {
+    font-family: 'IBM Plex Mono', monospace; font-size: .66rem;
+    padding: 1px 6px; border-radius: 99px; background: var(--border-mid); color: inherit;
+}
+.sbx-chip--on .sbx-chip__n { background: var(--accent); color: var(--accent-on); }
+
+.sbx-resumen {
+    display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 6px;
+    font-size: .8rem; color: var(--txt-secondary); margin: 2px 2px 10px;
+}
+.sbx-resumen__n { font-weight: 700; font-size: 1rem; color: var(--txt-primary); font-variant-numeric: tabular-nums; }
+.sbx-resumen__q { color: var(--accent); font-weight: 600; }
+.sbx-resumen__kbd { margin-left: auto; font-size: .66rem; color: var(--txt-muted); }
+@media (hover: none), (max-width: 767px) { .sbx-resumen__kbd { display: none; } }
+
+.sb-mark {
+    background: var(--accent-dim2); color: var(--accent);
+    border-radius: 3px; padding: 0 1px; font-weight: 700;
+}
+
+.sbx-res--refresco { animation: sbxAparece .14s var(--ease-out); }
+/* Durante una búsqueda no se repite la cascada de entrada de cada tarjeta. */
+.sbx-res--refresco .prd-card,
+.sbx-res--refresco .inv-card,
+.sbx-res--refresco [data-sbx-item] { animation: none !important; }
+
+[data-sbx-item].sbx-activo {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+    border-radius: var(--r-md);
+}
+tr[data-sbx-item].sbx-activo { outline-offset: -2px; background: var(--accent-dim); }
+
+.sbx-vacio {
+    text-align: center; padding: 36px 18px; margin-top: 4px;
+    background: var(--surface); border: 1px dashed var(--border-strong); border-radius: 12px;
+    animation: sbxAparece .16s var(--ease-out);
+}
+.sbx-vacio__icono { font-size: 1.9rem; margin-bottom: 8px; opacity: .8; }
+.sbx-vacio__titulo { font-weight: 700; color: var(--txt-primary); margin-bottom: 4px; word-break: break-word; }
+.sbx-vacio__texto { color: var(--txt-secondary); font-size: .86rem; }
+.sbx-vacio__acciones { display: flex; gap: 8px; justify-content: center; margin-top: 14px; flex-wrap: wrap; }
+
+.sbx-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    min-height: 44px; padding: 0 16px; border-radius: var(--r-md);
+    background: var(--accent-dim); border: 1px solid var(--accent-dim2);
+    color: var(--accent); font-weight: 600; font-size: .84rem; cursor: pointer;
+}
+.sbx-btn:hover { background: var(--accent-dim2); }
+.sbx-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sbx-mas { display: flex; justify-content: center; padding: 14px 0 6px; }
+.sbx-mas__resto { color: var(--txt-muted); font-weight: 500; }
+
+@keyframes sbxAparece { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+    .sbx-res--refresco, .sbx__recientes, .sbx-vacio { animation: none; }
+    .sbx__limpiar { transition: none; }
+}
+
+html[data-theme="light"] .sbx__input { background: #fff; border-color: #cbd5e1; }
+html[data-theme="light"] .sbx__input:focus,
+html[data-theme="light"] .sbx--texto .sbx__input { background: #fff; }
+html[data-theme="light"] .sbx__recientes { background: #fff; border-color: #dbe3ec; }
+html[data-theme="light"] .sbx-chip { background: #fff; border-color: #cbd5e1; color: #334155; }
+html[data-theme="light"] .sbx-chip--on { background: rgba(26,91,186,.10); border-color: var(--accent); color: var(--accent); }
+html[data-theme="light"] .sb-mark { background: rgba(29,78,216,.13); color: #1d4ed8; }
+html[data-theme="light"] .sbx-vacio { background: #fff; border-color: #cbd5e1; }
+html[data-theme="light"] .sbx--sticky { background: var(--bg); }
+
 
 /* Ajuste de padding inferior para no solapar con la tab bar.
    M1: la barra inferior crece con la barra de gestos del telefono; el

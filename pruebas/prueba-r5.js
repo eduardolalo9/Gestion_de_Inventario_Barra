@@ -121,19 +121,43 @@ chk('El stock por debajo del mínimo se resalta',
     'es la señal que dispara una compra');
 
 // ═══ 4 · Buscador ════════════════════════════════════════════════════════
-chk('La pestaña tiene buscador',            /id="productos-search-input"/.test(tab));
-chk('Usa el mismo motor que Inicio',        /updateSearchTerm\(this\.value\)/.test(tab),
+// FASE 6: el buscador pasó a la barra unificada (js/06-busqueda-ui.js). Las
+// comprobaciones conservan la MISMA intención que tenían en R5; cambia dónde
+// se verifica cada una.
+const buscUI  = fs.readFileSync(path.join(RAIZ, 'js/06-busqueda-ui.js'), 'utf8');
+const buscApp = fs.readFileSync(path.join(RAIZ, 'js/80-buscador.js'), 'utf8');
+const iniIni  = render.indexOf('function renderInicioTab() {');
+const tabIni  = iniIni !== -1 ? render.slice(iniIni, render.indexOf('\n        }\n', iniIni)) : '';
+chk('La pestaña tiene buscador',            /BusquedaUI\.barra\('catalogo'/.test(tab));
+chk('Usa el mismo motor que Inicio',
+    /BusquedaUI\.barra\('catalogo'/.test(tabIni) && /BusquedaUI\.region\('catalogo'/.test(tab),
     'dos buscadores distintos darían resultados distintos para lo mismo');
-chk('Escape limpia la búsqueda',            /event\.key===\\'Escape\\'/.test(tab));
-chk('El foco vuelve al input tras re-render',
-    /input\[type="search"\], #tabContent input\[type="text"\]/.test(render),
-    'buscar solo type="text" no encontraba el input: en el móvil el teclado se cerraba a media palabra');
+chk('Escape limpia la búsqueda',
+    /case 'Escape':[\s\S]{0,400}?limpiar\(key, true\)/.test(buscUI));
+chk('El foco no se pierde al buscar',
+    // Buscar ya no reconstruye la pestaña (se reescribe solo la región de
+    // resultados) y el input tiene id estable, que renderTab() restaura.
+    (() => {
+        const i = render.indexOf('function updateSearchTerm(value) {');
+        const cuerpo = i === -1 ? '' : render.slice(i, render.indexOf('\n        }', i));
+        return cuerpo.length > 0 && !/renderTab\(\)|saveToLocalStorage\(\)/.test(cuerpo);
+    })() &&
+    /id="sbx-input-' \+ id \+ '"/.test(buscUI) &&
+    /if \(el\.id\) return '#' \+ el\.id;/.test(render),
+    'si la búsqueda reconstruye el input, en el móvil el teclado se cierra a media palabra');
+chk('El catálogo se sigue leyendo con el mismo filtro que Inicio',
+    /_buscarCatalogo\(\)/.test(tab) &&
+    /function filterByGroup\(\) \{\s*return _buscarCatalogo\(\)\.items;/.test(
+        fs.readFileSync(path.join(RAIZ, 'js/85-ui-inventario-fisico.js'), 'utf8').replace(/\r/g, '')) &&
+    /function _buscarCatalogo\(\)/.test(buscApp),
+    'reimplementar el filtro aquí lo habría desincronizado del de Inicio');
 
 // ═══ 5 · Estados vacíos ══════════════════════════════════════════════════
 chk('Hay estado para catálogo vacío',       /El catálogo está vacío/.test(tab));
 chk('El texto vacío cambia según el rol',   /admin[\s\S]{0,200}?Importa el Excel del catálogo/.test(tab),
     'a un bartender no se le ofrece un botón que no puede pulsar');
-chk('Hay estado para filtro sin resultados', /Ningún producto coincide/.test(tab));
+chk('Hay estado para filtro sin resultados', /BusquedaUI\.vacio\('catalogo'/.test(tab),
+    'FASE 6: estado vacío común, con botones para limpiar búsqueda y quitar filtros');
 chk('Se avisa de cuántos faltan de precio y de PV',
     /sin precio/.test(tab) && /sin PV/.test(tab),
     'sin precio no se costea y sin PV no cruza con Parrot');
@@ -162,9 +186,6 @@ chk('…y se oculta solo en pantallas estrechas',
 chk('Sigue el filtro por grupo',   /getAvailableGroups\(\)\.forEach/.test(tab));
 chk('Sigue el botón de editar',    /editProduct\(/.test(tab));
 chk('Sigue el botón de eliminar',  /deleteProduct\(/.test(tab));
-chk('El catálogo se sigue leyendo con filterByGroup()',
-    /filterByGroup\(\)/.test(tab),
-    'reimplementar el filtro aquí lo habría desincronizado del de Inicio');
 
 // ═══ 9 · Caché ═══════════════════════════════════════════════════════════
 const html = fs.readFileSync(path.join(RAIZ, 'index.html'), 'utf8');

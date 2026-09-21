@@ -578,6 +578,115 @@
             });
         }
 
+        // FASE 6 — región de resultados del conteo de un área. La llama
+        // renderAuditoriaConteo() y, sin reconstruir la pantalla, BusquedaUI al
+        // buscar o filtrar. Recalcula aquí lo que necesita (área, conteo de
+        // referencia) para poder llamarse sola.
+        function _renderConteoResultados() {
+            const area = auditoriaAreaActiva;
+            const conteoRef = puedeVerConteosAjenos() ? auditoriaConteo : myAuditoriaConteo;
+            const r   = _buscarConteo(area, conteoRef);
+            const filteredProducts = r.items;
+            const lim = BusquedaUI.limite('conteo');
+            let html = '';
+            html += BusquedaUI.resumen('conteo', r.coincidencias, r.total, 'producto', 'productos');
+            html += '<div class="flex flex-col gap-3">';
+
+            if (filteredProducts.length === 0) {
+                html += BusquedaUI.vacio('conteo', 'productos');
+            } else {
+                filteredProducts.slice(0, lim).forEach((product, idx) => {
+                    // Leer conteo de auditoría (no del inventario operativo)
+                    const areaData = (conteoRef[product.id] && conteoRef[product.id][area]) || { enteras: 0, abiertas: [] };
+                    const enteras  = areaData.enteras || 0;
+                    const abiertas = areaData.abiertas || [];
+                    const hasData  = enteras > 0 || abiertas.some(a => a > 0);
+                    const hasExtra = abiertas.length > 1;
+                    const isExpanded = expandedCards.has(product.id);
+                    const delay = Math.min(idx * 35, 350);
+                    const usaConversion = tieneConversion(product);
+
+                    // Total con conversión
+                    let totalFinal = enteras;
+                    if (usaConversion) {
+                        abiertas.forEach(oz => { totalFinal += convertirOzAPuntos(oz, product.capacidadMl, product.pesoBotellaLlenaOz); });
+                    } else {
+                        abiertas.forEach(v => { totalFinal += (v || 0); });
+                    }
+
+                    const puntosAbiertas = abiertas.map(pesoOz =>
+                        usaConversion
+                            ? convertirOzAPuntos(pesoOz, product.capacidadMl, product.pesoBotellaLlenaOz)
+                            : pesoOz
+                    );
+
+                    // FIX #4: onkeydown para activar la tarjeta con Enter/Espacio desde teclado
+                    html += '<div class="inv-card' + (hasData ? ' has-data' : '') + (areaData.alerta_conflicto ? ' inv-card--conflict' : '') + '" data-sbx-item'
+                          + ' onclick="openInventarioModal(\'' + escapeHtml(product.id) + '\')"'
+                          + ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();openInventarioModal(\'' + escapeHtml(product.id) + '\');}"'
+                          + ' role="button" tabindex="0" aria-label="Contar ' + escapeHtml(product.name) + '" style="animation-delay:' + delay + 'ms">';
+                    html += '<div class="inv-card__ripple"></div>';
+
+                    html += '<div class="inv-card__header">';
+                    html += '<div style="min-width:0;flex:1">';
+                    html += '<div class="inv-card__name">' + resaltarBusqueda(product.name, _conteoSearchTerm) + '</div>';
+                    html += '<span class="inv-card__group-badge">' + escapeHtml(product.group || 'General') + '</span>';
+                    if (areaData.alerta_conflicto) {
+                        html += '<div class="inv-card__conflict-badge"><i class="fa-solid fa-triangle-exclamation"></i> Conflicto abierta</div>';
+                    }
+                    html += '</div>';
+                    html += '<span class="inv-card__code" title="Total (enteras + fracciones de abiertas)">' + totalFinal.toFixed(2) + ' u</span>';
+                    html += '</div>';
+
+                    html += '<div class="inv-card__chips">';
+                    html += '<div class="inv-chip entera' + (enteras === 0 ? ' empty' : '') + '">';
+                    html += '<span class="inv-chip__val">' + (enteras > 0 ? enteras : '0') + '</span>';
+                    html += '<span class="inv-chip__label">Entera</span>';
+                    html += '</div>';
+
+                    const pt1 = puntosAbiertas.length > 0 ? puntosAbiertas[0] : 0;
+                    const ab1Raw = abiertas.length > 0 ? abiertas[0] : 0;
+                    const ab1Label = usaConversion ? (pt1 * 100).toFixed(0) + '%' : pt1.toFixed(2);
+                    html += '<div class="inv-chip abierta' + (pt1 === 0 ? ' empty' : '') + '">';
+                    html += '<span class="inv-chip__val">' + ab1Label + '</span>';
+                    html += '<span class="inv-chip__label">' + (usaConversion ? ab1Raw.toFixed(1) + ' oz' : 'Abierta 1') + '</span>';
+                    html += '</div>';
+
+                    html += '</div>'; // FIX-3: cierre de .inv-card__chips ANTES de chips extra
+
+                    if (hasExtra) {
+                        // FIX-3: wrap chips extra en .inv-card__extra con id="card-extra-{id}"
+                        // para que toggleCardExpand() lo encuentre y aplique la clase .open
+                        html += '<div class="inv-card__extra' + (isExpanded ? ' open' : '') + '" id="card-extra-' + escapeHtml(product.id) + '">';
+                        puntosAbiertas.slice(1).forEach((pt, i) => {
+                            const rawOz = abiertas[i + 1] || 0;
+                            const chipLabel = usaConversion ? (pt * 100).toFixed(0) + '%' : pt.toFixed(2);
+                            html += '<div class="inv-chip abierta' + (pt === 0 ? ' empty' : '') + '">';
+                            html += '<span class="inv-chip__val">' + chipLabel + '</span>';
+                            html += '<span class="inv-chip__label">' + (usaConversion ? rawOz.toFixed(1) + ' oz' : 'Abierta ' + (i + 2)) + '</span>';
+                            html += '</div>';
+                        });
+                        html += '</div>'; // close .inv-card__extra
+                    }
+
+                    if (hasExtra) {
+                        html += '<button class="inv-card__expand-btn' + (isExpanded ? ' open' : '') + '" id="card-expand-btn-' + escapeHtml(product.id) + '" onclick="toggleCardExpand(\'' + escapeHtml(product.id) + '\', event)" aria-expanded="' + isExpanded + '">';
+                        html += '<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>';
+                        html += '<span>' + (isExpanded ? 'Ocultar' : 'Ver más abiertas') + '</span>';
+                        html += '<span style="font-size:0.65rem;opacity:0.7;margin-left:2px">(+' + (abiertas.length - 1) + ')</span>';
+                        html += '</button>';
+                    }
+                    html += '</div>'; // inv-card
+
+                    // ── Trail multiusuario (quién contó, cuánto, cuándo, diferencias) ──
+                    html += renderAuditTrailForProduct(product.id, area); // FIX-04: usa var local en lugar de global
+                });
+            }
+            html += '</div>'; // flex flex-col gap-3
+            html += BusquedaUI.centinela('conteo', filteredProducts.length - lim);
+            return { html: html, coincidencias: r.coincidencias, total: r.total };
+        }
+
         // ── Pantalla 2: Conteo de un área específica ───────────────────────────
         function renderAuditoriaConteo() {
             const area = auditoriaAreaActiva;
@@ -669,20 +778,14 @@
             });
             html += '</div></div>';
 
-            // ── Buscador inteligente ─────────────────────────────────────────────
-            html += '<div class="csb-wrap' + (_conteoSearchTerm ? ' csb-wrap--active' : '') + '" id="csb-wrap">';
-            html += '<svg class="csb-icon" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">'
-                  + '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>';
-            html += '<input id="csb-input" type="search" class="csb-input"'
-                  + ' placeholder="Buscar por nombre, código o grupo\u2026"'
-                  + ' value="' + escapeHtml(_conteoSearchTerm) + '"'
-                  + ' oninput="updateConteoSearch(this.value)"'
-                  + ' onkeydown="if(event.key===\'Escape\'){event.preventDefault();event.stopPropagation();clearConteoSearch();}"'
-                  + ' autocomplete="off" autocorrect="off" spellcheck="false"'
-                  + ' aria-label="Buscar producto en el conteo">';
-            // El botón limpiar está siempre en el DOM; .csb-wrap--active controla su visibilidad
-            html += '<button class="csb-clear" onclick="clearConteoSearch()" title="Limpiar (Esc)" aria-label="Limpiar búsqueda">✕</button>';
-            html += '</div>';
+            // ── Buscador (FASE 6: barra unificada) ───────────────────────────────
+            // Sin `sticky`: el encabezado del área ya es pegajoso y dos barras
+            // pegajosas apiladas se tapan entre sí.
+            html += BusquedaUI.barra('conteo', {
+                placeholder: 'Buscar por nombre, código o grupo…',
+                etiqueta: 'Buscar producto en el conteo'
+            });
+            html += BusquedaUI.chips('conteo', _chipsConteo(area, conteoRef));
 
             html += '<p class="text-xs text-gray-400 mb-3 px-1">Conteo ciego — toca cada producto para ingresar la cantidad física</p>';
 
@@ -726,126 +829,8 @@
                 }
             }
 
-            // ── Lista de tarjetas ─────────────────────────────────────────────
-            let filteredProducts = filterByGroup();
-            // Búsqueda fuzzy/multi-palabra: nombre, código, grupo — con tolerancia a typos
-            if (_conteoSearchTerm) {
-                const csScored = filteredProducts
-                    .map(p => ({ p, score: _csFuzzyMatch(p, _conteoSearchTerm) }))
-                    .filter(x => x.score > 0);
-                csScored.sort((a, b) => b.score - a.score); // mejor match primero
-                filteredProducts = csScored.map(x => x.p);
-            }
-            // Contador de resultados con estado visual
-            if (_conteoSearchTerm) {
-                html += '<div class="csb-meta">';
-                if (filteredProducts.length === 0) {
-                    html += '<span class="csb-tag csb-tag--none">Sin resultados</span>'
-                          + ' para "<em>' + escapeHtml(_conteoSearchTerm) + '</em>"'
-                          + ' <span class="csb-tag csb-tag--esc">Esc · limpiar</span>';
-                } else {
-                    html += '<span class="csb-tag csb-tag--ok">' + filteredProducts.length
-                          + ' encontrado' + (filteredProducts.length !== 1 ? 's' : '') + '</span>'
-                          + ' para "<em>' + escapeHtml(_conteoSearchTerm) + '</em>"'
-                          + ' <span class="csb-tag csb-tag--esc">Esc · limpiar</span>';
-                }
-                html += '</div>';
-            }
-            html += '<div class="flex flex-col gap-3">';
-
-            if (filteredProducts.length === 0) {
-                html += '<div class="bg-white rounded-2xl p-10 text-center shadow-md">';
-                html += '<p class="text-gray-500 text-sm">No hay productos en este grupo</p>';
-                html += '</div>';
-            } else {
-                filteredProducts.forEach((product, idx) => {
-                    // Leer conteo de auditoría (no del inventario operativo)
-                    const areaData = (conteoRef[product.id] && conteoRef[product.id][area]) || { enteras: 0, abiertas: [] };
-                    const enteras  = areaData.enteras || 0;
-                    const abiertas = areaData.abiertas || [];
-                    const hasData  = enteras > 0 || abiertas.some(a => a > 0);
-                    const hasExtra = abiertas.length > 1;
-                    const isExpanded = expandedCards.has(product.id);
-                    const delay = Math.min(idx * 35, 350);
-                    const usaConversion = tieneConversion(product);
-
-                    // Total con conversión
-                    let totalFinal = enteras;
-                    if (usaConversion) {
-                        abiertas.forEach(oz => { totalFinal += convertirOzAPuntos(oz, product.capacidadMl, product.pesoBotellaLlenaOz); });
-                    } else {
-                        abiertas.forEach(v => { totalFinal += (v || 0); });
-                    }
-
-                    const puntosAbiertas = abiertas.map(pesoOz =>
-                        usaConversion
-                            ? convertirOzAPuntos(pesoOz, product.capacidadMl, product.pesoBotellaLlenaOz)
-                            : pesoOz
-                    );
-
-                    // FIX #4: onkeydown para activar la tarjeta con Enter/Espacio desde teclado
-                    html += '<div class="inv-card' + (hasData ? ' has-data' : '') + (areaData.alerta_conflicto ? ' inv-card--conflict' : '') + '"'
-                          + ' onclick="openInventarioModal(\'' + escapeHtml(product.id) + '\')"'
-                          + ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();openInventarioModal(\'' + escapeHtml(product.id) + '\');}"'
-                          + ' role="button" tabindex="0" aria-label="Contar ' + escapeHtml(product.name) + '" style="animation-delay:' + delay + 'ms">';
-                    html += '<div class="inv-card__ripple"></div>';
-
-                    html += '<div class="inv-card__header">';
-                    html += '<div style="min-width:0;flex:1">';
-                    html += '<div class="inv-card__name">' + highlightConteoMatch(product.name, _conteoSearchTerm) + '</div>';
-                    html += '<span class="inv-card__group-badge">' + escapeHtml(product.group || 'General') + '</span>';
-                    if (areaData.alerta_conflicto) {
-                        html += '<div class="inv-card__conflict-badge"><i class="fa-solid fa-triangle-exclamation"></i> Conflicto abierta</div>';
-                    }
-                    html += '</div>';
-                    html += '<span class="inv-card__code" title="Total (enteras + fracciones de abiertas)">' + totalFinal.toFixed(2) + ' u</span>';
-                    html += '</div>';
-
-                    html += '<div class="inv-card__chips">';
-                    html += '<div class="inv-chip entera' + (enteras === 0 ? ' empty' : '') + '">';
-                    html += '<span class="inv-chip__val">' + (enteras > 0 ? enteras : '0') + '</span>';
-                    html += '<span class="inv-chip__label">Entera</span>';
-                    html += '</div>';
-
-                    const pt1 = puntosAbiertas.length > 0 ? puntosAbiertas[0] : 0;
-                    const ab1Raw = abiertas.length > 0 ? abiertas[0] : 0;
-                    const ab1Label = usaConversion ? (pt1 * 100).toFixed(0) + '%' : pt1.toFixed(2);
-                    html += '<div class="inv-chip abierta' + (pt1 === 0 ? ' empty' : '') + '">';
-                    html += '<span class="inv-chip__val">' + ab1Label + '</span>';
-                    html += '<span class="inv-chip__label">' + (usaConversion ? ab1Raw.toFixed(1) + ' oz' : 'Abierta 1') + '</span>';
-                    html += '</div>';
-
-                    html += '</div>'; // FIX-3: cierre de .inv-card__chips ANTES de chips extra
-
-                    if (hasExtra) {
-                        // FIX-3: wrap chips extra en .inv-card__extra con id="card-extra-{id}"
-                        // para que toggleCardExpand() lo encuentre y aplique la clase .open
-                        html += '<div class="inv-card__extra' + (isExpanded ? ' open' : '') + '" id="card-extra-' + escapeHtml(product.id) + '">';
-                        puntosAbiertas.slice(1).forEach((pt, i) => {
-                            const rawOz = abiertas[i + 1] || 0;
-                            const chipLabel = usaConversion ? (pt * 100).toFixed(0) + '%' : pt.toFixed(2);
-                            html += '<div class="inv-chip abierta' + (pt === 0 ? ' empty' : '') + '">';
-                            html += '<span class="inv-chip__val">' + chipLabel + '</span>';
-                            html += '<span class="inv-chip__label">' + (usaConversion ? rawOz.toFixed(1) + ' oz' : 'Abierta ' + (i + 2)) + '</span>';
-                            html += '</div>';
-                        });
-                        html += '</div>'; // close .inv-card__extra
-                    }
-
-                    if (hasExtra) {
-                        html += '<button class="inv-card__expand-btn' + (isExpanded ? ' open' : '') + '" id="card-expand-btn-' + escapeHtml(product.id) + '" onclick="toggleCardExpand(\'' + escapeHtml(product.id) + '\', event)" aria-expanded="' + isExpanded + '">';
-                        html += '<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>';
-                        html += '<span>' + (isExpanded ? 'Ocultar' : 'Ver más abiertas') + '</span>';
-                        html += '<span style="font-size:0.65rem;opacity:0.7;margin-left:2px">(+' + (abiertas.length - 1) + ')</span>';
-                        html += '</button>';
-                    }
-                    html += '</div>'; // inv-card
-
-                    // ── Trail multiusuario (quién contó, cuánto, cuándo, diferencias) ──
-                    html += renderAuditTrailForProduct(product.id, area); // FIX-04: usa var local en lugar de global
-                });
-            }
-            html += '</div>'; // flex flex-col gap-3
+            // ── Lista de tarjetas (región que refresca la búsqueda) ───────────
+            html += BusquedaUI.region('conteo', _renderConteoResultados().html);
 
             // ── Botón FINALIZAR ÁREA ──────────────────────────────────────────
             // FIX #4 — Solo mostrar si el área no está completada (o si es admin)
@@ -859,6 +844,51 @@
 
             html += '</div>'; // audit-screen
             return html;
+        }
+
+        // FASE 6 — región de resultados del historial de conteos.
+        function _renderHistoriaResultados() {
+            let html = '';
+            const r = _buscarHistoria();
+            const filteredInventories = r.items;
+            const lim = BusquedaUI.limite('historia');
+            if (filteredInventories.length === 0) {
+                return { html: BusquedaUI.vacio('historia', 'conteos'), coincidencias: 0, total: r.total };
+            }
+            html += BusquedaUI.resumen('historia', r.coincidencias, r.total, 'conteo', 'conteos');
+            html += '<div class="space-y-4">';
+            filteredInventories.slice(0, lim).forEach((inv, idx) => {
+                const isExpanded = expandedInventories.has(inv.id);
+                const delay = Math.min(idx * 50, 400);
+                html += '<div class="bg-white rounded-2xl shadow-md overflow-hidden" data-sbx-item style="animation: tabContentIn 0.3s ease-out both; animation-delay:' + delay + 'ms">';
+                html += '<div class="p-4 sm:p-6 cursor-pointer hover:bg-gray-50 transition-colors" data-sbx-principal onclick="toggleInventory(\'' + escapeHtml(inv.id) + '\')">';
+                html += '<div class="flex items-center justify-between gap-4">';
+                html += '<div class="flex-1">';
+                html += '<div class="flex items-center gap-3 mb-1">';
+                html += '<h3 class="text-lg font-bold text-gray-900">' + resaltarBusqueda(inv.id, _historiaSearchTerm) + '</h3>';
+                html += '<span class="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded-full font-medium">' + escapeHtml(areas[inv.area] || inv.area || 'General') + '</span>';
+                html += '</div>';
+                html += '<p class="text-sm text-gray-600">' + escapeHtml(inv.date) + ' • ' + inv.products.length + ' productos • Total: ' + (inv.totalProducts || 0).toFixed(2) + '</p>';
+                html += '</div>';
+                html += '<div class="flex items-center gap-2">';
+                html += '<button onclick="event.stopPropagation(); downloadInventory(\'' + escapeHtml(inv.id) + '\')" class="p-2.5 bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl hover:shadow-lg transition-all transform active:scale-95" title="Descargar"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg></button>';
+                html += '<button onclick="event.stopPropagation(); shareInventoryWhatsApp(\'' + escapeHtml(inv.id) + '\')" class="p-2.5 bg-gradient-to-br from-green-500 to-emerald-500 text-white rounded-xl hover:shadow-lg transition-all transform active:scale-95" title="Compartir"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg></button>';
+                html += '<svg class="w-5 h-5 text-gray-600 transition-transform ' + (isExpanded ? 'rotate-180' : '') + '" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>';
+                html += '</div></div></div>';
+                if (isExpanded) {
+                    html += '<div class="border-t border-gray-200 p-4 sm:p-6 bg-gray-50 animate-fadeIn"><div class="overflow-x-auto">';
+                    html += '<table class="w-full"><thead class="bg-gradient-to-r from-purple-600 to-blue-600"><tr><th class="px-4 py-3 text-left text-sm font-semibold text-white">Producto</th><th class="px-4 py-3 text-center text-sm font-semibold text-white">Stock (Enteras)</th><th class="px-4 py-3 text-center text-sm font-semibold text-white">Abiertas</th><th class="px-4 py-3 text-center text-sm font-semibold text-white">Grupo</th></tr></thead><tbody class="divide-y divide-gray-200 bg-white">';
+                    inv.products.forEach(p => {
+                        const abiertasStr = p.abiertas ? p.abiertas.map(a => (a || 0).toFixed(2)).join(' + ') : '';
+                        html += '<tr><td class="px-4 py-3 text-gray-900">' + escapeHtml(p.name) + '</td><td class="px-4 py-3 text-center text-gray-600">' + p.stock + ' ' + escapeHtml(p.unit) + '</td><td class="px-4 py-3 text-center text-orange-600">' + escapeHtml(abiertasStr) + '</td><td class="px-4 py-3 text-center font-semibold text-gray-900">' + escapeHtml(p.group || 'General') + '</td></tr>';
+                    });
+                    html += '</tbody></table></div></div>';
+                }
+                html += '</div>';
+            });
+            html += '</div>';
+            html += BusquedaUI.centinela('historia', filteredInventories.length - lim);
+            return { html: html, coincidencias: r.coincidencias, total: r.total };
         }
 
         function renderHistoriaTab() {
@@ -880,55 +910,15 @@
                 html += '<button onclick="deleteAllInventories()" class="bg-gradient-to-r from-red-500 to-orange-600 text-white px-4 py-2 rounded-xl flex items-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs" title="Eliminar todo el historial"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg><span class="font-medium">Eliminar historial</span></button>';
                 }
                 html += '</div>';
-                // FIX-BUSCADOR-PEDIDOS-HISTORIA (BarInventario): buscador fuzzy —
-                // mismo motor que Inicio (_csBigrams) — sobre folio, área, fecha
-                // y productos contados en cada registro del historial.
-                html += '<div class="csb-wrap' + (_historiaSearchTerm ? ' csb-wrap--active' : '') + '" id="historia-csb-wrap">'
-                    + '<svg class="csb-icon" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">'
-                    + '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>'
-                    + '<input id="historia-search-input" type="search" class="csb-input"'
-                    + ' placeholder="Buscar por folio, área o producto\u2026"'
-                    + ' value="' + escapeHtml(_historiaSearchTerm) + '"'
-                    + ' oninput="updateHistoriaSearch(this.value)"'
-                    + ' onkeydown="if(event.key===\'Escape\'){event.preventDefault();clearHistoriaSearch();}"'
-                    + ' autocomplete="off" autocorrect="off" spellcheck="false">'
-                    + '<button class="csb-clear" onclick="clearHistoriaSearch()" title="Limpiar (Esc)" aria-label="Limpiar búsqueda">✕</button>'
-                    + '</div>';
-                html += '<div class="space-y-4">';
-                const filteredInventories = _filtrarHistoriaInventarios();
-                if (_historiaSearchTerm && filteredInventories.length === 0) {
-                    html += '<div class="bg-white rounded-2xl shadow-md" style="padding:40px 20px;text-align:center;"><p style="font-size:.85rem;color:var(--txt-muted);">Sin resultados para "' + escapeHtml(_historiaSearchTerm) + '"</p></div>';
-                }
-                filteredInventories.forEach((inv, idx) => {
-                    const isExpanded = expandedInventories.has(inv.id);
-                    const delay = Math.min(idx * 50, 400);
-                    html += '<div class="bg-white rounded-2xl shadow-md overflow-hidden" style="animation: tabContentIn 0.3s ease-out both; animation-delay:' + delay + 'ms">';
-                    html += '<div class="p-4 sm:p-6 cursor-pointer hover:bg-gray-50 transition-colors" onclick="toggleInventory(\'' + escapeHtml(inv.id) + '\')">';
-                    html += '<div class="flex items-center justify-between gap-4">';
-                    html += '<div class="flex-1">';
-                    html += '<div class="flex items-center gap-3 mb-1">';
-                    html += '<h3 class="text-lg font-bold text-gray-900">' + escapeHtml(inv.id) + '</h3>';
-                    html += '<span class="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded-full font-medium">' + escapeHtml(areas[inv.area] || inv.area || 'General') + '</span>';
-                    html += '</div>';
-                    html += '<p class="text-sm text-gray-600">' + escapeHtml(inv.date) + ' • ' + inv.products.length + ' productos • Total: ' + (inv.totalProducts || 0).toFixed(2) + '</p>';
-                    html += '</div>';
-                    html += '<div class="flex items-center gap-2">';
-                    html += '<button onclick="event.stopPropagation(); downloadInventory(\'' + escapeHtml(inv.id) + '\')" class="p-2.5 bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl hover:shadow-lg transition-all transform active:scale-95" title="Descargar"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg></button>';
-                    html += '<button onclick="event.stopPropagation(); shareInventoryWhatsApp(\'' + escapeHtml(inv.id) + '\')" class="p-2.5 bg-gradient-to-br from-green-500 to-emerald-500 text-white rounded-xl hover:shadow-lg transition-all transform active:scale-95" title="Compartir"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg></button>';
-                    html += '<svg class="w-5 h-5 text-gray-600 transition-transform ' + (isExpanded ? 'rotate-180' : '') + '" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>';
-                    html += '</div></div></div>';
-                    if (isExpanded) {
-                        html += '<div class="border-t border-gray-200 p-4 sm:p-6 bg-gray-50 animate-fadeIn"><div class="overflow-x-auto">';
-                        html += '<table class="w-full"><thead class="bg-gradient-to-r from-purple-600 to-blue-600"><tr><th class="px-4 py-3 text-left text-sm font-semibold text-white">Producto</th><th class="px-4 py-3 text-center text-sm font-semibold text-white">Stock (Enteras)</th><th class="px-4 py-3 text-center text-sm font-semibold text-white">Abiertas</th><th class="px-4 py-3 text-center text-sm font-semibold text-white">Grupo</th></tr></thead><tbody class="divide-y divide-gray-200 bg-white">';
-                        inv.products.forEach(p => {
-                            const abiertasStr = p.abiertas ? p.abiertas.map(a => (a || 0).toFixed(2)).join(' + ') : '';
-                            html += '<tr><td class="px-4 py-3 text-gray-900">' + escapeHtml(p.name) + '</td><td class="px-4 py-3 text-center text-gray-600">' + p.stock + ' ' + escapeHtml(p.unit) + '</td><td class="px-4 py-3 text-center text-orange-600">' + escapeHtml(abiertasStr) + '</td><td class="px-4 py-3 text-center font-semibold text-gray-900">' + escapeHtml(p.group || 'General') + '</td></tr>';
-                        });
-                        html += '</tbody></table></div></div>';
-                    }
-                    html += '</div>';
+                // FASE 6 — barra unificada sobre folio, área, fecha y productos,
+                // con chips por área cuando hay más de una.
+                html += BusquedaUI.barra('historia', {
+                    placeholder: 'Buscar por folio, área, fecha o producto…',
+                    etiqueta: 'Buscar en el historial de conteos',
+                    sticky: true
                 });
-                html += '</div>';
+                html += BusquedaUI.chips('historia', _chipsHistoria());
+                html += BusquedaUI.region('historia', _renderHistoriaResultados().html);
             }
 
             // Cargar reportes async después de render
@@ -1494,19 +1484,14 @@
             );
         }
 
+        // Catálogo filtrado por grupo, chips y la búsqueda del catálogo, del
+        // más relevante al menos. FASE 6: delega en el motor unificado
+        // (_buscarCatalogo, js/80-buscador.js). El conteo YA NO usa esta
+        // función: tiene su propia búsqueda (_buscarConteo) y no hereda la de
+        // Inicio/Productos.
         function filterByGroup() {
-    let filtered = products;
-    if (selectedGroup !== 'Todos') filtered = filtered.filter(p => p.group === selectedGroup);
-    if (searchTerm) {
-        // Usar _csFuzzyMatch: tolera typos, acentos, multi-palabra, ordena por relevancia
-        const scored = filtered
-            .map(function(p) { return { p: p, score: _csFuzzyMatch(p, searchTerm) }; })
-            .filter(function(x) { return x.score > 0; });
-        scored.sort(function(a, b) { return b.score - a.score; });
-        filtered = scored.map(function(x) { return x.p; });
-    }
-    return filtered;
-}
+            return _buscarCatalogo().items;
+        }
 
         function addToCart(productId) {
             const product = products.find(p => p.id === productId);

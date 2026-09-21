@@ -44,7 +44,12 @@
             if (storedTab)    activeTab     = storedTab;
             if (storedGroup)  selectedGroup = storedGroup;
             if (storedArea)   selectedArea  = storedArea;
-            if (storedSearch) searchTerm    = storedSearch;
+            // FASE 6 — la búsqueda del catálogo ya NO se restaura al abrir la app.
+            // Reaparecer con la lista filtrada por algo que se escribió ayer hacía
+            // creer que faltaban productos (y hasta FASE 6 ese mismo texto filtraba
+            // en silencio el conteo). Lo que se recuerda ahora son las búsquedas
+            // recientes, que se ofrecen pero no se aplican solas.
+            void storedSearch;
 
             const storedExpanded = safeGet('inventarioApp_expandedInventories', []);
             expandedInventories = new Set(Array.isArray(storedExpanded) ? storedExpanded : []);

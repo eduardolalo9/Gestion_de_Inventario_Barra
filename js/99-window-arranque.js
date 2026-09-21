@@ -56,7 +56,7 @@
                         if (data._auditoriaSessionId) _auditoriaSessionId = data._auditoriaSessionId;
 
                         activeTab = data.activeTab || 'inicio';
-                        searchTerm = data.searchTerm || '';
+                        searchTerm = '';   // FASE 6: un respaldo no trae la búsqueda aplicada
                         selectedGroup = data.selectedGroup || 'Todos';
                         selectedArea = data.selectedArea || AREAS_CONTEO[0] || 'almacen';   // R6
                         expandedInventories = new Set(data.expandedInventories || []);

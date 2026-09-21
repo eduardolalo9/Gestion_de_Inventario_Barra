@@ -1285,104 +1285,23 @@
         }
 
         // ── BÚSQUEDA EN CONTEO ────────────────────────────────────────────────
-        // ── Utilidad: extrae bigramas de un string ────────────────────────────────
-        function _csBigrams(str) {
-            const b = [];
-            for (let i = 0; i < str.length - 1; i++) b.push(str.slice(i, i + 2));
-            return b;
-        }
+        // FASE 6 — La puntuación difusa que vivía aquí pasó al motor unificado
+        // (js/05-busqueda-motor.js) y la barra a js/06-busqueda-ui.js. Estas
+        // tres funciones quedan como puentes con el nombre de siempre.
 
-        /**
-         * Búsqueda fuzzy/multi-palabra.
-         * Normaliza acentos, divide la query en palabras y para cada una:
-         *   10pts  → substring exacto en cualquier campo
-         *    7pts  → prefijo de token (startsWith)
-         *   1-6pts → similitud de bigramas ≥ 0.45 (tolerancia a typos)
-         *    0pts  → sin coincidencia → el producto se descarta
-         * Retorna score > 0 si hay match, 0 si no.
-         */
+        /** @deprecated usar el motor: devuelve > 0 si el producto coincide. */
         function _csFuzzyMatch(product, query) {
             if (!query) return 1;
-            const norm = s => (s || '').toLowerCase()
-                .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-            const words = norm(query.trim()).split(/\s+/).filter(Boolean);
-            if (!words.length) return 1;
-
-            const fields = [norm(product.name), norm(product.id), norm(product.group)];
-            const haystack = fields.join(' ');
-            const tokens   = haystack.split(/\s+/).filter(Boolean);
-
-            let totalScore = 0;
-            for (const word of words) {
-                // Nota: words ya fue filtrado con .filter(Boolean); la guarda redundante se eliminó.
-                let wordScore = 0;
-
-                // Substring exacto (mejor)
-                if (haystack.includes(word)) {
-                    wordScore = 10;
-                }
-                // Prefijo de algún token
-                else if (tokens.some(t => t.startsWith(word))) {
-                    wordScore = 7;
-                }
-                // Tolerancia a typos vía bigramas (solo para palabras ≥ 3 chars)
-                else if (word.length >= 3) {
-                    const qBig = _csBigrams(word);
-                    let bestSim = 0;
-                    for (const token of tokens) {
-                        if (Math.abs(token.length - word.length) > 3) continue;
-                        const tBig   = _csBigrams(token);
-                        const common = qBig.filter(b => tBig.includes(b)).length;
-                        if (common === 0) continue;
-                        const sim = (2 * common) / (qBig.length + tBig.length);
-                        if (sim > bestSim) bestSim = sim;
-                    }
-                    if (bestSim >= 0.45) wordScore = Math.max(1, Math.round(bestSim * 6));
-                }
-
-                // Si alguna palabra no matchea, el producto queda excluido
-                if (wordScore === 0) return 0;
-                totalScore += wordScore;
-            }
-            return totalScore;
+            return _motorProductos.buscar([product], query).coincidencias;
         }
 
-        /**
-         * Resalta en el nombre del producto TODAS las palabras de la query.
-         * Soporta búsqueda multi-palabra: "tequila rep" resalta ambas palabras.
-         */
+        /** @deprecated usar resaltarBusqueda(): ya escapa y entiende acentos. */
         function highlightConteoMatch(name, query) {
-            if (!name) return '';
-            if (!query) return escapeHtml(name);
-            const words = query.trim().split(/\s+/).filter(w => w.length >= 2);
-            if (!words.length) return escapeHtml(name);
-            let result = escapeHtml(name);
-            for (const word of words) {
-                const esc = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                try {
-                    result = result.replace(new RegExp('(' + esc + ')', 'gi'),
-                        '<mark class="csb-match">$1</mark>');
-                } catch (_) { /* regex inválida — ignorar */ }
-            }
-            return result;
+            return resaltarBusqueda(name, query);
         }
 
-        /**
-         * updateConteoSearch — con debounce (180ms) y skip si el término no cambió.
-         * Restaura foco al input después del render (manejado por _getElementSelector via id).
-         */
         function updateConteoSearch(val) {
-            const next = (val || '').trimStart();
-            clearTimeout(_csSearchTimer);
-            _csSearchTimer = setTimeout(function() {
-                const trimmed = next.trimEnd();
-                if (trimmed === _conteoSearchTerm) return; // sin cambio → no re-render
-                _conteoSearchTerm = trimmed;
-                // Actualizar clase del wrapper sin esperar re-render completo
-                const wrap = document.getElementById('csb-wrap');
-                if (wrap) wrap.classList.toggle('csb-wrap--active', !!_conteoSearchTerm);
-                renderTab();
-            }, 180);
+            BusquedaUI.establecer('conteo', val);
         }
 
         // ══════════════════════════════════════════════════════════════════════

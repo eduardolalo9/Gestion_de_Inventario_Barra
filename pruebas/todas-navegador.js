@@ -31,6 +31,7 @@ const PRUEBAS = [
     'prueba-p1.js',    // P1  — la pestaña de compras
     'prueba-f3-navegador.js',  // F3 — contabilizar: humo en la app real
     'prueba-p2-navegador.js',  // FASE 4 — importación de compras: parseo, vista previa, incidencias
+    'prueba-fase6-navegador.js', // FASE 6 — buscadores en la app real
 ];
 
 function esperarServidor(intentos) {

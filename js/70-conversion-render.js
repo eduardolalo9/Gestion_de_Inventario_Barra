@@ -266,26 +266,13 @@
             notificationTimeout = setTimeout(() => { notificationTimeout = null; }, 1000);
         }
 
-        // Debounce para búsqueda: evita re-renders y escrituras en localStorage en cada tecla
-        let _searchDebounceTimer = null;
+        // FASE 6 — El buscador del catálogo (Inicio y Productos) lo maneja
+        // BusquedaUI (js/06-busqueda-ui.js). Antes esta función, por cada
+        // tecla, guardaba TODO el estado en IndexedDB + localStorage y
+        // reconstruía la pestaña entera (incluido el input). Queda como puente
+        // por si algún botón o script la sigue llamando.
         function updateSearchTerm(value) {
-            searchTerm = value;
-            clearTimeout(_searchDebounceTimer);
-    _searchDebounceTimer = setTimeout(() => {
-        saveToLocalStorage();
-        renderTab();
-        // CORRECCIÓN BUG 1: restaurar foco y cursor al final del input de búsqueda
-        // tras el re-render que destruye y recrea el DOM
-        // El input es type="search", no type="text". Buscar solo "text" no
-        // encontraba nada y el foco se perdía en cada tecla — en el teléfono eso
-        // significa que el teclado se cierra a media palabra.
-        const searchInput = document.querySelector('#tabContent input[type="search"], #tabContent input[type="text"]');
-        if (searchInput) {
-            searchInput.focus();
-            const len = searchInput.value.length;
-            searchInput.setSelectionRange(len, len);
-        }
-    }, 300);
+            BusquedaUI.establecer('catalogo', value);
         }
 
         function updateSelectedGroup(value) {
@@ -336,6 +323,10 @@
                 case 'notificaciones':  content.innerHTML = renderNotificacionesTab(); break;
                 case 'admin':           content.innerHTML = isAdmin() ? renderAdminTab() : renderInicioTab(); break;
             }
+
+            // FASE 6 — centinelas de carga incremental y altura del encabezado
+            // para la barra de búsqueda pegajosa.
+            if (typeof BusquedaUI !== 'undefined') BusquedaUI.trasRender();
 
             // FIX 4: restaurar scroll (en siguiente frame para no luchar con el layout)
             if (scrollY > 0) {
@@ -435,8 +426,75 @@
             return result;
         }
 
+        // FASE 6 — región de resultados de Inicio. La llama renderInicioTab()
+        // y, sin reconstruir la pestaña, BusquedaUI al buscar o filtrar.
+        function _renderInicioResultados() {
+            const r   = _buscarCatalogo();
+            const filteredProducts = r.items;
+            const lim = BusquedaUI.limite('catalogo');
+            let html = '';
+            // ── Tarjetas de productos ─────────────────────────────────────────
+            if (products.length === 0) {
+                html += '<div style="text-align:center;padding:40px 20px;color:var(--txt-muted);">'
+                      + '<div style="font-size:2.5rem;margin-bottom:12px;">📦</div>'
+                      + '<p style="font-size:.88rem;">No hay productos en el catálogo</p></div>';
+            } else if (filteredProducts.length === 0) {
+                html += BusquedaUI.vacio('catalogo', 'productos');
+            } else {
+                html += BusquedaUI.resumen('catalogo', r.coincidencias, r.total, 'producto', 'productos');
+                filteredProducts.slice(0, lim).forEach((product, idx) => {
+                    // FIX: sba (stockByArea) eliminada — ya no se usa en los chips.
+                    // hasData ahora refleja si hay datos de auditoría, que es lo que
+                    // muestran los chips (antes usaba getTotalStock/stockByArea, inconsistente).
+                    const total   = getTotalStock(product);   // sigue usándose en la línea meta
+                    const adCheck = _getAuditConteoParaProducto(product.id);
+                    const hasData = adCheck._hayDatos || total > 0;
+                    const delay   = Math.min(idx * 30, 400);
+
+                    html += '<div class="prd-card' + (hasData ? ' has-data' : '') + '" data-sbx-item style="animation-delay:' + delay + 'ms">';
+                    // Top row: nombre + botones
+                    html += '<div class="prd-card__top">';
+                    html += '<div class="prd-card__name">' + resaltarBusqueda(product.name, searchTerm) + '</div>';
+                    html += '<div class="prd-card__actions">';
+                    html += '<button class="prd-action-btn cart" data-sbx-principal onclick="addToCart(\'' + escapeHtml(product.id) + '\')" title="Agregar al carrito">'
+                          + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg></button>';
+                    if (isAdmin()) {
+                        html += '<button class="prd-action-btn edit" onclick="editProduct(\'' + escapeHtml(product.id) + '\')" title="Editar producto">'
+                              + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button>';
+                        html += '<button class="prd-action-btn del" onclick="deleteProduct(\'' + escapeHtml(product.id) + '\')" title="Eliminar producto">'
+                              + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>';
+                    }
+                    html += '</div></div>';
+                    // Group badge
+                    html += '<div class="prd-card__group-badge">' + escapeHtml(product.group || 'General') + '</div>';
+                    // Meta: ID · Unit · Total
+                    html += '<div class="prd-card__meta">' + resaltarBusqueda(product.id, searchTerm) + ' · ' + escapeHtml(product.unit || '') + ' · Total: ' + total.toFixed(2) + '</div>';
+                    // Area chips — total contado de auditoría por área
+                    var ad           = adCheck;   // reutilizar el resultado ya calculado arriba
+                    var CHIP_LABELS  = areas;   // R6: las etiquetas salen de la configuracion
+                    html += '<div class="prd-card__areas">';
+                    AREAS_CONTEO.forEach(function(area) {
+                        var d          = ad[area];
+                        var totalAudit = d ? (d.enteras + d.sumaAbiertas) : null;
+                        html += '<div class="prd-area-chip">';
+                        html += '<span class="prd-area-chip__label">' + CHIP_LABELS[area] + '</span>';
+                        if (totalAudit !== null) {
+                            html += '<span class="prd-area-chip__val">' + totalAudit.toFixed(2) + '</span>';
+                        } else {
+                            html += '<span class="prd-area-chip__val" style="color:var(--txt-muted);font-size:0.78rem;font-weight:500;">—</span>';
+                        }
+                        html += '</div>';
+                    });
+                    html += '</div>';
+
+                    html += '</div>';
+                });
+            }
+            html += BusquedaUI.centinela('catalogo', filteredProducts.length - lim);
+            return { html: html, coincidencias: r.coincidencias, total: r.total };
+        }
+
         function renderInicioTab() {
-            const filteredProducts = filterByGroup();
             const totalProducts    = products.length;
             const totalStockAll    = products.reduce((s, p) => s + getTotalStock(p), 0);
             const cartCount        = cart.reduce((s, c) => s + (c.quantity || 1), 0); // FIX: era c.qty (undefined), debe ser c.quantity
@@ -463,19 +521,12 @@
                   + '<div class="stat-card__label">Pedidos</div></div></div>';
             html += '</div>';
 
-            // ── Búsqueda + filtro de grupo ─────────────────────────────────────
-             // Buscador inteligente con clear button y feedback visual
-    html += '<div class="csb-wrap' + (searchTerm ? ' csb-wrap--active' : '') + '">';
-    html += '<svg class="csb-icon" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">'
-        + '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>';
-    html += '<input id="inicio-search-input" type="search" class="csb-input"'
-        + ' placeholder="Buscar por nombre, código o grupo\u2026"'
-        + ' value="' + escapeHtml(searchTerm) + '"'
-        + ' oninput="updateSearchTerm(this.value)"'
-        + ' onkeydown="if(event.key===\'Escape\'){event.preventDefault();this.value=\'\';updateSearchTerm(\'\');}"'
-        + ' autocomplete="off" autocorrect="off" spellcheck="false">';
-    html += '<button class="csb-clear" onclick="document.getElementById(\'inicio-search-input\').value=\'\';updateSearchTerm(\'\');" title="Limpiar (Esc)" aria-label="Limpiar búsqueda">✕</button>';
-    html += '</div>';
+            // ── Búsqueda (FASE 6: barra unificada, comparte estado con Productos) ──
+            html += BusquedaUI.barra('catalogo', {
+                placeholder: 'Buscar por nombre, código, PV o grupo…',
+                etiqueta: 'Buscar productos del catálogo',
+                sticky: true
+            });
 
             // ── Pill-rail de grupos (horizontal, sin select) ───────────────────
             html += '<div class="grp-rail-wrap"><div class="grp-rail">';
@@ -487,6 +538,7 @@
                       + '</button>';
             });
             html += '</div></div>';
+            html += BusquedaUI.chips('catalogo', _chipsCatalogo(false));
 
             // ── Botones de acción (admin) ─────────────────────────────────────
             if (isAdmin()) {
@@ -500,63 +552,11 @@
                 html += '</div>';
             }
 
-            // ── Tarjetas de productos ─────────────────────────────────────────
-            if (filteredProducts.length === 0) {
-                html += '<div style="text-align:center;padding:40px 20px;color:var(--txt-muted);">'
-                      + '<div style="font-size:2.5rem;margin-bottom:12px;">📦</div>'
-                      + '<p style="font-size:.88rem;">No se encontraron productos</p></div>';
-            } else {
-                filteredProducts.forEach((product, idx) => {
-                    // FIX: sba (stockByArea) eliminada — ya no se usa en los chips.
-                    // hasData ahora refleja si hay datos de auditoría, que es lo que
-                    // muestran los chips (antes usaba getTotalStock/stockByArea, inconsistente).
-                    const total   = getTotalStock(product);   // sigue usándose en la línea meta
-                    const adCheck = _getAuditConteoParaProducto(product.id);
-                    const hasData = adCheck._hayDatos || total > 0;
-                    const delay   = Math.min(idx * 30, 400);
-
-                    html += '<div class="prd-card' + (hasData ? ' has-data' : '') + '" style="animation-delay:' + delay + 'ms">';
-                    // Top row: nombre + botones
-                    html += '<div class="prd-card__top">';
-                    html += '<div class="prd-card__name">' + escapeHtml(product.name) + '</div>';
-                    html += '<div class="prd-card__actions">';
-                    html += '<button class="prd-action-btn cart" onclick="addToCart(\'' + escapeHtml(product.id) + '\')" title="Agregar al carrito">'
-                          + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg></button>';
-                    if (isAdmin()) {
-                        html += '<button class="prd-action-btn edit" onclick="editProduct(\'' + escapeHtml(product.id) + '\')" title="Editar producto">'
-                              + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button>';
-                        html += '<button class="prd-action-btn del" onclick="deleteProduct(\'' + escapeHtml(product.id) + '\')" title="Eliminar producto">'
-                              + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>';
-                    }
-                    html += '</div></div>';
-                    // Group badge
-                    html += '<div class="prd-card__group-badge">' + escapeHtml(product.group || 'General') + '</div>';
-                    // Meta: ID · Unit · Total
-                    html += '<div class="prd-card__meta">' + escapeHtml(product.id) + ' · ' + escapeHtml(product.unit || '') + ' · Total: ' + total.toFixed(2) + '</div>';
-                    // Area chips — total contado de auditoría por área
-                    var ad           = adCheck;   // reutilizar el resultado ya calculado arriba
-                    var CHIP_LABELS  = areas;   // R6: las etiquetas salen de la configuracion
-                    html += '<div class="prd-card__areas">';
-                    AREAS_CONTEO.forEach(function(area) {
-                        var d          = ad[area];
-                        var totalAudit = d ? (d.enteras + d.sumaAbiertas) : null;
-                        html += '<div class="prd-area-chip">';
-                        html += '<span class="prd-area-chip__label">' + CHIP_LABELS[area] + '</span>';
-                        if (totalAudit !== null) {
-                            html += '<span class="prd-area-chip__val">' + totalAudit.toFixed(2) + '</span>';
-                        } else {
-                            html += '<span class="prd-area-chip__val" style="color:var(--txt-muted);font-size:0.78rem;font-weight:500;">—</span>';
-                        }
-                        html += '</div>';
-                    });
-                    html += '</div>';
-
-                    html += '</div>';
-                });
-            }
+            // ── Tarjetas de productos (región que refresca la búsqueda) ──────
+            html += BusquedaUI.region('catalogo', _renderInicioResultados().html);
 
             // ── Zona admin: eliminar todos ─────────────────────────────────────
-            if (isAdmin() && filteredProducts.length > 0) {
+            if (isAdmin() && products.length > 0) {
                 html += '<button class="inicio-btn danger" onclick="deleteAllProducts()" style="margin-top:10px;">'
                       + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:15px;height:15px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>'
                       + 'Eliminar todos los productos</button>';
@@ -624,24 +624,17 @@
         }
 
         function renderProductosTab() {
-            const filteredProducts = filterByGroup();
             const admin = isAdmin();
             let html = '';
 
             // ── Buscador ──────────────────────────────────────────────────────
-            // Mismo motor que el de Inicio: una sola variable searchTerm, para
-            // que filtrar aquí y allá no den resultados distintos.
-            html += '<div class="csb-wrap' + (searchTerm ? ' csb-wrap--active' : '') + '">';
-            html += '<svg class="csb-icon" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">'
-                 + '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>';
-            html += '<input id="productos-search-input" type="search" class="csb-input"'
-                 + ' placeholder="Buscar por nombre, código o grupo…"'
-                 + ' value="' + escapeHtml(searchTerm) + '"'
-                 + ' oninput="updateSearchTerm(this.value)"'
-                 + ' onkeydown="if(event.key===\'Escape\'){event.preventDefault();this.value=\'\';updateSearchTerm(\'\');}"'
-                 + ' autocomplete="off" autocorrect="off" spellcheck="false">';
-            html += '<button class="csb-clear" onclick="document.getElementById(\'productos-search-input\').value=\'\';updateSearchTerm(\'\');" title="Limpiar (Esc)" aria-label="Limpiar búsqueda">✕</button>';
-            html += '</div>';
+            // Mismo buscador y mismo estado que Inicio (clave 'catalogo'): filtrar
+            // aquí y allá no puede dar resultados distintos.
+            html += BusquedaUI.barra('catalogo', {
+                placeholder: 'Buscar por nombre, código, PV o proveedor…',
+                etiqueta: 'Buscar en el catálogo de productos',
+                sticky: true
+            });
 
             // ── Pill-rail de grupos ───────────────────────────────────────────
             html += '<div class="grp-rail-wrap"><div class="grp-rail">';
@@ -653,6 +646,42 @@
                       + '</button>';
             });
             html += '</div></div>';
+
+            html += BusquedaUI.chips('catalogo', _chipsCatalogo(admin));
+
+            if (!admin) {
+                html += '<div style="background:var(--accent-dim);border:1px solid var(--accent-dim2);border-radius:var(--r-md);padding:8px 12px;margin-bottom:12px;font-size:.78rem;color:var(--accent);">📋 Catálogo de solo lectura — solo el administrador puede modificar productos</div>';
+            }
+
+            // ── Catálogo vacío ────────────────────────────────────────────────
+            if (products.length === 0) {
+                html += '<div style="text-align:center;padding:42px 18px;background:var(--surface);'
+                     + 'border:1px solid var(--border-mid);border-radius:12px">'
+                     + '<div style="font-size:2.2rem;margin-bottom:10px">📦</div>'
+                     + '<div style="font-weight:600;margin-bottom:6px">El catálogo está vacío</div>'
+                     + '<div style="color:var(--txt-secondary);font-size:.88rem;max-width:420px;margin:0 auto;line-height:1.55">'
+                     + (admin
+                        ? 'Importa el Excel del catálogo con el botón de arriba, o agrega un producto a mano. '
+                          + 'Al reimportar, los productos que ya existan se actualizan en vez de duplicarse.'
+                        : 'Todavía no hay productos cargados. El administrador los importa desde Excel.')
+                     + '</div></div>';
+                return html;
+            }
+
+            // ── Resultados (región que refresca la búsqueda) ─────────────────
+            html += BusquedaUI.region('catalogo', _renderProductosResultados(admin).html);
+            return html;
+        }
+
+        // FASE 6 — región de resultados del catálogo. Queda entre
+        // renderProductosTab y renderPedidosTab a propósito: es parte de la
+        // misma pantalla y así la aísla pruebas/prueba-r5.js.
+        function _renderProductosResultados(admin) {
+            if (typeof admin === 'undefined') admin = isAdmin();
+            const r   = _buscarCatalogo();
+            const filteredProducts = r.items;
+            const lim = BusquedaUI.limite('catalogo');
+            let html = '';
 
             // ── Resumen ───────────────────────────────────────────────────────
             // Los dos contadores de la derecha no son decoración: un producto sin
@@ -679,33 +708,12 @@
             }
             html += '</div>';
 
-            if (!admin) {
-                html += '<div style="background:var(--accent-dim);border:1px solid var(--accent-dim2);border-radius:var(--r-md);padding:8px 12px;margin-bottom:12px;font-size:.78rem;color:var(--accent);">📋 Catálogo de solo lectura — solo el administrador puede modificar productos</div>';
-            }
-
-            // ── Catálogo vacío ────────────────────────────────────────────────
-            if (products.length === 0) {
-                html += '<div style="text-align:center;padding:42px 18px;background:var(--surface);'
-                     + 'border:1px solid var(--border-mid);border-radius:12px">'
-                     + '<div style="font-size:2.2rem;margin-bottom:10px">📦</div>'
-                     + '<div style="font-weight:600;margin-bottom:6px">El catálogo está vacío</div>'
-                     + '<div style="color:var(--txt-secondary);font-size:.88rem;max-width:420px;margin:0 auto;line-height:1.55">'
-                     + (admin
-                        ? 'Importa el Excel del catálogo con el botón de arriba, o agrega un producto a mano. '
-                          + 'Al reimportar, los productos que ya existan se actualizan en vez de duplicarse.'
-                        : 'Todavía no hay productos cargados. El administrador los importa desde Excel.')
-                     + '</div></div>';
-                return html;
-            }
-
             // ── Filtro sin resultados ─────────────────────────────────────────
             if (filteredProducts.length === 0) {
-                html += '<div style="text-align:center;padding:36px 18px;background:var(--surface);'
-                     + 'border:1px solid var(--border-mid);border-radius:12px">'
-                     + '<div style="font-weight:600;margin-bottom:6px">Ningún producto coincide</div>'
-                     + '<div style="color:var(--txt-secondary);font-size:.88rem">'
-                     + 'Prueba con otro texto, o toca el grupo <b>Todos</b>.</div></div>';
-                return html;
+                // Ningún producto coincide: estado vacío común, con botones
+                // para limpiar la búsqueda o quitar filtros.
+                html += BusquedaUI.vacio('catalogo', 'productos');
+                return { html: html, coincidencias: 0, total: r.total };
             }
 
             // ── Tabla ─────────────────────────────────────────────────────────
@@ -733,19 +741,19 @@
             if (admin) html += '<th style="' + th + ';text-align:center">Acciones</th>';
             html += '</tr></thead><tbody>';
 
-            filteredProducts.forEach(function(product) {
+            filteredProducts.slice(0, lim).forEach(function(product) {
                 var total    = (typeof getTotalStock === 'function') ? getTotalStock(product) : null;
                 var bajoMin  = (typeof product.stockMinimo === 'number' && product.stockMinimo > 0 &&
                                 typeof total === 'number' && total < product.stockMinimo);
                 var usaOz    = tieneConversion(product);
 
-                html += '<tr>';
+                html += '<tr data-sbx-item>';
 
                 // Producto: el ID va debajo del nombre, en pequeño. Es lo que
                 // identifica la fila al importar, así que tiene que verse.
                 html += '<td style="' + td + '">'
                      + '<div style="font-weight:600;color:var(--txt-primary);line-height:1.3">'
-                     + escapeHtml(product.name || '(sin nombre)') + '</div>'
+                     + (product.name ? resaltarBusqueda(product.name, searchTerm) : '(sin nombre)') + '</div>'
                      + '<div style="font-size:.7rem;color:var(--txt-muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;margin-top:2px">'
                      + escapeHtml(product.id)
                      + (usaOz ? ' · <span style="color:var(--accent)">oz</span>' : '')
@@ -774,7 +782,7 @@
 
                 if (admin) {
                     html += '<td style="' + td + '"><div style="display:flex;gap:6px;justify-content:center">';
-                    html += '<button type="button" onclick="editProduct(\'' + escapeHtml(product.id) + '\')" '
+                    html += '<button type="button" data-sbx-principal onclick="editProduct(\'' + escapeHtml(product.id) + '\')" '
                          + 'title="Editar" aria-label="Editar ' + escapeHtml(product.name || product.id) + '" '
                          + 'style="min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;'
                          + 'border-radius:10px;border:1px solid var(--border-mid);background:var(--surface);'
@@ -792,7 +800,8 @@
             });
 
             html += '</tbody></table></div></div>';
-            return html;
+            html += BusquedaUI.centinela('catalogo', filteredProducts.length - lim);
+            return { html: html, coincidencias: r.coincidencias, total: r.total };
         }
 
         function renderPedidosTab() {
@@ -800,34 +809,38 @@
             if (orders.length === 0) {
                 return headerHtml + '<div class="bg-white rounded-2xl shadow-md" style="padding:50px 20px;text-align:center;"><div style="font-size:3rem;margin-bottom:12px;">🛒</div><p style="font-size:.95rem;font-weight:600;color:var(--txt-secondary);margin-bottom:6px;">No hay pedidos todavía</p><p style="font-size:.78rem;color:var(--txt-muted);">Ve a Inicio, agrega productos con 🛒 y genera un pedido</p></div>';
             }
-            // FIX-BUSCADOR-PEDIDOS (BarInventario): buscador fuzzy — mismo motor
-            // que Inicio (_csBigrams) — sobre folio, proveedor, nota y productos.
+            // FASE 6 — barra unificada sobre folio, proveedor, nota y productos.
             let html = headerHtml;
-            html += '<div class="csb-wrap' + (_pedidosSearchTerm ? ' csb-wrap--active' : '') + '" id="pedidos-csb-wrap">'
-                + '<svg class="csb-icon" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">'
-                + '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>'
-                + '<input id="pedidos-search-input" type="search" class="csb-input"'
-                + ' placeholder="Buscar por folio, proveedor o producto\u2026"'
-                + ' value="' + escapeHtml(_pedidosSearchTerm) + '"'
-                + ' oninput="updatePedidosSearch(this.value)"'
-                + ' onkeydown="if(event.key===\'Escape\'){event.preventDefault();clearPedidosSearch();}"'
-                + ' autocomplete="off" autocorrect="off" spellcheck="false">'
-                + '<button class="csb-clear" onclick="clearPedidosSearch()" title="Limpiar (Esc)" aria-label="Limpiar búsqueda">✕</button>'
-                + '</div>';
+            html += BusquedaUI.barra('pedidos', {
+                placeholder: 'Buscar por folio, proveedor o producto…',
+                etiqueta: 'Buscar pedidos',
+                sticky: true
+            });
             html += '<div class="mb-6">';
             if (isAdmin()) {
             html += '<button onclick="deleteAllOrders()" class="bg-gradient-to-r from-red-500 to-orange-600 text-white px-6 py-3 rounded-xl flex items-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200" title="Eliminar todos los pedidos"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg><span class="font-medium">Eliminar todos los pedidos</span></button>';
             }
-            html += '</div><div class="space-y-4">';
-            const filteredOrders = _filtrarPedidos();
-            if (_pedidosSearchTerm && filteredOrders.length === 0) {
-                html += '<div class="bg-white rounded-2xl shadow-md" style="padding:40px 20px;text-align:center;"><p style="font-size:.85rem;color:var(--txt-muted);">Sin resultados para "' + escapeHtml(_pedidosSearchTerm) + '"</p></div>';
+            html += '</div>';
+            html += BusquedaUI.region('pedidos', _renderPedidosResultados().html);
+            return html;
+        }
+
+        // FASE 6 — región de resultados de Pedidos.
+        function _renderPedidosResultados() {
+            const r = _buscarPedidos();
+            const filteredOrders = r.items;
+            const lim = BusquedaUI.limite('pedidos');
+            let html = '';
+            if (filteredOrders.length === 0) {
+                return { html: BusquedaUI.vacio('pedidos', 'pedidos'), coincidencias: 0, total: r.total };
             }
-            filteredOrders.forEach((order, idx) => {
+            html += BusquedaUI.resumen('pedidos', r.coincidencias, r.total, 'pedido', 'pedidos');
+            html += '<div class="space-y-4">';
+            filteredOrders.slice(0, lim).forEach((order, idx) => {
                 const delay = Math.min(idx * 50, 400);
-                html += '<div class="bg-white rounded-2xl p-6 shadow-md" style="animation: tabContentIn 0.3s ease-out both; animation-delay:' + delay + 'ms"><div class="flex justify-between items-start mb-4"><div><h3 class="text-xl font-bold text-gray-900">' + escapeHtml(order.id) + '</h3><p class="text-gray-600">Proveedor: ' + escapeHtml(order.supplier) + '</p><p class="text-sm text-gray-600">Fecha: ' + escapeHtml(order.date) + '</p>';
+                html += '<div class="bg-white rounded-2xl p-6 shadow-md" data-sbx-item style="animation: tabContentIn 0.3s ease-out both; animation-delay:' + delay + 'ms"><div class="flex justify-between items-start mb-4"><div><h3 class="text-xl font-bold text-gray-900">' + resaltarBusqueda(order.id, _pedidosSearchTerm) + '</h3><p class="text-gray-600">Proveedor: ' + resaltarBusqueda(order.supplier, _pedidosSearchTerm) + '</p><p class="text-sm text-gray-600">Fecha: ' + escapeHtml(order.date) + '</p>';
                 if (order.deliveryDate) html += '<p class="text-sm text-gray-600">Entrega: ' + escapeHtml(order.deliveryDate) + '</p>';
-                html += '</div><div class="flex gap-2"><button onclick="shareOrderWhatsApp(\'' + escapeHtml(order.id) + '\')" class="p-2.5 bg-gradient-to-br from-green-500 to-emerald-500 text-white rounded-xl hover:shadow-lg transition-all transform active:scale-95"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg></button><button onclick="deleteOrder(\'' + escapeHtml(order.id) + '\')" class="p-2.5 bg-gradient-to-br from-red-500 to-orange-500 text-white rounded-xl hover:shadow-lg transition-all transform active:scale-95"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button></div></div><div class="overflow-x-auto"><table class="w-full"><thead class="bg-gradient-to-r from-purple-600 to-blue-600"><tr><th class="px-4 py-3 text-left text-sm font-semibold text-white">Nombre de Producto</th><th class="px-4 py-3 text-center text-sm font-semibold text-white">Unidad de Medida</th><th class="px-4 py-3 text-center text-sm font-semibold text-white">Cantidad</th></tr></thead><tbody class="divide-y divide-gray-200">';
+                html += '</div><div class="flex gap-2"><button data-sbx-principal onclick="shareOrderWhatsApp(\'' + escapeHtml(order.id) + '\')" class="p-2.5 bg-gradient-to-br from-green-500 to-emerald-500 text-white rounded-xl hover:shadow-lg transition-all transform active:scale-95"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg></button><button onclick="deleteOrder(\'' + escapeHtml(order.id) + '\')" class="p-2.5 bg-gradient-to-br from-red-500 to-orange-500 text-white rounded-xl hover:shadow-lg transition-all transform active:scale-95"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button></div></div><div class="overflow-x-auto"><table class="w-full"><thead class="bg-gradient-to-r from-purple-600 to-blue-600"><tr><th class="px-4 py-3 text-left text-sm font-semibold text-white">Nombre de Producto</th><th class="px-4 py-3 text-center text-sm font-semibold text-white">Unidad de Medida</th><th class="px-4 py-3 text-center text-sm font-semibold text-white">Cantidad</th></tr></thead><tbody class="divide-y divide-gray-200">';
                 order.products.forEach(p => {
                     html += '<tr><td class="px-4 py-3 text-gray-900">' + escapeHtml(p.name) + '</td><td class="px-4 py-3 text-center text-gray-600">' + escapeHtml(p.unit) + '</td><td class="px-4 py-3 text-center font-semibold text-gray-900">' + p.quantity + '</td></tr>';
                 });
@@ -836,7 +849,8 @@
                 html += '</div></div>';
             });
             html += '</div>';
-            return html;
+            html += BusquedaUI.centinela('pedidos', filteredOrders.length - lim);
+            return { html: html, coincidencias: r.coincidencias, total: r.total };
         }
 
         // Bug #11 fix: modal de confirmación propio — reemplaza confirm() nativo que

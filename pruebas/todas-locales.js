@@ -44,6 +44,7 @@ const PRUEBAS = [
     'prueba-f3.js',                 // F3 — contabilizar: inicial inmutable y alcance
     'prueba-p2.js',                 // FASE 4 — compras: persistencia e importacion desde Excel
     'prueba-fase5.js',              // FASE 5 — reapertura de area + conteo de auditoria huerfano
+    'prueba-fase6.js',              // FASE 6 — buscadores: motor unificado + integracion
 ];
 
 let fallaron = [];

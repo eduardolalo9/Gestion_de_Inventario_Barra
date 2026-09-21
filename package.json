@@ -15,7 +15,9 @@
     "test:f3nav": "node pruebas/prueba-f3-navegador.js",
     "test:p2": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-p2-integracion.js\"",
     "test:p2nav": "node pruebas/prueba-p2-navegador.js",
-    "test:f5": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-fase5-integracion.js\""
+    "test:f5": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-fase5-integracion.js\"",
+    "test:f6": "node pruebas/prueba-fase6.js",
+    "test:f6nav": "node pruebas/prueba-fase6-navegador.js"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5",

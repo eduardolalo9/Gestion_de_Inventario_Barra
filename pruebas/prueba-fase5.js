@@ -225,12 +225,15 @@ chk('ALCANCE · el conteo huérfano nunca se mezcla automáticamente con el inve
 // ═══════════════════════════════════════════════════════════════════════════
 //  CACHÉ
 // ═══════════════════════════════════════════════════════════════════════════
-chk('La versión de caché subió a 4.0 (por encima de la de FASE 4) y es consistente entre index.html (JS y CSS) y sw.js',
+// FASE 6: antes exigía EXACTAMENTE 4.0, y eso rompía en cuanto cualquier fase
+// posterior subía la versión. Como el resto de las fases: "al menos" la suya.
+chk('La versión de caché es al menos 4.0 (por encima de la de FASE 4) y es consistente entre index.html (JS y CSS) y sw.js',
     (() => {
         const v = [...new Set([...html.matchAll(/<script\s+src="js\/[^"?]+\.js\?v=([^"]*)"/g)].map(m => m[1]))];
-        return v.length === 1 && v[0] === '4.0' &&
-               /href="css\/estilos\.css\?v=4\.0"/.test(html) &&
-               /const APP_VERSION = '4\.0';/.test(sw);
+        const mSw = /const APP_VERSION = '([^']+)';/.exec(sw);
+        return v.length === 1 && parseFloat(v[0]) >= 4.0 &&
+               html.indexOf('href="css/estilos.css?v=' + v[0] + '"') !== -1 &&
+               !!mSw && mSw[1] === v[0];
     })(),
     'un index.html nuevo sirviendo .js viejos desde caché es el fallo más difícil de diagnosticar');
 
