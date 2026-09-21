@@ -7,6 +7,11 @@
         let myAuditoriaConteo  = {};   // conteo propio (aislado)
         let myAuditoriaStatus  = estadoAreasVacio('pendiente');
         let myAuditoriaUnlocks = {};   // { 'prodId__area': { unlockedBy, unlockedAt, used } }
+        // D — rastro de finalización de área: { area: { uid, nombre, ts, rol } }.
+        // myAuditoriaStatus solo guarda la palabra 'completada', que no dice
+        // quién la cerró ni cuándo. Esto lo acompaña sin sustituirlo, para no
+        // tocar a los diez sitios que ya leen ese estado.
+        let myAuditoriaFinalizadas = {};
         let allUsersAuditoria  = {};   // admin: { uid: { email, status, conteo, updatedAt } }
         let _auditoriaSessionId = null;
 
@@ -516,7 +521,26 @@
         async function syncConteoPorUsuarioToFirestore(area) {
             if (!_db || !navigator.onLine || !auditCurrentUser) return;
             const cu      = auditCurrentUser; // FIX-07
-            const safeId  = cu.userId.replace(/[^a-zA-Z0-9]/g, '_');
+            // ── D · La clave del bloque pasa a ser el uid de Firebase ────────
+            // Antes era `cu.userId`, que NO es el uid: es un identificador que
+            // el propio dispositivo se inventa y guarda en localStorage
+            // ('usr-<fecha>-<azar>', ver initAuditUser). Como el servidor no
+            // podía relacionarlo con nadie, la regla de Firestore no tenía
+            // forma de comprobar que un usuario solo tocara su propio bloque,
+            // y por eso este documento estaba abierto de par en par: cualquier
+            // bartender podía vaciar el conteo de todos sus compañeros.
+            //
+            // Con el uid como clave, la regla exige que una escritura afecte
+            // únicamente al bloque de quien la hace.
+            //
+            // Esto no rompe los datos anteriores: quien lee
+            // (loadConteoPorUsuarioFromFirestore) indexa por el `userId` de
+            // DENTRO del bloque, no por la clave, así que los bloques viejos
+            // se siguen leyendo igual y la misma persona no aparece dos veces.
+            // El uid de Firebase ya es alfanumérico; se usa tal cual porque la
+            // regla lo compara literalmente con request.auth.uid. Solo se
+            // sanea el identificador de respaldo, que sí lleva guiones.
+            const safeId  = currentUserUid || cu.userId.replace(/[^a-zA-Z0-9]/g, '_');
             const areaRef = _db
                 .collection('inventarioApp')
                 .doc(FIRESTORE_DOC_ID)
@@ -549,6 +573,10 @@
                 payload[safeId] = {
                     userId:   cu.userId,
                     userName: cu.userName,
+                    // D — autoría verificable: es el uid que la regla compara
+                    // contra request.auth.uid. `userId` se conserva porque es
+                    // lo que usa el lector y lo que llevan los datos viejos.
+                    uid:      currentUserUid || null,
                     ts:       Date.now(),
                     productos: productos
                 };

@@ -276,7 +276,10 @@
         renderTab();
         // CORRECCIÓN BUG 1: restaurar foco y cursor al final del input de búsqueda
         // tras el re-render que destruye y recrea el DOM
-        const searchInput = document.querySelector('#tabContent input[type="text"]');
+        // El input es type="search", no type="text". Buscar solo "text" no
+        // encontraba nada y el foco se perdía en cada tecla — en el teléfono eso
+        // significa que el teclado se cierra a media palabra.
+        const searchInput = document.querySelector('#tabContent input[type="search"], #tabContent input[type="text"]');
         if (searchInput) {
             searchInput.focus();
             const len = searchInput.value.length;
@@ -529,7 +532,7 @@
                     html += '<div class="prd-card__meta">' + escapeHtml(product.id) + ' · ' + escapeHtml(product.unit || '') + ' · Total: ' + total.toFixed(2) + '</div>';
                     // Area chips — total contado de auditoría por área
                     var ad           = adCheck;   // reutilizar el resultado ya calculado arriba
-                    var CHIP_LABELS  = { almacen: 'Almacén', barra1: 'Barra 1', barra2: 'Barra 2' };
+                    var CHIP_LABELS  = areas;   // R6: las etiquetas salen de la configuracion
                     html += '<div class="prd-card__areas">';
                     AREAS_CONTEO.forEach(function(area) {
                         var d          = ad[area];
@@ -600,9 +603,43 @@
             return html;
         }
 
+        // ══════════════════════════════════════════════════════════════════════
+        //  CATÁLOGO DE PRODUCTOS — R5
+        //  ────────────────────────────────────────────────────────────────────
+        //  Antes esta pantalla mostraba tres columnas: nombre, grupo y unidad.
+        //  El catálogo guarda mucho más —precio, mínimo, proveedor, PV, modo de
+        //  conteo— y no había forma de verlo sin abrir producto por producto.
+        //
+        //  Se usan los tokens del tema (var(--surface), var(--txt-primary)…) en
+        //  vez de colores fijos: la tabla anterior forzaba fondo blanco y en
+        //  modo oscuro quedaba ilegible.
+        // ══════════════════════════════════════════════════════════════════════
+
+        function _celdaNum(v, sufijo) {
+            if (typeof v !== 'number' || !isFinite(v)) return '<span style="color:var(--txt-muted)">—</span>';
+            return escapeHtml(v.toLocaleString('es-MX', { maximumFractionDigits: 3 })) + (sufijo || '');
+        }
+
         function renderProductosTab() {
             const filteredProducts = filterByGroup();
+            const admin = isAdmin();
             let html = '';
+
+            // ── Buscador ──────────────────────────────────────────────────────
+            // Mismo motor que el de Inicio: una sola variable searchTerm, para
+            // que filtrar aquí y allá no den resultados distintos.
+            html += '<div class="csb-wrap' + (searchTerm ? ' csb-wrap--active' : '') + '">';
+            html += '<svg class="csb-icon" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">'
+                 + '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>';
+            html += '<input id="productos-search-input" type="search" class="csb-input"'
+                 + ' placeholder="Buscar por nombre, código o grupo…"'
+                 + ' value="' + escapeHtml(searchTerm) + '"'
+                 + ' oninput="updateSearchTerm(this.value)"'
+                 + ' onkeydown="if(event.key===\'Escape\'){event.preventDefault();this.value=\'\';updateSearchTerm(\'\');}"'
+                 + ' autocomplete="off" autocorrect="off" spellcheck="false">';
+            html += '<button class="csb-clear" onclick="document.getElementById(\'productos-search-input\').value=\'\';updateSearchTerm(\'\');" title="Limpiar (Esc)" aria-label="Limpiar búsqueda">✕</button>';
+            html += '</div>';
+
             // ── Pill-rail de grupos ───────────────────────────────────────────
             html += '<div class="grp-rail-wrap"><div class="grp-rail">';
             getAvailableGroups().forEach(function(group) {
@@ -613,26 +650,144 @@
                       + '</button>';
             });
             html += '</div></div>';
-            if (!isAdmin()) {
+
+            // ── Resumen ───────────────────────────────────────────────────────
+            // Los dos contadores de la derecha no son decoración: un producto sin
+            // precio no se puede costear y uno sin PV no cruza con las ventas de
+            // Parrot. Verlos aquí evita descubrirlo al final, cuando ya estorba.
+            var sinPrecio = 0, sinPV = 0;
+            products.forEach(function(p) {
+                if (typeof p.precio !== 'number') sinPrecio++;
+                if (!p.pv) sinPV++;
+            });
+            html += '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:baseline;margin:4px 0 12px">';
+            html += '<span style="font-weight:700;font-size:1.05rem">' + filteredProducts.length + '</span>';
+            html += '<span style="color:var(--txt-secondary);font-size:.85rem">'
+                 + (filteredProducts.length === products.length
+                    ? 'producto' + (products.length === 1 ? '' : 's') + ' en el catálogo'
+                    : 'de ' + products.length + ' productos') + '</span>';
+            if (sinPrecio) {
+                html += '<span style="margin-left:auto;font-size:.75rem;color:var(--txt-muted)">'
+                     + sinPrecio + ' sin precio</span>';
+            }
+            if (sinPV) {
+                html += '<span style="font-size:.75rem;color:var(--txt-muted)'
+                     + (sinPrecio ? '' : ';margin-left:auto') + '">' + sinPV + ' sin PV</span>';
+            }
+            html += '</div>';
+
+            if (!admin) {
                 html += '<div style="background:var(--accent-dim);border:1px solid var(--accent-dim2);border-radius:var(--r-md);padding:8px 12px;margin-bottom:12px;font-size:.78rem;color:var(--accent);">📋 Catálogo de solo lectura — solo el administrador puede modificar productos</div>';
             }
-            html += '<div class="bg-white rounded-xl sm:rounded-2xl shadow-md overflow-hidden"><div class="overflow-x-auto"><table class="w-full text-sm sm:text-base"><thead class="bg-gradient-to-r from-purple-600 to-blue-600"><tr><th class="px-2 sm:px-4 lg:px-6 py-2 sm:py-3 lg:py-4 text-left text-xs sm:text-sm font-semibold text-white">Nombre del Producto</th><th class="px-2 sm:px-4 lg:px-6 py-2 sm:py-3 lg:py-4 text-left text-xs sm:text-sm font-semibold text-white hidden md:table-cell">Grupo</th><th class="px-2 sm:px-4 lg:px-6 py-2 sm:py-3 lg:py-4 text-left text-xs sm:text-sm font-semibold text-white">Unidad</th>';
-            if (isAdmin()) html += '<th class="px-2 sm:px-4 lg:px-6 py-2 sm:py-3 lg:py-4 text-center text-xs sm:text-sm font-semibold text-white">Acc</th>';
-            html += '</tr></thead><tbody class="divide-y divide-gray-200">';
-            filteredProducts.forEach((product, idx) => {
-                const delay = Math.min(idx * 35, 350);
-                html += '<tr class="hover:bg-purple-50 transition-colors" style="animation: rowIn 0.25s ease-out both; animation-delay:' + delay + 'ms">';
-                html += '<td class="px-2 sm:px-4 lg:px-6 py-2 sm:py-3 lg:py-4 font-medium text-gray-900 text-xs sm:text-sm">' + escapeHtml(product.name) + '</td>';
-                html += '<td class="px-2 sm:px-4 lg:px-6 py-2 sm:py-3 lg:py-4 text-gray-600 hidden md:table-cell text-xs sm:text-sm">' + escapeHtml(product.group || 'General') + '</td>';
-                html += '<td class="px-2 sm:px-4 lg:px-6 py-2 sm:py-3 lg:py-4 text-gray-600 text-xs sm:text-sm">' + escapeHtml((product.unit || '').substring(0, 8)) + '</td>';
-                if (isAdmin()) {
-                    html += '<td class="px-2 sm:px-4 lg:px-6 py-2 sm:py-3 lg:py-4"><div class="flex items-center justify-center gap-1">';
-                    html += '<button onclick="editProduct(\'' + escapeHtml(product.id) + '\')" class="p-1.5 sm:p-2.5 bg-gradient-to-br from-blue-500 to-purple-500 text-white rounded-lg sm:rounded-xl hover:shadow-lg transition-all transform active:scale-95 min-w-[36px] sm:min-w-[48px] min-h-[36px] sm:min-h-[48px] flex items-center justify-center"><svg class="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg></button>';
-                    html += '<button onclick="deleteProduct(\'' + escapeHtml(product.id) + '\')" class="p-1.5 sm:p-2.5 bg-gradient-to-br from-red-500 to-orange-500 text-white rounded-lg sm:rounded-xl hover:shadow-lg transition-all transform active:scale-95 min-w-[36px] sm:min-w-[48px] min-h-[36px] sm:min-h-[48px] flex items-center justify-center"><svg class="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>';
+
+            // ── Catálogo vacío ────────────────────────────────────────────────
+            if (products.length === 0) {
+                html += '<div style="text-align:center;padding:42px 18px;background:var(--surface);'
+                     + 'border:1px solid var(--border-mid);border-radius:12px">'
+                     + '<div style="font-size:2.2rem;margin-bottom:10px">📦</div>'
+                     + '<div style="font-weight:600;margin-bottom:6px">El catálogo está vacío</div>'
+                     + '<div style="color:var(--txt-secondary);font-size:.88rem;max-width:420px;margin:0 auto;line-height:1.55">'
+                     + (admin
+                        ? 'Importa el Excel del catálogo con el botón de arriba, o agrega un producto a mano. '
+                          + 'Al reimportar, los productos que ya existan se actualizan en vez de duplicarse.'
+                        : 'Todavía no hay productos cargados. El administrador los importa desde Excel.')
+                     + '</div></div>';
+                return html;
+            }
+
+            // ── Filtro sin resultados ─────────────────────────────────────────
+            if (filteredProducts.length === 0) {
+                html += '<div style="text-align:center;padding:36px 18px;background:var(--surface);'
+                     + 'border:1px solid var(--border-mid);border-radius:12px">'
+                     + '<div style="font-weight:600;margin-bottom:6px">Ningún producto coincide</div>'
+                     + '<div style="color:var(--txt-secondary);font-size:.88rem">'
+                     + 'Prueba con otro texto, o toca el grupo <b>Todos</b>.</div></div>';
+                return html;
+            }
+
+            // ── Tabla ─────────────────────────────────────────────────────────
+            // Las columnas secundarias se ocultan en móvil con .cat-col-sec y
+            // siguen alcanzables con el scroll lateral del contenedor.
+            var th = 'padding:9px 10px;text-align:left;font-size:.68rem;font-weight:700;'
+                   + 'text-transform:uppercase;letter-spacing:.05em;color:var(--txt-secondary);'
+                   + 'white-space:nowrap;border-bottom:1px solid var(--border-mid)';
+            var thNum = th + ';text-align:right';
+            var td = 'padding:9px 10px;font-size:.84rem;border-bottom:1px solid var(--border-soft,var(--border-mid))';
+            var tdNum = td + ';text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap';
+
+            html += '<div style="background:var(--surface);border:1px solid var(--border-mid);'
+                 + 'border-radius:12px;overflow:hidden"><div style="overflow-x:auto;-webkit-overflow-scrolling:touch">';
+            html += '<table style="width:100%;border-collapse:collapse;min-width:520px">';
+            html += '<thead><tr>';
+            html += '<th style="' + th + '">Producto</th>';
+            html += '<th style="' + th + '" class="cat-col-sec">Grupo</th>';
+            html += '<th style="' + th + '">Unidad</th>';
+            html += '<th style="' + thNum + '">Stock</th>';
+            html += '<th style="' + thNum + '" class="cat-col-sec">Precio</th>';
+            html += '<th style="' + thNum + '" class="cat-col-sec">Mínimo</th>';
+            html += '<th style="' + th + '" class="cat-col-sec">PV</th>';
+            html += '<th style="' + th + '" class="cat-col-sec">Proveedor</th>';
+            if (admin) html += '<th style="' + th + ';text-align:center">Acciones</th>';
+            html += '</tr></thead><tbody>';
+
+            filteredProducts.forEach(function(product) {
+                var total    = (typeof getTotalStock === 'function') ? getTotalStock(product) : null;
+                var bajoMin  = (typeof product.stockMinimo === 'number' && product.stockMinimo > 0 &&
+                                typeof total === 'number' && total < product.stockMinimo);
+                var usaOz    = tieneConversion(product);
+
+                html += '<tr>';
+
+                // Producto: el ID va debajo del nombre, en pequeño. Es lo que
+                // identifica la fila al importar, así que tiene que verse.
+                html += '<td style="' + td + '">'
+                     + '<div style="font-weight:600;color:var(--txt-primary);line-height:1.3">'
+                     + escapeHtml(product.name || '(sin nombre)') + '</div>'
+                     + '<div style="font-size:.7rem;color:var(--txt-muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;margin-top:2px">'
+                     + escapeHtml(product.id)
+                     + (usaOz ? ' · <span style="color:var(--accent)">oz</span>' : '')
+                     + '</div></td>';
+
+                html += '<td style="' + td + ';color:var(--txt-secondary)" class="cat-col-sec">'
+                     + escapeHtml(product.group || 'General') + '</td>';
+                html += '<td style="' + td + ';color:var(--txt-secondary)">'
+                     + escapeHtml(product.unit || '—') + '</td>';
+
+                // Stock bajo el mínimo se marca. Es la señal que dispara una compra.
+                html += '<td style="' + tdNum + (bajoMin ? ';color:#f87171;font-weight:700' : '') + '">'
+                     + _celdaNum(total) + '</td>';
+
+                html += '<td style="' + tdNum + '" class="cat-col-sec">'
+                     + (typeof product.precio === 'number'
+                        ? '$' + escapeHtml(product.precio.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+                        : '<span style="color:var(--txt-muted)">—</span>') + '</td>';
+                html += '<td style="' + tdNum + '" class="cat-col-sec">'
+                     + _celdaNum(product.stockMinimo) + '</td>';
+
+                html += '<td style="' + td + ';font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.76rem" class="cat-col-sec">'
+                     + (product.pv ? escapeHtml(product.pv) : '<span style="color:var(--txt-muted)">—</span>') + '</td>';
+                html += '<td style="' + td + ';color:var(--txt-secondary);font-size:.78rem" class="cat-col-sec">'
+                     + (product.proveedor ? escapeHtml(product.proveedor) : '<span style="color:var(--txt-muted)">—</span>') + '</td>';
+
+                if (admin) {
+                    html += '<td style="' + td + '"><div style="display:flex;gap:6px;justify-content:center">';
+                    html += '<button type="button" onclick="editProduct(\'' + escapeHtml(product.id) + '\')" '
+                         + 'title="Editar" aria-label="Editar ' + escapeHtml(product.name || product.id) + '" '
+                         + 'style="min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;'
+                         + 'border-radius:10px;border:1px solid var(--border-mid);background:var(--surface);'
+                         + 'color:var(--txt-primary);cursor:pointer">'
+                         + '<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button>';
+                    html += '<button type="button" onclick="deleteProduct(\'' + escapeHtml(product.id) + '\')" '
+                         + 'title="Eliminar" aria-label="Eliminar ' + escapeHtml(product.name || product.id) + '" '
+                         + 'style="min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;'
+                         + 'border-radius:10px;border:1px solid rgba(248,113,113,.3);background:rgba(248,113,113,.08);'
+                         + 'color:#f87171;cursor:pointer">'
+                         + '<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>';
                     html += '</div></td>';
                 }
                 html += '</tr>';
             });
+
             html += '</tbody></table></div></div>';
             return html;
         }
@@ -1140,6 +1295,13 @@ document.body.appendChild(overlay);
                     const clave = pid + '|' + area;
                     clearTimeout(_conteoProductoSyncTimers[clave]);
                     _conteoProductoSyncTimers[clave] = setTimeout(function() {
+                        // D — la clave se borra al dispararse. Antes se
+                        // quedaba para siempre, así que al cerrar la pestaña
+                        // se marcaba como pendiente TODO lo tocado en la
+                        // sesión, ya subido o no, y al arrancar se reenviaba
+                        // entero: versiones incrementadas sobre valores que
+                        // podían ser más nuevos de otro aparato.
+                        delete _conteoProductoSyncTimers[clave];
                         // C1: el resultado ya NO se descarta.
                         updateCloudSyncBadge('syncing');
                         syncConteoProductoAtomico(pid, area, ent, abi)

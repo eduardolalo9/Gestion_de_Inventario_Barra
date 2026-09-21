@@ -22,6 +22,12 @@
             _deletedOrderIds     = Array.isArray(rawDelOrd)  ? rawDelOrd  : [];
             _deletedInventoryIds = Array.isArray(rawDelInv)  ? rawDelInv  : [];
 
+            // D — marca de purga del catálogo (ver _marcarCatalogoPurgado).
+            // Sobrevive al cierre de la app: si el vaciado se hizo sin señal,
+            // la purga sigue vigente al volver y no se resucita nada.
+            const rawPurga = parseInt(localStorage.getItem('inventarioApp_catalogoPurgadoEn') || '0', 10);
+            _catalogoPurgadoEn = isNaN(rawPurga) ? 0 : rawPurga;
+
             const storedTab   = localStorage.getItem('inventarioApp_activeTab');
             const storedGroup = localStorage.getItem('inventarioApp_selectedGroup');
             const storedArea  = localStorage.getItem('inventarioApp_selectedArea');
@@ -73,6 +79,9 @@
             }
             const storedMyStatus = safeGet('inventarioApp_myAuditoriaStatus', estadoAreasVacio('pendiente'));
             if (storedMyStatus && typeof storedMyStatus === 'object') myAuditoriaStatus = storedMyStatus;
+            // D — rastro de finalización de área
+            const storedFinalizadas = safeGet('inventarioApp_myAuditoriaFinalizadas', {});
+            if (storedFinalizadas && typeof storedFinalizadas === 'object') myAuditoriaFinalizadas = storedFinalizadas;
             const storedMyUnlocks = safeGet('inventarioApp_myAuditoriaUnlocks', {});
             if (storedMyUnlocks && typeof storedMyUnlocks === 'object') myAuditoriaUnlocks = storedMyUnlocks;
             const storedSessionId = localStorage.getItem('inventarioApp_auditoriaSessionId');
@@ -225,12 +234,31 @@
         //  documento; dos usuarios contando el MISMO producto casi al mismo
         //  tiempo son detectados y ninguno sobrescribe al otro en silencio.
         //
-        //  No se usa runTransaction() a propósito: los conteos deben poder
-        //  guardarse offline y quedar en cola del propio SDK de Firestore.
-        //  En su lugar, cada escritura declara la versión que espera
-        //  sobrescribir, y firestore.rules la rechaza si ya no coincide con
-        //  la real — incluso si el rechazo llega minutos después, al
-        //  reconectar y reenviar una escritura que quedó en cola offline.
+        //  No se usa runTransaction() a propósito: obliga a un viaje de ida y
+        //  vuelta al servidor antes de poder escribir, y en la bodega del bar
+        //  la señal se cae a media cuenta. En su lugar, cada escritura declara
+        //  la versión que espera sobrescribir, y firestore.rules la rechaza si
+        //  ya no coincide con la real.
+        //
+        //  D — CORRECCIÓN: aquí decía que los conteos quedaban "en cola del
+        //  propio SDK de Firestore" al estar sin señal. Era falso por dos
+        //  razones, y la segunda es la importante:
+        //
+        //    1. syncConteoProductoAtomico() cortaba por navigator.onLine
+        //       ANTES de llamar a set(), así que el SDK nunca veía la
+        //       escritura y su cola no llegaba a usarse nunca.
+        //    2. Aunque se hubiera dejado pasar, apoyarse en esa cola sería
+        //       incorrecto con bloqueo optimista. La versión que la escritura
+        //       declara se fija en el momento de encolarla, pero solo se
+        //       verifica al vaciarse, minutos u horas después. Si alguien más
+        //       contó ese producto entretanto, la escritura sale rechazada y
+        //       el SDK la descarta sin avisar: pérdida silenciosa, que es
+        //       justo lo que este módulo existe para evitar.
+        //
+        //  La versión tiene que leerse en el momento de escribir, no en el de
+        //  encolar. Por eso el corte por falta de señal se conserva, y lo que
+        //  se añade es un registro propio de pendientes (_outboxConteo, abajo)
+        //  que reintenta con lectura de versión fresca al volver la conexión.
         // ══════════════════════════════════════════════════════════════════════
 
         // Caché en memoria de la última versión conocida por producto+área.
@@ -244,10 +272,265 @@
             return productId + '|' + area;
         }
 
+        // ══════════════════════════════════════════════════════════════════════
+        //  D · DEFECTO CRÍTICO — EL CONTEO SIN SEÑAL NUNCA LLEGABA A LA NUBE
+        //  ────────────────────────────────────────────────────────────────────
+        //  Lo que pasaba en la barra: el bartender cuenta en la bodega, donde
+        //  no hay señal. La app le dice "Guardado en el dispositivo — subiendo".
+        //  El conteo entra en localStorage y ahí se queda. No había nada que
+        //  lo reintentara: el corte por navigator.onLine devolvía 'offline' y
+        //  el resultado se anunciaba al usuario, pero la clave no quedaba
+        //  anotada en ningún sitio. Si además otro aparato sincronizaba
+        //  mientras tanto, al reconectar _applyCloudData reemplazaba
+        //  inventarioConteo entero y el conteo desaparecía sin dejar rastro.
+        //
+        //  Lo único que existía era un rescate parcial: al CERRAR la pestaña,
+        //  las claves de los debounce que no habían alcanzado a dispararse se
+        //  anotaban en localStorage. Solo cubría ese caso, y solo si el
+        //  usuario cerraba la pestaña en vez de perder la señal.
+        //
+        //  _outboxConteo generaliza ese rescate: una clave `productId|area`
+        //  entra ANTES de intentar subir y solo sale cuando el servidor
+        //  confirma. Sobrevive al cierre de la app, a quedarse sin batería y
+        //  a perder la señal. Se vacía al arrancar, al volver la conexión y
+        //  en el sync periódico, releyendo la versión real cada vez.
+        //
+        //  El dato en sí nunca dependió de esto: ya estaba a salvo en
+        //  localStorage/IndexedDB. Lo que faltaba era que alguien se acordara
+        //  de volver a intentarlo.
+        // ══════════════════════════════════════════════════════════════════════
+
+        const _OUTBOX_CONTEO_KEY = 'inventarioApp_conteoPendiente';
+        // Clave del rescate anterior (solo beforeunload). Se lee una vez al
+        // arrancar para no perder lo que dejó la versión vieja, y se borra.
+        const _OUTBOX_CONTEO_KEY_LEGACY = 'inventarioApp_conteoProductoPendiente';
+
+        // { 'productId|area': { ts, base } }
+        //   ts   — cuándo se anotó, para poder informar al usuario.
+        //   base — la versión del servidor que este dispositivo creía vigente
+        //          cuando guardó el conteo, o null si nunca la supo.
+        //
+        //  `base` es lo que impide que un reintento pise el trabajo de otro.
+        //  Sin ella, un conteo hecho sin señal a las 6 de la tarde se subiría
+        //  al reconectar leyendo la versión de ese momento y escribiendo la
+        //  siguiente — borrando en silencio lo que otro bartender contó a las
+        //  7. Con ella, el reintento compara: si el servidor sigue donde lo
+        //  dejamos, sube; si se movió, no sube nada y registra un conflicto.
+        let _outboxConteo = {};
+
+        function _outboxGuardar() {
+            try {
+                localStorage.setItem(_OUTBOX_CONTEO_KEY, JSON.stringify(_outboxConteo));
+            } catch (_) { /* cuota llena: el dato sigue en inventarioConteo */ }
+        }
+
+        function _outboxCargar() {
+            try {
+                const crudo = localStorage.getItem(_OUTBOX_CONTEO_KEY);
+                const leido = crudo ? JSON.parse(crudo) : null;
+                if (leido && typeof leido === 'object' && !Array.isArray(leido)) {
+                    // Se normaliza por si viene de una versión que guardaba
+                    // solo el timestamp: sin `base` conocida, el reintento
+                    // será conservador y pedirá confirmación ante cualquier
+                    // duda, que es el lado correcto en el que equivocarse.
+                    Object.keys(leido).forEach(function(clave) {
+                        const v = leido[clave];
+                        _outboxConteo[clave] = (v && typeof v === 'object')
+                            ? { ts: v.ts || Date.now(), base: (typeof v.base === 'number' ? v.base : null) }
+                            : { ts: (typeof v === 'number' ? v : Date.now()), base: null };
+                    });
+                }
+            } catch (_) { _outboxConteo = {}; }
+
+            // Migración de la clave anterior, que guardaba un array de claves.
+            try {
+                const viejo = localStorage.getItem(_OUTBOX_CONTEO_KEY_LEGACY);
+                if (viejo) {
+                    const claves = JSON.parse(viejo);
+                    if (Array.isArray(claves)) {
+                        claves.forEach(function(clave) {
+                            if (typeof clave === 'string' && clave.indexOf('|') > 0 &&
+                                !(clave in _outboxConteo)) {
+                                _outboxConteo[clave] = { ts: Date.now(), base: null };
+                            }
+                        });
+                    }
+                    localStorage.removeItem(_OUTBOX_CONTEO_KEY_LEGACY);
+                    _outboxGuardar();
+                }
+            } catch (_) {}
+
+            return _outboxConteo;
+        }
+
+        function _outboxAnotar(productId, area) {
+            const clave = _claveVersionProducto(productId, area);
+            if (!(clave in _outboxConteo)) {
+                const base = (clave in _versionesConteoProducto)
+                    ? _versionesConteoProducto[clave]
+                    : null;
+                _outboxConteo[clave] = { ts: Date.now(), base: base };
+                _outboxGuardar();
+            }
+            return clave;
+        }
+
+        function _outboxQuitar(productId, area) {
+            const clave = _claveVersionProducto(productId, area);
+            if (clave in _outboxConteo) {
+                delete _outboxConteo[clave];
+                _outboxGuardar();
+            }
+        }
+
+        function _outboxTienePendiente(productId, area) {
+            return _claveVersionProducto(productId, area) in _outboxConteo;
+        }
+
+        function _outboxPendientes() {
+            return Object.keys(_outboxConteo);
+        }
+
+        /**
+         * drenarConteosPendientes()
+         * ─────────────────────────
+         * Reintenta contra el servidor todos los conteos anotados como
+         * pendientes, leyendo la versión real de cada uno en el momento (no
+         * la que tenía cuando se guardó). Se llama al arrancar, al volver la
+         * conexión y en el sync periódico.
+         *
+         * No reintenta lo que ya no existe en el conteo local: si el producto
+         * se borró o el conteo se revirtió al valor del servidor, la clave se
+         * descarta en vez de resucitar un valor que el usuario ya no tiene.
+         *
+         * Y no sube nada a ciegas: antes de escribir comprueba que el
+         * documento del servidor siga en la versión que este dispositivo
+         * esperaba. Si se movió, alguien más contó ese producto mientras
+         * tanto y el reintento se convierte en conflicto, no en sobrescritura.
+         */
+        async function drenarConteosPendientes() {
+            if (!_db || !navigator.onLine) return { intentados: 0, confirmados: 0, conflictos: 0 };
+
+            const claves = _outboxPendientes();
+            if (claves.length === 0) return { intentados: 0, confirmados: 0, conflictos: 0 };
+
+            console.info('[ConteoProducto] Reintentando', claves.length, 'conteo(s) pendiente(s)…');
+
+            let confirmados = 0;
+            let conflictos  = 0;
+
+            for (const clave of claves) {
+                const corte = clave.indexOf('|');
+                if (corte <= 0) { delete _outboxConteo[clave]; continue; }
+                const pid  = clave.slice(0, corte);
+                const area = clave.slice(corte + 1);
+
+                const valor = inventarioConteo[pid] && inventarioConteo[pid][area];
+                if (!valor || typeof valor.enteras === 'undefined') {
+                    // Ya no hay valor local que subir: la clave sobra.
+                    delete _outboxConteo[clave];
+                    continue;
+                }
+
+                const anotacion = _outboxConteo[clave] || { base: null };
+                const remoto    = await _leerConteoProducto(pid, area);
+                const versionServidor = remoto ? (remoto.version || 0) : 0;
+
+                // ¿Se movió el servidor desde que guardamos sin señal?
+                //   base null  → nunca supimos la versión. Solo es seguro si
+                //                el producto sigue sin contar por nadie.
+                //   base n     → seguro solo si el servidor sigue en n.
+                const baseEsperada = (typeof anotacion.base === 'number') ? anotacion.base : 0;
+                const servidorIntacto = (versionServidor === baseEsperada);
+
+                if (!servidorIntacto) {
+                    // Otro dispositivo contó este producto mientras este no
+                    // tenía señal. Subir ahora borraría ese conteo. Se deja
+                    // constancia y se saca de pendientes: lo resuelve una
+                    // persona, no un reintento automático.
+                    console.warn('[ConteoProducto] Conflicto al reintentar', pid, area,
+                        '— esperaba v' + baseEsperada + ', el servidor va en v' + versionServidor);
+                    delete _outboxConteo[clave];
+                    conflictos++;
+                    await _registrarConflictoVersion(pid, area, baseEsperada,
+                        valor.enteras, valor.abiertas || []);
+                    continue;
+                }
+
+                // El servidor sigue donde lo dejamos: se puede subir con la
+                // versión correcta, sin adivinar.
+                _versionesConteoProducto[clave] = versionServidor;
+                const res = await syncConteoProductoAtomico(
+                    pid, area, valor.enteras, valor.abiertas || []);
+                if (res && res.ok) confirmados++;
+            }
+            _outboxGuardar();
+
+            if (confirmados > 0) {
+                console.info('[ConteoProducto]', confirmados, 'conteo(s) confirmado(s) al reconectar.');
+                if (typeof syncStockByAreaFromConteo === 'function') syncStockByAreaFromConteo();
+                if (typeof showNotification === 'function') {
+                    showNotification('✅ ' + confirmados +
+                        ' conteo(s) que estaban sin subir ya llegaron a la nube.');
+                }
+            }
+            if (typeof updateCloudSyncBadge === 'function') {
+                updateCloudSyncBadge(_outboxPendientes().length > 0 ? 'pending' : 'ok');
+            }
+            return { intentados: claves.length, confirmados: confirmados, conflictos: conflictos };
+        }
+
+        /**
+         * _esErrorDeRed(err)
+         * ──────────────────
+         * Distingue "el servidor me rechazó" de "no pude hablar con el
+         * servidor". Antes todo error caía en el mismo saco y se anunciaba
+         * como conflicto de versión, así que un corte de red producía el
+         * mensaje "alguien más actualizó este producto" — falso, y además
+         * ensuciaba el registro de conflictos con ruido.
+         *
+         * La diferencia importa para el reintento: un rechazo por versión NO
+         * se debe reintentar solo (reintentarlo pisaría el conteo del otro),
+         * pero un fallo de red SÍ.
+         */
+        function _esErrorDeRed(err) {
+            const codigo = err && (err.code || err.name || '');
+            return codigo === 'unavailable'
+                || codigo === 'deadline-exceeded'
+                || codigo === 'internal'
+                || codigo === 'resource-exhausted'
+                || codigo === 'cancelled'
+                || codigo === 'aborted';
+        }
+
+        // F1 — DEFECTO CRÍTICO 1: las tres funciones de abajo usaban una
+        // variable `docRef` que NO existe en este ámbito. Las únicas
+        // declaraciones de ese nombre en todo el proyecto son `const` locales
+        // DENTRO de otras funciones (_flushSyncQueueToFirestore,
+        // subscribeMainDoc, etc.), así que aquí resolvía a un identificador
+        // libre y lanzaba ReferenceError antes de intentar escribir nada.
+        //
+        // Consecuencia real, verificada ejecutando la función: cada conteo
+        // guardado desde la pestaña Inicio se quedaba en el dispositivo y el
+        // usuario veía "no se pudo subir — se reintentará". El reintento
+        // fallaba por lo mismo. El bug es anterior a la partición en 17
+        // archivos (ya estaba en el commit 0283ddd).
+        //
+        // Se corrige con un ayudante explícito en vez de declarar otra global:
+        // una global más sería una cuarta forma de nombrar lo mismo, y el
+        // origen del fallo fue justamente esa ambigüedad. Devuelve null si
+        // todavía no hay conexión a la base, que es la condición que las tres
+        // funciones ya comprobaban.
+        function _docPrincipal() {
+            if (!_db) return null;
+            return _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID);
+        }
+
         // Lee el documento actual de un producto/área directo de Firestore.
         // Devuelve null si nunca se ha escrito (primer conteo de ese producto
         // en esa área, desde ningún dispositivo).
         async function _leerConteoProducto(productId, area) {
+            const docRef = _docPrincipal();
             if (!_db || !docRef) return null;
             try {
                 const snap = await docRef.collection('stockAreas').doc(area)
@@ -276,8 +559,18 @@
          * lo confirmó como autoritativo.
          */
         async function syncConteoProductoAtomico(productId, area, enteras, abiertas) {
+            // D: la clave se anota ANTES de cualquier intento. Si la app se
+            // cierra, se queda sin batería o pierde la señal a partir de aquí,
+            // al volver se sabe que este conteo quedó sin confirmar.
+            _outboxAnotar(productId, area);
+
+            const docRef = _docPrincipal();
             if (!_db || !docRef) return { ok: false, motivo: 'sin_conexion_bd' };
-            if (!navigator.onLine) return { ok: false, motivo: 'offline' };
+            if (!navigator.onLine) {
+                // Queda pendiente en el outbox; drenarConteosPendientes() lo
+                // reintenta al volver la conexión, releyendo la versión real.
+                return { ok: false, motivo: 'offline' };
+            }
 
             const clave = _claveVersionProducto(productId, area);
             const ref = docRef.collection('stockAreas').doc(area)
@@ -306,13 +599,29 @@
                 });
 
                 _versionesConteoProducto[clave] = nuevaVersion;
+                // Confirmado por el servidor: es el único punto donde la
+                // clave sale de pendientes.
+                _outboxQuitar(productId, area);
                 return { ok: true, version: nuevaVersion };
 
             } catch (err) {
-                // Rechazado por firestore.rules (versión desactualizada) o
-                // error de red/permisos. Se trata siempre como conflicto
-                // potencial — nunca se asume éxito silencioso.
+                // D: antes cualquier error se anunciaba como conflicto de
+                // versión, incluido un simple corte de red. Ahora se separan,
+                // porque el reintento debe comportarse al revés en cada caso.
+                if (_esErrorDeRed(err)) {
+                    // No se pudo hablar con el servidor. El conteo sigue
+                    // pendiente y se reintenta solo al recuperar la conexión.
+                    console.warn('[ConteoProducto] Sin respuesta del servidor para', productId, area, err);
+                    return { ok: false, motivo: 'offline', error: err };
+                }
+
+                // Rechazado por firestore.rules: la versión ya no coincide,
+                // o sea que otro dispositivo contó este mismo producto. NO se
+                // reintenta solo: reintentarlo pisaría el conteo del otro sin
+                // que nadie lo decida. Sale de pendientes y queda registrado
+                // como conflicto para que el jefe de barra lo resuelva.
                 console.warn('[ConteoProducto] Escritura rechazada para', productId, area, err);
+                _outboxQuitar(productId, area);
                 await _registrarConflictoVersion(productId, area, _versionesConteoProducto[clave] || 0, enteras, abiertas);
                 return { ok: false, motivo: 'conflicto_version', error: err };
             }
@@ -381,6 +690,7 @@
         // existe. Pensada para ejecutarse una vez, por un admin, desde la
         // consola (migrarStockAreasAProductos()), no automáticamente.
         async function migrarStockAreasAProductos() {
+            const docRef = _docPrincipal();
             if (!_db || !docRef || !isAdmin()) {
                 console.warn('[Migración] Requiere admin autenticado con conexión.');
                 return { ok: false };
@@ -605,7 +915,16 @@
                 const cloudDataForMerge = snap.exists ? snap.data() : null;
                 const cloudProductsForMerge = (cloudDataForMerge && Array.isArray(cloudDataForMerge.products))
                     ? cloudDataForMerge.products : [];
-                products = _mergeArrayByIdPreferLocal(products, cloudProductsForMerge, _deletedProductIds);
+                if (_purgaDeCatalogoVigente(cloudDataForMerge)) {
+                    // D — el catálogo se vació en este dispositivo y la nube
+                    // todavía no se ha enterado. Fusionar aquí devolvería los
+                    // productos que no alcanzaron lápida (ver la nota larga en
+                    // 20-persistencia.js). La purga sube tal cual y la nube
+                    // queda vacía de verdad.
+                    console.info('[Catalogo] Purga vigente — no se fusiona el catálogo de la nube.');
+                } else {
+                    products = _mergeArrayByIdPreferLocal(products, cloudProductsForMerge, _deletedProductIds);
+                }
 
                 try {
                     const cloudOrdersForMerge = cloudDataForMerge
@@ -679,6 +998,14 @@
                 if (isAdmin()) {
                     payload.products        = products;
                     payload.auditoriaStatus = auditoriaStatus;
+                    // D — la marca de purga viaja con el catálogo. Sin ella,
+                    // otro dispositivo con los 424 productos todavía en local
+                    // los volvería a subir en su siguiente sincronización.
+                    if (_catalogoPurgadoEn) payload._catalogoPurgadoEn = _catalogoPurgadoEn;
+                    // R6: la definicion de areas viaja con el resto de lo global.
+                    // Sin esto, el admin crea un area y los bartenders no la ven:
+                    // contarian en tres areas mientras el panel espera cuatro.
+                    if (typeof areasConteoDef !== 'undefined') payload.areasConteo = areasConteoDef;
                     // FIX-SESSION: incluir _auditoriaSessionId para que otros dispositivos
                     // detecten cambios de ciclo de auditoría incluso sin pasar por
                     // _adminIniciarSesionFirestore (p.ej., reconexiones tardías).
@@ -1015,6 +1342,10 @@
                     email:      (_auth && _auth.currentUser) ? _auth.currentUser.email : currentUserUid,
                     sessionId:  _auditoriaSessionId,
                     status:     myAuditoriaStatus,
+                    // D — quién finalizó cada área y cuándo. Viaja con el
+                    // conteo porque pertenece al mismo acto: cerrar el área.
+                    finalizadas: (typeof myAuditoriaFinalizadas !== 'undefined')
+                                 ? myAuditoriaFinalizadas : {},
                     conteo:     conteoConTs,   // BUG-5 FIX: conteo con _ts por producto
                     updatedAt:  now,
                     isAdmin:    isAdmin()

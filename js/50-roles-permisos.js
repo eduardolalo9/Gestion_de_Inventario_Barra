@@ -33,11 +33,20 @@
                         });
                     }
                     loadFromCloud().then(function() {
+                        // D — los conteos que se hicieron sin señal se suben
+                        // aquí. Va después de loadFromCloud a propósito: así
+                        // el reintento compara contra lo que el servidor tiene
+                        // AHORA y detecta si alguien más contó ese producto
+                        // mientras este aparato estaba desconectado.
+                        return drenarConteosPendientes();
+                    }).then(function() {
                         // loadFromCloud ya llama syncToCloud() si local es más reciente
-                        updateCloudSyncBadge(_cloudSyncPending ? 'pending' : 'ok');
+                        updateCloudSyncBadge(
+                            (_cloudSyncPending || _outboxPendientes().length > 0) ? 'pending' : 'ok');
                     }).catch(function(e) {
                         console.warn('[Firebase] Error en loadFromCloud tras reconexión:', e);
                         if (_cloudSyncPending) syncToCloud();
+                        drenarConteosPendientes().catch(function() {});
                     });
                 } else {
                     updateCloudSyncBadge('none');
@@ -822,17 +831,64 @@
             }
         }
 
+        /**
+         * _vaciarCatalogoPublicado()
+         * ──────────────────────────
+         * Deja `catalogo/productos` vacío y con una versión más nueva, para
+         * que todos los dispositivos adopten el vaciado por el mismo camino
+         * por el que adoptan una publicación normal.
+         *
+         * No se borra el documento: si se borrara, los listeners verían
+         * `snap.exists === false`, saldrían sin hacer nada, y cada aparato se
+         * quedaría con su copia local de los 424 productos. Un documento
+         * vacío con versión mayor sí es una instrucción que el listener
+         * entiende.
+         */
+        async function _vaciarCatalogoPublicado() {
+            if (!_db || !isAdmin()) return false;
+            const version = Date.now();
+            await _db.collection('catalogo').doc('productos').set({
+                productos:    [],
+                publicadoPor: currentUserUid,
+                publicadoEn:  version,
+                version:      version,
+                vaciado:      true
+            });
+            try {
+                localStorage.setItem('inventarioApp_catalogVersion', String(version));
+            } catch(_) {}
+            console.info('[Catalogo] Catálogo publicado vaciado (v' + version + ').');
+            return true;
+        }
+
         function subscribeCatalogoUsuario() {
             if (!_db || _unsubCatalogo) return;
             _unsubCatalogo = _db.collection('catalogo').doc('productos')
                 .onSnapshot(function(snap) {
                     if (!snap.exists) return;
                     const data = snap.data();
-                    if (!Array.isArray(data.productos) || data.productos.length === 0) return;
+                    if (!Array.isArray(data.productos)) return;
                     // Solo actualizar si la versión del servidor es más nueva
                     const serverVersion = data.version || 0;
                     const localVersion  = parseInt(localStorage.getItem('inventarioApp_catalogVersion') || '0', 10);
                     if (serverVersion <= localVersion) return;
+
+                    // D — un catálogo vacío con versión más nueva es la señal
+                    // de que el administrador lo vació. Antes se descartaba
+                    // junto con los snapshots inválidos (`length === 0` salía
+                    // sin hacer nada), así que el vaciado no llegaba a ningún
+                    // dispositivo y cada uno seguía con sus 424 productos.
+                    if (data.productos.length === 0 && data.vaciado) {
+                        _marcarCatalogoPurgado(serverVersion);
+                        products = [];
+                        syncStockByAreaFromConteo();
+                        localStorage.setItem('inventarioApp_catalogVersion', String(serverVersion));
+                        saveToLocalStorage();
+                        renderTab();
+                        showNotification('🗑️ El administrador vació el catálogo');
+                        return;
+                    }
+                    if (data.productos.length === 0) return;
                     // FIX-CONCURRENCIA: mismo merge que _applyCloudData — conserva
                     // cualquier producto local aún no sincronizado en vez de borrarlo.
                     products = _mergeArrayByIdPreferCloud(products, data.productos);
@@ -861,10 +917,26 @@
                 .onSnapshot(function(snap) {
                     if (!snap.exists) return;
                     const data = snap.data();
-                    if (!Array.isArray(data.productos) || data.productos.length === 0) return;
+                    if (!Array.isArray(data.productos)) return;
                     const serverVersion = data.version || 0;
                     const localVersion  = parseInt(localStorage.getItem('inventarioApp_catalogVersion') || '0', 10);
                     if (serverVersion <= localVersion) return; // ya lo tenemos (incluye el caso "yo mismo lo publiqué")
+
+                    // D — mismo caso que en el listener de usuario: el vaciado
+                    // hecho por OTRO administrador tiene que llegar aquí, o
+                    // este dispositivo devolvería los 424 productos a la nube
+                    // en su siguiente sincronización.
+                    if (data.productos.length === 0 && data.vaciado) {
+                        _marcarCatalogoPurgado(serverVersion);
+                        products = [];
+                        syncStockByAreaFromConteo();
+                        localStorage.setItem('inventarioApp_catalogVersion', String(serverVersion));
+                        saveToLocalStorage();
+                        renderTab();
+                        showNotification('🗑️ Otro administrador vació el catálogo');
+                        return;
+                    }
+                    if (data.productos.length === 0) return;
                     products = _mergeArrayByIdPreferCloud(products, data.productos);
                     syncStockByAreaFromConteo();
                     localStorage.setItem('inventarioApp_catalogVersion', String(serverVersion));
@@ -1201,7 +1273,7 @@
          * @param {Array}   productsList Lista de productos a exportar
          * @param {string}  [fileName]   Nombre del archivo de salida (opcional)
          */
-function exportToExcelConDatos(modo, conteoData, productsList, fileName) {
+function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOverride) {
     if (!Array.isArray(productsList) || productsList.length === 0) {
         showNotification('⚠️ No hay productos para exportar');
         return;
@@ -1215,7 +1287,7 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName) {
     inventarioConteo = conteoData;
     products = productsList;
     try {
-        exportToExcel(modo, fileName);
+        exportToExcel(modo, fileName, areasOverride);
     } finally {
         inventarioConteo = _backupConteo;
         products = _backupProducts;
@@ -1252,6 +1324,10 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName) {
         // ── RENDER: AJUSTES ────────────────────────────────────────────────
         function renderAjustesTab() {
             let html = '<div class="max-w-2xl mx-auto">';
+
+            // R6: la administracion de areas de conteo vive aqui, y solo para
+            // el admin. La funcion devuelve cadena vacia si no lo es.
+            if (typeof renderAreasConteoAdmin === 'function') html += renderAreasConteoAdmin();
 
             // Formulario para solicitar ajuste (solo usuarios)
             if (!isAdmin()) {

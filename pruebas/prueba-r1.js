@@ -171,10 +171,19 @@ chk('Los productos congelados del cierre conservan el modo',
 // ═══ 7 · Excel: ida y vuelta sin perder el modo ═══════════════════════════
 chk('La importación reconoce una columna ConteoOz',
     /conteoOz:\s*\['ConteoOz'/.test(importa));
-chk('Sin capacidad ni peso, la importación fuerza el modo cantidad',
-    /if \(capacidadMl === null \|\| pesoBotellaLlenaOz === null\) \{\s*\n\s*product\.conteoOzHabilitado = false;/.test(importa));
-chk('Si el Excel no trae la columna, se deduce el comportamiento de siempre',
-    /product\.conteoOzHabilitado = true;/.test(importa));
+// ── ACTUALIZADO EN F1 ────────────────────────────────────────────────────
+// Estas dos comprobaciones fijaban el comportamiento que resultó ser el
+// DEFECTO CRÍTICO 2 de la auditoría: la decisión se tomaba mirando solo la
+// fila del Excel, así que un Excel sin las columnas de capacidad y peso
+// apagaba el conteo en oz de productos que sí tenían esos datos, y eso
+// reinterpretaba conteos ya capturados. La regla correcta vive ahora en
+// _resolverConteoOz y se prueba a fondo, ejecutándola, en prueba-f1.js.
+chk('Sin capacidad ni peso EN NINGÚN LADO, se cuenta por cantidad',
+    /if \(cap === null \|\| peso === null\) return false;/.test(importa),
+    'la decisión ya no la toma la fila suelta, sino _resolverConteoOz');
+chk('Un producto que ya existe conserva su modo si el Excel no dice nada',
+    /if \(existente && typeof existente\.conteoOzHabilitado === 'boolean'\) \{\s*\n\s*return existente\.conteoOzHabilitado;/.test(importa),
+    'importar el catálogo no puede reinterpretar lo ya contado');
 chk('La exportación escribe la columna ConteoOz',
     /headerRow\.push\('ConteoOz'\)/.test(expor));
 chk('La exportación y la importación usan el mismo nombre de columna',

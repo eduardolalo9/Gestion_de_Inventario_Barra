@@ -58,7 +58,7 @@
                         activeTab = data.activeTab || 'inicio';
                         searchTerm = data.searchTerm || '';
                         selectedGroup = data.selectedGroup || 'Todos';
-                        selectedArea = data.selectedArea || 'almacen';
+                        selectedArea = data.selectedArea || AREAS_CONTEO[0] || 'almacen';   // R6
                         expandedInventories = new Set(data.expandedInventories || []);
 
                         saveToLocalStorage();
@@ -105,6 +105,9 @@
             document.getElementById('importDataInput').addEventListener('change', function(e) { window.importFullData(e); });
 
             // --- App principal ---
+            // R6: la configuracion de areas se carga antes que nada. Si se
+            // cargara despues, el primer render usaria las tres por defecto.
+            if (typeof cargarAreasLocal === 'function') cargarAreasLocal();
             initializeApp();
 
             // --- Patch de seguridad: guardar referencia a exportToExcel DESPUÉS de que initializeApp la defina ---

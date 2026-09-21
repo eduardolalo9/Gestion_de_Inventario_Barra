@@ -25,7 +25,14 @@
             let html = '<div class="bg-white rounded-xl p-4 sm:p-5 mb-4 shadow-md">';
 
             if (!_inventarioActivo) {
-                html += '<p style="font-size:0.8rem;color:var(--txt-muted);">Sin Inventario Físico activo todavía.</p>';
+                // R7: el estado vacio invita a crear en vez de constatar que no hay nada.
+                html += '<p style="font-size:0.86rem;font-weight:600;color:var(--txt-primary);margin-bottom:4px;">Sin Inventario Físico abierto</p>';
+                html += '<p style="font-size:0.75rem;color:var(--txt-muted);line-height:1.5;">'
+                     +  (isAdmin()
+                         ? 'Crea uno para que el equipo pueda empezar a contar. El número se asigna solo.'
+                         : 'El administrador todavía no ha abierto el inventario de esta semana.')
+                     +  '</p>';
+                if (typeof renderGlosarioEstados === 'function') html += renderGlosarioEstados();
                 html += '</div>';
                 return html;
             }
@@ -55,6 +62,38 @@
                 html += '<p style="font-size:0.72rem;color:var(--txt-muted);">Cerrado: ' + new Date(inv.fechaCierre).toLocaleDateString('es-MX') + ' por ' + escapeHtml(inv.cerradoPorNombre || '—') + '</p>';
             }
             html += '<p style="font-size:0.72rem;color:var(--txt-muted);margin-top:2px;">Artículos contados: ' + productosContados.size + ' / ' + products.length + '</p>';
+
+            // ── R7: lo que el formulario dejo escrito ────────────────────────
+            // Se lee siempre a la defensiva: los inventarios creados antes de R7
+            // no tienen ninguno de estos campos.
+            if (inv.fechaRecuento) {
+                var _cl = (typeof clasificarRecuento === 'function') ? clasificarRecuento(inv.fechaRecuento) : null;
+                html += '<p style="font-size:0.72rem;color:var(--txt-muted);margin-top:2px;">Recuento: '
+                     +  escapeHtml(inv.fechaRecuento)
+                     +  (_cl && typeof etiquetaSemana === 'function' ? ' · ' + escapeHtml(etiquetaSemana(inv.fechaRecuento)) : '')
+                     +  (_cl && _cl.cierraSemana ? ' · <span style="color:var(--green,#4ade80);font-weight:600;">cierra semana</span>' : '')
+                     +  '</p>';
+            }
+            if (Array.isArray(inv.warehousesSnapshot) && inv.warehousesSnapshot.length) {
+                html += '<p style="font-size:0.72rem;color:var(--txt-muted);margin-top:2px;">Áreas: '
+                     +  escapeHtml(inv.warehousesSnapshot.map(function(a) {
+                            return (typeof areasAuditoria !== 'undefined' && areasAuditoria[a]) ? areasAuditoria[a] : a;
+                        }).join(', '))
+                     +  '</p>';
+            }
+            // Cuantas personas tienen algo contado. Es el dato que el admin mira
+            // antes de cerrar: cerrar con gente contando pierde su trabajo.
+            var _contando = (typeof _usuariosContando === 'function') ? _usuariosContando() : 0;
+            if (!esCerrado) {
+                html += '<p style="font-size:0.72rem;margin-top:2px;color:'
+                     +  (_contando ? 'var(--accent)' : 'var(--txt-muted)') + ';font-weight:'
+                     +  (_contando ? '600' : '400') + ';">Usuarios contando: ' + _contando + '</p>';
+            }
+            if (inv.comentario) {
+                html += '<p style="font-size:0.72rem;color:var(--txt-secondary);margin-top:6px;'
+                     +  'padding-left:8px;border-left:2px solid var(--border-mid);line-height:1.5;">'
+                     +  escapeHtml(inv.comentario) + '</p>';
+            }
             html += '</div>';
 
             html += '<div class="flex flex-col gap-2" style="align-items:flex-end;">';
@@ -194,7 +233,7 @@
             // Inventario Físico activo que no esté CERRADO, para que el admin
             // ni siquiera vea la opción que la función rechazaría.
             if (isAdmin() && hasPermission('inventory.create') && (!_inventarioActivo || _inventarioActivo.estado === 'CERRADO')) {
-                html += '<button onclick="auditoriaResetear()" title="Iniciar nuevo Inventario Físico (solo admin)" style="flex-shrink:0;padding:6px 10px;border-radius:var(--r-md);background:var(--red-dim);border:1px solid rgba(239,68,68,0.18);color:var(--red-text);font-size:0.7rem;font-weight:600;cursor:pointer;white-space:nowrap;" class="flex items-center gap-1">';
+                html += '<button onclick="abrirModalNuevoInventario()" title="Crear nuevo Inventario Físico (solo admin)" style="flex-shrink:0;padding:6px 10px;border-radius:var(--r-md);background:var(--red-dim);border:1px solid rgba(239,68,68,0.18);color:var(--red-text);font-size:0.7rem;font-weight:600;cursor:pointer;white-space:nowrap;" class="flex items-center gap-1">';
                 html += '<svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>';
                 html += ' Nuevo Inventario Físico</button>';
             } else if (isAdmin() && hasPermission('inventory.create') && _inventarioActivo) {
@@ -204,7 +243,7 @@
             html += '</div>';
             // Barra de progreso
             html += '<div class="flex items-center gap-3">';
-            html += '<div style="font-size:0.68rem;font-weight:600;color:var(--txt-muted);white-space:nowrap;">' + totalCompletas + ' / 3 áreas</div>';
+            html += '<div style="font-size:0.68rem;font-weight:600;color:var(--txt-muted);white-space:nowrap;">' + totalCompletas + ' / ' + AREAS_CONTEO.length + ' áreas</div>';
             html += '<div class="audit-progress-bar" style="flex:1;"><div class="audit-progress-fill" style="width:' + porcentaje + '%;"></div></div>';
             html += '<div style="font-size:0.68rem;font-weight:700;color:' + (todasCompletas ? 'var(--green)' : 'var(--accent)') + ';white-space:nowrap;">' + porcentaje + '%</div>';
             html += '</div>';
@@ -242,7 +281,11 @@
                     const totalProductos = products.filter(p => conteoRef[p.id] && conteoRef[p.id][area] &&
                         (conteoRef[p.id][area].enteras > 0 || (conteoRef[p.id][area].abiertas || []).some(a => a > 0))).length;
                     html += '<div style="font-size:0.63rem;color:var(--txt-muted);margin-top:3px;">' + totalProductos + ' producto(s) con cantidad';
-                    if (isAdmin()) {
+                    // D — el enlace se ofrece según el permiso, no según
+                    // isAdmin(): es el mismo criterio que ahora aplica
+                    // reabrirArea(), y así no se muestra una acción que el
+                    // servidor va a rechazar.
+                    if (hasPermission('inventory.reopenArea')) {
                         html += ' · <a href="#" onclick="event.stopPropagation();reabrirArea(\'' + area + '\');" style="color:var(--amber);text-decoration:underline;font-weight:600;">↩ Reabrir</a>';
                     } else if (tieneUnlock) {
                         html += ' · <span style="color:var(--amber);font-weight:600;">🔓 Corrección habilitada</span>';
@@ -276,7 +319,7 @@
                     html += '<i class="fa-solid fa-file-excel" style="font-size:1.1rem;"></i>';
                     html += 'DESCARGAR MI CONTEO (ÁREAS FINALIZADAS)';
                     html += '</button>';
-                    html += '<p style="text-align:center;font-size:0.68rem;color:var(--txt-muted);margin-top:8px;">Exporta únicamente tu conteo personal de las 3 áreas</p>';
+                    html += '<p style="text-align:center;font-size:0.68rem;color:var(--txt-muted);margin-top:8px;">Exporta únicamente tu conteo personal de las ' + AREAS_CONTEO.length + ' áreas</p>';
                 }
                 html += '</div>';
             } else {
@@ -367,7 +410,7 @@
                     html += '<span class="audit-timestamp">⏱ ' + relTime + '</span>';
                 }
                 html += '</div>';
-                html += '<span style="font-size:0.65rem;color:var(--txt-muted);">' + totalAreas + '/3 áreas</span>';
+                html += '<span style="font-size:0.65rem;color:var(--txt-muted);">' + totalAreas + '/' + AREAS_CONTEO.length + ' áreas</span>';
                 html += '</div>';
 
                 // ── Fila por área ───────────────────────────────────────────
@@ -943,6 +986,61 @@
             return !!(el && el.checked);
         }
 
+        // ── R2 (reglas 2 y 8) — el PV de Parrot ───────────────────────────────
+        // Parrot genera un product_id por articulo de venta: PVA1001169. Es la
+        // llave con la que se cruzan las ventas contra el catalogo. Cruzar por
+        // nombre seria fragil: basta que cambien "Margarita" por "Margarita
+        // Clasica" en la carta para que las ventas dejen de encontrar su producto.
+
+        /**
+         * Normaliza el PV mientras se escribe: mayusculas y sin espacios.
+         * Un PV copiado de un Excel llega con espacios al final mas veces de las
+         * que parece, y " PVA1001169" no cruza con "PVA1001169".
+         */
+        function _normalizarPV(el) {
+            if (!el) return;
+            var pos   = el.selectionStart;
+            var antes = el.value;
+            var val   = antes.toUpperCase().replace(/\s+/g, '');
+            if (val !== antes) {
+                el.value = val;
+                // Conservar la posicion del cursor: sin esto, corregir una letra
+                // en medio del PV manda el cursor al final en cada tecla.
+                try { el.setSelectionRange(pos, pos); } catch (_) {}
+            }
+            _avisarPVDuplicado(val);
+        }
+
+        /**
+         * Busca si otro producto ya usa ese PV. Devuelve el producto en conflicto
+         * o null. Excluye el que se esta editando.
+         */
+        function _buscarPVDuplicado(pv) {
+            if (!pv) return null;
+            for (var i = 0; i < products.length; i++) {
+                var p = products[i];
+                if (!p.pv) continue;
+                if (p.id === editingProductId) continue;
+                if (String(p.pv).toUpperCase() === pv) return p;
+            }
+            return null;
+        }
+
+        // Aviso en vivo. No bloquea: avisar mientras se escribe y dejar seguir es
+        // menos molesto que pelearse con el campo. El bloqueo real va al guardar.
+        function _avisarPVDuplicado(pv) {
+            var aviso = document.getElementById('productPVAviso');
+            if (!aviso) return;
+            var choque = _buscarPVDuplicado(pv);
+            if (choque) {
+                aviso.textContent = 'Ese PV ya lo usa ' + (choque.name || choque.id) + '.';
+                aviso.style.color = '#dc2626';
+            } else {
+                aviso.textContent = 'Déjalo vacío si el producto no se vende tal cual en el punto de venta.';
+                aviso.style.color = '#9ca3af';
+            }
+        }
+
         function _ponerCasillaOz(valor) {
             var el = document.getElementById('productConteoOz');
             if (el) el.checked = !!valor;
@@ -985,7 +1083,7 @@
             document.getElementById('productCapacidadMl').value = '';
             document.getElementById('productPesoLlenaOz').value = '';
             // P0 — limpiar tambien los campos de compras
-            ['productPrecio','productStockMinimo','productConversion','productProveedor']
+            ['productPrecio','productStockMinimo','productConversion','productProveedor','productPV']
                 .forEach(function(id) { var el = document.getElementById(id); if (el) el.value = ''; });
             if (productId) {
                 const product = products.find(p => p.id === productId);
@@ -1005,6 +1103,7 @@
                     if (typeof product.conversion  === 'number') document.getElementById('productConversion').value  = product.conversion;
                     if (typeof product.stockMinimo === 'number') document.getElementById('productStockMinimo').value = product.stockMinimo;
                     if (product.proveedor) document.getElementById('productProveedor').value = product.proveedor;
+                    if (product.pv) document.getElementById('productPV').value = product.pv;   // R2
                     // R1 (regla 14) — poblar la casilla con el modo REAL del producto.
                     // Es lo que evita el accidente silencioso: si no se poblara, abrir
                     // y guardar un producto antiguo lo cambiaria de modo de conteo sin
@@ -1021,6 +1120,8 @@
                 _ponerCasillaOz(false);
             }
             _sincronizarCasillaOz();
+            // R2 — recalcular el aviso de PV: si no, queda el rojo de la edicion anterior.
+            _avisarPVDuplicado((document.getElementById('productPV') || {}).value || '');
             modal.classList.remove('hidden');
             document.body.classList.add('modal-open');
             setTimeout(() => {
@@ -1088,6 +1189,22 @@
             const provEl      = document.getElementById('productProveedor');
             const proveedor   = provEl ? provEl.value.trim() : '';
 
+            // ── R2 (reglas 2 y 8): PV de Parrot ──────────────────────────────
+            // Se bloquea el duplicado. Dos productos con el mismo PV no darian un
+            // error visible: repartirian mal las ventas y la desviacion saldria
+            // torcida en los dos, que es mucho peor que no guardar.
+            const pvEl = document.getElementById('productPV');
+            const pv   = pvEl ? pvEl.value.toUpperCase().replace(/\s+/g, '') : '';
+            if (pv) {
+                const choquePV = _buscarPVDuplicado(pv);
+                if (choquePV) {
+                    showNotification('⚠️ El PV ' + pv + ' ya lo usa ' + (choquePV.name || choquePV.id) +
+                                     '. Cada PV pertenece a un solo producto.');
+                    if (pvEl) pvEl.focus();
+                    return;
+                }
+            }
+
             // Bug #6 fix: validar coherencia física antes de guardar
             // pesoVidrio = pesoLleno - liquidoOz; si es negativo el usuario invirtió los campos
             if (capacidadMl !== undefined && pesoBotellaLlenaOz !== undefined) {
@@ -1152,6 +1269,8 @@
                 if (conversion  !== undefined) product.conversion  = conversion;  else delete product.conversion;
                 if (stockMinimo !== undefined) product.stockMinimo = stockMinimo; else delete product.stockMinimo;
                 if (proveedor)                 product.proveedor   = proveedor;   else delete product.proveedor;
+                // R2 — mismo criterio: si se vacia el campo, el dato se quita.
+                if (pv)                        product.pv          = pv;          else delete product.pv;
                 // stockByArea se recalcula
                 syncStockByAreaFromConteo();
                 // CORRECCIÓN 3: Auditoría obligatoria en modificación de producto
@@ -1173,7 +1292,7 @@
                     name: name,
                     unit: unit,
                     group: group,
-                    stockByArea: { almacen: 0, barra1: 0, barra2: 0 }
+                    stockByArea: _stockInicialPorArea(0)
                 };
                 if (capacidadMl !== undefined)       newProduct.capacidadMl = capacidadMl;
                 if (pesoBotellaLlenaOz !== undefined) newProduct.pesoBotellaLlenaOz = pesoBotellaLlenaOz;
@@ -1184,6 +1303,7 @@
                 if (conversion  !== undefined) newProduct.conversion  = conversion;
                 if (stockMinimo !== undefined) newProduct.stockMinimo = stockMinimo;
                 if (proveedor)                 newProduct.proveedor   = proveedor;
+                if (pv)                        newProduct.pv          = pv;   // R2
                 products.push(newProduct);
                 // CORRECCIÓN 3: Auditoría de nuevo producto
                 _registrarEnSyncQueue({
@@ -1272,10 +1392,30 @@
                                 uid:      currentUserUid || null
                             });
 
+                            // D — la marca de purga es lo que hace que el
+                            // vaciado sea real. Las lápidas por producto se
+                            // siguen poniendo (sirven para el borrado suelto),
+                            // pero ya no son lo que sostiene esta operación:
+                            // con 424 productos y tope de 300, 124 se quedaban
+                            // sin lápida y volvían de la nube a los 900 ms.
+                            _marcarCatalogoPurgado(Date.now());
                             products.forEach(function(p) { _marcarComoBorrado('producto', p.id); }); // FIX-CONCURRENCIA
                             products = []; cart = []; inventarioConteo = {};
                             auditoriaConteo = {}; myAuditoriaConteo = {}; auditoriaConteoPorUsuario = {};
                             saveToLocalStorage();
+
+                            // D — la segunda copia del catálogo (catalogo/productos)
+                            // quedaba intacta con los 424 productos. Bastaba con que
+                            // un teléfono entrara por primera vez —con su contador de
+                            // versión local en cero— para que el listener le inyectara
+                            // el catálogo completo y, si ese teléfono era de un admin,
+                            // lo devolviera a la nube. Vaciarla aquí cierra esa puerta.
+                            _vaciarCatalogoPublicado().catch(function(e) {
+                                console.warn('[Catalogo] No se pudo vaciar el catálogo publicado:', e);
+                                showNotification('⚠️ El catálogo se borró aquí, pero no se pudo ' +
+                                    'vaciar en la nube. Vuelve a intentarlo con señal.');
+                            });
+
                             showNotification('Todos los productos han sido eliminados. Respaldo guardado.');
                             renderTab();
                         }

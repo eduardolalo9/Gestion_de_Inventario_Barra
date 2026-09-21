@@ -503,6 +503,25 @@ const usersList = Object.values(allUsersAuditoria);
             });
         }
 
+        // R7 — lectura defensiva de lo que dejo el formulario. Si alguien llama
+        // a la creacion por el camino antiguo, _opcionesNuevoInventario es null
+        // y todo cae a los valores de siempre.
+        function _opcNuevoInv(campo, porDefecto) {
+            var o = (typeof _opcionesNuevoInventario !== 'undefined') ? _opcionesNuevoInventario : null;
+            if (!o || o[campo] === undefined || o[campo] === null || o[campo] === '') return porDefecto;
+            return o[campo];
+        }
+        function _areasDelNuevoInventario() {
+            var o = (typeof _opcionesNuevoInventario !== 'undefined') ? _opcionesNuevoInventario : null;
+            if (o && Array.isArray(o.areas) && o.areas.length) {
+                // Solo las que existen de verdad: una lista guardada podria
+                // nombrar un area que el admin borro entre medias.
+                var v = o.areas.filter(function(a) { return AREAS_CONTEO.indexOf(a) !== -1; });
+                if (v.length) return v;
+            }
+            return AREAS_CONTEO.slice();
+        }
+
         async function _adminIniciarSesionFirestore(sessionId, numeroInventario) {
             // FIX-PROP-1 (CRÍTICO): antes, si el admin estaba offline en el
             // instante exacto de confirmar, esta función retornaba en silencio
@@ -611,7 +630,15 @@ const usersList = Object.values(allUsersAuditoria);
                 cerradoPorUid:   null,
                 cerradoPorNombre: null,
                 totalProductos:  products.length,
-                warehousesSnapshot: AREAS_CONTEO.slice() // fotografía congelada de los almacenes vigentes al crear
+                // R7 — el formulario puede limitar el inventario a unas areas
+                // concretas. Si no hay formulario (camino antiguo), entran todas.
+                // Esta fotografia es la que manda para ese inventario: aunque
+                // despues se creen o borren areas, este conteo sigue siendo de
+                // las que tenia cuando se abrio.
+                warehousesSnapshot: _areasDelNuevoInventario(),
+                nombre:          _opcNuevoInv('nombre', 'BARRA INVENTARIO FISICO'),
+                comentario:      _opcNuevoInv('comentario', ''),
+                fechaRecuento:   _opcNuevoInv('fechaRecuento', null)
             });
 
             await batch.commit(); // atómico: todo-o-nada para (1)+(2)+(3)+(4)
@@ -659,11 +686,12 @@ const usersList = Object.values(allUsersAuditoria);
         async function loadConflictosDesdeFirestore() {
             if (!_db || !navigator.onLine || !_haySesionFirebase()) return; // M2a
             try {
-                await Promise.all([
-                    _cargarYAgeregarConteos('almacen'),
-                    _cargarYAgeregarConteos('barra1'),
-                    _cargarYAgeregarConteos('barra2'),
-                ]);
+                // R6: una por cada area definida, no tres fijas. Con las areas
+                // escritas a mano, una cuarta area se contaba en el telefono y
+                // nunca llegaba al panel del administrador.
+                await Promise.all(AREAS_CONTEO.map(function(a) {
+                    return _cargarYAgeregarConteos(a);
+                }));
                 console.info('[MultiDisp] Conteos de todos los dispositivos cargados ✓');
             } catch (err) {
                 console.warn('[MultiDisp] No se pudieron cargar conteos desde Firestore:', err);
@@ -729,6 +757,49 @@ const usersList = Object.values(allUsersAuditoria);
                 updateCloudSyncBadge('error');
                 // No interrumpir arranque — se sigue con datos locales
             }
+        }
+
+        /**
+         * _preservarConteosPendientes(deLaNube, local)
+         * ───────────────────────────────────────────
+         * Devuelve el conteo de la nube, pero conservando los productos/área
+         * que este dispositivo tiene anotados como pendientes de subir.
+         *
+         * Solo protege lo que está en el outbox, no todo lo local: un conteo
+         * ya confirmado por el servidor no tiene por qué ganarle a la nube,
+         * porque la nube ya lo incluye. Y un conteo que perdió un conflicto
+         * de versión tampoco, porque salió del outbox a propósito.
+         *
+         * Sin _db o sin outbox (por ejemplo en las pruebas del navegador) se
+         * comporta exactamente como antes: gana la nube.
+         */
+        function _preservarConteosPendientes(deLaNube, local) {
+            if (typeof _outboxPendientes !== 'function') return deLaNube;
+            const pendientes = _outboxPendientes();
+            if (!pendientes.length || !local) return deLaNube;
+
+            const resultado = deLaNube || {};
+            let conservados = 0;
+
+            pendientes.forEach(function(clave) {
+                const corte = clave.indexOf('|');
+                if (corte <= 0) return;
+                const pid  = clave.slice(0, corte);
+                const area = clave.slice(corte + 1);
+
+                const valorLocal = local[pid] && local[pid][area];
+                if (!valorLocal || typeof valorLocal.enteras === 'undefined') return;
+
+                if (!resultado[pid]) resultado[pid] = {};
+                resultado[pid][area] = valorLocal;
+                conservados++;
+            });
+
+            if (conservados > 0) {
+                console.info('[ConteoProducto]', conservados,
+                    'conteo(s) sin confirmar conservados frente a la nube.');
+            }
+            return resultado;
         }
 
         /**
@@ -820,12 +891,36 @@ const usersList = Object.values(allUsersAuditoria);
                 // gana para ids que ya existen en ambos lados (trae ediciones de
                 // otros dispositivos), pero se conservan los ids que solo existen
                 // localmente (alta reciente de este dispositivo, aún pendiente).
-                products    = _mergeArrayByIdPreferCloud(products,    validatedProducts);
+                // D — dos sentidos de la purga del catálogo:
+                //   • Si OTRO administrador vació el catálogo, su marca llega
+                //     con fecha más nueva que la nuestra: se adopta el vaciado
+                //     en vez de conservar los productos locales, que es lo que
+                //     hacía _mergeArrayByIdPreferCloud (conserva los ids que
+                //     solo existen en local — aquí serían los 424 enteros).
+                //   • Si la purga la hicimos NOSOTROS y la nube todavía no la
+                //     refleja, no se fusiona nada de la nube.
+                const _purgaNube = (data && data._catalogoPurgadoEn) || 0;
+                if (_purgaNube > (_catalogoPurgadoEn || 0)) {
+                    console.info('[Catalogo] Otro administrador vació el catálogo — se adopta el vaciado.');
+                    _marcarCatalogoPurgado(_purgaNube);
+                    products = validatedProducts.slice();
+                } else if (_purgaDeCatalogoVigente(data)) {
+                    console.info('[Catalogo] Purga local vigente — no se recuperan productos de la nube.');
+                } else {
+                    products = _mergeArrayByIdPreferCloud(products, validatedProducts);
+                }
                 orders      = _mergeArrayByIdPreferCloud(orders,      cloudOrders);
                 inventories = _mergeArrayByIdPreferCloud(inventories, cloudInventories);
                 cart        = data.cart        || [];
                 activeTab   = data.activeTab   || 'inicio';
-                selectedArea = data.selectedArea || 'almacen';
+                selectedArea = data.selectedArea || AREAS_CONTEO[0] || 'almacen';   // R6
+                // R6: la definicion de areas llega antes que el estado que la usa.
+                // Si se aplicara despues, auditoriaStatus se leeria contra las areas
+                // viejas y un area nueva apareceria sin estado.
+                if (Array.isArray(data.areasConteo) && typeof aplicarDefinicionAreas === 'function') {
+                    aplicarDefinicionAreas(data.areasConteo);
+                    if (typeof _guardarAreasLocal === 'function') _guardarAreasLocal();
+                }
                 if (data.auditoriaStatus && typeof data.auditoriaStatus === 'object') auditoriaStatus = data.auditoriaStatus;
                 if (data.auditoriaConteo && typeof data.auditoriaConteo === 'object') auditoriaConteo = data.auditoriaConteo;
 
@@ -878,11 +973,11 @@ const usersList = Object.values(allUsersAuditoria);
 
                     if (!huboDatosNuevos && data._conteoInSubcol) {
                         // Nivel 2 — esquema anterior (documento único por área)
-                        const [snapAlmacen, snapBarra1, snapBarra2] = await Promise.all([
-                            docRef.collection('stockAreas').doc('almacen').get(),
-                            docRef.collection('stockAreas').doc('barra1').get(),
-                            docRef.collection('stockAreas').doc('barra2').get(),
-                        ]);
+                        // R6: se leen las areas definidas, no tres fijas.
+                        const _areasLegacy = AREAS_CONTEO.slice();
+                        const _snapsLegacy = await Promise.all(_areasLegacy.map(function(a) {
+                            return docRef.collection('stockAreas').doc(a).get();
+                        }));
                         const mergeArea = (snap, areaKey) => {
                             if (!snap.exists) return;
                             const areaData = snap.data();
@@ -892,9 +987,7 @@ const usersList = Object.values(allUsersAuditoria);
                                 rawConteo[prodId][areaKey] = areaData[prodId];
                             });
                         };
-                        mergeArea(snapAlmacen, 'almacen');
-                        mergeArea(snapBarra1,  'barra1');
-                        mergeArea(snapBarra2,  'barra2');
+                        _snapsLegacy.forEach(function(snap, i) { mergeArea(snap, _areasLegacy[i]); });
                     }
                 }
                 if (Object.keys(rawConteo).length === 0) {
@@ -912,7 +1005,21 @@ const usersList = Object.values(allUsersAuditoria);
                         migrated[prodId] = val;
                     }
                 });
-                inventarioConteo = migrated;
+                // ── D · Preservar lo que todavía no se ha confirmado ──────────
+                // Antes esta línea era `inventarioConteo = migrated;` a secas:
+                // un reemplazo completo por lo que dice la nube. Si el
+                // bartender contaba sin señal y otro aparato sincronizaba
+                // entretanto, al reconectar este reemplazo borraba el conteo
+                // local antes de que nadie hubiera intentado subirlo. El aviso
+                // decía "Guardado en el dispositivo" y el dato desaparecía.
+                //
+                // Ahora los conteos anotados como pendientes sobreviven a la
+                // bajada. No es preferir lo local por gusto: es que ese valor
+                // aún no ha tenido su oportunidad de llegar al servidor, y
+                // quien decide si entra o choca con otro es
+                // syncConteoProductoAtomico con la versión real en la mano
+                // (drenarConteosPendientes lo llama justo después).
+                inventarioConteo = _preservarConteosPendientes(migrated, inventarioConteo);
 
                 // Actualizar stockByArea desde conteo
                 syncStockByAreaFromConteo();

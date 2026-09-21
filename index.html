@@ -183,14 +183,75 @@
         // usuario que abra el código fuente. Asegúrate de restringir la API Key
         // en https://console.cloud.google.com → Credenciales → Restricciones de clave.
         // (dominio HTTP Referrer + solo Firestore API)
-const firebaseConfig = {
-  apiKey: "AIzaSyBviIBoQVn1aq6QTXCk-3CEIkWjiJV_WYI",
+// ══════════════════════════════════════════════════════════════════════════
+//  R3 — DOS ENTORNOS, ELEGIDOS POR EL DOMINIO
+//  ────────────────────────────────────────────────────────────────────────
+//  Hasta aquí había una sola configuración. Eso significaba que abrir la app
+//  en localhost para probar cualquier cosa escribía en la base REAL del bar:
+//  el mismo Firestore que usan los bartenders durante el servicio.
+//
+//  Ahora el entorno lo decide el dominio, no una decisión humana que se puede
+//  olvidar a las dos de la mañana:
+//      · eduardolalo9.github.io  → PRODUCCIÓN, la base del bar
+//      · localhost / 127.0.0.1   → PRUEBAS
+//
+//  Y si el de pruebas todavía no está configurado, la app NO cae a producción:
+//  se queda en modo local con localStorage. Fallar cerrado. Un descuido aquí
+//  no borra un inventario.
+// ══════════════════════════════════════════════════════════════════════════
+const FIREBASE_PRODUCCION = {
+  apiKey: "AIzaSyDaMcyv_o0YYv9XRDG1A-V3IrboLFK53-o",
+  authDomain: "gestor-de-inventarios-76c19.firebaseapp.com",
+  projectId: "gestor-de-inventarios-76c19",
+  storageBucket: "gestor-de-inventarios-76c19.firebasestorage.app",
+  messagingSenderId: "520575498448",
+  appId: "1:520575498448:web:3a83c2e4fcaedfc9d386d5"
+};
+
+// Proyecto barinventory-staging, creado el 12/09/2026.
+// Faltan DOS valores, que salen de Firebase Console → ⚙ Configuración del
+// proyecto → Tus apps → App web. Los otros cuatro ya están puestos: el
+// messagingSenderId es el número de proyecto (575323446273).
+// Mientras apiKey y appId sigan vacíos, en local la app funciona sin nube y
+// NO se conecta a la base del bar.
+const FIREBASE_PRUEBAS = {
+  apiKey: "",                                                  // ← PEGAR
   authDomain: "barinventory-staging.firebaseapp.com",
   projectId: "barinventory-staging",
   storageBucket: "barinventory-staging.firebasestorage.app",
   messagingSenderId: "575323446273",
-  appId: "1:575323446273:web:9140952b4e9ba78e67f400"
+  appId: ""                                                    // ← PEGAR
 };
+
+function _esEntornoDePruebas() {
+    var h = (location.hostname || '').toLowerCase();
+    // Cadena vacía cubre file:// — abrir el index a doble clic tampoco puede
+    // acabar escribiendo en la base del bar.
+    return h === '' || h === 'localhost' || h === '127.0.0.1' ||
+           h === '::1' || h.endsWith('.local');
+}
+
+const ENTORNO         = _esEntornoDePruebas() ? 'pruebas' : 'produccion';
+const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PRODUCCION;
+
+        // R3 — Aviso permanente cuando NO estás en producción. Sin esto es
+        // demasiado fácil contar media barra creyendo que va a la base buena, o
+        // al revés: tocar producción creyendo que estabas probando.
+        if (ENTORNO === 'pruebas') {
+            document.addEventListener('DOMContentLoaded', function() {
+                var b = document.createElement('div');
+                b.id = 'bannerEntorno';
+                b.textContent = FIREBASE_PRUEBAS.projectId
+                    ? 'PRUEBAS · ' + FIREBASE_PRUEBAS.projectId
+                    : 'PRUEBAS · sin nube, solo este dispositivo';
+                b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;' +
+                    'background:#b45309;color:#fff;text-align:center;font:600 11px/20px ' +
+                    '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;' +
+                    'letter-spacing:.08em;text-transform:uppercase;pointer-events:none;' +
+                    'padding:env(safe-area-inset-top) 8px 0';
+                document.body.appendChild(b);
+            });
+        }
 
         // ID del documento Firestore que almacena el estado de ESTA instalación.
         // Cambia este valor si quieres múltiples instancias (ej. "barra-norte", "barra-sur").
@@ -516,9 +577,17 @@ const firebaseConfig = {
   typeof v === "string" && v.length > 0 && !v.includes("REEMPLAZA")
 );
             if (!configured) {
-                console.warn("[Firebase] Config incompleta — solo se usará localStorage.");
+                // R3: en local esto es lo NORMAL mientras no exista el proyecto de
+                // pruebas, y es deliberado. No se cae a producción.
+                console.warn(ENTORNO === 'pruebas'
+                    ? '[Firebase] Entorno de PRUEBAS sin configurar — la app funciona solo con ' +
+                      'localStorage. No se toca la base del bar. Para conectar el proyecto de ' +
+                      'pruebas, rellena FIREBASE_PRUEBAS arriba en index.html.'
+                    : '[Firebase] Config incompleta — solo se usará localStorage.');
                 return;
             }
+            console.info('[Firebase] Entorno: ' + ENTORNO.toUpperCase() +
+                         ' · proyecto: ' + firebaseConfig.projectId);
             try {
                 firebase.initializeApp(firebaseConfig);
                 _db   = firebase.firestore();
@@ -558,7 +627,7 @@ const firebaseConfig = {
             }
         })();
     </script>
-    <link rel="stylesheet" href="css/estilos.css?v=2.7">
+    <link rel="stylesheet" href="css/estilos.css?v=3.5">
 </head>
 <body class="min-h-screen">
 
@@ -919,6 +988,24 @@ const firebaseConfig = {
                     </div>
                     <p class="text-xs text-gray-400 mt-2">El precio es el ultimo costo conocido; la importacion de compras avisa cuando cambia. El minimo en 0 significa que no se repone.</p>
                 </div>
+
+                <!-- R2 (reglas 2 y 8) — EL PV DE PARROT
+                     Es el product_id que genera Parrot para cada articulo de venta
+                     (PVA1001169). Es la llave con la que se cruzan las ventas: por
+                     eso no puede repetirse en dos productos y por eso NO se cruza
+                     por nombre, que cambia con cualquier cambio de carta.
+                     Va vacio en los insumos que no se venden tal cual: una botella
+                     de tequila que solo entra en cocteles llega por la receta. -->
+                <div class="mt-4 pt-4" style="border-top:1px solid var(--border-mid,#e5e7eb)">
+                    <p class="text-sm font-semibold text-gray-700 mb-3">Ventas</p>
+                    <label for="productPV" class="block text-sm font-medium text-gray-600 mb-2">PV de Parrot <span class="text-gray-400 font-normal">(SKU)</span></label>
+                    <input type="text" id="productPV" autocapitalize="characters" spellcheck="false"
+                        oninput="_normalizarPV(this)"
+                        class="w-full px-3 py-2 bg-white text-gray-900 border border-gray-200 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.02em"
+                        placeholder="Ej: PVA1001169">
+                    <p id="productPVAviso" class="text-xs mt-2" style="color:#9ca3af">Déjalo vacío si el producto no se vende tal cual en el punto de venta.</p>
+                </div>
                 <div class="flex gap-3 mt-6 pt-4" style="position:sticky;bottom:0;background:var(--modal-bg,#fff);padding-bottom:4px;z-index:1;">
                     <button type="button" onclick="closeProductModal()" style="flex:1;height:40px;border-radius:9999px;border:none;background:transparent;color:var(--txt-secondary);font-family:'IBM Plex Sans',sans-serif;font-size:.875rem;font-weight:500;cursor:pointer;transition:background .18s ease;" onmouseover="this.style.background='rgba(202,196,208,0.10)'" onmouseout="this.style.background='transparent'">Cancelar</button>
                     <button type="button" onclick="saveProduct()" style="flex:1;height:40px;border-radius:9999px;border:none;background:var(--accent);color:var(--accent-on,#003063);font-family:'IBM Plex Sans',sans-serif;font-size:.875rem;font-weight:500;cursor:pointer;box-shadow:var(--shadow-card);" >Guardar</button>
@@ -995,6 +1082,45 @@ const firebaseConfig = {
         </div>
     </div>
 
+    <!-- ══════════════════════════════════════════════════════════════════
+         R7 — NUEVO INVENTARIO FÍSICO
+         El número no se escribe: lo asigna el servidor con una transacción,
+         que es lo que evita que dos administradores creando a la vez se
+         lleven el mismo.
+         ══════════════════════════════════════════════════════════════════ -->
+    <div id="nuevoInventarioModal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[300] hidden" style="padding:12px;" role="dialog" aria-modal="true" aria-labelledby="nuevoInvTitulo">
+        <div class="modal-box" style="background:var(--modal-bg,#fff);border-radius:18px;max-width:26rem;width:100%;padding:18px;max-height:calc(100dvh - 80px);overflow-y:auto;">
+            <div style="width:48px;height:5px;background:var(--border-mid,#d1d5db);border-radius:999px;margin:0 auto 14px;"></div>
+            <h2 id="nuevoInvTitulo" style="font-size:1.15rem;font-weight:700;color:var(--txt-primary);margin-bottom:2px;">Nuevo Inventario Físico</h2>
+            <p style="font-size:.76rem;color:var(--txt-muted);margin-bottom:16px;">El número se asigna solo al crearlo.</p>
+
+            <label for="nuevoInvNombre" style="display:block;font-size:.78rem;font-weight:600;color:var(--txt-secondary);margin-bottom:5px;">Nombre</label>
+            <input type="text" id="nuevoInvNombre" maxlength="60" value="BARRA INVENTARIO FÍSICO"
+                style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border-mid);background:var(--surface);color:var(--txt-primary);font-family:inherit;font-size:.86rem;margin-bottom:14px;">
+
+            <label for="nuevoInvFecha" style="display:block;font-size:.78rem;font-weight:600;color:var(--txt-secondary);margin-bottom:5px;">Fecha del recuento</label>
+            <input type="date" id="nuevoInvFecha" onchange="_pintarAvisoFechaNuevoInv()"
+                style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border-mid);background:var(--surface);color:var(--txt-primary);font-family:inherit;font-size:.86rem;">
+            <p id="nuevoInvAvisoFecha" style="font-size:.72rem;margin:6px 0 14px;line-height:1.5;"></p>
+
+            <div style="font-size:.78rem;font-weight:600;color:var(--txt-secondary);margin-bottom:5px;">Creado por</div>
+            <div id="nuevoInvCreadoPor" style="font-size:.84rem;color:var(--txt-primary);margin-bottom:14px;"></div>
+
+            <div style="font-size:.78rem;font-weight:600;color:var(--txt-secondary);margin-bottom:5px;">Áreas de conteo</div>
+            <div id="nuevoInvAreas" style="display:flex;flex-direction:column;margin-bottom:4px;"></div>
+            <p style="font-size:.7rem;color:var(--txt-muted);margin-bottom:14px;line-height:1.5;">Las áreas elegidas quedan fijadas en este inventario, aunque después cambies la configuración.</p>
+
+            <label for="nuevoInvComentario" style="display:block;font-size:.78rem;font-weight:600;color:var(--txt-secondary);margin-bottom:5px;">Comentario <span style="font-weight:400;color:var(--txt-muted);">(opcional)</span></label>
+            <textarea id="nuevoInvComentario" rows="2" maxlength="300" placeholder="Ej: cierre de la semana 7-13 de septiembre"
+                style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border-mid);background:var(--surface);color:var(--txt-primary);font-family:inherit;font-size:.86rem;resize:vertical;margin-bottom:18px;"></textarea>
+
+            <div style="display:flex;gap:10px;">
+                <button type="button" onclick="cerrarModalNuevoInventario()" style="flex:1;min-height:44px;border-radius:9999px;border:1px solid var(--border-mid);background:transparent;color:var(--txt-secondary);font-family:inherit;font-size:.86rem;font-weight:500;cursor:pointer;">Cancelar</button>
+                <button type="button" onclick="confirmarNuevoInventario()" style="flex:1;min-height:44px;border-radius:9999px;border:none;background:var(--accent);color:var(--accent-on,#003063);font-family:inherit;font-size:.86rem;font-weight:600;cursor:pointer;">Crear inventario</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal Inventario -->
     <div id="inventarioModal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[300] animate-fadeIn hidden" style="padding:12px;" role="dialog" aria-modal="true" aria-labelledby="inventarioModalTitle">
         <div class="modal-box bg-white shadow-2xl max-w-sm w-full p-4 animate-slideUp" style="border-radius:18px;max-height:calc(100dvh - 56px - 24px);overflow-y:auto;">
@@ -1046,28 +1172,30 @@ const firebaseConfig = {
         </div>
     </div>
 
-        <script src="js/00-nucleo.js?v=2.7"></script>
-    <script src="js/10-multiusuario.js?v=2.7"></script>
-    <script src="js/20-persistencia.js?v=2.7"></script>
-    <script src="js/30-indexeddb.js?v=2.7"></script>
-    <script src="js/40-firestore.js?v=2.7"></script>
-    <script src="js/45-inventario-datos.js?v=2.7"></script>
-    <script src="js/50-roles-permisos.js?v=2.7"></script>
-    <script src="js/60-arranque.js?v=2.7"></script>
-    <script src="js/70-conversion-render.js?v=2.7"></script>
-    <script src="js/75-auditoria-flujo.js?v=2.7"></script>
-    <script src="js/80-buscador.js?v=2.7"></script>
-    <script src="js/85-ui-inventario-fisico.js?v=2.7"></script>
-    <script src="js/88-compras.js?v=2.7"></script>
-    <script src="js/90-ciclo-admin.js?v=2.7"></script>
-    <script src="js/95-exportacion.js?v=2.7"></script>
-    <script src="js/99-window-arranque.js?v=2.7"></script>
+        <script src="js/00-nucleo.js?v=3.5"></script>
+    <script src="js/10-multiusuario.js?v=3.5"></script>
+    <script src="js/15-ciclo-semanal.js?v=3.5"></script>
+    <script src="js/18-areas-config.js?v=3.5"></script>
+    <script src="js/20-persistencia.js?v=3.5"></script>
+    <script src="js/30-indexeddb.js?v=3.5"></script>
+    <script src="js/40-firestore.js?v=3.5"></script>
+    <script src="js/45-inventario-datos.js?v=3.5"></script>
+    <script src="js/50-roles-permisos.js?v=3.5"></script>
+    <script src="js/60-arranque.js?v=3.5"></script>
+    <script src="js/70-conversion-render.js?v=3.5"></script>
+    <script src="js/75-auditoria-flujo.js?v=3.5"></script>
+    <script src="js/80-buscador.js?v=3.5"></script>
+    <script src="js/85-ui-inventario-fisico.js?v=3.5"></script>
+    <script src="js/88-compras.js?v=3.5"></script>
+    <script src="js/90-ciclo-admin.js?v=3.5"></script>
+    <script src="js/95-exportacion.js?v=3.5"></script>
+    <script src="js/99-window-arranque.js?v=3.5"></script>
 
     </div><!-- /#appWrapper -->
 
     <!-- ══════════════════════════════════════════════════════
          AUTH — Lógica de autenticación Firebase
          ══════════════════════════════════════════════════════ -->
-        <script src="js/auth.js?v=2.7"></script>
+        <script src="js/auth.js?v=3.5"></script>
 </body>
 </html>

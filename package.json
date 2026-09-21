@@ -8,7 +8,9 @@
     "test:locales": "node pruebas/todas-locales.js",
     "test:navegador": "node pruebas/todas-navegador.js",
     "test:split": "node pruebas/prueba-integridad-split.js",
-    "test:reglas": "firebase emulators:exec --only firestore --project demo-barinventory \"node run-rules-tests.js\""
+    "test:reglas": "firebase emulators:exec --only firestore --project demo-barinventory \"node run-rules-tests.js\"",
+    "test:f1": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-f1-integracion.js\"",
+    "test:d": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-d-integracion.js\""
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5",
