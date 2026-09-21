@@ -188,6 +188,20 @@
                 return { procesado: true, reseteo: false, sessionAnterior: sessionAnterior, sessionNueva: nuevoSessionId };
             }
 
+            // 5B (FASE 5) — Antes de vaciar el conteo: archivarlo si había
+            // algo sin confirmar contra el servidor (_auditSyncPending).
+            //
+            // Debe ir ANTES del vaciado (lee las variables actuales) y usa
+            // `sessionAnterior` — capturado en el paso 2, ANTES de la
+            // reasignación de _auditoriaSessionId de la línea de arriba —
+            // nunca la variable mutable: para cuando este código corre,
+            // _auditoriaSessionId YA apunta a la sesión NUEVA, así que un
+            // set() con esa variable mezclaría conteo viejo con la sesión
+            // nueva. Ver _archivarConteoHuerfanoSiAplica (js/40-firestore.js).
+            _archivarConteoHuerfanoSiAplica(sessionAnterior).catch(function(err) {
+                console.warn('[AuditHuerfano] Error inesperado al archivar:', err);
+            });
+
             // 5. RESET REAL — únicamente el estado que pertenece en exclusiva
             //    a la auditoría anterior. Deliberadamente NO aparecen aquí:
             //    products, cart, orders, inventories, inventarioConteo, catálogo.
@@ -304,6 +318,43 @@
                 if (nuevoDesbloqueo) {
                     saveToLocalStorage({ skipSyncTrigger: false });
                     showNotification('🔓 El administrador desbloqueó un producto para corrección');
+                    renderTab();
+                }
+
+                // ─────────────────────────────────────────────────────────────
+                // Path D: Reapertura de área confirmada por el admin.
+                //
+                // FIX 5A (FASE 5): reabrirArea() (js/75-auditoria-flujo.js)
+                // escribe status.{area} = 'pendiente' en ESTE documento para
+                // cada persona afectada — pero este listener nunca leía
+                // data.status, solo sessionId (Path B) y unlocks (Path C). El
+                // bartender nunca se enteraba de que su área fue reabierta:
+                // auditoriaEntrarArea() sigue bloqueando por myAuditoriaStatus,
+                // variable local que nunca se actualizaba. El admin veía el
+                // área en pendiente; el bartender la seguía viendo bloqueada,
+                // sin ningún error visible, sin importar si recargaba.
+                //
+                // Alcance deliberado: solo se reacciona al sentido "reabrir"
+                // (servidor dice 'pendiente' para un área que aquí sigue
+                // 'completada'). El sentido contrario — reflejar aquí que YA
+                // se finalizó desde OTRO dispositivo del mismo usuario — es un
+                // problema distinto (sincronía entre dispositivos del mismo
+                // uid, no reapertura) y no es lo que este fix corrige.
+                // ─────────────────────────────────────────────────────────────
+                const serverStatus = data.status || {};
+                let huboReapertura = false;
+                Object.keys(serverStatus).forEach(function(area) {
+                    if (serverStatus[area] === 'pendiente' && myAuditoriaStatus[area] === 'completada') {
+                        myAuditoriaStatus[area] = 'pendiente';
+                        if (typeof myAuditoriaFinalizadas !== 'undefined' && myAuditoriaFinalizadas) {
+                            delete myAuditoriaFinalizadas[area];
+                        }
+                        huboReapertura = true;
+                    }
+                });
+                if (huboReapertura) {
+                    saveToLocalStorage({ skipSyncTrigger: true });
+                    showNotification('↩️ El administrador reabrió un área para que la corrijas');
                     renderTab();
                 }
             }, function(err) { console.warn('[AuditUser] Error listener propio:', err); });
@@ -685,6 +736,11 @@ const usersList = Object.values(allUsersAuditoria);
          */
         async function loadConflictosDesdeFirestore() {
             if (!_db || !navigator.onLine || !_haySesionFirebase()) return; // M2a
+            // FASE 2B — se invoca en el arranque sin ninguna guarda de rol y
+            // agrega los conteos de todos los dispositivos. La guarda real
+            // vive dentro de _cargarYAgeregarConteos(), pero se corta también
+            // aquí para no lanzar una consulta por área que no llevará a nada.
+            if (!puedeVerConteosAjenos()) return;
             try {
                 // R6: una por cada area definida, no tres fijas. Con las areas
                 // escritas a mano, una cuarta area se contaba en el telefono y
@@ -757,6 +813,49 @@ const usersList = Object.values(allUsersAuditoria);
                 updateCloudSyncBadge('error');
                 // No interrumpir arranque — se sigue con datos locales
             }
+        }
+
+        /**
+         * _preservarConteosPendientes(deLaNube, local)
+         * ───────────────────────────────────────────
+         * Devuelve el conteo de la nube, pero conservando los productos/área
+         * que este dispositivo tiene anotados como pendientes de subir.
+         *
+         * Solo protege lo que está en el outbox, no todo lo local: un conteo
+         * ya confirmado por el servidor no tiene por qué ganarle a la nube,
+         * porque la nube ya lo incluye. Y un conteo que perdió un conflicto
+         * de versión tampoco, porque salió del outbox a propósito.
+         *
+         * Sin _db o sin outbox (por ejemplo en las pruebas del navegador) se
+         * comporta exactamente como antes: gana la nube.
+         */
+        function _preservarConteosPendientes(deLaNube, local) {
+            if (typeof _outboxPendientes !== 'function') return deLaNube;
+            const pendientes = _outboxPendientes();
+            if (!pendientes.length || !local) return deLaNube;
+
+            const resultado = deLaNube || {};
+            let conservados = 0;
+
+            pendientes.forEach(function(clave) {
+                const corte = clave.indexOf('|');
+                if (corte <= 0) return;
+                const pid  = clave.slice(0, corte);
+                const area = clave.slice(corte + 1);
+
+                const valorLocal = local[pid] && local[pid][area];
+                if (!valorLocal || typeof valorLocal.enteras === 'undefined') return;
+
+                if (!resultado[pid]) resultado[pid] = {};
+                resultado[pid][area] = valorLocal;
+                conservados++;
+            });
+
+            if (conservados > 0) {
+                console.info('[ConteoProducto]', conservados,
+                    'conteo(s) sin confirmar conservados frente a la nube.');
+            }
+            return resultado;
         }
 
         /**
@@ -848,7 +947,24 @@ const usersList = Object.values(allUsersAuditoria);
                 // gana para ids que ya existen en ambos lados (trae ediciones de
                 // otros dispositivos), pero se conservan los ids que solo existen
                 // localmente (alta reciente de este dispositivo, aún pendiente).
-                products    = _mergeArrayByIdPreferCloud(products,    validatedProducts);
+                // D — dos sentidos de la purga del catálogo:
+                //   • Si OTRO administrador vació el catálogo, su marca llega
+                //     con fecha más nueva que la nuestra: se adopta el vaciado
+                //     en vez de conservar los productos locales, que es lo que
+                //     hacía _mergeArrayByIdPreferCloud (conserva los ids que
+                //     solo existen en local — aquí serían los 424 enteros).
+                //   • Si la purga la hicimos NOSOTROS y la nube todavía no la
+                //     refleja, no se fusiona nada de la nube.
+                const _purgaNube = (data && data._catalogoPurgadoEn) || 0;
+                if (_purgaNube > (_catalogoPurgadoEn || 0)) {
+                    console.info('[Catalogo] Otro administrador vació el catálogo — se adopta el vaciado.');
+                    _marcarCatalogoPurgado(_purgaNube);
+                    products = validatedProducts.slice();
+                } else if (_purgaDeCatalogoVigente(data)) {
+                    console.info('[Catalogo] Purga local vigente — no se recuperan productos de la nube.');
+                } else {
+                    products = _mergeArrayByIdPreferCloud(products, validatedProducts);
+                }
                 orders      = _mergeArrayByIdPreferCloud(orders,      cloudOrders);
                 inventories = _mergeArrayByIdPreferCloud(inventories, cloudInventories);
                 cart        = data.cart        || [];
@@ -945,7 +1061,21 @@ const usersList = Object.values(allUsersAuditoria);
                         migrated[prodId] = val;
                     }
                 });
-                inventarioConteo = migrated;
+                // ── D · Preservar lo que todavía no se ha confirmado ──────────
+                // Antes esta línea era `inventarioConteo = migrated;` a secas:
+                // un reemplazo completo por lo que dice la nube. Si el
+                // bartender contaba sin señal y otro aparato sincronizaba
+                // entretanto, al reconectar este reemplazo borraba el conteo
+                // local antes de que nadie hubiera intentado subirlo. El aviso
+                // decía "Guardado en el dispositivo" y el dato desaparecía.
+                //
+                // Ahora los conteos anotados como pendientes sobreviven a la
+                // bajada. No es preferir lo local por gusto: es que ese valor
+                // aún no ha tenido su oportunidad de llegar al servidor, y
+                // quien decide si entra o choca con otro es
+                // syncConteoProductoAtomico con la versión real en la mano
+                // (drenarConteosPendientes lo llama justo después).
+                inventarioConteo = _preservarConteosPendientes(migrated, inventarioConteo);
 
                 // Actualizar stockByArea desde conteo
                 syncStockByAreaFromConteo();
@@ -1040,4 +1170,4 @@ const usersList = Object.values(allUsersAuditoria);
             }
         }
 
-        // BUG-FIX m3: updateNetworkStatus definida a nivel global
+        // BUG-FIX m3: updateNetworkStatus definida a nivel global

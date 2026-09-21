@@ -1,5 +1,12 @@
         async function loadConteoPorUsuarioFromFirestore() {
             if (!_db || !navigator.onLine || !_haySesionFirebase()) return; // M2a
+            // ── FASE 2B — CONTEO CIEGO ────────────────────────────────────
+            // conteoMultiUsuario/{area} es UN SOLO documento que contiene
+            // dentro el bloque de cada persona, con su nombre y sus
+            // cantidades. Firestore no permite leer un documento a medias:
+            // o se lee entero o nada. Por eso esta ruta no admite término
+            // medio y queda reservada a quien puede ver conteos ajenos.
+            if (!puedeVerConteosAjenos()) return;
             try {
                 let changed = false;
                 const AUDIT_AREAS = AREAS_CONTEO; // FIX-05: array declarado una sola vez
@@ -73,7 +80,7 @@
          *               Incrementar solo cuando cambia la estructura de los datos
          *               (no en cambios visuales). Se usa para ejecutar migraciones.
          */
-        const APP_VERSION = '1.0.99';
+        const APP_VERSION = '1.2.0';
         const DB_VERSION  = 2;     // v1: esquema original  v2: IDB + sync queue + ciclo
 
         /**
@@ -394,7 +401,10 @@
          * Solo admin puede llamar esta función.
          */
         function restaurarBackup(key) {
-            if (!isAdmin()) { showNotification('⚠️ Solo el administrador puede restaurar respaldos'); return; }
+            // FASE 2A — settings.update no es delegable fuera de administración
+            // (ver PERMISOS_METADATOS): restaurar un respaldo sobreescribe el
+            // estado completo del dispositivo.
+            if (!hasPermission('settings.update')) { showNotification('⚠️ No tienes permiso para restaurar respaldos'); return; }
             try {
                 const raw = localStorage.getItem(key);
                 if (!raw) { showNotification('❌ Respaldo no encontrado'); return; }
@@ -471,6 +481,55 @@
         let _deletedOrderIds      = [];
         let _deletedInventoryIds  = [];
         const _TOMBSTONE_MAX = 300;
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  D · DEFECTO CRÍTICO — "ELIMINAR TODO EL CATÁLOGO" NO BORRABA TODO
+        //  ────────────────────────────────────────────────────────────────────
+        //  Las lápidas de arriba están limitadas a 300 (_TOMBSTONE_MAX), y con
+        //  razón: son una lista en localStorage y no puede crecer sin freno.
+        //  Pero el catálogo del bar tiene 424 productos. Al borrarlos todos se
+        //  generaban 424 lápidas y el recorte se quedaba con las ÚLTIMAS 300:
+        //  las 124 primeras se caían de la lista.
+        //
+        //  Novecientos milisegundos después, la sincronización fusionaba el
+        //  catálogo local (vacío) con el de la nube (424) filtrando por
+        //  lápidas. Los 124 sin lápida no se filtraban y volvían a escribirse.
+        //  El administrador leía "Todos los productos han sido eliminados" y
+        //  el catálogo reaparecía con 124 productos.
+        //
+        //  Una lista de identificadores es la herramienta equivocada para
+        //  "bórralo todo": no escala y por eso tiene tope. Lo correcto es una
+        //  marca de purga — una fecha que dice "el catálogo se vació aquí".
+        //  Ocupa un número, no crece nunca, y cubre cualquier tamaño de
+        //  catálogo. Todo lo de la nube anterior a esa fecha se descarta
+        //  entero, sin necesitar una lápida por producto.
+        //
+        //  Las lápidas siguen intactas para el caso normal: borrar un producto
+        //  suelto, donde sí son la herramienta adecuada.
+        // ══════════════════════════════════════════════════════════════════════
+        let _catalogoPurgadoEn = 0;
+
+        function _marcarCatalogoPurgado(ts) {
+            _catalogoPurgadoEn = ts || Date.now();
+            try {
+                localStorage.setItem('inventarioApp_catalogoPurgadoEn', String(_catalogoPurgadoEn));
+            } catch(_) {}
+            return _catalogoPurgadoEn;
+        }
+
+        /**
+         * _purgaDeCatalogoVigente(datosNube)
+         * ──────────────────────────────────
+         * ¿Este dispositivo tiene una purga que la nube todavía no refleja?
+         * Si la respuesta es sí, el catálogo de la nube es anterior al vaciado
+         * y no debe fusionarse: sería justamente la resurrección que se quiere
+         * evitar.
+         */
+        function _purgaDeCatalogoVigente(datosNube) {
+            if (!_catalogoPurgadoEn) return false;
+            const purgaNube = (datosNube && datosNube._catalogoPurgadoEn) || 0;
+            return _catalogoPurgadoEn > purgaNube;
+        }
 
         function _marcarComoBorrado(listName, id) {
             if (!id) return;
@@ -561,7 +620,18 @@
             'reapertura_almacen',         // reapertura de un área a un usuario
             'ciclo_estado',               // cambio de estado del ciclo
             'restauracion_backup',        // restauración de un respaldo
-            'reset_auditoria'             // inicio de una nueva sesión de conteo
+            'reset_auditoria',            // inicio de una nueva sesión de conteo
+            // FASE 2 — la auditoría de cambios de permisos NO estrena una
+            // tubería propia: reutiliza esta, que ya es append-only y que las
+            // reglas hacen imborrable (historialCambios: allow update, delete:
+            // if false). Un tipo nuevo aquí basta para que el evento viaje a
+            // Firestore por el mismo camino que todo lo demás.
+            'permisos',                   // cambio de rol/permisos/áreas de un usuario
+            'contabilizacion',            // FASE 3 — inventario cerrado → inicial del ciclo siguiente
+            'candado_local',              // desbloqueo del candado local de captura (D6)
+            'compra_importada',           // FASE 4 — entrada de mercancía importada desde Excel
+            'compra_manual',              // FASE 4 — entrada de mercancía capturada a mano
+            'conteo_auditoria_huerfano'   // FASE 5 — conteo de auditoría archivado por cambio de sesión
         ];
 
         function _registrarEnSyncQueue(evento) {
@@ -772,4 +842,4 @@
 /**
  * FIX-10: _idbPruneSyncedQueue()
  * Elimina eventos ya sincronizados del store IDB.
- */
+ */

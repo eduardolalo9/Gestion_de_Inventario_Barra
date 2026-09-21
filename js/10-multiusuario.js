@@ -7,6 +7,11 @@
         let myAuditoriaConteo  = {};   // conteo propio (aislado)
         let myAuditoriaStatus  = estadoAreasVacio('pendiente');
         let myAuditoriaUnlocks = {};   // { 'prodId__area': { unlockedBy, unlockedAt, used } }
+        // D — rastro de finalización de área: { area: { uid, nombre, ts, rol } }.
+        // myAuditoriaStatus solo guarda la palabra 'completada', que no dice
+        // quién la cerró ni cuándo. Esto lo acompaña sin sustituirlo, para no
+        // tocar a los diez sitios que ya leen ese estado.
+        let myAuditoriaFinalizadas = {};
         let allUsersAuditoria  = {};   // admin: { uid: { email, status, conteo, updatedAt } }
         let _auditoriaSessionId = null;
 
@@ -337,13 +342,17 @@
          * para garantizar la independencia del conteo ciego.
          */
         function renderAuditTrailForProduct(productId, area) {
-            // BUG-H8 FIX: usar myAuditoriaStatus para usuarios (estado propio del bartender),
-            // no auditoriaStatus que es el estado global del admin.
-            // Un bartender que finalizó su área debe ver el trail aunque el admin no la haya cerrado globalmente.
-            const areaCompletada = isAdmin()
-                ? (auditoriaStatus[area] === 'completada')
-                : (myAuditoriaStatus[area] === 'completada');
-            if (!isAdmin() && !areaCompletada) return '';
+            // ══════════════════════════════════════════════════════════════
+            //  FASE 2B — CONTEO CIEGO
+            //  Este bloque desglosa NOMBRE y cantidades persona por persona.
+            //  Hasta ahora se le destapaba al bartender en cuanto marcaba su
+            //  área como completada: un conteo ciego "hasta que termino", no
+            //  ciego durante el inventario, que es lo que se exige.
+            //
+            //  Ahora depende únicamente del permiso, no del avance del
+            //  conteo. Quien no puede ver conteos ajenos no lo ve nunca.
+            // ══════════════════════════════════════════════════════════════
+            if (!puedeVerConteosAjenos()) return '';
 
             const stats = calcAuditStats(productId, area); // FIX-07
             if (!stats || stats.count === 0) return '';
@@ -447,6 +456,13 @@
          * Solo se renderiza si hay al menos un conteo registrado.
          */
         function renderAuditComparePanel() {
+            // FASE 2B (D4) — el panel es de solo agregados (cuántos conteos y
+            // cuántas diferencias, sin nombres ni cantidades), pero se
+            // alimenta de conteoMultiUsuario, que deja de estar disponible
+            // para un no-admin. Decisión del propietario: la supervisión es
+            // función de administración, y un bartender no debe recibir NADA
+            // derivado del conteo de otros durante la captura, ni agregado.
+            if (!puedeVerConteosAjenos()) return '';
             const areasList = AREAS_CONTEO; // FIX-07
             const areaInfo  = areasList.map(function(area) {
                 const userIds   = new Set();
@@ -516,7 +532,26 @@
         async function syncConteoPorUsuarioToFirestore(area) {
             if (!_db || !navigator.onLine || !auditCurrentUser) return;
             const cu      = auditCurrentUser; // FIX-07
-            const safeId  = cu.userId.replace(/[^a-zA-Z0-9]/g, '_');
+            // ── D · La clave del bloque pasa a ser el uid de Firebase ────────
+            // Antes era `cu.userId`, que NO es el uid: es un identificador que
+            // el propio dispositivo se inventa y guarda en localStorage
+            // ('usr-<fecha>-<azar>', ver initAuditUser). Como el servidor no
+            // podía relacionarlo con nadie, la regla de Firestore no tenía
+            // forma de comprobar que un usuario solo tocara su propio bloque,
+            // y por eso este documento estaba abierto de par en par: cualquier
+            // bartender podía vaciar el conteo de todos sus compañeros.
+            //
+            // Con el uid como clave, la regla exige que una escritura afecte
+            // únicamente al bloque de quien la hace.
+            //
+            // Esto no rompe los datos anteriores: quien lee
+            // (loadConteoPorUsuarioFromFirestore) indexa por el `userId` de
+            // DENTRO del bloque, no por la clave, así que los bloques viejos
+            // se siguen leyendo igual y la misma persona no aparece dos veces.
+            // El uid de Firebase ya es alfanumérico; se usa tal cual porque la
+            // regla lo compara literalmente con request.auth.uid. Solo se
+            // sanea el identificador de respaldo, que sí lleva guiones.
+            const safeId  = currentUserUid || cu.userId.replace(/[^a-zA-Z0-9]/g, '_');
             const areaRef = _db
                 .collection('inventarioApp')
                 .doc(FIRESTORE_DOC_ID)
@@ -549,6 +584,10 @@
                 payload[safeId] = {
                     userId:   cu.userId,
                     userName: cu.userName,
+                    // D — autoría verificable: es el uid que la regla compara
+                    // contra request.auth.uid. `userId` se conserva porque es
+                    // lo que usa el lector y lo que llevan los datos viejos.
+                    uid:      currentUserUid || null,
                     ts:       Date.now(),
                     productos: productos
                 };
@@ -571,4 +610,4 @@
          * Estrategia de fusión: por cada (producto, área, usuario) gana el conteo
          * con timestamp más alto — "último-gana por usuario".
          * Nunca elimina conteos de otros usuarios.
-         */
+         */

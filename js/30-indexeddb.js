@@ -376,6 +376,13 @@ function _idbPruneSyncedQueue() {
                     store.put(inventarioCicloEstado,     'cicloEstado');
                     store.put(inventarioCicloInfo,       'cicloInfo');
                     store.put(_syncQueue,                'syncQueue');
+                    // FASE 4 — compras (el hecho) y movimientos (el efecto).
+                    // Aditivo: si estos campos no llegaran a existir en una
+                    // versión anterior de este mismo objeto, el resto de la
+                    // transacción no se ve afectado.
+                    store.put((typeof compras !== 'undefined') ? compras : [],           'compras');
+                    store.put((typeof movimientos !== 'undefined') ? movimientos : [],   'movimientos');
+                    store.put((typeof costosUltimos !== 'undefined') ? costosUltimos : {}, 'costosUltimos');
                     // TIER 3 — Estado UI
                     store.put(cart,                      'cart');
                     store.put(activeTab,                 'activeTab');
@@ -450,7 +457,8 @@ function _idbPruneSyncedQueue() {
                     idbAuditoriaConteo, idbAuditoriaConteoPorUsuario,
                     idbAuditoriaStatus, idbMyAuditoriaStatus, idbMyAuditoriaUnlocks,
                     idbSessionId, idbCicloEstado, idbCicloInfo,
-                    idbSyncQueue, idbCart, idbActiveTab, idbSelectedArea, idbSelectedGroup
+                    idbSyncQueue, idbCart, idbActiveTab, idbSelectedArea, idbSelectedGroup,
+                    idbCompras, idbMovimientos, idbCostosUltimos
                 ] = await Promise.all([
                     _idbGet('products'),              _idbGet('inventarioConteo'),
                     _idbGet('myAuditoriaConteo'),     _idbGet('auditoriaConteo'),
@@ -459,7 +467,9 @@ function _idbPruneSyncedQueue() {
                     _idbGet('auditoriaSessionId'),    _idbGet('cicloEstado'),
                     _idbGet('cicloInfo'),             _idbGet('syncQueue'),
                     _idbGet('cart'),                  _idbGet('activeTab'),
-                    _idbGet('selectedArea'),          _idbGet('selectedGroup')
+                    _idbGet('selectedArea'),          _idbGet('selectedGroup'),
+                    _idbGet('compras'),               _idbGet('movimientos'),
+                    _idbGet('costosUltimos')
                 ]);
                 return {
                     products:                  idbProducts,
@@ -478,6 +488,9 @@ function _idbPruneSyncedQueue() {
                     activeTab:                 idbActiveTab,
                     selectedArea:              idbSelectedArea,
                     selectedGroup:             idbSelectedGroup,
+                    compras:                   idbCompras,
+                    movimientos:               idbMovimientos,
+                    costosUltimos:             idbCostosUltimos,
                     _savedAt:                  savedAt
                 };
             } catch(e) {
@@ -523,6 +536,16 @@ function _idbPruneSyncedQueue() {
             if (idbData.activeTab)  activeTab   = idbData.activeTab;
             if (idbData.selectedArea) selectedArea = idbData.selectedArea;
             if (idbData.selectedGroup) selectedGroup = idbData.selectedGroup;
+            // FASE 4 — compras y movimientos. Solo se aplican si IDB trae algo
+            // (un array vacío es un estado válido, pero no debe pisar datos ya
+            // cargados por otra vía si IDB simplemente nunca los tuvo — mismo
+            // criterio que products arriba).
+            if (Array.isArray(idbData.compras))
+                compras = idbData.compras;
+            if (Array.isArray(idbData.movimientos))
+                movimientos = idbData.movimientos;
+            if (idbData.costosUltimos && typeof idbData.costosUltimos === 'object')
+                costosUltimos = idbData.costosUltimos;
             isAuditoriaMode = (auditoriaView === 'counting' && !!auditoriaAreaActiva);
             console.info('[IDB] Estado restaurado desde IndexedDB (' +
                 new Date(idbData._savedAt).toLocaleString('es-MX') + ') — ' +
@@ -666,8 +689,19 @@ function _idbPruneSyncedQueue() {
                 ['inventarioApp_products',                 JSON.stringify(products)],
                 ['inventarioApp_auditoriaStatus',          JSON.stringify(auditoriaStatus)],
                 ['inventarioApp_myAuditoriaStatus',        JSON.stringify(myAuditoriaStatus)],
+                // D — quién finalizó cada área y cuándo (acompaña al estado)
+                ['inventarioApp_myAuditoriaFinalizadas',   JSON.stringify(
+                    (typeof myAuditoriaFinalizadas !== 'undefined' && myAuditoriaFinalizadas)
+                        ? myAuditoriaFinalizadas : {})],
                 ['inventarioApp_myAuditoriaUnlocks',       JSON.stringify(myAuditoriaUnlocks)],
                 ['inventarioApp_auditoriaSessionId',       _auditoriaSessionId || ''],
+                // FASE 4 — compras y movimientos. Van en TIER 2: no son el conteo
+                // activo, pero sí son documentos ya confirmados por el servidor
+                // (compras/{compraId} es inmutable) que no deben perderse entre
+                // sesiones si el dispositivo se queda sin red antes de recargar.
+                ['inventarioApp_compras',                  JSON.stringify(compras)],
+                ['inventarioApp_movimientos',              JSON.stringify(movimientos)],
+                ['inventarioApp_costosUltimos',            JSON.stringify(costosUltimos)],
                 // ── TIER 3: Estado de UI ─────────────────────────────────────────────────
                 ['inventarioApp_cart',                     JSON.stringify(cart)],
                 ['inventarioApp_activeTab',                activeTab],

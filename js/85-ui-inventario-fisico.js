@@ -140,9 +140,19 @@
                     html += '<div onclick="_detalleInventarioCerradoId=\'' + inv.inventoryId + '\'; _detalleInventarioCerradoData=null; auditoriaView=\'detalle_cerrado\'; renderTab();" style="cursor:pointer;padding:10px 12px;border:1px solid var(--border-soft);border-radius:var(--r-md);margin-bottom:8px;">';
                     html += '<div class="flex items-center justify-between">';
                     html += '<span style="font-weight:700;font-size:0.82rem;">#' + inv.numero + ' | Inventario Barra</span>';
-                    html += '<span style="font-size:0.68rem;font-weight:700;color:#16a34a;">CERRADO</span>';
+                    // FASE 3 — un inventario contabilizado ya no es solo
+                    // "cerrado": su resultado pasó a ser el inicial de la
+                    // semana siguiente, y eso se ve de un vistazo.
+                    var _contab = (inv.estado === 'CONTABILIZADO');
+                    html += '<span style="font-size:0.68rem;font-weight:700;color:'
+                         +  (_contab ? '#2563eb' : '#16a34a') + ';">'
+                         +  (_contab ? 'CONTABILIZADO' : 'CERRADO') + '</span>';
                     html += '</div>';
                     html += '<p style="font-size:0.72rem;color:var(--txt-muted);">Fecha: ' + new Date(inv.fechaCreacion).toLocaleDateString('es-MX') + ' &nbsp;·&nbsp; Artículos: ' + (inv.totalProductos || '—') + '</p>';
+                    if (_contab && inv.semanaDestino) {
+                        html += '<p style="font-size:0.7rem;color:#2563eb;font-weight:600;">📘 Inicial de la semana '
+                             +  escapeHtml(inv.semanaDestino) + '</p>';
+                    }
                     html += '</div>';
                 });
             }
@@ -193,6 +203,43 @@
 
             if (hasPermission('inventory.export')) {
                 html += '<button onclick="exportarInventarioCerrado(\'' + _detalleInventarioCerradoId + '\', ' + meta.numero + ')" style="padding:7px 14px;border-radius:var(--r-md);background:var(--accent);color:#fff;font-size:0.75rem;font-weight:700;cursor:pointer;margin-bottom:10px;">📥 Exportar Excel</button>';
+            }
+
+            // ── FASE 3 · CONTABILIZAR ────────────────────────────────────────
+            // El botón no se limita a estar o no estar: cuando no se puede, dice
+            // POR QUÉ. Un control gris sin explicación manda al administrador a
+            // adivinar, y aquí las tres razones posibles son muy distintas
+            // entre sí.
+            if (meta.estado === 'CONTABILIZADO') {
+                html += '<div style="padding:9px 12px;border-radius:var(--r-md);background:#eff6ff;'
+                     +  'border-left:3px solid #2563eb;margin-bottom:10px;">'
+                     +  '<p style="font-size:0.75rem;font-weight:700;color:#1d4ed8;margin:0;">📘 Contabilizado</p>'
+                     +  '<p style="font-size:0.7rem;color:var(--txt-muted);margin:2px 0 0;">'
+                     +  'Su resultado es el stock inicial de la semana ' + escapeHtml(meta.semanaDestino || '—')
+                     +  (meta.contabilizadoEn ? ' · ' + new Date(meta.contabilizadoEn).toLocaleDateString('es-MX') : '')
+                     +  '</p></div>';
+            } else if (hasPermission('inventory.post')) {
+                var _cl = (typeof clasificarRecuento === 'function' && meta.fechaRecuento)
+                          ? clasificarRecuento(meta.fechaRecuento) : null;
+                var _motivo = null;
+                if (!meta.semanaId) {
+                    _motivo = 'Este inventario se cerró antes de que se guardara la semana en su cabecera.';
+                } else if (!_cl || !_cl.cierraSemana) {
+                    _motivo = 'Solo se contabiliza un recuento fechado en DOMINGO. Este está fechado '
+                            + (meta.fechaRecuento || 'sin fecha de recuento')
+                            + ', y un corte a media semana partiría el ciclo en dos.';
+                }
+                if (_motivo) {
+                    html += '<div style="padding:9px 12px;border-radius:var(--r-md);background:var(--bg-soft);'
+                         +  'border-left:3px solid var(--amber,#f59e0b);margin-bottom:10px;">'
+                         +  '<p style="font-size:0.72rem;color:var(--txt-muted);margin:0;">'
+                         +  '📘 No se puede contabilizar. ' + escapeHtml(_motivo) + '</p></div>';
+                } else {
+                    html += '<button onclick="contabilizarInventario(\'' + _detalleInventarioCerradoId + '\', ' + meta.numero + ')" '
+                         +  'style="padding:7px 14px;border-radius:var(--r-md);background:#2563eb;color:#fff;'
+                         +  'font-size:0.75rem;font-weight:700;cursor:pointer;margin-bottom:10px;margin-left:6px;">'
+                         +  '📘 Contabilizar</button>';
+                }
             }
 
             html += '<div style="max-height:320px;overflow-y:auto;border-top:1px solid var(--border-soft);padding-top:8px;">';
@@ -251,8 +298,8 @@
 
             html += renderAuditUserPanel();
 
-            // ── Panel de usuarios (solo admin) ────────────────────────────────
-            if (isAdmin()) {
+            // ── Panel de usuarios (solo quien puede ver conteos ajenos) ───────
+            if (puedeVerConteosAjenos()) {
                 html += _renderAdminUsersPanel();
             }
 
@@ -277,11 +324,18 @@
                     : '<span style="width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;"></span> Pendiente';
                 html += '</div>';
                 if (isCompleta) {
-                    const conteoRef = isAdmin() ? auditoriaConteo : myAuditoriaConteo;
+                    // FASE 2B — auditoriaConteo es el agregado de TODAS las
+                    // personas; myAuditoriaConteo es el propio. El criterio
+                    // pasa a ser el permiso de privacidad, no el rol.
+                    const conteoRef = puedeVerConteosAjenos() ? auditoriaConteo : myAuditoriaConteo;
                     const totalProductos = products.filter(p => conteoRef[p.id] && conteoRef[p.id][area] &&
                         (conteoRef[p.id][area].enteras > 0 || (conteoRef[p.id][area].abiertas || []).some(a => a > 0))).length;
                     html += '<div style="font-size:0.63rem;color:var(--txt-muted);margin-top:3px;">' + totalProductos + ' producto(s) con cantidad';
-                    if (isAdmin()) {
+                    // D — el enlace se ofrece según el permiso, no según
+                    // isAdmin(): es el mismo criterio que ahora aplica
+                    // reabrirArea(), y así no se muestra una acción que el
+                    // servidor va a rechazar.
+                    if (hasPermission('inventory.reopenArea')) {
                         html += ' · <a href="#" onclick="event.stopPropagation();reabrirArea(\'' + area + '\');" style="color:var(--amber);text-decoration:underline;font-weight:600;">↩ Reabrir</a>';
                     } else if (tieneUnlock) {
                         html += ' · <span style="color:var(--amber);font-weight:600;">🔓 Corrección habilitada</span>';
@@ -289,6 +343,14 @@
                         html += ' · <span style="color:var(--green);font-weight:600;">🔒 Bloqueada</span>';
                     }
                     html += '</div>';
+                } else if (hasPermission('inventory.closeOther')) {
+                    // FASE 2A — cerrar el área para TODAS las personas deja
+                    // de ser un efecto secundario de "finalizar mi conteo" y
+                    // pasa a ser una acción visible y propia.
+                    html += '<div style="font-size:0.63rem;margin-top:3px;">'
+                          + '<a href="#" onclick="event.stopPropagation();auditoriaCerrarArea(\'' + area + '\');" '
+                          + 'style="color:var(--amber);text-decoration:underline;font-weight:600;">'
+                          + '🔒 Cerrar área para todos</a></div>';
                 }
                 html += '</div>';
                 html += '<svg class="audit-area-arrow" width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 18l6-6-6-6"/></svg>';
@@ -529,7 +591,10 @@
                 .some(k => k.endsWith('__' + area) && !myAuditoriaUnlocks[k].used);
             const soloLectura = estaCompleta && !isAdmin() && !tieneUnlocksPendientes;
             // Conteo a mostrar en las tarjetas
-            const conteoRef = isAdmin() ? auditoriaConteo : myAuditoriaConteo;
+            // FASE 2B — el criterio deja de ser el rol y pasa a ser el
+            // permiso de privacidad: auditoriaConteo agrega el conteo de
+            // todas las personas, myAuditoriaConteo es solo el propio.
+            const conteoRef = puedeVerConteosAjenos() ? auditoriaConteo : myAuditoriaConteo;
 
             let html = '<div class="audit-screen">';
 
@@ -623,7 +688,13 @@
 
             // ── Barra de estado multiusuario para el área actual ─────────────────
             // FIX-06: bloque { } limpio en lugar de IIFE innecesario
-            {
+            // FASE 2B — esta barra dice cuántos dispositivos contaron el área y
+            // cuántas diferencias hay entre ellos. Es información agregada, pero
+            // sigue siendo información DERIVADA del conteo de otras personas y no
+            // tenía ninguna guarda de rol: un bartender sabía en tiempo real si su
+            // cifra discrepaba de la de su compañero, que es justo lo que el
+            // conteo ciego debe impedir.
+            if (puedeVerConteosAjenos()) {
                 const auditUniqUsers = new Set();
                 let   auditNConf     = 0;
                 products.forEach(p => {
@@ -1144,7 +1215,10 @@
         }
 
         function saveProduct() {
-            if (!isAdmin()) { showNotification('⚠️ Solo el administrador puede modificar productos'); return; }
+            // FASE 2A — catalog.edit sustituye a la comprobación de rol. Sin
+            // cambio para el administrador (comodín '*'); delegable a Subjefe
+            // desde la pantalla de permisos.
+            if (!hasPermission('catalog.edit')) { showNotification('⚠️ No tienes permiso para modificar productos'); return; }
             const name = document.getElementById('productName').value.trim();
             if (!name) { showNotification('La descripción es requerida'); return; }
             let productId = document.getElementById('productId').value.trim();
@@ -1316,10 +1390,10 @@
             renderTab();
         }
 
-        function editProduct(id) { if (!isAdmin()) { showNotification('⚠️ Solo el administrador puede editar productos'); return; } openProductModal(id); }
+        function editProduct(id) { if (!hasPermission('catalog.edit')) { showNotification('⚠️ No tienes permiso para editar productos'); return; } openProductModal(id); }
 
         function deleteProduct(id) {
-            if (!isAdmin()) { showNotification('⚠️ Solo el administrador puede eliminar productos'); return; }
+            if (!hasPermission('catalog.edit')) { showNotification('⚠️ No tienes permiso para eliminar productos'); return; }
             if (isCicloBloqueado()) { showNotification('🔒 No se puede eliminar: el inventario está CERRADO.'); return; }
             const product = products.find(function(p) { return p.id === id; });
             const prodName = product ? product.name : id;
@@ -1364,7 +1438,7 @@
         }
 
         function deleteAllProducts() {
-            if (!isAdmin()) { showNotification('⚠️ Solo el administrador puede eliminar productos'); return; }
+            if (!hasPermission('catalog.edit')) { showNotification('⚠️ No tienes permiso para eliminar productos'); return; }
             if (products.length === 0) { showNotification('No hay productos para eliminar'); return; }
             if (isCicloBloqueado()) { showNotification('🔒 No se puede eliminar: el inventario está CERRADO.'); return; }
             // PROTECCIÓN: doble confirmación para eliminación masiva del catálogo
@@ -1388,10 +1462,30 @@
                                 uid:      currentUserUid || null
                             });
 
+                            // D — la marca de purga es lo que hace que el
+                            // vaciado sea real. Las lápidas por producto se
+                            // siguen poniendo (sirven para el borrado suelto),
+                            // pero ya no son lo que sostiene esta operación:
+                            // con 424 productos y tope de 300, 124 se quedaban
+                            // sin lápida y volvían de la nube a los 900 ms.
+                            _marcarCatalogoPurgado(Date.now());
                             products.forEach(function(p) { _marcarComoBorrado('producto', p.id); }); // FIX-CONCURRENCIA
                             products = []; cart = []; inventarioConteo = {};
                             auditoriaConteo = {}; myAuditoriaConteo = {}; auditoriaConteoPorUsuario = {};
                             saveToLocalStorage();
+
+                            // D — la segunda copia del catálogo (catalogo/productos)
+                            // quedaba intacta con los 424 productos. Bastaba con que
+                            // un teléfono entrara por primera vez —con su contador de
+                            // versión local en cero— para que el listener le inyectara
+                            // el catálogo completo y, si ese teléfono era de un admin,
+                            // lo devolviera a la nube. Vaciarla aquí cierra esa puerta.
+                            _vaciarCatalogoPublicado().catch(function(e) {
+                                console.warn('[Catalogo] No se pudo vaciar el catálogo publicado:', e);
+                                showNotification('⚠️ El catálogo se borró aquí, pero no se pudo ' +
+                                    'vaciar en la nube. Vuelve a intentarlo con señal.');
+                            });
+
                             showNotification('Todos los productos han sido eliminados. Respaldo guardado.');
                             renderTab();
                         }
@@ -1669,4 +1763,4 @@
             // Formato estándar o ya limpio
             return parseFloat(str) || 0;
         }
-
+

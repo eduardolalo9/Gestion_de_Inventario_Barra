@@ -61,11 +61,16 @@ chk('Una fila sin ID sigue recibiendo uno generado',
 chk('Ya no se hace concat ciego del lote',
     !/products = products\.concat\(toImport\)/.test(importa));
 
+// F1 reordenó este bloque para poder decidir el modo de conteo mirando el
+// producto que ya existe. El comportamiento que estas dos comprobaciones
+// defienden es el mismo de R5 y no cambió: ID desconocido se da de alta, ID
+// conocido se actualiza en su sitio.
 chk('Un ID desconocido se da de alta',
-    /if \(idx === undefined\) \{[\s\S]{0,200}?products\.push\(prod\)/.test(importa));
+    /var actual = \(idx === undefined\) \? null : products\[idx\];/.test(importa) &&
+    /if \(actual === null\) \{[\s\S]{0,200}?products\.push\(prod\)/.test(importa));
 
 chk('Un ID conocido actualiza el producto existente',
-    /var actual = products\[idx\];[\s\S]{0,300}?actual\[campo\] = prod\[campo\]/.test(importa));
+    /Object\.keys\(prod\)\.forEach\(function\(campo\) \{[\s\S]{0,200}?actual\[campo\] = prod\[campo\]/.test(importa));
 
 // El merge es selectivo a propósito, y las dos reglas importan:
 chk('Solo se tocan los campos que el Excel trae',
@@ -86,13 +91,18 @@ chk('Se siguen contando las filas descartadas por no traer nombre',
 // ═══ 2 · Permiso real, no solo un botón escondido ════════════════════════
 const iniImp = importa.indexOf('function handleFileImport(event) {');
 const cabeza = iniImp !== -1 ? importa.slice(iniImp, iniImp + 2200) : '';
-chk('handleFileImport comprueba isAdmin()', /if \(!isAdmin\(\)\)/.test(cabeza),
+// FASE 2A — la guarda sigue existiendo y sigue yendo primero; lo que cambió
+// es que ya no pregunta "¿eres admin?" sino "¿tienes catalog.publish?".
+// Para un administrador es exactamente lo mismo (hasPermission resuelve el
+// comodín '*' antes que nada), y además la capacidad pasa a ser delegable.
+chk('handleFileImport comprueba el permiso de catálogo',
+    /if \(!hasPermission\('catalog\.publish'\)\)/.test(cabeza),
     'sin esto, cualquiera podía llamarla desde la consola');
 chk('El guard va antes de tocar nada',
-    cabeza.indexOf('if (!isAdmin())') < cabeza.indexOf('_crearBackupNombrado'),
+    cabeza.indexOf("if (!hasPermission('catalog.publish'))") < cabeza.indexOf('_crearBackupNombrado'),
     'comprobar después de empezar deja el trabajo a medias');
 chk('Al rechazar se limpia el input de archivo',
-    /if \(!isAdmin\(\)\) \{[\s\S]{0,300}?event\.target\.value = '';[\s\S]{0,60}?return;/.test(cabeza),
+    /if \(!hasPermission\('catalog\.publish'\)\) \{[\s\S]{0,300}?event\.target\.value = '';[\s\S]{0,60}?return;/.test(cabeza),
     'si no, el mismo archivo no se puede volver a elegir');
 chk('Se sigue creando el respaldo previo a importar',
     /_crearBackupNombrado\('pre_importacion_/.test(importa));

@@ -12,6 +12,13 @@
          * NO modifica datos reales. Es completamente no-destructivo.
          */
         async function runDiagnostics() {
+            // FASE 2A — este archivo no tenía NINGUNA validación: 525 líneas de
+            // exportación accesibles a cualquier usuario autenticado. El
+            // diagnóstico vuelca configuración y estado interno del sistema.
+            if (typeof hasPermission === 'function' && !hasPermission('settings.read')) {
+                if (typeof showNotification === 'function') showNotification('⚠️ No tienes permiso para ejecutar el diagnóstico');
+                return { ok: false, motivo: 'sin-permiso' };
+            }
             console.group('🔬 DIAGNÓSTICO BARINVENTORY — ' + APP_VERSION + ' (DB v' + DB_VERSION + ')');
             const results = [];
             let passed = 0, failed = 0;
@@ -146,7 +153,19 @@
         }
         window.runDiagnostics = runDiagnostics;
 
-        function exportToExcel(modo, fileNameOverride) { // FIX: parámetro fileNameOverride para soporte de nombres personalizados
+        // F1 — `areasOverride` es OPCIONAL y solo lo usa la exportación de un
+        // Inventario Físico cerrado, que tiene que reconstruirse con las áreas
+        // que existían ESE día, no con las de hoy. Sin ese parámetro el
+        // comportamiento es exactamente el de siempre: todos los demás
+        // llamadores siguen usando AREAS_CONTEO.
+        function exportToExcel(modo, fileNameOverride, areasOverride) { // FIX: parámetro fileNameOverride para soporte de nombres personalizados
+            // FASE 2A — el Excel lleva el conteo consolidado del inventario:
+            // exige inventory.export, igual que el resto de las salidas de
+            // inventario. Antes no exigía nada.
+            if (!hasPermission('inventory.export')) {
+                showNotification('⚠️ No tienes permiso para exportar el inventario');
+                return;
+            }
             // Guard: sin productos no hay nada que exportar
             if (!Array.isArray(products) || products.length === 0) {
                 showNotification('⚠️ No hay productos para exportar');
@@ -155,14 +174,32 @@
             // ══════════════════════════════════════════════════════════════════
             //  CONFIGURACIÓN DE ÁREAS
             // ══════════════════════════════════════════════════════════════════
-            const areaKeys  = AREAS_CONTEO;
+            const areaKeys  = (Array.isArray(areasOverride) && areasOverride.length)
+                              ? areasOverride.slice()
+                              : AREAS_CONTEO;
             const areaNames = modo === 'AUDITORIA'
                 ? { almacen: 'Almacén', barra1: 'Barra Restaurante', barra2: 'Barra Bar' }
                 : { almacen: 'Almacén', barra1: 'Barra1', barra2: 'Barra2' };
             const areaColor = { almacen: '7C3AED', barra1: '2563EB', barra2: 'EA580C' };
+            // F1 — un área que no sea una de las tres de sistema (creada con R6, o
+            // reconstruida de un inventario viejo) no tenía nombre ni color aquí y
+            // salía como "undefined" en el encabezado. Se completa con el nombre
+            // real si la app lo conoce, y si no, con el propio identificador.
+            areaKeys.forEach(function(a) {
+                if (!areaNames[a]) {
+                    areaNames[a] = (typeof areasAuditoria === 'object' && areasAuditoria && areasAuditoria[a])
+                                   ? areasAuditoria[a]
+                                   : (typeof areas === 'object' && areas && areas[a]) ? areas[a] : a;
+                }
+                if (!areaColor[a]) areaColor[a] = '64748B';
+            });
 
             // ── Calcular máximo de botellas abiertas por área ────────────────
-            const maxAbiertas = { almacen: 1, barra1: 1, barra2: 1 };
+            // F1 — se construye a partir de las áreas reales de esta exportación;
+            // antes eran las tres fijas y una cuarta área daba comparaciones
+            // contra undefined.
+            const maxAbiertas = {};
+            areaKeys.forEach(function(a) { maxAbiertas[a] = 1; });
             products.forEach(p => {
                 areaKeys.forEach(area => {
                     const d = inventarioConteo[p.id] && inventarioConteo[p.id][area];
@@ -465,14 +502,25 @@
 
         // ==================== NUEVAS FUNCIONES PARA RESPALDO JSON ====================
         function exportFullData() {
+            // ══════════════════════════════════════════════════════════════
+            //  FASE 2A/2B — El respaldo completo arrastra
+            //  auditoriaConteoPorUsuario, que contiene el NOMBRE y las
+            //  CANTIDADES contadas por cada compañero. Hasta ahora cualquier
+            //  usuario autenticado podía descargarlo: era la fuga de
+            //  privacidad más directa del sistema, y ni siquiera hacía falta
+            //  manipular el cliente, bastaba con pulsar el botón.
+            //
+            //  No se retira la función a quien no tiene el permiso: se le
+            //  entrega un respaldo REDUCIDO, con sus propios datos y sin los
+            //  de nadie más. Un bartender sigue pudiendo respaldar su trabajo.
+            // ══════════════════════════════════════════════════════════════
+            const completo = hasPermission('data.exportFull');
             const data = {
                 products,
                 orders,
                 inventories,
                 cart,
                 inventarioConteo,
-                auditoriaConteo,             // Bug #3 fix: incluir conteo de auditoría
-                auditoriaConteoPorUsuario,   // Multiusuario: conteos de todos los dispositivos
                 auditoriaStatus,             // Bug #3 fix: incluir estado por área
                 auditoriaView,               // Bug #3 fix: incluir vista activa
                 auditoriaAreaActiva,         // Bug #3 fix: incluir área activa
@@ -486,8 +534,14 @@
                 myAuditoriaConteo,
                 myAuditoriaStatus,
                 myAuditoriaUnlocks,
-                _auditoriaSessionId
+                _auditoriaSessionId,
+                _respaldoCompleto: completo
             };
+            if (completo) {
+                // Solo con data.exportFull viajan los conteos de OTRAS personas.
+                data.auditoriaConteo           = auditoriaConteo;
+                data.auditoriaConteoPorUsuario = auditoriaConteoPorUsuario;
+            }
             const json = JSON.stringify(data, null, 2);
             const blob = new Blob([json], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
@@ -498,6 +552,8 @@
             a.click();
             document.body.removeChild(a);
             setTimeout(() => URL.revokeObjectURL(url), 1000);
-            showNotification('Datos exportados correctamente');
+            showNotification(completo
+                ? 'Respaldo completo exportado correctamente'
+                : 'Respaldo exportado (solo tus datos — no incluye conteos de otras personas)');
         }
-
+

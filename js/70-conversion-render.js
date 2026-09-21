@@ -392,7 +392,10 @@
          */
         function _getAuditConteoParaProducto(prodId) {
             // Misma fuente de verdad que renderAuditoriaConteo
-            const conteoFuente = isAdmin() ? auditoriaConteo : myAuditoriaConteo;
+            // FASE 2B — el criterio deja de ser el rol y pasa a ser el
+            // permiso de privacidad: auditoriaConteo agrega el conteo de
+            // todas las personas, myAuditoriaConteo es solo el propio.
+            const conteoFuente = puedeVerConteosAjenos() ? auditoriaConteo : myAuditoriaConteo;
             const AREAS        = AREAS_CONTEO;
             var result         = { _hayDatos: false };
             // FIX: buscar el producto para aplicar conversión oz→puntos si corresponde.
@@ -1054,8 +1057,15 @@ document.body.appendChild(overlay);
             // ── CICLO CERRADO: bloquear cualquier modificación ───────────────
             // El administrador cierra el ciclo cuando el inventario está listo;
             // después de eso nadie puede modificar conteos hasta que se reabra.
+            // D6 — el mensaje decía "el inventario está CERRADO", lo que hacía
+            // pensar en el Inventario Físico de Firestore. No es eso: es el
+            // candado LOCAL de captura de este dispositivo, un mecanismo de una
+            // etapa anterior del producto que vive en localStorage. Confundir
+            // los dos llevaba a buscar la solución donde no estaba.
             if (isCicloBloqueado()) {
-                showNotification('🔒 El inventario está CERRADO. Solo el administrador puede reabrir el ciclo.');
+                showNotification('🔒 La captura está bloqueada en ESTE dispositivo '
+                    + '(candado local). Un administrador puede desbloquearla desde '
+                    + 'Administración → Candado local de captura.');
                 closeInventarioModal();
                 return;
             }
@@ -1295,6 +1305,13 @@ document.body.appendChild(overlay);
                     const clave = pid + '|' + area;
                     clearTimeout(_conteoProductoSyncTimers[clave]);
                     _conteoProductoSyncTimers[clave] = setTimeout(function() {
+                        // D — la clave se borra al dispararse. Antes se
+                        // quedaba para siempre, así que al cerrar la pestaña
+                        // se marcaba como pendiente TODO lo tocado en la
+                        // sesión, ya subido o no, y al arrancar se reenviaba
+                        // entero: versiones incrementadas sobre valores que
+                        // podían ser más nuevos de otro aparato.
+                        delete _conteoProductoSyncTimers[clave];
                         // C1: el resultado ya NO se descarta.
                         updateCloudSyncBadge('syncing');
                         syncConteoProductoAtomico(pid, area, ent, abi)
@@ -1314,4 +1331,4 @@ document.body.appendChild(overlay);
         }
 
 
-        // Toggle expansión de tarjeta de inventario (botellas abiertas adicionales)
+        // Toggle expansión de tarjeta de inventario (botellas abiertas adicionales)

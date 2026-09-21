@@ -20,16 +20,78 @@
         //  AUDITORÍA FÍSICA CIEGA — Funciones de control de flujo
         // ══════════════════════════════════════════════════════════════════════
 
+        // ══════════════════════════════════════════════════════════════════════
+        //  FASE 2A — FINALIZAR CONTEO PROPIO ≠ CERRAR EL ÁREA
+        //  ────────────────────────────────────────────────────────────────────
+        //  Hasta ahora esta única función hacía DOS cosas distintas según
+        //  quién pulsaba el botón: marcaba el conteo propio como terminado
+        //  y, si el que pulsaba era administrador, marcaba ADEMÁS el área
+        //  como completada para TODAS las personas (la línea
+        //  `if (isAdmin()) auditoriaStatus[area] = 'completada';`).
+        //
+        //  Esa mezcla ya causó un defecto documentado más abajo en este
+        //  mismo archivo (la puerta de entrada miraba myAuditoriaStatus
+        //  mientras el administrador operaba sobre auditoriaStatus, de modo
+        //  que "Reabrir" no desbloqueaba a nadie).
+        //
+        //  Ahora son dos operaciones con dos permisos:
+        //    auditoriaFinalizarConteo()  → inventory.closeOwn
+        //    auditoriaCerrarArea(area)   → inventory.closeOther
+        //
+        //  Para el bartender el camino es idéntico al de antes: la línea
+        //  retirada solo se ejecutaba para administradores.
+        // ══════════════════════════════════════════════════════════════════════
         function auditoriaFinalizarConteo() {
             if (!auditoriaAreaActiva) return;
             const area = auditoriaAreaActiva;
             const nombreArea = areasAuditoria[area];
 
+            // FASE 2A — esta función no verificaba NADA: ni permiso, ni
+            // estado del inventario. Cualquier usuario autenticado que
+            // llegara a la pantalla podía finalizar.
+            if (!hasPermission('inventory.closeOwn')) {
+                showNotification('⚠️ No tienes permiso para finalizar el conteo');
+                return;
+            }
+            if (!puedeOperarArea(area)) {
+                showNotification('⚠️ No tienes asignada el área ' + nombreArea);
+                return;
+            }
+            if (_inventarioActivo && _inventarioActivo.estado === 'CERRADO') {
+                showNotification('🔒 El inventario está cerrado');
+                return;
+            }
+
             showConfirm('¿Finalizar conteo de ' + nombreArea + '?\n\nEsto guardará y bloqueará tu conteo del área. Solo el administrador podrá habilitar correcciones.', function() {
                 // Marcar MI área como completada (por usuario, no global)
                 myAuditoriaStatus[area] = 'completada';
-                // Admin también actualiza el status global del área
-                if (isAdmin()) auditoriaStatus[area] = 'completada';
+
+                // ── D · Quién la finalizó y cuándo ──────────────────────────
+                // Antes de esto, finalizar un área solo escribía la palabra
+                // 'completada'. No quedaba constancia de quién la cerró ni a
+                // qué hora: si el lunes el conteo de la barra no cuadraba, no
+                // había forma de saber quién lo dio por terminado ni cuándo.
+                // El único dato era un updatedAt a nivel de todo el documento
+                // del usuario, que cambia con cualquier cosa que haga.
+                //
+                // El registro vive en el documento del propio usuario
+                // (userAuditoria/{uid}), que ya está aislado por uid del lado
+                // del servidor y que el administrador sí puede leer.
+                if (typeof myAuditoriaFinalizadas === 'undefined' || !myAuditoriaFinalizadas) {
+                    myAuditoriaFinalizadas = {};
+                }
+                myAuditoriaFinalizadas[area] = {
+                    uid:    currentUserUid || null,
+                    nombre: ((_auth && _auth.currentUser && _auth.currentUser.email)
+                            || (auditCurrentUser && auditCurrentUser.userName)
+                            || currentUserUid || 'desconocido'),
+                    ts:     Date.now(),
+                    rol:    currentUserRole || 'user'
+                };
+
+                // FASE 2A — aquí vivía `if (isAdmin()) auditoriaStatus[area] =
+                // 'completada';`. Cerrar el área para todas las personas es
+                // ahora una acción propia y explícita: auditoriaCerrarArea().
                 auditoriaView       = 'selection';
                 auditoriaAreaActiva = null;
                 isAuditoriaMode     = false;
@@ -74,6 +136,52 @@
             });
         }
 
+        // ══════════════════════════════════════════════════════════════════════
+        //  auditoriaCerrarArea(area) — FASE 2A
+        //  ────────────────────────────────────────────────────────────────────
+        //  Da por terminada un área para TODAS las personas que cuentan en
+        //  ella. No es "finalizar mi conteo" ni es "cerrar el inventario":
+        //  es el escalón intermedio que hasta ahora existía escondido como
+        //  efecto secundario del botón de finalizar.
+        //
+        //  No toca el conteo de nadie: solo marca el estado global del área.
+        //  Reabrirla sigue siendo competencia de inventory.reopenArea.
+        // ══════════════════════════════════════════════════════════════════════
+        function auditoriaCerrarArea(area) {
+            if (!area) return;
+            if (!hasPermission('inventory.closeOther')) {
+                showNotification('⚠️ No tienes permiso para cerrar el área completa');
+                return;
+            }
+            if (_inventarioActivo && _inventarioActivo.estado === 'CERRADO') {
+                showNotification('🔒 El inventario está cerrado');
+                return;
+            }
+            const nombreArea = areasAuditoria[area] || area;
+            if (auditoriaStatus[area] === 'completada') {
+                showNotification('El área ' + nombreArea + ' ya estaba cerrada');
+                return;
+            }
+            showConfirm(
+                '¿Cerrar el área ' + nombreArea + ' para TODAS las personas?\n\n' +
+                'Nadie podrá seguir capturando en esta área hasta que se reabra. ' +
+                'Los conteos ya guardados no se modifican.\n\n¿Continuar?',
+                function() {
+                    auditoriaStatus[area] = 'completada';
+                    saveToLocalStorage();
+                    _registrarEnSyncQueue({
+                        tipo:    'reapertura_almacen',
+                        detalle: 'Cierre de área ' + area + ' para todos los usuarios',
+                        area:    area,
+                        accion:  'cierre_area'
+                    });
+                    showNotification('🔒 Área ' + nombreArea + ' cerrada para todos');
+                    renderTab();
+                }
+            );
+        }
+        window.auditoriaCerrarArea = auditoriaCerrarArea;
+
         function auditoriaVolverSeleccion() {
             auditoriaView = 'selection';
             auditoriaAreaActiva = null;
@@ -110,14 +218,53 @@
         // para _writeChunkedSubcollection (que chunkea por CANTIDAD de items,
         // no por tamaño de un objeto único — por eso se aplana en vez de
         // escribir un solo objeto grande).
+        // ══════════════════════════════════════════════════════════════════════
+        //  _semanaIdDelInventario(inv)
+        //  PASO PREVIO A FASE 3 — defecto H-3
+        //  ────────────────────────────────────────────────────────────────────
+        //  La semana del cierre se calculaba con clasificarRecuento(new Date()),
+        //  es decir con el RELOJ DEL DISPOSITIVO en el instante de pulsar
+        //  cerrar. Cerrar el lunes de madrugada un inventario contado el domingo
+        //  asignaba la semana siguiente. Como "contabilizar" se apoyará en ese
+        //  identificador para arrastrar el stock inicial, el error se heredaría
+        //  desde el primer ciclo y nadie lo notaría hasta cuadrar la semana.
+        //
+        //  Orden de preferencia:
+        //    1. inv.fechaRecuento — la fecha que el administrador eligió en el
+        //       formulario. Es un hecho de negocio, no un accidente del reloj.
+        //    2. La fecha del cierre, como respaldo para el camino antiguo (sin
+        //       formulario), donde fechaRecuento nace en null.
+        //
+        //  Devuelve también el ORIGEN, para que dentro de un año se pueda saber
+        //  de dónde salió la semana de un inventario concreto sin adivinarlo.
+        // ══════════════════════════════════════════════════════════════════════
+        function _semanaIdDelInventario(inv) {
+            if (typeof clasificarRecuento !== 'function') {
+                return { clase: null, origen: 'no_disponible' };
+            }
+            const fechaForm = inv && inv.fechaRecuento;
+            if (fechaForm) {
+                const clase = clasificarRecuento(fechaForm);
+                if (clase && clase.semanaId) return { clase: clase, origen: 'fechaRecuento' };
+            }
+            // Respaldo explícito: queda registrado que NO se usó la fecha del
+            // formulario, en vez de fingir que sí.
+            return { clase: clasificarRecuento(new Date()), origen: 'fechaCierre' };
+        }
+        window._semanaIdDelInventario = _semanaIdDelInventario;
+
         function _construirSnapshotInventario() {
             const registros = [];
             // R4 (reglas 4 y 5) — a qué semana pertenece este cierre.
             // Se calcula UNA vez, aquí, y se congela. Volver a deducirlo después
             // a partir del timestamp daría un resultado distinto si alguien abre
             // el histórico desde un dispositivo en otro huso horario.
-            var _claseR4 = (typeof clasificarRecuento === 'function')
-                           ? clasificarRecuento(new Date()) : null;
+            //
+            // H-3: la fecha ya NO es new Date(). Sale de la fecha de recuento
+            // que eligió el administrador; el reloj del dispositivo es solo el
+            // respaldo, y queda constancia de cuál se usó.
+            var _semana  = _semanaIdDelInventario(_inventarioActivo);
+            var _claseR4 = _semana.clase;
 
             registros.push({
                 tipo: 'meta',
@@ -128,6 +275,8 @@
                 // arrastre del inicial (regla 5) se activa cuando esté lista la
                 // pantalla de inventario físico.
                 semanaId:       _claseR4 ? _claseR4.semanaId : null,
+                // H-3 — 'fechaRecuento' (lo normal) o 'fechaCierre' (respaldo).
+                semanaIdOrigen: _semana.origen,
                 fechaLocal:     _claseR4 ? _claseR4.fecha : null,
                 tipoRecuento:   _claseR4 ? _claseR4.tipo : null,
                 cierraSemana:   _claseR4 ? _claseR4.cierraSemana : null,
@@ -140,8 +289,22 @@
                 registros.push({
                     tipo: 'producto',
                     id: p.id,
-                    nombre: p.nombre || '',
-                    grupo: p.grupo || p.categoria || '',
+                    // F1 — aqui se leia p.nombre y p.grupo, pero un producto del
+                    // catalogo usa p.name y p.group (ver saveProduct y la
+                    // importacion). El snapshot llevaba anos guardando cadena
+                    // vacia en los dos campos. Se leen ambos nombres para no
+                    // depender de cual use el objeto, y se guardan tambien como
+                    // name/unit/group, que es lo que el generador de Excel lee.
+                    nombre: p.name || p.nombre || '',
+                    name:   p.name || p.nombre || '',
+                    unit:   p.unit || '',
+                    grupo:  p.group || p.grupo || p.categoria || '',
+                    group:  p.group || p.grupo || p.categoria || '',
+                    precio:      (typeof p.precio      === 'number') ? p.precio      : null,
+                    stockMinimo: (typeof p.stockMinimo === 'number') ? p.stockMinimo : null,
+                    conversion:  (typeof p.conversion  === 'number') ? p.conversion  : null,
+                    proveedor:   p.proveedor || '',
+                    pv:          p.pv || '',
                     capacidadMl: (typeof p.capacidadMl === 'number') ? p.capacidadMl : null,
                     pesoBotellaLlenaOz: (typeof p.pesoBotellaLlenaOz === 'number') ? p.pesoBotellaLlenaOz : null,
                     // R1 (regla 14) — el modo de conteo se congela junto con el stock.
@@ -247,20 +410,57 @@
                         const inventoryRef = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
                                                  .collection('inventories').doc(_auditoriaSessionId);
                         const registros = _construirSnapshotInventario();
-                        // El snapshot se escribe ANTES de marcar CERRADO — si
-                        // esto falla, el inventario sigue SINCRONIZADO y el
-                        // admin puede reintentar con seguridad (escribir los
-                        // chunks de nuevo es seguro: _writeChunkedSubcollection
-                        // borra los anteriores antes de escribir).
-                        await _writeChunkedSubcollection(inventoryRef, 'snapshotChunks', registros);
-                        await inventoryRef.update({
+                        const _semanaCierre = _semanaIdDelInventario(_inventarioActivo);
+
+                        // ══════════════════════════════════════════════════════
+                        //  H-1 — CIERRE ATÓMICO
+                        //  ────────────────────────────────────────────────────
+                        //  Antes eran dos await independientes (los fragmentos y
+                        //  luego el cambio de estado), y el escritor de
+                        //  fragmentos eran a su vez dos batches más. Si fallaba
+                        //  entre medias, el inventario quedaba SINCRONIZADO con
+                        //  el snapshot ya escrito. Y el comentario que había
+                        //  aquí afirmaba que reintentar era seguro: NO lo era.
+                        //  Reescribir un fragmento existente es un 'update' para
+                        //  Firestore, y las reglas lo prohíben, así que el
+                        //  reintento moría con permission-denied y el inventario
+                        //  quedaba atascado: ni cerrado ni reabrible.
+                        //
+                        //  Ahora los fragmentos y el paso a CERRADO viajan en UN
+                        //  SOLO batch: o queda todo escrito, o no queda nada.
+                        //  Un fallo deja el inventario exactamente como estaba y
+                        //  el reintento parte de cero.
+                        //
+                        //  Las reglas evalúan cada escritura del batch contra el
+                        //  estado YA CONFIRMADO, así que durante el cierre el
+                        //  inventario todavía es SINCRONIZADO y los fragmentos
+                        //  se crean; en cuanto el batch se confirma, pasa a
+                        //  CERRADO y ya no se le puede añadir nada (H-2).
+                        //  Comprobado contra el emulador real.
+                        // ══════════════════════════════════════════════════════
+                        const batch = _db.batch();
+                        const resSnap = _escribirSnapshotEnBatch(batch, inventoryRef, registros);
+                        if (!resSnap.ok) {
+                            console.error('[InventarioFisico] No se pudo preparar el snapshot:', resSnap);
+                            showNotification(resSnap.motivo === 'demasiados_fragmentos'
+                                ? '❌ El inventario es demasiado grande para cerrarse en una sola operación. Avisa a soporte.'
+                                : '❌ No se pudo preparar el cierre — revisa la conexión');
+                            return;
+                        }
+                        batch.update(inventoryRef, {
                             estado:           'CERRADO',
                             fechaCierre:      Date.now(),
                             cerradoPorUid:    currentUserUid,
                             cerradoPorNombre: (_auth && _auth.currentUser) ? _auth.currentUser.email : currentUserUid,
                             totalProductos:   products.length,
-                            participantesUids: Object.keys(allUsersAuditoria) // ETAPA 15: para filtrar "mis inventarios" barato en el historial, sin leer el snapshot
+                            participantesUids: Object.keys(allUsersAuditoria), // ETAPA 15: para filtrar "mis inventarios" barato en el historial, sin leer el snapshot
+                            // H-3 — la semana queda también en la CABECERA, no
+                            // solo dentro del snapshot: contabilizar necesita
+                            // leerla sin abrir los fragmentos.
+                            semanaId:         _semanaCierre.clase ? _semanaCierre.clase.semanaId : null,
+                            semanaIdOrigen:   _semanaCierre.origen
                         });
+                        await batch.commit();
                         _registrarEnSyncQueue({
                             tipo:         'cierre_inventario_fisico',
                             detalle:      'Inventario Físico #' + numeroParaLog + ' cerrado' + (hayPendientes ? ' (forzoso, con pendientes)' : ''),
@@ -280,6 +480,345 @@
         // Exporta un inventario CERRADO reutilizando el motor Excel EXISTENTE
         // (exportToExcelConDatos) — nunca crea productos ni toca el catálogo
         // real (esa función ya restaura products/inventarioConteo al terminar).
+        // F1 — Reconstruye { producto: { area: {enteras, abiertas[]} } } a partir
+        // de los registros de usuario congelados en el snapshot, con la MISMA
+        // regla de consolidación que _recalcAdminAggregatedConteo usa en vivo:
+        //
+        //   1. Si algún ADMIN contó ese producto en esa área, manda el admin
+        //      (el más reciente por updatedAt). El admin ya resolvió el conflicto
+        //      al guardar su conteo final.
+        //   2. Si no, gana el conteo más reciente entre los usuarios regulares,
+        //      desempatando por el timestamp DEL PRODUCTO (_ts / _lastWrite), no
+        //      por el del documento del usuario.
+        //
+        // Reusar la regla, en vez de inventar otra, es lo que hace que el Excel
+        // diga lo mismo que el admin vio en pantalla el día del cierre.
+        // No modifica el snapshot: solo lee.
+        function _consolidarConteoCongelado(usuarios, areas, productos) {
+            var agregado  = {};
+            var admins    = usuarios.filter(function(u) { return u.isAdmin; });
+            var regulares = usuarios.filter(function(u) { return !u.isAdmin; });
+
+            // Todos los productos del inventario, aunque nadie los haya contado:
+            // una fila en cero es información, una fila ausente es un hueco.
+            var ids = {};
+            (productos || []).forEach(function(p) { ids[p.id] = true; });
+            usuarios.forEach(function(u) {
+                Object.keys(u.conteo || {}).forEach(function(id) { ids[id] = true; });
+            });
+
+            Object.keys(ids).forEach(function(prodId) {
+                agregado[prodId] = {};
+                areas.forEach(function(area) {
+                    function _entradas(lista) {
+                        return lista.map(function(u) {
+                            return { u: u, d: u.conteo && u.conteo[prodId] && u.conteo[prodId][area] };
+                        }).filter(function(e) { return e.d; });
+                    }
+
+                    var conAdmin = _entradas(admins);
+                    if (conAdmin.length > 0) {
+                        conAdmin.sort(function(a, b) { return (b.u.updatedAt || 0) - (a.u.updatedAt || 0); });
+                        agregado[prodId][area] = {
+                            enteras:  conAdmin[0].d.enteras  || 0,
+                            abiertas: conAdmin[0].d.abiertas || []
+                        };
+                        return;
+                    }
+
+                    var entradas = _entradas(regulares);
+                    if (entradas.length === 0) {
+                        agregado[prodId][area] = { enteras: 0, abiertas: [] };
+                        return;
+                    }
+                    entradas.sort(function(a, b) {
+                        var tsA = (a.d._ts || a.d._lastWrite || a.u.updatedAt || 0);
+                        var tsB = (b.d._ts || b.d._lastWrite || b.u.updatedAt || 0);
+                        return tsB - tsA;
+                    });
+                    agregado[prodId][area] = {
+                        enteras:  entradas[0].d.enteras  || 0,
+                        abiertas: entradas[0].d.abiertas || []
+                    };
+                });
+            });
+            return agregado;
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  FASE 3 — CONTABILIZAR
+        //  ────────────────────────────────────────────────────────────────────
+        //  Convierte el resultado físico de un inventario CERRADO en el stock
+        //  inicial del ciclo siguiente.
+        //
+        //  Lo que NO hace, y es la mitad del diseño:
+        //   · NO toca el snapshot congelado. Ni un byte.
+        //   · NO toca stockAreas, que es el stock operativo continuo.
+        //   · NO recalcula nada con el catálogo actual: usa los valores que
+        //     quedaron congelados el día del cierre.
+        //
+        //  La idempotencia NO la comprueba el cliente: la garantiza el servidor.
+        //  El documento del inicial se llama como la semana destino y las reglas
+        //  solo permiten crearlo, nunca actualizarlo. Dos administradores
+        //  pulsando a la vez, el segundo recibe permission-denied de Firestore.
+        // ══════════════════════════════════════════════════════════════════════
+
+        // ── Saldos por producto desde el snapshot congelado ──────────────────
+        // Tres pasos: consolidar entre usuarios con la MISMA regla que usa el
+        // Excel del cierre (admin manda; si no, el más reciente), convertir las
+        // onzas a fracción de botella con los datos CONGELADOS, y sumar las
+        // áreas. Decisión D-1: un total por producto, sin desglose de área.
+        //
+        // Usar los datos congelados y no el catálogo actual no es un detalle:
+        // si alguien corrige el peso de una botella en marzo, un inicial de
+        // enero recalculado con el peso nuevo daría otro número.
+        function _saldosDesdeSnapshot(registros) {
+            const meta = (registros || []).filter(function(r) { return r.tipo === 'meta'; })[0] || {};
+            const areas = (Array.isArray(meta.warehousesSnapshot) && meta.warehousesSnapshot.length)
+                          ? meta.warehousesSnapshot.slice()
+                          : AREAS_CONTEO.slice();
+            const productosCongelados = (registros || []).filter(function(r) { return r.tipo === 'producto'; });
+            const usuarios            = (registros || []).filter(function(r) { return r.tipo === 'usuario'; });
+
+            if (productosCongelados.length === 0) {
+                return { ok: false, motivo: 'snapshot_sin_productos' };
+            }
+
+            const conteo = _consolidarConteoCongelado(usuarios, areas, productosCongelados);
+
+            let enCero = 0;
+            const productos = productosCongelados.map(function(p) {
+                let total = 0;
+                areas.forEach(function(area) {
+                    const d = (conteo[p.id] && conteo[p.id][area]) || { enteras: 0, abiertas: [] };
+                    let suma = d.enteras || 0;
+                    const abiertas = d.abiertas || [];
+                    if (tieneConversion(p)) {
+                        abiertas.forEach(function(pesoOz) {
+                            suma += convertirOzAPuntos(pesoOz, p.capacidadMl, p.pesoBotellaLlenaOz);
+                        });
+                    } else {
+                        // Mismo respaldo que el resto del sistema: sin datos de
+                        // conversión, las abiertas ya vienen como fracción.
+                        abiertas.forEach(function(v) { suma += (v || 0); });
+                    }
+                    total += suma;
+                });
+                if (total === 0) enCero++;
+                return { id: p.id, total: total };
+            });
+
+            return {
+                ok: true,
+                productos: productos,
+                areas: areas,
+                enCero: enCero,
+                totalProductos: productos.length
+            };
+        }
+
+        // ── ¿Esta semana ya tiene un inicial? ────────────────────────────────
+        // Distingue dos cosas que NO son lo mismo: "ya lo contabilicé yo"
+        // (éxito, no hay nada que hacer) de "otro inventario ocupa esa semana"
+        // (conflicto real, que se muestra y no se resuelve en silencio).
+        async function _verificarInicialExistente(semanaId, inventoryId) {
+            try {
+                const snap = await _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
+                                      .collection('inventariosIniciales').doc(semanaId).get();
+                if (!snap.exists) return { existe: false };
+                const d = snap.data() || {};
+                const origenId = (d.origen && d.origen.inventoryId) || null;
+                return {
+                    existe: true,
+                    mismoOrigen: origenId === inventoryId,
+                    origenId: origenId,
+                    origenNumero: (d.origen && d.origen.numero) || null,
+                    datos: d
+                };
+            } catch (e) {
+                console.warn('[Contabilizar] No se pudo leer el inicial existente:', e);
+                return { existe: false, error: true };
+            }
+        }
+
+        async function contabilizarInventario(inventoryId, numero) {
+            if (!hasPermission('inventory.post')) {
+                showNotification('⚠️ No tienes permiso para contabilizar inventarios');
+                return;
+            }
+            if (!_db)              { showNotification('📴 Sin conexión a Firestore'); return; }
+            if (!navigator.onLine) { showNotification('📴 Sin conexión — conecta a internet antes de contabilizar'); return; }
+
+            showNotification('⏳ Preparando la contabilización…');
+            const inventoryRef = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
+                                    .collection('inventories').doc(inventoryId);
+            try {
+                const invSnap = await inventoryRef.get();
+                if (!invSnap.exists) { showNotification('❌ No se encontró el inventario'); return; }
+                const inv = invSnap.data() || {};
+
+                if (inv.estado === 'CONTABILIZADO') {
+                    showNotification('ℹ️ Este inventario ya estaba contabilizado'
+                        + (inv.semanaDestino ? ' — semana ' + inv.semanaDestino : ''));
+                    return;
+                }
+                if (inv.estado !== 'CERRADO') {
+                    showNotification('⚠️ Solo se puede contabilizar un inventario CERRADO');
+                    return;
+                }
+
+                // ── La semana destino ────────────────────────────────────────
+                // Decisión N-4: FASE 3 opera sobre inventarios cerrados a partir
+                // del paso previo, que es cuando semanaId empezó a guardarse en
+                // la cabecera. Un inventario anterior se bloquea con un motivo
+                // legible en vez de inventarle una semana.
+                if (!inv.semanaId) {
+                    showNotification('⚠️ Este inventario se cerró antes de que se guardara la semana '
+                        + 'en su cabecera, así que no se puede contabilizar.');
+                    return;
+                }
+                // Decisión N-1: solo un recuento fechado en domingo arrastra.
+                // La regla ya existía en clasificarRecuento(); aquí se explica.
+                const clase = (typeof clasificarRecuento === 'function' && inv.fechaRecuento)
+                              ? clasificarRecuento(inv.fechaRecuento) : null;
+                if (!clase || !clase.cierraSemana) {
+                    showNotification('⚠️ Solo se contabiliza un recuento fechado en DOMINGO. '
+                        + 'Este está fechado ' + (inv.fechaRecuento || 'sin fecha de recuento')
+                        + ', y un corte a media semana partiría el ciclo en dos.');
+                    return;
+                }
+
+                const semanaDestino = (typeof semanaSiguiente === 'function')
+                                      ? semanaSiguiente(inv.fechaRecuento) : null;
+                if (!semanaDestino) { showNotification('❌ No se pudo calcular la semana destino'); return; }
+
+                // ── ¿Ya está hecho? ──────────────────────────────────────────
+                const previo = await _verificarInicialExistente(semanaDestino, inventoryId);
+                if (previo.existe && previo.mismoOrigen) {
+                    showNotification('ℹ️ Este inventario ya generó el inicial de la semana ' + semanaDestino);
+                    return;
+                }
+                if (previo.existe && !previo.mismoOrigen) {
+                    showNotification('🛑 La semana ' + semanaDestino + ' ya tiene un inicial generado por el '
+                        + 'Inventario Físico #' + (previo.origenNumero || previo.origenId)
+                        + '. No se sobrescribe nada.');
+                    return;
+                }
+
+                // ── El físico congelado ──────────────────────────────────────
+                const registros = await _readChunkedSubcollection(inventoryRef, 'snapshotChunks');
+                if (!registros || registros.length === 0) {
+                    showNotification('❌ No se encontró el snapshot de este inventario');
+                    return;
+                }
+                const saldos = _saldosDesdeSnapshot(registros);
+                if (!saldos.ok) {
+                    showNotification('❌ El snapshot no contiene productos — no se puede contabilizar');
+                    return;
+                }
+
+                const inicial = inicialDesdeCierre({
+                    fecha:       inv.fechaRecuento,
+                    inventoryId: inventoryId,
+                    numero:      inv.numero,
+                    productos:   saldos.productos
+                });
+                if (!inicial) {
+                    showNotification('⚠️ El cierre no arrastra a la semana siguiente (no cierra semana)');
+                    return;
+                }
+
+                const totalUnidades = saldos.productos.reduce(function(a, p) { return a + p.total; }, 0);
+
+                showConfirm(
+                    '📘 CONTABILIZAR INVENTARIO FÍSICO #' + (inv.numero || numero) + '\n\n' +
+                    'Recuento: ' + inv.fechaRecuento + '\n' +
+                    'Semana destino: ' + inicial.semanaId + '\n' +
+                    'Productos: ' + inicial.totalProductos +
+                    (saldos.enCero ? '  (' + saldos.enCero + ' en cero)' : '') + '\n' +
+                    'Total de unidades: ' + (Math.round(totalUnidades * 1000) / 1000) + '\n\n' +
+                    'El resultado físico pasará a ser el stock inicial de esa semana.\n\n' +
+                    'El inventario cerrado NO se modifica: su conteo queda intacto.\n' +
+                    'El inicial es INMUTABLE — una vez creado no se puede corregir ni deshacer.\n\n' +
+                    '¿Confirmar?',
+                    async function() {
+                        showNotification('⏳ Contabilizando…');
+                        const inicialRef = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
+                                              .collection('inventariosIniciales').doc(inicial.semanaId);
+                        try {
+                            // Un solo batch: o queda todo, o no queda nada.
+                            const batch = _db.batch();
+                            batch.set(inicialRef, {
+                                semanaId:         inicial.semanaId,
+                                origen:           inicial.origen,
+                                saldos:           inicial.saldos,
+                                totalProductos:   inicial.totalProductos,
+                                productosEnCero:  saldos.enCero,
+                                areas:            saldos.areas,
+                                contabilizadoPor: currentUserUid,
+                                contabilizadoEn:  Date.now(),
+                                semanaOrigenDato: inv.semanaIdOrigen || 'cabecera'
+                            });
+                            batch.update(inventoryRef, {
+                                estado:           'CONTABILIZADO',
+                                contabilizadoEn:  Date.now(),
+                                contabilizadoPor: currentUserUid,
+                                semanaDestino:    inicial.semanaId
+                            });
+                            await batch.commit();
+
+                            _registrarEnSyncQueue({
+                                tipo:         'contabilizacion',
+                                detalle:      'Inventario Físico #' + (inv.numero || numero)
+                                              + ' contabilizado → inicial de la semana ' + inicial.semanaId,
+                                inventoryId:  inventoryId,
+                                numero:       inv.numero || numero,
+                                semanaOrigen: inicial.origen.semanaCerrada,
+                                semanaDestino: inicial.semanaId,
+                                totalProductos: inicial.totalProductos,
+                                motivo:       'Contabilización de Inventario Físico'
+                            });
+
+                            showNotification('✅ Contabilizado — el inicial de la semana '
+                                + inicial.semanaId + ' quedó registrado');
+                            _historialInventarios = null;
+                            renderTab();
+                        } catch (err) {
+                            // ── El manejo que hace que la idempotencia funcione ──
+                            // Un permission-denied aquí NO es necesariamente un
+                            // fallo: puede ser que la operación ya se completara
+                            // en un intento anterior cuya confirmación se perdió.
+                            // Se distingue leyendo el documento.
+                            console.error('[Contabilizar] Error:', err);
+                            if (err && err.code === 'permission-denied') {
+                                const post = await _verificarInicialExistente(inicial.semanaId, inventoryId);
+                                if (post.existe && post.mismoOrigen) {
+                                    showNotification('✅ Ya estaba contabilizado — la operación se había '
+                                        + 'completado antes. No se duplicó nada.');
+                                    _historialInventarios = null;
+                                    renderTab();
+                                    return;
+                                }
+                                if (post.existe && !post.mismoOrigen) {
+                                    showNotification('🛑 Otro inventario ocupó la semana ' + inicial.semanaId
+                                        + ' mientras confirmabas. No se sobrescribió nada.');
+                                    return;
+                                }
+                                showNotification('❌ El servidor rechazó la contabilización — revisa tus permisos');
+                                return;
+                            }
+                            showNotification('❌ No se pudo contabilizar — revisa la conexión e inténtalo de nuevo');
+                        }
+                    }
+                );
+            } catch (err) {
+                console.error('[Contabilizar] Error preparando:', err);
+                showNotification('❌ No se pudo preparar la contabilización — revisa la conexión');
+            }
+        }
+        window.contabilizarInventario = contabilizarInventario;
+        window._saldosDesdeSnapshot   = _saldosDesdeSnapshot;
+
         async function exportarInventarioCerrado(inventoryId, numero) {
             if (!hasPermission('inventory.export')) {
                 showNotification('⚠️ No tienes permiso para exportar');
@@ -294,14 +833,65 @@
                     showNotification('❌ No se encontró el snapshot de este inventario');
                     return;
                 }
+                // ── F1 — DEFECTO CRITICO 3 ────────────────────────────────
+                // Antes se entregaba `stockByArea` como si fuera el conteo. No lo
+                // es: stockByArea es UN NUMERO por area (el total ya convertido),
+                // mientras que el generador de Excel espera { enteras, abiertas[] }
+                // y lee `.enteras` de el. Un numero no tiene `.enteras`, asi que
+                // TODAS las cantidades salian en cero. Ademas el producto
+                // congelado guarda `nombre` y el generador lee `name`, asi que la
+                // columna Nombre salia vacia.
+                //
+                // El conteo fisico de verdad esta en los registros tipo 'usuario'.
+                // Se consolida con la MISMA regla que usa la pantalla del admin
+                // (admin manda; si no, gana el mas reciente), para que el Excel
+                // diga exactamente lo que el admin vio el dia que cerro.
+                const meta = registros.filter(function(r) { return r.tipo === 'meta'; })[0] || {};
+                const areasHistoricas = (Array.isArray(meta.warehousesSnapshot) && meta.warehousesSnapshot.length)
+                                        ? meta.warehousesSnapshot.slice()
+                                        : AREAS_CONTEO.slice();
+
+                var _sinNombre = 0;
                 const productosCongelados = registros.filter(function(r) { return r.tipo === 'producto'; })
                     .map(function(r) {
-                        return { id: r.id, nombre: r.nombre, grupo: r.grupo, capacidadMl: r.capacidadMl, pesoBotellaLlenaOz: r.pesoBotellaLlenaOz, conteoOzHabilitado: r.conteoOzHabilitado, stockByArea: r.stockByArea };
+                        // Los inventarios cerrados ANTES de F1 no tienen nombre
+                        // guardado (se grababa vacio). Para esos se recurre al
+                        // catalogo actual, que es la unica fuente que queda; se
+                        // cuenta cuantos fueron para avisarlo al terminar.
+                        var nom = r.name || r.nombre || '';
+                        if (!nom) {
+                            var vivo = products.filter(function(p) { return p.id === r.id; })[0];
+                            nom = vivo ? (vivo.name || '') : '';
+                            if (nom) _sinNombre++;
+                        }
+                        return {
+                            id: r.id,
+                            name: nom,
+                            unit: r.unit || '',
+                            group: r.group || r.grupo || '',
+                            capacidadMl: r.capacidadMl,
+                            pesoBotellaLlenaOz: r.pesoBotellaLlenaOz,
+                            conteoOzHabilitado: r.conteoOzHabilitado,
+                            precio:      (typeof r.precio      === 'number') ? r.precio      : undefined,
+                            stockMinimo: (typeof r.stockMinimo === 'number') ? r.stockMinimo : undefined,
+                            conversion:  (typeof r.conversion  === 'number') ? r.conversion  : undefined,
+                            proveedor:   r.proveedor || '',
+                            pv:          r.pv || '',
+                            stockByArea: r.stockByArea
+                        };
                     });
-                const conteoData = {};
-                productosCongelados.forEach(function(p) { conteoData[p.id] = p.stockByArea || {}; });
+
+                const usuariosCongelados = registros.filter(function(r) { return r.tipo === 'usuario'; });
+                const conteoData = _consolidarConteoCongelado(usuariosCongelados, areasHistoricas,
+                                                              productosCongelados);
+
                 const nombreArchivo = 'InventarioFisico_' + numero + '_' + new Date().toISOString().split('T')[0] + '.xlsx';
-                exportToExcelConDatos('completo', conteoData, productosCongelados, nombreArchivo);
+                exportToExcelConDatos('completo', conteoData, productosCongelados, nombreArchivo,
+                                      areasHistoricas);
+                if (_sinNombre > 0) {
+                    showNotification('ℹ️ ' + _sinNombre + ' nombre(s) se tomaron del catálogo actual: '
+                                   + 'este inventario se cerró antes de que el nombre quedara congelado.');
+                }
             } catch (err) {
                 console.error('[InventarioFisico] Error exportando:', err);
                 showNotification('❌ Error al exportar — revisa la conexión');
@@ -557,25 +1147,127 @@
 
         /**
          * reabrirArea(area)
-         * FIX #7 — Permite al administrador reabrir un área completada para corrección.
-         * Los bartenders que ya contaron conservan sus datos; solo cambia el estado.
+         * ─────────────────
+         * Reabre un área completada para que se pueda corregir el conteo.
+         *
+         * D — ESTA FUNCIÓN NO REABRÍA NADA PARA EL BARTENDER.
+         *
+         * Había tres caminos distintos para reabrir un área, y estaban
+         * desalineados entre sí:
+         *
+         *   1. reabrirArea(area)          — esta, la que se ofrece en la
+         *      tarjeta del área. Solo comprobaba isAdmin(), no pedía el
+         *      permiso inventory.reopenArea, no miraba si el inventario ya
+         *      estaba cerrado, no dejaba rastro, y escribía en
+         *      `auditoriaStatus` del documento principal.
+         *   2. reabrirAlmacenAdmin(uid, area) — la correcta: pide permiso,
+         *      exige inventario SINCRONIZADO, deja rastro, y escribe en
+         *      `userAuditoria/{uid}.status`.
+         *   3. adminUnlockAreaUsuario(uid, area) — desbloqueo producto a
+         *      producto, otro mecanismo distinto.
+         *
+         * El problema de fondo: la puerta de entrada al conteo
+         * (auditoriaEntrarArea) mira `myAuditoriaStatus[area]`, que vive en el
+         * documento de CADA usuario. `auditoriaStatus` del documento principal
+         * no lo consulta nadie para decidir si se puede contar. O sea que el
+         * jefe de barra pulsaba "Reabrir", veía el área en pendiente en su
+         * pantalla, le decía al bartender que ya podía corregir — y al
+         * bartender le seguía saliendo bloqueada. Sin ningún mensaje de error:
+         * simplemente no pasaba nada.
+         *
+         * Ahora esta función es la única puerta y hace lo que promete: aplica
+         * las mismas comprobaciones que el camino correcto, y reabre el área
+         * para todas las personas que la tenían finalizada, no solo en la
+         * vista del administrador.
          */
-        function reabrirArea(area) {
-            if (!isAdmin()) {
-                showNotification('⚠️ Solo el administrador puede reabrir áreas');
+        async function reabrirArea(area) {
+            // Mismas comprobaciones que reabrirAlmacenAdmin, en vez de un
+            // isAdmin() suelto: el permiso existía y esta ruta lo ignoraba.
+            if (!hasPermission('inventory.reopenArea')) {
+                showNotification('⚠️ No tienes permiso para reabrir áreas');
                 return;
             }
+            if (_inventarioActivo && _inventarioActivo.estado !== 'SINCRONIZADO') {
+                showNotification('⚠️ El Inventario Físico está ' + _inventarioActivo.estado +
+                    ' — no se puede reabrir un área');
+                return;
+            }
+
             const nombreArea = areasAuditoria[area] || area;
-            showConfirm('¿Reabrir el área "' + nombreArea + '"?\n\nLos conteos existentes se conservan. Los bartenders podrán modificar sus datos.', function() {
+
+            // Personas que tienen ESTA área finalizada. Son a quienes hay que
+            // reabrírsela de verdad, en su propio documento.
+            const afectados = Object.keys(allUsersAuditoria || {}).filter(function(uid) {
+                const u = allUsersAuditoria[uid];
+                return u && u.status && u.status[area] === 'completada';
+            });
+
+            const detalleQuienes = afectados.length === 0
+                ? '\n\nAhora mismo nadie la tiene finalizada.'
+                : '\n\nSe reabrirá para ' + afectados.length + ' persona(s).';
+
+            showConfirm('¿Reabrir el área "' + nombreArea + '"?\n\n' +
+                'Los conteos existentes se conservan; solo se permite volver a modificarlos.' +
+                detalleQuienes,
+            async function() {
+                const docPrincipal = _db
+                    ? _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
+                    : null;
+
+                // 1) Estado agregado que ve el administrador.
                 auditoriaStatus[area] = 'pendiente';
-                saveToLocalStorage();
-                // Sincronizar nuevo estado a Firestore si hay conexión
-                if (_db && navigator.onLine) {
-                    _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
-                        .update({ ['auditoriaStatus.' + area]: 'pendiente' }) // FIX-2: campo anidado correcto para que _applyCloudData lo lea
-                        .catch(err => console.warn('[Reabrir] Error sync:', err));
+                // 2) Mi propio estado, si soy yo quien había finalizado.
+                if (myAuditoriaStatus[area] === 'completada') {
+                    myAuditoriaStatus[area] = 'pendiente';
+                    if (typeof myAuditoriaFinalizadas !== 'undefined' && myAuditoriaFinalizadas) {
+                        delete myAuditoriaFinalizadas[area];
+                    }
                 }
-                showNotification('↩️ Área "' + nombreArea + '" reabierta para corrección');
+                saveToLocalStorage();
+
+                if (!docPrincipal || !navigator.onLine) {
+                    showNotification('📴 Sin conexión — el área se reabrió aquí, ' +
+                        'pero los demás no lo verán hasta que vuelva la señal');
+                    renderTab();
+                    return;
+                }
+
+                let fallidos = 0;
+                try {
+                    await docPrincipal.update({ ['auditoriaStatus.' + area]: 'pendiente' });
+                } catch (err) {
+                    console.warn('[Reabrir] Error al sincronizar el estado agregado:', err);
+                }
+
+                // 3) Lo que de verdad desbloquea el conteo: el estado dentro
+                //    del documento de cada persona.
+                for (const uid of afectados) {
+                    try {
+                        await docPrincipal.collection('userAuditoria').doc(uid)
+                            .update({ ['status.' + area]: 'pendiente', updatedAt: Date.now() });
+                    } catch (err) {
+                        fallidos++;
+                        console.warn('[Reabrir] No se pudo reabrir para', uid, err);
+                    }
+                }
+
+                // 4) Rastro. Reabrir un área permite cambiar cantidades ya
+                //    contadas; tiene que quedar escrito quién lo autorizó.
+                _registrarEnSyncQueue({
+                    tipo:         'reapertura_almacen',
+                    detalle:      'Área "' + nombreArea + '" reabierta para ' +
+                                  afectados.length + ' persona(s) por ' + (currentUserUid || 'admin'),
+                    valorAntes:   JSON.stringify({ area: area, status: 'completada', usuarios: afectados }),
+                    valorDespues: JSON.stringify({ area: area, status: 'pendiente' }),
+                    motivo:       'Reapertura de área por administrador'
+                });
+
+                if (fallidos > 0) {
+                    showNotification('⚠️ "' + nombreArea + '" se reabrió, pero ' + fallidos +
+                        ' persona(s) no recibieron el cambio — reintenta con señal');
+                } else {
+                    showNotification('↩️ Área "' + nombreArea + '" reabierta para corrección');
+                }
                 renderTab();
             });
         }
@@ -692,7 +1384,7 @@
                 renderTab();
             }, 180);
         }
-
+
         // ══════════════════════════════════════════════════════════════════════
         //  R7 — FORMULARIO DE NUEVO INVENTARIO FÍSICO
         //  ────────────────────────────────────────────────────────────────────
@@ -830,6 +1522,16 @@
                 color:    '#4ade80',
                 fondo:    'rgba(74,222,128,.12)',
                 texto:    'Cerrado e inmutable. Queda como histórico y nadie puede modificarlo, ni el administrador.'
+            },
+            // FASE 3 — el estado nuevo TAMBIÉN va aquí. Sin esta entrada el
+            // historial mostraba "CONTABILIZADO" y el glosario seguía
+            // explicando solo dos estados: la pantalla decía una cosa y la
+            // ayuda otra. Lo detectó la comprobación de alcance de R7.
+            CONTABILIZADO: {
+                etiqueta: 'Contabilizado',
+                color:    '#818cf8',
+                fondo:    'rgba(129,140,248,.12)',
+                texto:    'Su resultado ya es el stock inicial de la semana siguiente. Además de inmutable, no se puede volver a contabilizar.'
             }
         };
 
