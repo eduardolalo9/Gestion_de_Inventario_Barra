@@ -1,5 +1,12 @@
         async function loadConteoPorUsuarioFromFirestore() {
             if (!_db || !navigator.onLine || !_haySesionFirebase()) return; // M2a
+            // ── FASE 2B — CONTEO CIEGO ────────────────────────────────────
+            // conteoMultiUsuario/{area} es UN SOLO documento que contiene
+            // dentro el bloque de cada persona, con su nombre y sus
+            // cantidades. Firestore no permite leer un documento a medias:
+            // o se lee entero o nada. Por eso esta ruta no admite término
+            // medio y queda reservada a quien puede ver conteos ajenos.
+            if (!puedeVerConteosAjenos()) return;
             try {
                 let changed = false;
                 const AUDIT_AREAS = AREAS_CONTEO; // FIX-05: array declarado una sola vez
@@ -73,7 +80,7 @@
          *               Incrementar solo cuando cambia la estructura de los datos
          *               (no en cambios visuales). Se usa para ejecutar migraciones.
          */
-        const APP_VERSION = '1.0.99';
+        const APP_VERSION = '1.2.0';
         const DB_VERSION  = 2;     // v1: esquema original  v2: IDB + sync queue + ciclo
 
         /**
@@ -83,6 +90,40 @@
          * y ejecuta las migraciones necesarias EN ORDEN, sin perder datos.
          * Las migraciones son idempotentes: se pueden correr varias veces sin daño.
          */
+        // ══════════════════════════════════════════════════════════════════════
+        //  FASE 7 (S5) — ALMACENAMIENTO PERSISTENTE
+        //  ────────────────────────────────────────────────────────────────────
+        //  Todo lo que aún no llegó a la nube (conteos sin confirmar, outbox,
+        //  conteos huérfanos) vive en localStorage / IndexedDB. Por defecto el
+        //  navegador los trata como "desechables": con el teléfono corto de
+        //  espacio puede borrarlos sin avisar. navigator.storage.persist() pide
+        //  que no lo haga.
+        //
+        //  · Se pide una sola vez por dispositivo, después de iniciar sesión
+        //    (Chrome lo concede sin preguntar a una PWA que se usa; Firefox
+        //    puede mostrar un aviso, por eso no se pide antes del login).
+        //  · Nunca bloquea nada: si no existe la API o lo niega, la app sigue
+        //    igual que hoy. El resultado queda en consola para diagnóstico.
+        // ══════════════════════════════════════════════════════════════════════
+        async function _pedirAlmacenamientoPersistente() {
+            try {
+                if (!navigator.storage || typeof navigator.storage.persist !== 'function') return null;
+                if (typeof navigator.storage.persisted === 'function' && await navigator.storage.persisted()) {
+                    return true;
+                }
+                let yaPedido = false;
+                try { yaPedido = localStorage.getItem('inventarioApp_persistPedido') === '1'; } catch (_) {}
+                if (yaPedido) return false;
+                const ok = await navigator.storage.persist();
+                try { localStorage.setItem('inventarioApp_persistPedido', '1'); } catch (_) {}
+                console.info('[Almacenamiento] Persistente: ' + (ok ? 'concedido' : 'no concedido'));
+                return ok;
+            } catch (e) {
+                console.warn('[Almacenamiento] No se pudo pedir persistencia:', e && e.message);
+                return null;
+            }
+        }
+
         function _runMigrations() {
             const storedVersion = parseInt(localStorage.getItem('inventarioApp_dbVersion') || '1', 10);
             if (storedVersion >= DB_VERSION) return; // ya en la versión más reciente
@@ -394,7 +435,10 @@
          * Solo admin puede llamar esta función.
          */
         function restaurarBackup(key) {
-            if (!isAdmin()) { showNotification('⚠️ Solo el administrador puede restaurar respaldos'); return; }
+            // FASE 2A — settings.update no es delegable fuera de administración
+            // (ver PERMISOS_METADATOS): restaurar un respaldo sobreescribe el
+            // estado completo del dispositivo.
+            if (!hasPermission('settings.update')) { showNotification('⚠️ No tienes permiso para restaurar respaldos'); return; }
             try {
                 const raw = localStorage.getItem(key);
                 if (!raw) { showNotification('❌ Respaldo no encontrado'); return; }
@@ -610,7 +654,18 @@
             'reapertura_almacen',         // reapertura de un área a un usuario
             'ciclo_estado',               // cambio de estado del ciclo
             'restauracion_backup',        // restauración de un respaldo
-            'reset_auditoria'             // inicio de una nueva sesión de conteo
+            'reset_auditoria',            // inicio de una nueva sesión de conteo
+            // FASE 2 — la auditoría de cambios de permisos NO estrena una
+            // tubería propia: reutiliza esta, que ya es append-only y que las
+            // reglas hacen imborrable (historialCambios: allow update, delete:
+            // if false). Un tipo nuevo aquí basta para que el evento viaje a
+            // Firestore por el mismo camino que todo lo demás.
+            'permisos',                   // cambio de rol/permisos/áreas de un usuario
+            'contabilizacion',            // FASE 3 — inventario cerrado → inicial del ciclo siguiente
+            'candado_local',              // desbloqueo del candado local de captura (D6)
+            'compra_importada',           // FASE 4 — entrada de mercancía importada desde Excel
+            'compra_manual',              // FASE 4 — entrada de mercancía capturada a mano
+            'conteo_auditoria_huerfano'   // FASE 5 — conteo de auditoría archivado por cambio de sesión
         ];
 
         function _registrarEnSyncQueue(evento) {
@@ -821,4 +876,4 @@
 /**
  * FIX-10: _idbPruneSyncedQueue()
  * Elimina eventos ya sincronizados del store IDB.
- */
+ */

@@ -188,6 +188,20 @@
                 return { procesado: true, reseteo: false, sessionAnterior: sessionAnterior, sessionNueva: nuevoSessionId };
             }
 
+            // 5B (FASE 5) — Antes de vaciar el conteo: archivarlo si había
+            // algo sin confirmar contra el servidor (_auditSyncPending).
+            //
+            // Debe ir ANTES del vaciado (lee las variables actuales) y usa
+            // `sessionAnterior` — capturado en el paso 2, ANTES de la
+            // reasignación de _auditoriaSessionId de la línea de arriba —
+            // nunca la variable mutable: para cuando este código corre,
+            // _auditoriaSessionId YA apunta a la sesión NUEVA, así que un
+            // set() con esa variable mezclaría conteo viejo con la sesión
+            // nueva. Ver _archivarConteoHuerfanoSiAplica (js/40-firestore.js).
+            _archivarConteoHuerfanoSiAplica(sessionAnterior).catch(function(err) {
+                console.warn('[AuditHuerfano] Error inesperado al archivar:', err);
+            });
+
             // 5. RESET REAL — únicamente el estado que pertenece en exclusiva
             //    a la auditoría anterior. Deliberadamente NO aparecen aquí:
             //    products, cart, orders, inventories, inventarioConteo, catálogo.
@@ -304,6 +318,43 @@
                 if (nuevoDesbloqueo) {
                     saveToLocalStorage({ skipSyncTrigger: false });
                     showNotification('🔓 El administrador desbloqueó un producto para corrección');
+                    renderTab();
+                }
+
+                // ─────────────────────────────────────────────────────────────
+                // Path D: Reapertura de área confirmada por el admin.
+                //
+                // FIX 5A (FASE 5): reabrirArea() (js/75-auditoria-flujo.js)
+                // escribe status.{area} = 'pendiente' en ESTE documento para
+                // cada persona afectada — pero este listener nunca leía
+                // data.status, solo sessionId (Path B) y unlocks (Path C). El
+                // bartender nunca se enteraba de que su área fue reabierta:
+                // auditoriaEntrarArea() sigue bloqueando por myAuditoriaStatus,
+                // variable local que nunca se actualizaba. El admin veía el
+                // área en pendiente; el bartender la seguía viendo bloqueada,
+                // sin ningún error visible, sin importar si recargaba.
+                //
+                // Alcance deliberado: solo se reacciona al sentido "reabrir"
+                // (servidor dice 'pendiente' para un área que aquí sigue
+                // 'completada'). El sentido contrario — reflejar aquí que YA
+                // se finalizó desde OTRO dispositivo del mismo usuario — es un
+                // problema distinto (sincronía entre dispositivos del mismo
+                // uid, no reapertura) y no es lo que este fix corrige.
+                // ─────────────────────────────────────────────────────────────
+                const serverStatus = data.status || {};
+                let huboReapertura = false;
+                Object.keys(serverStatus).forEach(function(area) {
+                    if (serverStatus[area] === 'pendiente' && myAuditoriaStatus[area] === 'completada') {
+                        myAuditoriaStatus[area] = 'pendiente';
+                        if (typeof myAuditoriaFinalizadas !== 'undefined' && myAuditoriaFinalizadas) {
+                            delete myAuditoriaFinalizadas[area];
+                        }
+                        huboReapertura = true;
+                    }
+                });
+                if (huboReapertura) {
+                    saveToLocalStorage({ skipSyncTrigger: true });
+                    showNotification('↩️ El administrador reabrió un área para que la corrijas');
                     renderTab();
                 }
             }, function(err) { console.warn('[AuditUser] Error listener propio:', err); });
@@ -685,6 +736,11 @@ const usersList = Object.values(allUsersAuditoria);
          */
         async function loadConflictosDesdeFirestore() {
             if (!_db || !navigator.onLine || !_haySesionFirebase()) return; // M2a
+            // FASE 2B — se invoca en el arranque sin ninguna guarda de rol y
+            // agrega los conteos de todos los dispositivos. La guarda real
+            // vive dentro de _cargarYAgeregarConteos(), pero se corta también
+            // aquí para no lanzar una consulta por área que no llevará a nada.
+            if (!puedeVerConteosAjenos()) return;
             try {
                 // R6: una por cada area definida, no tres fijas. Con las areas
                 // escritas a mano, una cuarta area se contaba en el telefono y
@@ -1114,4 +1170,4 @@ const usersList = Object.values(allUsersAuditoria);
             }
         }
 
-        // BUG-FIX m3: updateNetworkStatus definida a nivel global
+        // BUG-FIX m3: updateNetworkStatus definida a nivel global

@@ -10,12 +10,24 @@
     "test:split": "node pruebas/prueba-integridad-split.js",
     "test:reglas": "firebase emulators:exec --only firestore --project demo-barinventory \"node run-rules-tests.js\"",
     "test:f1": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-f1-integracion.js\"",
-    "test:d": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-d-integracion.js\""
+    "test:d": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-d-integracion.js\"",
+    "test:f3": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-f3-integracion.js\"",
+    "test:f3nav": "node pruebas/prueba-f3-navegador.js",
+    "test:p2": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-p2-integracion.js\"",
+    "test:p2nav": "node pruebas/prueba-p2-navegador.js",
+    "test:f5": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-fase5-integracion.js\"",
+    "test:f7": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-fase7-integracion.js\"",
+    "test:f6": "node pruebas/prueba-fase6.js",
+    "test:f6nav": "node pruebas/prueba-fase6-navegador.js",
+    "test:hotfixnav": "node pruebas/prueba-hotfix-decimales.js",
+    "test:rc": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-reconteo-integracion.js\"",
+    "test:rcnav": "node pruebas/prueba-reconteo-navegador.js"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5",
+    "acorn": "^8",
     "firebase-tools": "^15",
-    "acorn": "^8"
+    "playwright": "^1.63.0"
   },
   "dependencies": {
     "acorn": "^8.18.0"

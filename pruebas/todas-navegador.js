@@ -29,6 +29,11 @@ const PRUEBAS = [
     'prueba-c1.js',    // C1  — el aviso de guardado no miente
     'prueba-p0.js',    // P0  — campos de compras en el catálogo (necesita cdnjs)
     'prueba-p1.js',    // P1  — la pestaña de compras
+    'prueba-f3-navegador.js',  // F3 — contabilizar: humo en la app real
+    'prueba-p2-navegador.js',  // FASE 4 — importación de compras: parseo, vista previa, incidencias
+    'prueba-fase6-navegador.js', // FASE 6 — buscadores en la app real
+    'prueba-hotfix-decimales.js', // HOTFIX — separador decimal (coma/punto) en conteo físico
+    'prueba-reconteo-navegador.js', // RECONTEO — ventana de reconteo en la app real
 ];
 
 function esperarServidor(intentos) {

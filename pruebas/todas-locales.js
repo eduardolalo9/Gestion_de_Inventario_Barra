@@ -39,6 +39,14 @@ const PRUEBAS = [
     'prueba-r7.js',                 // R7 — crear inventario desde formulario
     'prueba-f1.js',                 // F1 — los tres defectos criticos de la auditoria
     'prueba-d.js',                  // D  — sincronizacion y defectos criticos
+    'prueba-f2.js',                 // F2 — permisos, privacidad y seguridad de servidor
+    'prueba-f3prev.js',             // Paso previo a F3 — cierre atomico e inmutabilidad
+    'prueba-f3.js',                 // F3 — contabilizar: inicial inmutable y alcance
+    'prueba-p2.js',                 // FASE 4 — compras: persistencia e importacion desde Excel
+    'prueba-fase5.js',              // FASE 5 — reapertura de area + conteo de auditoria huerfano
+    'prueba-fase6.js',              // FASE 6 — buscadores: motor unificado + integracion
+    'prueba-fase7.js',              // FASE 7 — seguridad: chunks, ajustes, conflictos, cambios
+    'prueba-reconteo.js',      // RECONTEO — ventana de reconteo (estática)
 ];
 
 let fallaron = [];

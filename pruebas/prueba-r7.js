@@ -143,8 +143,16 @@ chk('Las opciones del formulario se leen a la defensiva',
 chk('Existe el glosario',            /function renderGlosarioEstados\(/.test(flujo));
 chk('Define Sincronizado',           /SINCRONIZADO: \{[\s\S]{0,200}?Conteo en curso/.test(flujo));
 chk('Define Cerrado',                /CERRADO: \{[\s\S]{0,220}?inmutable/.test(flujo));
-chk('NO define Contabilizado',       !/CONTABILIZADO/.test(flujo),
-    'Lalo lo descartó: solo hay dos estados');
+// Esta comprobación decía 'NO define Contabilizado': en R7 Lalo había
+// descartado el tercer estado. La decisión N-3 lo autoriza expresamente
+// ('FASE 3 añade únicamente CONTABILIZADO'), así que lo que hay que vigilar
+// ya no es su ausencia sino que sea el ÚNICO que se añadió y que esté
+// explicado, no solo pintado.
+const _glosario = (flujo.match(/const ESTADOS_INVENTARIO = \{[\s\S]*?\n        \};/) || [''])[0];
+chk('Define Contabilizado, y ningún estado más (N-3)',
+    /CONTABILIZADO: \{[\s\S]{0,300}?stock inicial de la semana siguiente/.test(_glosario) &&
+    (_glosario.match(/^            [A-Z_]+: \{/gm) || []).length === 3,
+    'el glosario debe tener exactamente tres estados');
 chk('El glosario aparece con el inventario vacío',
     /renderGlosarioEstados === 'function'\) html \+= renderGlosarioEstados\(\)/.test(uiInv));
 

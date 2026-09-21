@@ -187,6 +187,22 @@
                         loadConteoPorUsuarioFromFirestore().catch(err =>
                             console.warn('[MultiUser] loadConteoPorUsuarioFromFirestore silenciado:', err)
                         );
+                        // FASE 4A — compras de la semana en curso y la anterior.
+                        // Acotada a propósito (nunca "todas las compras"); ver
+                        // cargarComprasIniciales() en js/88-compras.js.
+                        if (typeof cargarComprasIniciales === 'function') {
+                            cargarComprasIniciales().catch(err =>
+                                console.warn('[Compras] cargarComprasIniciales silenciado:', err)
+                            );
+                        }
+                        // FASE 5 (5B) — reintentar al arrancar cualquier conteo
+                        // huérfano que quedó sin subir (app cerrada offline
+                        // antes de que el reintento de reconexión pudiera correr).
+                        if (typeof reintentarConteosHuerfanosPendientes === 'function') {
+                            reintentarConteosHuerfanosPendientes().catch(err =>
+                                console.warn('[AuditHuerfano] Reintento al arrancar silenciado:', err)
+                            );
+                        }
                     });
                 }
             });

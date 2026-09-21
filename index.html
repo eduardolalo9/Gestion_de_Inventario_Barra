@@ -627,7 +627,7 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
             }
         })();
     </script>
-    <link rel="stylesheet" href="css/estilos.css?v=3.5">
+    <link rel="stylesheet" href="css/estilos.css?v=4.4">
 </head>
 <body class="min-h-screen">
 
@@ -696,6 +696,11 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
          ══════════════════════════════════════════════════════ -->
     <div id="appWrapper">
     <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" class="hidden">
+    <!-- FASE 4B — input propio para compras, deliberadamente separado de
+         #fileInput: un solo input compartido con un "modo" global es la
+         clase de estado que produce el bug de "importé compras y me borró
+         el catálogo" (ver diseño de FASE 4, punto de fricción). -->
+    <input type="file" id="fileInputCompras" accept=".xlsx,.xls" class="hidden">
     <!-- Input oculto para importar respaldo JSON -->
     <input type="file" id="importDataInput" accept=".json" class="hidden">
 
@@ -1132,7 +1137,7 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
             <div id="inv_bloqueBotella">
             <div class="mb-4">
                 <label for="inv_enteras" class="block text-sm font-semibold text-gray-700 mb-2">🍾 Botellas Enteras</label>
-                <input type="number" id="inv_enteras" min="0" step="1" value="0" inputmode="numeric" oninput="if(parseFloat(this.value)<0||isNaN(parseFloat(this.value)))this.value=0;" class="w-full px-4 py-2 bg-white text-gray-900 border-2 border-blue-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center text-base font-bold">
+                <input type="text" id="inv_enteras" inputmode="numeric" value="0" oninput="_sanearEntradaEntero(this)" class="w-full px-4 py-2 bg-white text-gray-900 border-2 border-blue-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center text-base font-bold">
             </div>
             <div class="mb-4">
                 <div class="flex items-center justify-between mb-2">
@@ -1156,10 +1161,10 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
                 <label for="inv_cantidadTotal" class="block text-sm font-semibold text-gray-700 mb-2">
                     📦 Cantidad total <span id="inv_cantidadUnidad" class="text-xs font-normal text-gray-500"></span>
                 </label>
-                <input type="number" id="inv_cantidadTotal" min="0" step="0.001" value="0" inputmode="decimal"
-                    oninput="if(parseFloat(this.value)<0||isNaN(parseFloat(this.value)))this.value=0;"
+                <input type="text" id="inv_cantidadTotal" min="0" step="0.001" inputmode="decimal" value="0"
+                    oninput="_sanearEntradaDecimal(this)"
                     class="w-full px-4 py-2 bg-white text-gray-900 border-2 border-blue-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center text-base font-bold">
-                <p class="text-xs text-gray-400 mt-2">Admite decimales. Ejemplos: 8.65 · 4.5 · 1.245</p>
+                <p class="text-xs text-gray-400 mt-2">Admite decimales, con punto o coma. Ejemplos: 8.65 · 4,5 · 1.245</p>
             </div>
 
             <!-- R1 (regla 16) — El selector "Motivo del cambio" se eliminó por completo.
@@ -1172,30 +1177,33 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
         </div>
     </div>
 
-        <script src="js/00-nucleo.js?v=3.5"></script>
-    <script src="js/10-multiusuario.js?v=3.5"></script>
-    <script src="js/15-ciclo-semanal.js?v=3.5"></script>
-    <script src="js/18-areas-config.js?v=3.5"></script>
-    <script src="js/20-persistencia.js?v=3.5"></script>
-    <script src="js/30-indexeddb.js?v=3.5"></script>
-    <script src="js/40-firestore.js?v=3.5"></script>
-    <script src="js/45-inventario-datos.js?v=3.5"></script>
-    <script src="js/50-roles-permisos.js?v=3.5"></script>
-    <script src="js/60-arranque.js?v=3.5"></script>
-    <script src="js/70-conversion-render.js?v=3.5"></script>
-    <script src="js/75-auditoria-flujo.js?v=3.5"></script>
-    <script src="js/80-buscador.js?v=3.5"></script>
-    <script src="js/85-ui-inventario-fisico.js?v=3.5"></script>
-    <script src="js/88-compras.js?v=3.5"></script>
-    <script src="js/90-ciclo-admin.js?v=3.5"></script>
-    <script src="js/95-exportacion.js?v=3.5"></script>
-    <script src="js/99-window-arranque.js?v=3.5"></script>
+        <script src="js/00-nucleo.js?v=4.4"></script>
+    <script src="js/05-busqueda-motor.js?v=4.4"></script>
+    <script src="js/06-busqueda-ui.js?v=4.4"></script>
+    <script src="js/10-multiusuario.js?v=4.4"></script>
+    <script src="js/15-ciclo-semanal.js?v=4.4"></script>
+    <script src="js/18-areas-config.js?v=4.4"></script>
+    <script src="js/20-persistencia.js?v=4.4"></script>
+    <script src="js/30-indexeddb.js?v=4.4"></script>
+    <script src="js/40-firestore.js?v=4.4"></script>
+    <script src="js/45-inventario-datos.js?v=4.4"></script>
+    <script src="js/50-roles-permisos.js?v=4.4"></script>
+    <script src="js/60-arranque.js?v=4.4"></script>
+    <script src="js/70-conversion-render.js?v=4.4"></script>
+    <script src="js/75-auditoria-flujo.js?v=4.4"></script>
+    <script src="js/80-buscador.js?v=4.4"></script>
+    <script src="js/85-ui-inventario-fisico.js?v=4.4"></script>
+    <script src="js/87-reconteo.js?v=4.4"></script>
+    <script src="js/88-compras.js?v=4.4"></script>
+    <script src="js/90-ciclo-admin.js?v=4.4"></script>
+    <script src="js/95-exportacion.js?v=4.4"></script>
+    <script src="js/99-window-arranque.js?v=4.4"></script>
 
     </div><!-- /#appWrapper -->
 
     <!-- ══════════════════════════════════════════════════════
          AUTH — Lógica de autenticación Firebase
          ══════════════════════════════════════════════════════ -->
-        <script src="js/auth.js?v=3.5"></script>
+        <script src="js/auth.js?v=4.4"></script>
 </body>
 </html>

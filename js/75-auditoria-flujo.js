@@ -20,10 +20,47 @@
         //  AUDITORÍA FÍSICA CIEGA — Funciones de control de flujo
         // ══════════════════════════════════════════════════════════════════════
 
+        // ══════════════════════════════════════════════════════════════════════
+        //  FASE 2A — FINALIZAR CONTEO PROPIO ≠ CERRAR EL ÁREA
+        //  ────────────────────────────────────────────────────────────────────
+        //  Hasta ahora esta única función hacía DOS cosas distintas según
+        //  quién pulsaba el botón: marcaba el conteo propio como terminado
+        //  y, si el que pulsaba era administrador, marcaba ADEMÁS el área
+        //  como completada para TODAS las personas (la línea
+        //  `if (isAdmin()) auditoriaStatus[area] = 'completada';`).
+        //
+        //  Esa mezcla ya causó un defecto documentado más abajo en este
+        //  mismo archivo (la puerta de entrada miraba myAuditoriaStatus
+        //  mientras el administrador operaba sobre auditoriaStatus, de modo
+        //  que "Reabrir" no desbloqueaba a nadie).
+        //
+        //  Ahora son dos operaciones con dos permisos:
+        //    auditoriaFinalizarConteo()  → inventory.closeOwn
+        //    auditoriaCerrarArea(area)   → inventory.closeOther
+        //
+        //  Para el bartender el camino es idéntico al de antes: la línea
+        //  retirada solo se ejecutaba para administradores.
+        // ══════════════════════════════════════════════════════════════════════
         function auditoriaFinalizarConteo() {
             if (!auditoriaAreaActiva) return;
             const area = auditoriaAreaActiva;
             const nombreArea = areasAuditoria[area];
+
+            // FASE 2A — esta función no verificaba NADA: ni permiso, ni
+            // estado del inventario. Cualquier usuario autenticado que
+            // llegara a la pantalla podía finalizar.
+            if (!hasPermission('inventory.closeOwn')) {
+                showNotification('⚠️ No tienes permiso para finalizar el conteo');
+                return;
+            }
+            if (!puedeOperarArea(area)) {
+                showNotification('⚠️ No tienes asignada el área ' + nombreArea);
+                return;
+            }
+            if (_inventarioActivo && _inventarioActivo.estado === 'CERRADO') {
+                showNotification('🔒 El inventario está cerrado');
+                return;
+            }
 
             showConfirm('¿Finalizar conteo de ' + nombreArea + '?\n\nEsto guardará y bloqueará tu conteo del área. Solo el administrador podrá habilitar correcciones.', function() {
                 // Marcar MI área como completada (por usuario, no global)
@@ -52,8 +89,9 @@
                     rol:    currentUserRole || 'user'
                 };
 
-                // Admin también actualiza el status global del área
-                if (isAdmin()) auditoriaStatus[area] = 'completada';
+                // FASE 2A — aquí vivía `if (isAdmin()) auditoriaStatus[area] =
+                // 'completada';`. Cerrar el área para todas las personas es
+                // ahora una acción propia y explícita: auditoriaCerrarArea().
                 auditoriaView       = 'selection';
                 auditoriaAreaActiva = null;
                 isAuditoriaMode     = false;
@@ -98,6 +136,52 @@
             });
         }
 
+        // ══════════════════════════════════════════════════════════════════════
+        //  auditoriaCerrarArea(area) — FASE 2A
+        //  ────────────────────────────────────────────────────────────────────
+        //  Da por terminada un área para TODAS las personas que cuentan en
+        //  ella. No es "finalizar mi conteo" ni es "cerrar el inventario":
+        //  es el escalón intermedio que hasta ahora existía escondido como
+        //  efecto secundario del botón de finalizar.
+        //
+        //  No toca el conteo de nadie: solo marca el estado global del área.
+        //  Reabrirla sigue siendo competencia de inventory.reopenArea.
+        // ══════════════════════════════════════════════════════════════════════
+        function auditoriaCerrarArea(area) {
+            if (!area) return;
+            if (!hasPermission('inventory.closeOther')) {
+                showNotification('⚠️ No tienes permiso para cerrar el área completa');
+                return;
+            }
+            if (_inventarioActivo && _inventarioActivo.estado === 'CERRADO') {
+                showNotification('🔒 El inventario está cerrado');
+                return;
+            }
+            const nombreArea = areasAuditoria[area] || area;
+            if (auditoriaStatus[area] === 'completada') {
+                showNotification('El área ' + nombreArea + ' ya estaba cerrada');
+                return;
+            }
+            showConfirm(
+                '¿Cerrar el área ' + nombreArea + ' para TODAS las personas?\n\n' +
+                'Nadie podrá seguir capturando en esta área hasta que se reabra. ' +
+                'Los conteos ya guardados no se modifican.\n\n¿Continuar?',
+                function() {
+                    auditoriaStatus[area] = 'completada';
+                    saveToLocalStorage();
+                    _registrarEnSyncQueue({
+                        tipo:    'reapertura_almacen',
+                        detalle: 'Cierre de área ' + area + ' para todos los usuarios',
+                        area:    area,
+                        accion:  'cierre_area'
+                    });
+                    showNotification('🔒 Área ' + nombreArea + ' cerrada para todos');
+                    renderTab();
+                }
+            );
+        }
+        window.auditoriaCerrarArea = auditoriaCerrarArea;
+
         function auditoriaVolverSeleccion() {
             auditoriaView = 'selection';
             auditoriaAreaActiva = null;
@@ -134,14 +218,53 @@
         // para _writeChunkedSubcollection (que chunkea por CANTIDAD de items,
         // no por tamaño de un objeto único — por eso se aplana en vez de
         // escribir un solo objeto grande).
+        // ══════════════════════════════════════════════════════════════════════
+        //  _semanaIdDelInventario(inv)
+        //  PASO PREVIO A FASE 3 — defecto H-3
+        //  ────────────────────────────────────────────────────────────────────
+        //  La semana del cierre se calculaba con clasificarRecuento(new Date()),
+        //  es decir con el RELOJ DEL DISPOSITIVO en el instante de pulsar
+        //  cerrar. Cerrar el lunes de madrugada un inventario contado el domingo
+        //  asignaba la semana siguiente. Como "contabilizar" se apoyará en ese
+        //  identificador para arrastrar el stock inicial, el error se heredaría
+        //  desde el primer ciclo y nadie lo notaría hasta cuadrar la semana.
+        //
+        //  Orden de preferencia:
+        //    1. inv.fechaRecuento — la fecha que el administrador eligió en el
+        //       formulario. Es un hecho de negocio, no un accidente del reloj.
+        //    2. La fecha del cierre, como respaldo para el camino antiguo (sin
+        //       formulario), donde fechaRecuento nace en null.
+        //
+        //  Devuelve también el ORIGEN, para que dentro de un año se pueda saber
+        //  de dónde salió la semana de un inventario concreto sin adivinarlo.
+        // ══════════════════════════════════════════════════════════════════════
+        function _semanaIdDelInventario(inv) {
+            if (typeof clasificarRecuento !== 'function') {
+                return { clase: null, origen: 'no_disponible' };
+            }
+            const fechaForm = inv && inv.fechaRecuento;
+            if (fechaForm) {
+                const clase = clasificarRecuento(fechaForm);
+                if (clase && clase.semanaId) return { clase: clase, origen: 'fechaRecuento' };
+            }
+            // Respaldo explícito: queda registrado que NO se usó la fecha del
+            // formulario, en vez de fingir que sí.
+            return { clase: clasificarRecuento(new Date()), origen: 'fechaCierre' };
+        }
+        window._semanaIdDelInventario = _semanaIdDelInventario;
+
         function _construirSnapshotInventario() {
             const registros = [];
             // R4 (reglas 4 y 5) — a qué semana pertenece este cierre.
             // Se calcula UNA vez, aquí, y se congela. Volver a deducirlo después
             // a partir del timestamp daría un resultado distinto si alguien abre
             // el histórico desde un dispositivo en otro huso horario.
-            var _claseR4 = (typeof clasificarRecuento === 'function')
-                           ? clasificarRecuento(new Date()) : null;
+            //
+            // H-3: la fecha ya NO es new Date(). Sale de la fecha de recuento
+            // que eligió el administrador; el reloj del dispositivo es solo el
+            // respaldo, y queda constancia de cuál se usó.
+            var _semana  = _semanaIdDelInventario(_inventarioActivo);
+            var _claseR4 = _semana.clase;
 
             registros.push({
                 tipo: 'meta',
@@ -152,6 +275,8 @@
                 // arrastre del inicial (regla 5) se activa cuando esté lista la
                 // pantalla de inventario físico.
                 semanaId:       _claseR4 ? _claseR4.semanaId : null,
+                // H-3 — 'fechaRecuento' (lo normal) o 'fechaCierre' (respaldo).
+                semanaIdOrigen: _semana.origen,
                 fechaLocal:     _claseR4 ? _claseR4.fecha : null,
                 tipoRecuento:   _claseR4 ? _claseR4.tipo : null,
                 cierraSemana:   _claseR4 ? _claseR4.cierraSemana : null,
@@ -261,6 +386,12 @@
                 showNotification('📴 Sin conexión — conecta a internet antes de cerrar el inventario');
                 return;
             }
+            // RECONTEO — cerrar con un reconteo sin finalizar congelaría los
+            // valores anteriores a las correcciones anotadas.
+            if (typeof _hayReconteoAbierto === 'function' && await _hayReconteoAbierto(_auditoriaSessionId)) {
+                showNotification('⚠️ Hay un reconteo abierto — finalízalo o descártalo antes de cerrar el inventario');
+                return;
+            }
 
             const usuarios = Object.values(allUsersAuditoria);
             const resumenTxt = usuarios.map(function(u) {
@@ -285,20 +416,57 @@
                         const inventoryRef = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
                                                  .collection('inventories').doc(_auditoriaSessionId);
                         const registros = _construirSnapshotInventario();
-                        // El snapshot se escribe ANTES de marcar CERRADO — si
-                        // esto falla, el inventario sigue SINCRONIZADO y el
-                        // admin puede reintentar con seguridad (escribir los
-                        // chunks de nuevo es seguro: _writeChunkedSubcollection
-                        // borra los anteriores antes de escribir).
-                        await _writeChunkedSubcollection(inventoryRef, 'snapshotChunks', registros);
-                        await inventoryRef.update({
+                        const _semanaCierre = _semanaIdDelInventario(_inventarioActivo);
+
+                        // ══════════════════════════════════════════════════════
+                        //  H-1 — CIERRE ATÓMICO
+                        //  ────────────────────────────────────────────────────
+                        //  Antes eran dos await independientes (los fragmentos y
+                        //  luego el cambio de estado), y el escritor de
+                        //  fragmentos eran a su vez dos batches más. Si fallaba
+                        //  entre medias, el inventario quedaba SINCRONIZADO con
+                        //  el snapshot ya escrito. Y el comentario que había
+                        //  aquí afirmaba que reintentar era seguro: NO lo era.
+                        //  Reescribir un fragmento existente es un 'update' para
+                        //  Firestore, y las reglas lo prohíben, así que el
+                        //  reintento moría con permission-denied y el inventario
+                        //  quedaba atascado: ni cerrado ni reabrible.
+                        //
+                        //  Ahora los fragmentos y el paso a CERRADO viajan en UN
+                        //  SOLO batch: o queda todo escrito, o no queda nada.
+                        //  Un fallo deja el inventario exactamente como estaba y
+                        //  el reintento parte de cero.
+                        //
+                        //  Las reglas evalúan cada escritura del batch contra el
+                        //  estado YA CONFIRMADO, así que durante el cierre el
+                        //  inventario todavía es SINCRONIZADO y los fragmentos
+                        //  se crean; en cuanto el batch se confirma, pasa a
+                        //  CERRADO y ya no se le puede añadir nada (H-2).
+                        //  Comprobado contra el emulador real.
+                        // ══════════════════════════════════════════════════════
+                        const batch = _db.batch();
+                        const resSnap = _escribirSnapshotEnBatch(batch, inventoryRef, registros);
+                        if (!resSnap.ok) {
+                            console.error('[InventarioFisico] No se pudo preparar el snapshot:', resSnap);
+                            showNotification(resSnap.motivo === 'demasiados_fragmentos'
+                                ? '❌ El inventario es demasiado grande para cerrarse en una sola operación. Avisa a soporte.'
+                                : '❌ No se pudo preparar el cierre — revisa la conexión');
+                            return;
+                        }
+                        batch.update(inventoryRef, {
                             estado:           'CERRADO',
                             fechaCierre:      Date.now(),
                             cerradoPorUid:    currentUserUid,
                             cerradoPorNombre: (_auth && _auth.currentUser) ? _auth.currentUser.email : currentUserUid,
                             totalProductos:   products.length,
-                            participantesUids: Object.keys(allUsersAuditoria) // ETAPA 15: para filtrar "mis inventarios" barato en el historial, sin leer el snapshot
+                            participantesUids: Object.keys(allUsersAuditoria), // ETAPA 15: para filtrar "mis inventarios" barato en el historial, sin leer el snapshot
+                            // H-3 — la semana queda también en la CABECERA, no
+                            // solo dentro del snapshot: contabilizar necesita
+                            // leerla sin abrir los fragmentos.
+                            semanaId:         _semanaCierre.clase ? _semanaCierre.clase.semanaId : null,
+                            semanaIdOrigen:   _semanaCierre.origen
                         });
+                        await batch.commit();
                         _registrarEnSyncQueue({
                             tipo:         'cierre_inventario_fisico',
                             detalle:      'Inventario Físico #' + numeroParaLog + ' cerrado' + (hayPendientes ? ' (forzoso, con pendientes)' : ''),
@@ -382,6 +550,280 @@
             });
             return agregado;
         }
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  FASE 3 — CONTABILIZAR
+        //  ────────────────────────────────────────────────────────────────────
+        //  Convierte el resultado físico de un inventario CERRADO en el stock
+        //  inicial del ciclo siguiente.
+        //
+        //  Lo que NO hace, y es la mitad del diseño:
+        //   · NO toca el snapshot congelado. Ni un byte.
+        //   · NO toca stockAreas, que es el stock operativo continuo.
+        //   · NO recalcula nada con el catálogo actual: usa los valores que
+        //     quedaron congelados el día del cierre.
+        //
+        //  La idempotencia NO la comprueba el cliente: la garantiza el servidor.
+        //  El documento del inicial se llama como la semana destino y las reglas
+        //  solo permiten crearlo, nunca actualizarlo. Dos administradores
+        //  pulsando a la vez, el segundo recibe permission-denied de Firestore.
+        // ══════════════════════════════════════════════════════════════════════
+
+        // ── Saldos por producto desde el snapshot congelado ──────────────────
+        // Tres pasos: consolidar entre usuarios con la MISMA regla que usa el
+        // Excel del cierre (admin manda; si no, el más reciente), convertir las
+        // onzas a fracción de botella con los datos CONGELADOS, y sumar las
+        // áreas. Decisión D-1: un total por producto, sin desglose de área.
+        //
+        // Usar los datos congelados y no el catálogo actual no es un detalle:
+        // si alguien corrige el peso de una botella en marzo, un inicial de
+        // enero recalculado con el peso nuevo daría otro número.
+        function _saldosDesdeSnapshot(registros) {
+            const meta = (registros || []).filter(function(r) { return r.tipo === 'meta'; })[0] || {};
+            const areas = (Array.isArray(meta.warehousesSnapshot) && meta.warehousesSnapshot.length)
+                          ? meta.warehousesSnapshot.slice()
+                          : AREAS_CONTEO.slice();
+            const productosCongelados = (registros || []).filter(function(r) { return r.tipo === 'producto'; });
+            const usuarios            = (registros || []).filter(function(r) { return r.tipo === 'usuario'; });
+
+            if (productosCongelados.length === 0) {
+                return { ok: false, motivo: 'snapshot_sin_productos' };
+            }
+
+            const conteo = _consolidarConteoCongelado(usuarios, areas, productosCongelados);
+
+            let enCero = 0;
+            const productos = productosCongelados.map(function(p) {
+                let total = 0;
+                areas.forEach(function(area) {
+                    const d = (conteo[p.id] && conteo[p.id][area]) || { enteras: 0, abiertas: [] };
+                    let suma = d.enteras || 0;
+                    const abiertas = d.abiertas || [];
+                    if (tieneConversion(p)) {
+                        abiertas.forEach(function(pesoOz) {
+                            suma += convertirOzAPuntos(pesoOz, p.capacidadMl, p.pesoBotellaLlenaOz);
+                        });
+                    } else {
+                        // Mismo respaldo que el resto del sistema: sin datos de
+                        // conversión, las abiertas ya vienen como fracción.
+                        abiertas.forEach(function(v) { suma += (v || 0); });
+                    }
+                    total += suma;
+                });
+                if (total === 0) enCero++;
+                return { id: p.id, total: total };
+            });
+
+            return {
+                ok: true,
+                productos: productos,
+                areas: areas,
+                enCero: enCero,
+                totalProductos: productos.length
+            };
+        }
+
+        // ── ¿Esta semana ya tiene un inicial? ────────────────────────────────
+        // Distingue dos cosas que NO son lo mismo: "ya lo contabilicé yo"
+        // (éxito, no hay nada que hacer) de "otro inventario ocupa esa semana"
+        // (conflicto real, que se muestra y no se resuelve en silencio).
+        async function _verificarInicialExistente(semanaId, inventoryId) {
+            try {
+                const snap = await _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
+                                      .collection('inventariosIniciales').doc(semanaId).get();
+                if (!snap.exists) return { existe: false };
+                const d = snap.data() || {};
+                const origenId = (d.origen && d.origen.inventoryId) || null;
+                return {
+                    existe: true,
+                    mismoOrigen: origenId === inventoryId,
+                    origenId: origenId,
+                    origenNumero: (d.origen && d.origen.numero) || null,
+                    datos: d
+                };
+            } catch (e) {
+                console.warn('[Contabilizar] No se pudo leer el inicial existente:', e);
+                return { existe: false, error: true };
+            }
+        }
+
+        async function contabilizarInventario(inventoryId, numero) {
+            if (!hasPermission('inventory.post')) {
+                showNotification('⚠️ No tienes permiso para contabilizar inventarios');
+                return;
+            }
+            if (!_db)              { showNotification('📴 Sin conexión a Firestore'); return; }
+            if (!navigator.onLine) { showNotification('📴 Sin conexión — conecta a internet antes de contabilizar'); return; }
+
+            showNotification('⏳ Preparando la contabilización…');
+            const inventoryRef = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
+                                    .collection('inventories').doc(inventoryId);
+            try {
+                const invSnap = await inventoryRef.get();
+                if (!invSnap.exists) { showNotification('❌ No se encontró el inventario'); return; }
+                const inv = invSnap.data() || {};
+
+                if (inv.estado === 'CONTABILIZADO') {
+                    showNotification('ℹ️ Este inventario ya estaba contabilizado'
+                        + (inv.semanaDestino ? ' — semana ' + inv.semanaDestino : ''));
+                    return;
+                }
+                if (inv.estado !== 'CERRADO') {
+                    showNotification('⚠️ Solo se puede contabilizar un inventario CERRADO');
+                    return;
+                }
+
+                // ── La semana destino ────────────────────────────────────────
+                // Decisión N-4: FASE 3 opera sobre inventarios cerrados a partir
+                // del paso previo, que es cuando semanaId empezó a guardarse en
+                // la cabecera. Un inventario anterior se bloquea con un motivo
+                // legible en vez de inventarle una semana.
+                if (!inv.semanaId) {
+                    showNotification('⚠️ Este inventario se cerró antes de que se guardara la semana '
+                        + 'en su cabecera, así que no se puede contabilizar.');
+                    return;
+                }
+                // Decisión N-1: solo un recuento fechado en domingo arrastra.
+                // La regla ya existía en clasificarRecuento(); aquí se explica.
+                const clase = (typeof clasificarRecuento === 'function' && inv.fechaRecuento)
+                              ? clasificarRecuento(inv.fechaRecuento) : null;
+                if (!clase || !clase.cierraSemana) {
+                    showNotification('⚠️ Solo se contabiliza un recuento fechado en DOMINGO. '
+                        + 'Este está fechado ' + (inv.fechaRecuento || 'sin fecha de recuento')
+                        + ', y un corte a media semana partiría el ciclo en dos.');
+                    return;
+                }
+
+                const semanaDestino = (typeof semanaSiguiente === 'function')
+                                      ? semanaSiguiente(inv.fechaRecuento) : null;
+                if (!semanaDestino) { showNotification('❌ No se pudo calcular la semana destino'); return; }
+
+                // ── ¿Ya está hecho? ──────────────────────────────────────────
+                const previo = await _verificarInicialExistente(semanaDestino, inventoryId);
+                if (previo.existe && previo.mismoOrigen) {
+                    showNotification('ℹ️ Este inventario ya generó el inicial de la semana ' + semanaDestino);
+                    return;
+                }
+                if (previo.existe && !previo.mismoOrigen) {
+                    showNotification('🛑 La semana ' + semanaDestino + ' ya tiene un inicial generado por el '
+                        + 'Inventario Físico #' + (previo.origenNumero || previo.origenId)
+                        + '. No se sobrescribe nada.');
+                    return;
+                }
+
+                // ── El físico congelado ──────────────────────────────────────
+                const registros = await _readChunkedSubcollection(inventoryRef, 'snapshotChunks');
+                if (!registros || registros.length === 0) {
+                    showNotification('❌ No se encontró el snapshot de este inventario');
+                    return;
+                }
+                const saldos = _saldosDesdeSnapshot(registros);
+                if (!saldos.ok) {
+                    showNotification('❌ El snapshot no contiene productos — no se puede contabilizar');
+                    return;
+                }
+
+                const inicial = inicialDesdeCierre({
+                    fecha:       inv.fechaRecuento,
+                    inventoryId: inventoryId,
+                    numero:      inv.numero,
+                    productos:   saldos.productos
+                });
+                if (!inicial) {
+                    showNotification('⚠️ El cierre no arrastra a la semana siguiente (no cierra semana)');
+                    return;
+                }
+
+                const totalUnidades = saldos.productos.reduce(function(a, p) { return a + p.total; }, 0);
+
+                showConfirm(
+                    '📘 CONTABILIZAR INVENTARIO FÍSICO #' + (inv.numero || numero) + '\n\n' +
+                    'Recuento: ' + inv.fechaRecuento + '\n' +
+                    'Semana destino: ' + inicial.semanaId + '\n' +
+                    'Productos: ' + inicial.totalProductos +
+                    (saldos.enCero ? '  (' + saldos.enCero + ' en cero)' : '') + '\n' +
+                    'Total de unidades: ' + (Math.round(totalUnidades * 1000) / 1000) + '\n\n' +
+                    'El resultado físico pasará a ser el stock inicial de esa semana.\n\n' +
+                    'El inventario cerrado NO se modifica: su conteo queda intacto.\n' +
+                    'El inicial es INMUTABLE — una vez creado no se puede corregir ni deshacer.\n\n' +
+                    '¿Confirmar?',
+                    async function() {
+                        showNotification('⏳ Contabilizando…');
+                        const inicialRef = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
+                                              .collection('inventariosIniciales').doc(inicial.semanaId);
+                        try {
+                            // Un solo batch: o queda todo, o no queda nada.
+                            const batch = _db.batch();
+                            batch.set(inicialRef, {
+                                semanaId:         inicial.semanaId,
+                                origen:           inicial.origen,
+                                saldos:           inicial.saldos,
+                                totalProductos:   inicial.totalProductos,
+                                productosEnCero:  saldos.enCero,
+                                areas:            saldos.areas,
+                                contabilizadoPor: currentUserUid,
+                                contabilizadoEn:  Date.now(),
+                                semanaOrigenDato: inv.semanaIdOrigen || 'cabecera'
+                            });
+                            batch.update(inventoryRef, {
+                                estado:           'CONTABILIZADO',
+                                contabilizadoEn:  Date.now(),
+                                contabilizadoPor: currentUserUid,
+                                semanaDestino:    inicial.semanaId
+                            });
+                            await batch.commit();
+
+                            _registrarEnSyncQueue({
+                                tipo:         'contabilizacion',
+                                detalle:      'Inventario Físico #' + (inv.numero || numero)
+                                              + ' contabilizado → inicial de la semana ' + inicial.semanaId,
+                                inventoryId:  inventoryId,
+                                numero:       inv.numero || numero,
+                                semanaOrigen: inicial.origen.semanaCerrada,
+                                semanaDestino: inicial.semanaId,
+                                totalProductos: inicial.totalProductos,
+                                motivo:       'Contabilización de Inventario Físico'
+                            });
+
+                            showNotification('✅ Contabilizado — el inicial de la semana '
+                                + inicial.semanaId + ' quedó registrado');
+                            _historialInventarios = null;
+                            renderTab();
+                        } catch (err) {
+                            // ── El manejo que hace que la idempotencia funcione ──
+                            // Un permission-denied aquí NO es necesariamente un
+                            // fallo: puede ser que la operación ya se completara
+                            // en un intento anterior cuya confirmación se perdió.
+                            // Se distingue leyendo el documento.
+                            console.error('[Contabilizar] Error:', err);
+                            if (err && err.code === 'permission-denied') {
+                                const post = await _verificarInicialExistente(inicial.semanaId, inventoryId);
+                                if (post.existe && post.mismoOrigen) {
+                                    showNotification('✅ Ya estaba contabilizado — la operación se había '
+                                        + 'completado antes. No se duplicó nada.');
+                                    _historialInventarios = null;
+                                    renderTab();
+                                    return;
+                                }
+                                if (post.existe && !post.mismoOrigen) {
+                                    showNotification('🛑 Otro inventario ocupó la semana ' + inicial.semanaId
+                                        + ' mientras confirmabas. No se sobrescribió nada.');
+                                    return;
+                                }
+                                showNotification('❌ El servidor rechazó la contabilización — revisa tus permisos');
+                                return;
+                            }
+                            showNotification('❌ No se pudo contabilizar — revisa la conexión e inténtalo de nuevo');
+                        }
+                    }
+                );
+            } catch (err) {
+                console.error('[Contabilizar] Error preparando:', err);
+                showNotification('❌ No se pudo preparar la contabilización — revisa la conexión');
+            }
+        }
+        window.contabilizarInventario = contabilizarInventario;
+        window._saldosDesdeSnapshot   = _saldosDesdeSnapshot;
 
         async function exportarInventarioCerrado(inventoryId, numero) {
             if (!hasPermission('inventory.export')) {
@@ -849,104 +1291,23 @@
         }
 
         // ── BÚSQUEDA EN CONTEO ────────────────────────────────────────────────
-        // ── Utilidad: extrae bigramas de un string ────────────────────────────────
-        function _csBigrams(str) {
-            const b = [];
-            for (let i = 0; i < str.length - 1; i++) b.push(str.slice(i, i + 2));
-            return b;
-        }
+        // FASE 6 — La puntuación difusa que vivía aquí pasó al motor unificado
+        // (js/05-busqueda-motor.js) y la barra a js/06-busqueda-ui.js. Estas
+        // tres funciones quedan como puentes con el nombre de siempre.
 
-        /**
-         * Búsqueda fuzzy/multi-palabra.
-         * Normaliza acentos, divide la query en palabras y para cada una:
-         *   10pts  → substring exacto en cualquier campo
-         *    7pts  → prefijo de token (startsWith)
-         *   1-6pts → similitud de bigramas ≥ 0.45 (tolerancia a typos)
-         *    0pts  → sin coincidencia → el producto se descarta
-         * Retorna score > 0 si hay match, 0 si no.
-         */
+        /** @deprecated usar el motor: devuelve > 0 si el producto coincide. */
         function _csFuzzyMatch(product, query) {
             if (!query) return 1;
-            const norm = s => (s || '').toLowerCase()
-                .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-            const words = norm(query.trim()).split(/\s+/).filter(Boolean);
-            if (!words.length) return 1;
-
-            const fields = [norm(product.name), norm(product.id), norm(product.group)];
-            const haystack = fields.join(' ');
-            const tokens   = haystack.split(/\s+/).filter(Boolean);
-
-            let totalScore = 0;
-            for (const word of words) {
-                // Nota: words ya fue filtrado con .filter(Boolean); la guarda redundante se eliminó.
-                let wordScore = 0;
-
-                // Substring exacto (mejor)
-                if (haystack.includes(word)) {
-                    wordScore = 10;
-                }
-                // Prefijo de algún token
-                else if (tokens.some(t => t.startsWith(word))) {
-                    wordScore = 7;
-                }
-                // Tolerancia a typos vía bigramas (solo para palabras ≥ 3 chars)
-                else if (word.length >= 3) {
-                    const qBig = _csBigrams(word);
-                    let bestSim = 0;
-                    for (const token of tokens) {
-                        if (Math.abs(token.length - word.length) > 3) continue;
-                        const tBig   = _csBigrams(token);
-                        const common = qBig.filter(b => tBig.includes(b)).length;
-                        if (common === 0) continue;
-                        const sim = (2 * common) / (qBig.length + tBig.length);
-                        if (sim > bestSim) bestSim = sim;
-                    }
-                    if (bestSim >= 0.45) wordScore = Math.max(1, Math.round(bestSim * 6));
-                }
-
-                // Si alguna palabra no matchea, el producto queda excluido
-                if (wordScore === 0) return 0;
-                totalScore += wordScore;
-            }
-            return totalScore;
+            return _motorProductos.buscar([product], query).coincidencias;
         }
 
-        /**
-         * Resalta en el nombre del producto TODAS las palabras de la query.
-         * Soporta búsqueda multi-palabra: "tequila rep" resalta ambas palabras.
-         */
+        /** @deprecated usar resaltarBusqueda(): ya escapa y entiende acentos. */
         function highlightConteoMatch(name, query) {
-            if (!name) return '';
-            if (!query) return escapeHtml(name);
-            const words = query.trim().split(/\s+/).filter(w => w.length >= 2);
-            if (!words.length) return escapeHtml(name);
-            let result = escapeHtml(name);
-            for (const word of words) {
-                const esc = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                try {
-                    result = result.replace(new RegExp('(' + esc + ')', 'gi'),
-                        '<mark class="csb-match">$1</mark>');
-                } catch (_) { /* regex inválida — ignorar */ }
-            }
-            return result;
+            return resaltarBusqueda(name, query);
         }
 
-        /**
-         * updateConteoSearch — con debounce (180ms) y skip si el término no cambió.
-         * Restaura foco al input después del render (manejado por _getElementSelector via id).
-         */
         function updateConteoSearch(val) {
-            const next = (val || '').trimStart();
-            clearTimeout(_csSearchTimer);
-            _csSearchTimer = setTimeout(function() {
-                const trimmed = next.trimEnd();
-                if (trimmed === _conteoSearchTerm) return; // sin cambio → no re-render
-                _conteoSearchTerm = trimmed;
-                // Actualizar clase del wrapper sin esperar re-render completo
-                const wrap = document.getElementById('csb-wrap');
-                if (wrap) wrap.classList.toggle('csb-wrap--active', !!_conteoSearchTerm);
-                renderTab();
-            }, 180);
+            BusquedaUI.establecer('conteo', val);
         }
 
         // ══════════════════════════════════════════════════════════════════════
@@ -1086,6 +1447,16 @@
                 color:    '#4ade80',
                 fondo:    'rgba(74,222,128,.12)',
                 texto:    'Cerrado e inmutable. Queda como histórico y nadie puede modificarlo, ni el administrador.'
+            },
+            // FASE 3 — el estado nuevo TAMBIÉN va aquí. Sin esta entrada el
+            // historial mostraba "CONTABILIZADO" y el glosario seguía
+            // explicando solo dos estados: la pantalla decía una cosa y la
+            // ayuda otra. Lo detectó la comprobación de alcance de R7.
+            CONTABILIZADO: {
+                etiqueta: 'Contabilizado',
+                color:    '#818cf8',
+                fondo:    'rgba(129,140,248,.12)',
+                texto:    'Su resultado ya es el stock inicial de la semana siguiente. Además de inmutable, no se puede volver a contabilizar.'
             }
         };
 

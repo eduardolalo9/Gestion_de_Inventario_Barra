@@ -13,6 +13,14 @@
             orders     = safeGet('inventarioApp_orders',     []);
             inventories = safeGet('inventarioApp_inventories', []);
             cart       = safeGet('inventarioApp_cart',       []);
+            // FASE 4 — compras (el hecho), movimientos (el efecto) y el último
+            // costo conocido por producto. Ver js/00-nucleo.js para la forma de
+            // cada uno; se recargan de Firestore al arrancar (cargarComprasIniciales,
+            // js/88-compras.js) así que esto es solo el respaldo local mientras
+            // esa carga termina o si arranca sin red.
+            compras       = safeGet('inventarioApp_compras',       []);
+            movimientos   = safeGet('inventarioApp_movimientos',   []);
+            costosUltimos = safeGet('inventarioApp_costosUltimos', {});
 
             // FIX-CONCURRENCIA: restaurar tombstones de borrado (ver _mergeArrayByIdPreferLocal)
             const rawDelProd = safeGet('inventarioApp_deletedProductIds',   []);
@@ -36,7 +44,12 @@
             if (storedTab)    activeTab     = storedTab;
             if (storedGroup)  selectedGroup = storedGroup;
             if (storedArea)   selectedArea  = storedArea;
-            if (storedSearch) searchTerm    = storedSearch;
+            // FASE 6 — la búsqueda del catálogo ya NO se restaura al abrir la app.
+            // Reaparecer con la lista filtrada por algo que se escribió ayer hacía
+            // creer que faltaban productos (y hasta FASE 6 ese mismo texto filtraba
+            // en silencio el conteo). Lo que se recuerda ahora son las búsquedas
+            // recientes, que se ofrecen pero no se aplican solas.
+            void storedSearch;
 
             const storedExpanded = safeGet('inventarioApp_expandedInventories', []);
             expandedInventories = new Set(Array.isArray(storedExpanded) ? storedExpanded : []);
@@ -171,29 +184,173 @@
             }
             await writeBatch.commit();
 
-            // Eliminar docs obsoletos: chunks con índice mayor al nuevo total
-            // y cualquier doc temporal "new_chunk_N" que haya quedado de la versión anterior.
-            const existingSnap = await colRef.get();
-            const toDelete = [];
-            existingSnap.forEach(d => {
-                if (d.id.startsWith('new_')) {
-                    // Residuo de versión anterior con bug — eliminar siempre
-                    toDelete.push(d.ref);
-                } else {
-                    const idx = parseInt(d.id.replace('chunk_', ''), 10);
-                    if (isNaN(idx) || idx >= totalChunks) {
-                        // Chunk de exceso (había más chunks antes) — eliminar
-                        toDelete.push(d.ref);
+            // FASE 7 (S1) — Los fragmentos sobrantes (índice ≥ totalChunks, o
+            // residuos "new_*" de la versión vieja) YA NO los borra cualquier
+            // dispositivo: las reglas reservan el borrado a administración.
+            // No hace falta borrarlos para que desaparezcan: la lectura
+            // (_readChunkedSubcollection) solo toma chunk_0 … chunk_{T-1},
+            // con T = totalChunks de chunk_0, que se reescribe en CADA
+            // escritura. El admin los limpia cuando le toca sincronizar.
+            //
+            // La limpieza es de mejor esfuerzo: si falla (sin permiso, sin
+            // red), la sincronización NO se da por fallida, porque los datos
+            // ya quedaron escritos en el primer lote.
+            if (typeof isAdmin === 'function' && isAdmin()) {
+                try {
+                    const existingSnap = await colRef.get();
+                    const toDelete = [];
+                    existingSnap.forEach(d => {
+                        if (d.id.startsWith('new_')) {
+                            toDelete.push(d.ref);
+                        } else {
+                            const idx = parseInt(d.id.replace('chunk_', ''), 10);
+                            if (isNaN(idx) || idx >= totalChunks) toDelete.push(d.ref);
+                        }
+                    });
+                    if (toDelete.length > 0) {
+                        const delBatch = _db.batch();
+                        toDelete.forEach(ref => delBatch.delete(ref));
+                        await delBatch.commit();
                     }
+                } catch (e) {
+                    console.warn('[Firebase][Chunk] Limpieza de fragmentos sobrantes pospuesta:', e && (e.code || e.message));
                 }
-            });
-            if (toDelete.length > 0) {
-                const delBatch = _db.batch();
-                toDelete.forEach(ref => delBatch.delete(ref));
-                await delBatch.commit();
             }
 
             console.info('[Firebase][Chunk] ' + subcollName + ' → ' + totalChunks + ' chunk(s) escritos correctamente.');
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  _escribirSnapshotEnBatch(batch, docRef, registros)
+        //  PASO PREVIO A FASE 3 — defecto H-1
+        //  ────────────────────────────────────────────────────────────────────
+        //  El snapshot del Inventario Físico NO puede usar
+        //  _writeChunkedSubcollection(). Esa función sirve a ordersChunks e
+        //  inventoriesChunks, donde sobrescribir es legítimo, y hace dos cosas
+        //  que en snapshotChunks son ilegales: set() sobre documentos que ya
+        //  existen (en Firestore eso es un 'update', prohibido por
+        //  firestore.rules) y un segundo batch de borrado (también prohibido).
+        //
+        //  El resultado era un defecto silencioso y grave: si el cierre fallaba
+        //  a mitad, el comentario del código afirmaba que reintentar era
+        //  seguro, y NO lo era. El reintento chocaba con permission-denied y el
+        //  inventario quedaba atascado —ni cerrado ni reabrible— con un
+        //  snapshot parcial.
+        //
+        //  Esta función no escribe: AÑADE las operaciones a un batch que
+        //  construye quien llama, para que los fragmentos y el cambio de estado
+        //  a CERRADO viajen en una sola operación atómica. Así un fallo no deja
+        //  nada escrito y el reintento parte siempre de cero.
+        //
+        //  Solo crea. Nunca borra, nunca sobrescribe.
+        // ══════════════════════════════════════════════════════════════════════
+        const SNAPSHOT_CHUNK_SIZE = 80;   // mismo tamaño que el resto del sistema
+        const SNAPSHOT_MAX_OPS    = 450;  // margen bajo el límite de 500 de Firestore
+
+        function _escribirSnapshotEnBatch(batch, docRef, registros) {
+            if (!_db || !docRef || !batch) return { ok: false, motivo: 'sin_referencia' };
+            if (!Array.isArray(registros)) registros = [];
+
+            const colRef      = docRef.collection('snapshotChunks');
+            const totalChunks = Math.max(1, Math.ceil(registros.length / SNAPSHOT_CHUNK_SIZE));
+
+            // El batch lleva además el update del inventario a CERRADO, por eso
+            // se reserva una operación. Con 424 productos salen 6 fragmentos;
+            // el margen alcanza para unas 36.000 filas de snapshot. Si alguna
+            // vez se superara, es mejor fallar aquí con un motivo claro que
+            // recibir un error opaco de Firestore a mitad del cierre.
+            if (totalChunks + 1 > SNAPSHOT_MAX_OPS) {
+                return { ok: false, motivo: 'demasiados_fragmentos', totalChunks: totalChunks };
+            }
+
+            for (let i = 0; i < totalChunks; i++) {
+                const chunk = registros.slice(i * SNAPSHOT_CHUNK_SIZE, (i + 1) * SNAPSHOT_CHUNK_SIZE);
+                batch.set(colRef.doc('chunk_' + i), {
+                    items:       chunk,
+                    chunkIndex:  i,
+                    totalChunks: totalChunks,
+                    _updatedAt:  Date.now()
+                });
+            }
+            return { ok: true, totalChunks: totalChunks, totalRegistros: registros.length };
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  FASE 4 — COMPRAS: contador, batch por folio, último costo
+        //  ────────────────────────────────────────────────────────────────────
+        //  compras/{compraId} y movimientos/{movId} viven a nivel RAÍZ de
+        //  Firestore (no bajo inventarioApp/{FIRESTORE_DOC_ID}): no son datos
+        //  por sucursal, son el libro único del negocio. contadores/compras y
+        //  costos/ultimos siguen el mismo criterio — ver firestore.rules y
+        //  claude/fase4-diseno-compras-2026-09-20.md §2.1.
+        // ══════════════════════════════════════════════════════════════════════
+        const COMPRA_MAX_OPS = 450; // mismo margen que SNAPSHOT_MAX_OPS
+
+        /**
+         * _obtenerSiguienteFolioCompra()
+         * Solo para captura MANUAL: un folio interno correlativo cuando no hay
+         * uno de SAP que copiar. La importación de Excel nunca la usa — ese
+         * folio ya viene en el archivo. Mismo patrón que
+         * _obtenerSiguienteNumeroInventario (js/45-inventario-datos.js:493):
+         * runTransaction() hace que dos capturas casi simultáneas nunca
+         * reciban el mismo número.
+         */
+        async function _obtenerSiguienteFolioCompra() {
+            const contadorRef = _db.collection('contadores').doc('compras');
+            return _db.runTransaction(async function(tx) {
+                const snap = await tx.get(contadorRef);
+                const anterior = (snap.exists && typeof snap.data().ultimoNumero === 'number')
+                    ? snap.data().ultimoNumero : 0;
+                const nuevo = anterior + 1;
+                tx.set(contadorRef, { ultimoNumero: nuevo }, { merge: true });
+                return nuevo;
+            });
+        }
+
+        /**
+         * _escribirCompraEnBatch(batch, compra, asientos)
+         * Solo AÑADE operaciones al batch que arma quien llama — nunca hace
+         * commit. Mismo contrato que _escribirSnapshotEnBatch: si el batch
+         * falla, no queda nada escrito a medias, y reintentar es seguro porque
+         * el id de la compra y el de cada asiento son deterministas — el
+         * servidor rechaza los que ya existen (firestore.rules, "compras" y
+         * "movimientos": create sin update ni delete).
+         */
+        function _escribirCompraEnBatch(batch, compra, asientos) {
+            if (!_db || !batch || !compra || !compra.compraId) {
+                return { ok: false, motivo: 'sin_referencia' };
+            }
+            if (!Array.isArray(asientos)) asientos = [];
+
+            const totalOps = 1 + asientos.length; // el documento de compra + un asiento por línea
+            if (totalOps > COMPRA_MAX_OPS) {
+                return { ok: false, motivo: 'demasiadas_lineas', totalOps: totalOps };
+            }
+
+            batch.set(_db.collection('compras').doc(compra.compraId), compra);
+            asientos.forEach(function(asiento) {
+                batch.set(_db.collection('movimientos').doc(asiento.movId), asiento);
+            });
+
+            return { ok: true, totalOps: totalOps };
+        }
+
+        /**
+         * _actualizarUltimosCostos(mapa)
+         * Una sola escritura con merge sobre costos/ultimos — nunca reescribe
+         * el catálogo (§2.5 del diseño de FASE 4). `mapa` es
+         * { productoId: { costo, fecha, folio, compraId } }; con merge, cada
+         * importación solo toca los productos que trajo, sin pisar el resto
+         * (Firestore hace merge recursivo de mapas anidados con set(...,{merge:true})).
+         */
+        async function _actualizarUltimosCostos(mapa) {
+            if (!_db || !mapa || typeof mapa !== 'object') return;
+            const claves = Object.keys(mapa);
+            if (claves.length === 0) return;
+            const datos = {};
+            claves.forEach(function(pid) { datos[pid] = mapa[pid]; });
+            await _db.collection('costos').doc('ultimos').set({ productos: datos }, { merge: true });
+            costosUltimos = Object.assign({}, costosUltimos, datos);
         }
 
         /**
@@ -208,9 +365,23 @@
             try {
                 const snap = await docRef.collection(subcollName).orderBy('chunkIndex').get();
                 if (snap.empty) return [];
+                // FASE 7 (S1) — solo cuentan chunk_0 … chunk_{T-1}, donde T es
+                // el totalChunks que dejó la ÚLTIMA escritura en chunk_0 (se
+                // reescribe siempre). Antes se leía todo lo que hubiera: un
+                // fragmento sobrante no borrado devolvía pedidos o conteos ya
+                // eliminados. Ahora que solo el admin borra, esta es la única
+                // garantía de que un sobrante no resucita nada.
+                let total = null;
+                snap.forEach(d => {
+                    if (d.id === 'chunk_0' && Number.isInteger(d.data().totalChunks)) total = d.data().totalChunks;
+                });
                 const result = [];
                 snap.forEach(d => {
-                    const items = d.data().items;
+                    const data = d.data();
+                    if (!/^chunk_\d+$/.test(d.id)) return;                      // residuos new_*
+                    if (d.id !== 'chunk_' + data.chunkIndex) return;             // id y contenido deben coincidir
+                    if (total !== null && !(data.chunkIndex < total)) return;    // sobrante de una escritura anterior
+                    const items = data.items;
                     if (Array.isArray(items)) items.forEach(item => result.push(item));
                 });
                 return result;
@@ -691,8 +862,8 @@
         // consola (migrarStockAreasAProductos()), no automáticamente.
         async function migrarStockAreasAProductos() {
             const docRef = _docPrincipal();
-            if (!_db || !docRef || !isAdmin()) {
-                console.warn('[Migración] Requiere admin autenticado con conexión.');
+            if (!_db || !docRef || !hasPermission('settings.update')) {
+                console.warn('[Migración] Requiere permiso settings.update y conexión.');
                 return { ok: false };
             }
             const areasConocidas = AREAS_CONTEO;
@@ -1109,6 +1280,11 @@
             try {
                 // FIX 1 CRÍTICO: Leer de myAuditoriaConteo (conteo propio del usuario)
                 // y NO de auditoriaConteo (vista agregada del admin, calculada en memoria).
+                // FASE 2B — AQUÍ SE DEJA isAdmin() A PROPÓSITO. Esta no es una
+                // ruta de lectura sino de ESCRITURA: decide qué sube este
+                // dispositivo a su propio documento. Cambiar el criterio no
+                // aportaría privacidad (nadie lee datos ajenos aquí) y sí
+                // alteraría qué se guarda para un supervisor con viewAll.
                 const conteoFuente = isAdmin() ? auditoriaConteo : myAuditoriaConteo;
                 const productosConDatos = products.filter(p =>
                     conteoFuente[p.id] && conteoFuente[p.id][area]
@@ -1167,6 +1343,17 @@
          */
         async function _cargarYAgeregarConteos(area) {
             if (!_db || !navigator.onLine) return;
+            // ── FASE 2B — CONTEO CIEGO ────────────────────────────────────
+            // Esta función descarga el conteo de TODOS los dispositivos, es
+            // decir el de otras personas. Hasta ahora se ejecutaba para
+            // cualquier usuario: un bartender se bajaba el conteo de sus
+            // compañeros al arranque y después de subir su área, y no lo
+            // mostraba en ninguna parte — lo descargaba para nada.
+            //
+            // Se corta AQUÍ, en la consulta, no solo en la regla: si se
+            // dejara correr, la regla nueva la rechazaría y el dispositivo
+            // acumularía errores de permisos en cada arranque.
+            if (!puedeVerConteosAjenos()) return;
             try {
                 const dispositivosSnap = await _db
                     .collection('inventarioApp')
@@ -1363,9 +1550,139 @@
     }
 }
 
+// ══════════════════════════════════════════════════════════════════════
+//  FASE 5 (5B) — CONTEO DE AUDITORÍA HUÉRFANO
+//  ────────────────────────────────────────────────────────────────────
+//  Escenario: el admin abre un Inventario Físico nuevo mientras este
+//  dispositivo todavía tiene conteo sin confirmar contra el servidor
+//  (_auditSyncPending === true). Ese conteo NO se puede simplemente
+//  subir a userAuditoria/{uid} en ese momento: handleAuditSessionChange
+//  ya reasignó _auditoriaSessionId a la sesión NUEVA antes de llegar
+//  aquí, así que un set() con esa variable mezclaría conteo de la
+//  semana anterior con el inventario recién abierto — un error de
+//  negocio, no solo técnico.
+//
+//  En vez de eso, se archiva aparte, con el sessionId VIEJO explícito
+//  (siempre el que el llamador pasa, nunca _auditoriaSessionId), en un
+//  documento inmutable que solo puede leer quien tiene permiso de
+//  reabrir áreas (firestore.rules: conteosAuditoriaHuerfanos). Nunca se
+//  mezcla automáticamente con el inventario nuevo — mezclar conteos de
+//  dos inventarios distintos sería un error de negocio incluso si fuera
+//  técnicamente posible.
+// ══════════════════════════════════════════════════════════════════════
+const AUDIT_HUERFANO_KEY = 'inventarioApp_conteoHuerfanoPendiente';
+
+function _construirConteoHuerfano(sessionIdViejo) {
+    return {
+        uid:         currentUserUid,
+        sessionId:   sessionIdViejo,
+        conteo:      JSON.parse(JSON.stringify(myAuditoriaConteo || {})),
+        status:      JSON.parse(JSON.stringify(myAuditoriaStatus || {})),
+        finalizadas: (typeof myAuditoriaFinalizadas !== 'undefined' && myAuditoriaFinalizadas)
+                     ? JSON.parse(JSON.stringify(myAuditoriaFinalizadas)) : {},
+        capturadoEn: Date.now()
+    };
+}
+
+function _conteoHuerfanoTieneContenido(payload) {
+    if (!payload) return false;
+    if (payload.conteo && Object.keys(payload.conteo).length > 0) return true;
+    if (payload.status && Object.keys(payload.status).some(function(k) { return payload.status[k] === 'completada'; })) return true;
+    if (payload.finalizadas && Object.keys(payload.finalizadas).length > 0) return true;
+    return false;
+}
+
+/**
+ * Punto de entrada llamado por handleAuditSessionChange() justo antes de
+ * vaciar myAuditoriaConteo. No bloquea el reset: es responsabilidad del
+ * llamador seguir adelante pase lo que pase aquí — la preservación del
+ * dato no debe retrasar que el bartender pueda empezar a contar la
+ * sesión nueva.
+ */
+async function _archivarConteoHuerfanoSiAplica(sessionIdViejo) {
+    if (!currentUserUid || !sessionIdViejo) return;
+    // Solo archivar si había algo sin confirmar. Sin esta guarda, cada
+    // primer arranque (o cada cambio de sesión ya sincronizado a tiempo)
+    // crearía un documento huérfano vacío.
+    if (!_auditSyncPending) return;
+
+    const payload = _construirConteoHuerfano(sessionIdViejo);
+    if (!_conteoHuerfanoTieneContenido(payload)) return;
+
+    showNotification('⚠️ Se abrió un nuevo inventario antes de confirmar tu conteo anterior — se guardó aparte. Avísale al administrador.');
+
+    if (typeof _registrarEnSyncQueue === 'function') {
+        _registrarEnSyncQueue({
+            tipo:         'conteo_auditoria_huerfano',
+            detalle:      'Conteo de la sesión ' + sessionIdViejo + ' no se confirmó antes de que se abriera una nueva',
+            valorAntes:   null,
+            valorDespues: JSON.stringify({ sessionId: sessionIdViejo, uid: currentUserUid }),
+            motivo:       'Cambio de sesión de auditoría con sincronización pendiente'
+        });
+    }
+
+    await _intentarSubirConteoHuerfano(payload);
+}
+
+async function _intentarSubirConteoHuerfano(payload) {
+    if (!_db || !navigator.onLine) {
+        _encolarConteoHuerfanoLocal(payload);
+        return;
+    }
+    try {
+        const ref = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
+                       .collection('conteosAuditoriaHuerfanos')
+                       .doc(payload.uid + '_' + payload.sessionId);
+        await ref.set(payload);
+        _quitarConteoHuerfanoLocal(payload);
+        console.info('[AuditHuerfano] Conteo huérfano archivado ✓ sesión', payload.sessionId);
+    } catch (err) {
+        console.warn('[AuditHuerfano] No se pudo archivar de inmediato, se reintentará:', err);
+        _encolarConteoHuerfanoLocal(payload);
+    }
+}
+
+function _leerColaConteosHuerfanos() {
+    try {
+        const raw = localStorage.getItem(AUDIT_HUERFANO_KEY);
+        return raw ? JSON.parse(raw) : [];
+    } catch (_) { return []; }
+}
+
+function _encolarConteoHuerfanoLocal(payload) {
+    try {
+        const cola = _leerColaConteosHuerfanos();
+        const clave = payload.uid + '_' + payload.sessionId;
+        if (!cola.some(function(p) { return (p.uid + '_' + p.sessionId) === clave; })) {
+            cola.push(payload);
+            localStorage.setItem(AUDIT_HUERFANO_KEY, JSON.stringify(cola));
+        }
+    } catch (_) {}
+}
+
+function _quitarConteoHuerfanoLocal(payload) {
+    try {
+        const clave = payload.uid + '_' + payload.sessionId;
+        const cola = _leerColaConteosHuerfanos().filter(function(p) {
+            return (p.uid + '_' + p.sessionId) !== clave;
+        });
+        localStorage.setItem(AUDIT_HUERFANO_KEY, JSON.stringify(cola));
+    } catch (_) {}
+}
+
+/** Reintenta subir cualquier conteo huérfano que quedó pendiente de una
+ *  sesión anterior del navegador (offline en el momento del archivo).
+ *  Se llama al reconectar y al arrancar — mismo patrón que _auditSyncPending. */
+async function reintentarConteosHuerfanosPendientes() {
+    const cola = _leerColaConteosHuerfanos();
+    for (const payload of cola) {
+        await _intentarSubirConteoHuerfano(payload);
+    }
+}
+
     /**
      * Escucha el doc propio del usuario en userAuditoria/{myUid}
          * para detectar desbloqueos otorgados por el admin en tiempo real.
          */
 
-        /** Helper: reiniciar el conteo propio del usuario (FIX 9) */
+        /** Helper: reiniciar el conteo propio del usuario (FIX 9) */

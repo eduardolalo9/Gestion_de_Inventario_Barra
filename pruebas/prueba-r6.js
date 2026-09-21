@@ -50,6 +50,14 @@ function nuevoEntorno(esAdmin) {
         inventarioConteo: {}, myAuditoriaConteo: {},
         _inventarioActivo: null,
         isAdmin: function() { return esAdmin !== false; },
+        // FASE 2A — el módulo de áreas dejó de preguntar "¿eres admin?" y
+        // ahora pregunta por un permiso concreto (warehouses.*). En este
+        // entorno de prueba el administrador los tiene todos, igual que en
+        // la aplicación real, donde el comodín '*' se resuelve antes que
+        // cualquier otra regla.
+        hasPermission: function(p) {
+            return esAdmin !== false && /^warehouses\./.test(p);
+        },
         localStorage: (function() {
             const m = {};
             return { getItem: k => (k in m ? m[k] : null),

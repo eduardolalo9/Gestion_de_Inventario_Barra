@@ -56,7 +56,7 @@
                         if (data._auditoriaSessionId) _auditoriaSessionId = data._auditoriaSessionId;
 
                         activeTab = data.activeTab || 'inicio';
-                        searchTerm = data.searchTerm || '';
+                        searchTerm = '';   // FASE 6: un respaldo no trae la búsqueda aplicada
                         selectedGroup = data.selectedGroup || 'Todos';
                         selectedArea = data.selectedArea || AREAS_CONTEO[0] || 'almacen';   // R6
                         expandedInventories = new Set(data.expandedInventories || []);
@@ -103,6 +103,9 @@
             // --- Listeners de archivos ---
             document.getElementById('fileInput').addEventListener('change', function(e) { window.handleFileImport(e); });
             document.getElementById('importDataInput').addEventListener('change', function(e) { window.importFullData(e); });
+            // FASE 4B — input propio de compras (nunca comparte #fileInput con el catálogo).
+            const fileInputCompras = document.getElementById('fileInputCompras');
+            if (fileInputCompras) fileInputCompras.addEventListener('change', function(e) { window.handleFileImportCompras(e); });
 
             // --- App principal ---
             // R6: la configuracion de areas se carga antes que nada. Si se

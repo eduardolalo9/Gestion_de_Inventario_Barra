@@ -20,6 +20,85 @@
                    exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) &&
                    get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role in ['admin', 'ADMIN'];
                }
+               // ══════════════════════════════════════════════════════════════
+               //  FASE 2A — PERMISOS GRANULARES EN EL SERVIDOR
+               //  ────────────────────────────────────────────────────────────
+               //  Hasta ahora estas reglas solo distinguían admin de no-admin:
+               //  ninguno de los 38 permisos del catálogo se validaba aquí, así
+               //  que todo permiso granular era, en la práctica, una decisión
+               //  del cliente. Ocultar un botón no es una validación.
+               //
+               //  hasPerm() replica EXACTAMENTE la precedencia de
+               //  hasPermission() en js/50-roles-permisos.js. El orden importa y
+               //  no es negociable: si cliente y servidor resolvieran distinto,
+               //  el sistema tendría dos verdades y la pantalla podría mostrar
+               //  algo que el servidor rechaza (o al revés). Hay una prueba
+               //  dedicada de paridad que recorre la matriz rol × permiso ×
+               //  override en los dos motores.
+               //
+               //    1. cuenta inactiva                    → DENEGADO
+               //    2. el rol tiene '*'                   → PERMITIDO
+               //       (antes que los overrides: un ADMIN no es degradable)
+               //    3. override 'allow' del usuario       → PERMITIDO
+               //    4. override 'deny'  del usuario       → DENEGADO
+               //    5. el permiso está en la lista del rol→ PERMITIDO
+               //    6. cualquier otro caso                → DENEGADO
+               //
+               //  Coste: 2 accesos a documento (usuarios/{uid} y roles/{roleId}).
+               //  Firestore cachea get()/exists() repetidos sobre la MISMA ruta
+               //  dentro de una evaluación, y el límite es de 10 por petición de
+               //  documento único. Por eso hasPerm() se aplica solo donde aporta
+               //  algo; el resto conserva isAdminUser(), que cuesta 1.
+               // ══════════════════════════════════════════════════════════════
+               function _rolCanonico(raw) {
+                 return raw == 'admin' ? 'ADMIN' : (raw == 'user' ? 'BARTENDER' : raw);
+               }
+               // Mismo fallback que ROLES_SISTEMA_DEFECTO en el cliente, para
+               // el caso en que roles/{roleId} todavía no exista en Firestore
+               // (se siembra de forma perezosa la primera vez que entra un
+               // admin). Un roleId desconocido cae a BARTENDER, nunca a '*'.
+               function _permisosDefecto(roleId) {
+                 return roleId == 'ADMIN'
+                   ? ['*']
+                   : (roleId == 'SUBJEFE_BARRA'
+                       ? ['inventory.count','inventory.viewOwn','inventory.closeOwn',
+                          'inventory.history','catalog.read','warehouses.read',
+                          'inventory.closeOther','inventory.export']
+                       : ['inventory.count','inventory.viewOwn','inventory.closeOwn',
+                          'inventory.history','catalog.read','warehouses.read']);
+               }
+               function _permisosDeRol(roleId) {
+                 return exists(/databases/$(database)/documents/roles/$(roleId))
+                   ? get(/databases/$(database)/documents/roles/$(roleId)).data.get('permissions', _permisosDefecto(roleId))
+                   : _permisosDefecto(roleId);
+               }
+               function _perfil() {
+                 return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
+               }
+               // Cuenta desactivada por un administrador. Hasta ahora
+               // usuarios/{uid}.status solo se respetaba en el cliente: un
+               // empleado dado de baja conservaba acceso de ESCRITURA mientras
+               // su token siguiera vivo. El valor por defecto es 'activo', así
+               // que los usuarios que no tienen el campo no quedan bloqueados y
+               // no hace falta migrar nada antes de desplegar esta regla.
+               function _cuentaActiva() {
+                 return request.auth != null &&
+                   exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) &&
+                   _perfil().get('status', 'activo') != 'inactivo';
+               }
+               function _permisosPropios() {
+                 return _permisosDeRol(_rolCanonico(_perfil().get('role', 'user')));
+               }
+               function _override(p) {
+                 return _perfil().get('permissionOverrides', {}).get(p, '');
+               }
+               function hasPerm(p) {
+                 return _cuentaActiva() && (
+                   _permisosPropios().hasAny(['*'])
+                   || _override(p) == 'allow'
+                   || (_override(p) != 'deny' && _permisosPropios().hasAny([p]))
+                 );
+               }
                // FIX MICROFASE P0.2: valida la forma exacta que
                // syncConteoProductoAtomico() y migrarStockAreasAProductos()
                // ya escriben hoy (verificado contra el código real, no
@@ -29,6 +108,40 @@
                    && data.enteras is number && data.enteras >= 0
                    && data.abiertas is list
                    && data.version is int && data.version >= 1;
+               }
+               // ══════════════════════════════════════════════════════════════
+               //  RECONTEO (js/87-reconteo.js)
+               //  ────────────────────────────────────────────────────────────
+               //  Forma exacta de _rcDocParaNube(). Los mapas 'items' no se
+               //  validan en profundidad (Rules no recorre mapas), pero su
+               //  tamaño sí, igual que el tope del cliente (300 productos).
+               // ══════════════════════════════════════════════════════════════
+               function _reconteoValido(d) {
+                 return d.keys().hasOnly(['inventoryId','inventarioNumero','estado','ronda','recontadoPor',
+                                          'creadoPorUid','creadoPorEmail','creadoEn','actualizadoEn',
+                                          'finalizadoEn','finalizadoPorUid','rondas','orden','items'])
+                   && d.keys().hasAll(['inventoryId','estado','ronda','recontadoPor','creadoPorUid',
+                                       'creadoEn','actualizadoEn','rondas','orden','items'])
+                   && d.inventoryId is string && d.inventoryId.size() > 0
+                   && d.estado in ['abierto', 'finalizado', 'descartado']
+                   && d.ronda is int && d.ronda >= 1 && d.ronda <= 50
+                   && d.recontadoPor is string && d.recontadoPor.size() <= 60
+                   && d.creadoPorUid is string
+                   && d.creadoEn is number && d.actualizadoEn is number
+                   && d.rondas is list && d.rondas.size() <= 50
+                   && d.orden is list && d.orden.size() <= 300
+                   && d.items is map && d.items.size() <= 300
+                   && (!('inventarioNumero' in d) || d.inventarioNumero == null || d.inventarioNumero is number)
+                   && (d.estado != 'finalizado' || (
+                         d.finalizadoEn is number && d.finalizadoPorUid is string
+                         && d.recontadoPor.size() > 0));
+               }
+               // Un reconteo solo vive mientras su Inventario Físico está
+               // SINCRONIZADO. CERRADO y CONTABILIZADO quedan fuera, igual que
+               // el resto del histórico: el registro se congela con él.
+               function _inventarioAbiertoPara(docId, inventoryId) {
+                 return exists(/databases/$(database)/documents/inventarioApp/$(docId)/inventories/$(inventoryId))
+                   && get(/databases/$(database)/documents/inventarioApp/$(docId)/inventories/$(inventoryId)).data.estado == 'SINCRONIZADO';
                }
                // FIX-SECURITY CRÍTICO: Evitar auto-escalación a admin.
                // - Un usuario puede crear su propio doc solo con role='user' (o 'BARTENDER').
@@ -53,17 +166,28 @@
                  // overrides quedan reservados a un admin vía 'update'.
                  allow create: if request.auth != null && request.auth.uid == uid
                                   && request.resource.data.role in ['user', 'BARTENDER']
-                                  && !request.resource.data.keys().hasAny(['permissionOverrides'])
+                                  && !request.resource.data.keys().hasAny(['permissionOverrides', 'areasAsignadas'])
                                   && (!('status' in request.resource.data)
                                       || request.resource.data.status == 'activo');
+                 // FASE 2A — dos cambios:
+                 //  1. 'areasAsignadas' se suma a la lista de campos que un
+                 //     usuario NO puede tocar en su propio documento. Sin esto,
+                 //     un bartender restringido a la Barra 1 se ampliaría el
+                 //     alcance desde la consola en una línea.
+                 //  2. La administración de permisos puede DELEGARSE
+                 //     (permissions.update), pero nunca sobre uno mismo: quien
+                 //     la recibe no puede usarla para auto-ascenderse. Esto es
+                 //     deliberadamente MÁS estricto que el cliente.
                  allow update: if request.auth != null && (
                                   // Admin puede cambiar cualquier campo
                                   isAdminUser()
-                                  // Usuario solo puede actualizar si NO cambia role, permissionOverrides ni status
+                                  || (request.auth.uid != uid && hasPerm('permissions.update'))
+                                  // Usuario solo puede actualizar si NO cambia role, permissionOverrides, status ni areasAsignadas
                                   || (request.auth.uid == uid
                                       && !('role' in request.resource.data.diff(resource.data).affectedKeys())
                                       && !('permissionOverrides' in request.resource.data.diff(resource.data).affectedKeys())
-                                      && !('status' in request.resource.data.diff(resource.data).affectedKeys()))
+                                      && !('status' in request.resource.data.diff(resource.data).affectedKeys())
+                                      && !('areasAsignadas' in request.resource.data.diff(resource.data).affectedKeys()))
                                );
                  allow delete: if isAdminUser();
                }
@@ -72,14 +196,18 @@
                // los permisos de SU PROPIO rol); escritura solo admin.
                match /roles/{roleId} {
                  allow read:   if request.auth != null;
-                 allow create: if isAdminUser();
-                 allow update: if isAdminUser() &&
+                 allow create: if isAdminUser() || hasPerm('roles.update');
+                 // FASE 2A — la protección del comodín de ADMIN se conserva
+                 // intacta: es la segunda capa que impide dejar el sistema sin
+                 // ninguna autoridad administrativa.
+                 allow update: if (isAdminUser() || hasPerm('roles.update')) &&
                                   !(roleId == 'ADMIN' && !('*' in request.resource.data.permissions));
                  allow delete: if false; // los roles de sistema no se eliminan en esta etapa
                }
                match /catalogo/{docId} {
                  allow read:  if request.auth != null;
-                 allow write: if isAdminUser();
+                 // FASE 2A — catalog.publish en vez de "eres admin".
+                 allow write: if hasPerm('catalog.publish');
                }
                match /inventarioApp/{docId} {
                  // FASE 0 — VULNERABILIDAD S-1 (CRÍTICA)
@@ -175,55 +303,86 @@
                  //  queda para el administrador, que es quien resetea el ciclo
                  //  (resetConteoAtomicoEnFirestore).
                  //
-                 //  NOTA — la LECTURA se deja como estaba a propósito. Quién
-                 //  puede ver el conteo de quién es una decisión de negocio
-                 //  todavía abierta (decisión 2 de la auditoría) y cerrarla
-                 //  aquí sin esa respuesta dejaría sin datos al arranque de
-                 //  los bartenders. Lo que esta etapa cierra es la pérdida de
-                 //  datos, que no depende de ninguna decisión.
+                 //  FASE 2B — la decisión de negocio que esta nota dejaba
+                 //  abierta YA ESTÁ TOMADA: durante la captura nadie ve el
+                 //  conteo de otra persona, ni siquiera agregado.
+                 //
+                 //  Este documento es UNO POR ÁREA y lleva dentro el bloque de
+                 //  cada persona, con su nombre y sus cantidades. Firestore no
+                 //  permite leer un documento a medias —o se lee entero o
+                 //  nada—, así que aquí no cabe un término medio: o se abre a
+                 //  todos, o se reserva a quien puede ver conteos ajenos. Se
+                 //  reserva. El cliente deja de consultarla en
+                 //  loadConteoPorUsuarioFromFirestore() para que un bartender
+                 //  ni siquiera lance la petición.
                  // ═══════════════════════════════════════════════════════════
                  match /conteoMultiUsuario/{area} {
-                   allow read: if request.auth != null;
+                   allow read: if hasPerm('inventory.viewAll');
                    // El documento nace con un único bloque: el de quien escribe.
                    allow create: if request.auth != null
+                     && _cuentaActiva()
                      && request.resource.data.keys().hasOnly([request.auth.uid]);
                    // Una actualización solo puede tocar el bloque propio. Los
                    // bloques de los demás quedan intactos por construcción.
                    allow update: if request.auth != null
+                     && _cuentaActiva()
                      && request.resource.data.diff(resource.data)
                           .affectedKeys().hasOnly([request.auth.uid]);
                    // Borrar el área entera es parte de resetear el ciclo.
                    allow delete: if isAdminUser();
                  }
                  match /conteoAreas/{area} {
-                   allow read: if request.auth != null;
+                   allow read: if hasPerm('inventory.viewAll');
                    // Nadie escribe este documento padre: solo se borra al
                    // resetear el ciclo (ver resetConteoAtomicoEnFirestore).
                    allow write: if isAdminUser();
                    match /dispositivos/{deviceId} {
-                     allow read: if request.auth != null;
+                     // FASE 2B — cada documento lleva dentro el uid de su autor
+                     // (_userUid), así que aquí SÍ cabe cerrar por persona en
+                     // vez de por rol.
+                     //
+                     // Se cierra por UID y NO por deviceId, y la diferencia es
+                     // esencial: un mismo bartender con teléfono y tablet tiene
+                     // DOS deviceId y UN solo uid. Cerrar por dispositivo le
+                     // impediría leer lo que él mismo escribió desde su otro
+                     // aparato; cerrar por usuario no.
+                     allow read: if request.auth != null
+                       && (resource.data.get('_userUid', '') == request.auth.uid
+                           || hasPerm('inventory.viewAll'));
                      // Cada dispositivo tiene su propio documento y nunca
                      // compite con el de otro, pero nada impedía escribir en
                      // el ajeno. El uid del autor ya viajaba en el payload
                      // (_userUid); ahora el servidor lo comprueba.
                      allow create, update: if request.auth != null
+                       && _cuentaActiva()
                        && request.resource.data._userUid == request.auth.uid;
                      allow delete: if isAdminUser();
                    }
                  }
-                 // Bitácora de conflictos y cola de cambios: se pueden seguir
-                 // escribiendo igual que antes, pero ya no se pueden borrar.
-                 // Quien queda registrado en una diferencia de conteo no debe
-                 // poder hacer desaparecer el registro de esa diferencia.
+                 // Bitácora de conflictos y cola de cambios.
+                 //
+                 // FASE 7 (S3) — conflictos pasa a ser de solo-creación: el
+                 // cliente solo los crea (set sobre un id nuevo en
+                 // _registrarConflictos) y nunca los actualiza. Antes cualquier
+                 // autenticado podía REESCRIBIR un conflicto ajeno, lo que
+                 // vaciaba su valor probatorio. Quien queda registrado en una
+                 // diferencia de conteo no debe poder alterar ese registro.
                  match /conflictos/{conflictoId} {
                    allow read:   if request.auth != null;
-                   allow create: if request.auth != null;
-                   allow update: if request.auth != null;
+                   allow create: if _cuentaActiva();
+                   allow update: if false;
                    allow delete: if isAdminUser();
                  }
                  match /cambios/{cambioId} {
                    allow read:   if request.auth != null;
-                   allow create: if request.auth != null;
+                   // FASE 7 (S3) — la autoría ya no se puede falsificar al
+                   // crear: el uid del evento es el de quien escribe, o ninguno
+                   // (evento encolado antes de que la sesión estuviera lista,
+                   // que _flushSyncQueueToFirestore completa después).
+                   allow create: if _cuentaActiva()
+                     && ( !('uid' in request.resource.data)
+                       || request.resource.data.uid == null
+                       || request.resource.data.uid == request.auth.uid );
                    // Reescribir el evento de otro queda fuera. Se admite que
                    // un evento sin uid (registrado antes de que la sesión
                    // estuviera lista) se pueda completar, que es lo que hace
@@ -235,11 +394,52 @@
                        || resource.data.uid == request.auth.uid );
                    allow delete: if isAdminUser();
                  }
+
+                 // ══════════════════════════════════════════════════════════
+                 //  FASE 7 (S1) — ordersChunks / inventoriesChunks
+                 //  ──────────────────────────────────────────────────────
+                 //  Antes: 'allow read, write: if request.auth != null'.
+                 //  Cualquier cuenta —incluida una dada de baja— podía BORRAR
+                 //  los fragmentos del historial de pedidos e inventarios, o
+                 //  escribir documentos con cualquier nombre y contenido.
+                 //
+                 //  Ahora:
+                 //   · escribir exige cuenta activa y la forma EXACTA que
+                 //     produce _writeChunkedSubcollection(): id chunk_N, los
+                 //     cuatro campos, índice coherente con el id, ≤ 80 items;
+                 //   · borrar queda para administración. El cliente dejó de
+                 //     necesitar borrar: los fragmentos sobrantes se ignoran
+                 //     al leer (se lee solo hasta totalChunks de chunk_0).
+                 //
+                 //  LÍMITE CONOCIDO (se documenta, no se oculta): un usuario
+                 //  activo todavía puede SOBRESCRIBIR un fragmento, porque la
+                 //  sincronización de estos dos historiales reescribe el
+                 //  arreglo completo desde cada dispositivo. Cerrar eso exige
+                 //  pasar a un documento por pedido/inventario con reglas de
+                 //  solo-creación — un cambio de modelo con migración, fuera
+                 //  del alcance de esta fase.
+                 // ══════════════════════════════════════════════════════════
+                 function _chunkValido(chunkId) {
+                   let d = request.resource.data;
+                   return chunkId.matches('chunk_[0-9]{1,4}')
+                     && d.keys().hasOnly(['items', 'chunkIndex', 'totalChunks', '_updatedAt'])
+                     && d.keys().hasAll(['items', 'chunkIndex', 'totalChunks', '_updatedAt'])
+                     && d.items is list && d.items.size() <= 80
+                     && d.chunkIndex is int && d.chunkIndex >= 0
+                     && chunkId == 'chunk_' + string(d.chunkIndex)
+                     && d.totalChunks is int && d.totalChunks >= 1
+                     && d.chunkIndex < d.totalChunks
+                     && d._updatedAt is int;
+                 }
                  match /ordersChunks/{chunkId} {
-                   allow read, write: if request.auth != null;
+                   allow read:           if request.auth != null;
+                   allow create, update: if _cuentaActiva() && _chunkValido(chunkId);
+                   allow delete:         if isAdminUser();
                  }
                  match /inventoriesChunks/{chunkId} {
-                   allow read, write: if request.auth != null;
+                   allow read:           if request.auth != null;
+                   allow create, update: if _cuentaActiva() && _chunkValido(chunkId);
+                   allow delete:         if isAdminUser();
                  }
 
                  // FIX MICROFASE P0.2 (CRÍTICO — Optimistic Locking real):
@@ -313,13 +513,44 @@
                    // operaciones de negocio distintas y no deben compartir esta
                    // condición.
                    allow delete: if request.auth != null && (request.auth.uid == uid || isAdminUser());
-                   allow create, update: if request.auth != null && (
+                   // FASE 2A — se suma _cuentaActiva(): un empleado dado de
+                   // baja conservaba acceso de escritura mientras su token
+                   // siguiera vivo, porque 'status' solo se respetaba en el
+                   // cliente. Los usuarios sin el campo siguen siendo activos
+                   // por defecto, así que nadie queda bloqueado al desplegar.
+                   allow create, update: if request.auth != null && _cuentaActiva() && (
                      request.auth.uid == uid
                      || (
                        isAdminUser() &&
                        get(/databases/$(database)/documents/inventarioApp/$(docId)/inventories/$(request.resource.data.sessionId)).data.estado != 'CERRADO'
                      )
                    );
+                 }
+
+                 // ══════════════════════════════════════════════════════════
+                 //  FASE 5 (5B) — CONTEO DE AUDITORÍA HUÉRFANO
+                 //  ──────────────────────────────────────────────────────
+                 //  Cuando el admin abre un Inventario Físico nuevo mientras
+                 //  un dispositivo todavía tiene conteo de auditoría sin
+                 //  confirmar, ese conteo se archiva aquí en vez de perderse
+                 //  o mezclarse con la sesión nueva (ver
+                 //  _archivarConteoHuerfanoSiAplica, js/40-firestore.js).
+                 //
+                 //  Mismo patrón de inmutabilidad que 'compras': create sí,
+                 //  update/delete no. El id del documento fija uid+sessionId
+                 //  para que nadie pueda archivar a nombre de otro ni
+                 //  reescribir un archivo ya creado. Solo quien tiene permiso
+                 //  de reabrir áreas puede leerlos — son la misma persona que
+                 //  necesita saber que existe un conteo sin confirmar.
+                 // ══════════════════════════════════════════════════════════
+                 match /conteosAuditoriaHuerfanos/{huerfanoId} {
+                   allow read:   if hasPerm('inventory.reopenArea');
+                   allow create: if request.auth != null
+                                    && request.resource.data.uid == request.auth.uid
+                                    && huerfanoId == (request.resource.data.uid + '_' + request.resource.data.sessionId)
+                                    && request.resource.data.sessionId is string
+                                    && request.resource.data.capturadoEn is number;
+                   allow update, delete: if false;
                  }
 
                  // ETAPA 15 — INVENTARIO FÍSICO
@@ -334,18 +565,138 @@
                  match /inventories/{inventoryId} {
                    allow read:   if request.auth != null;
                    allow create: if isAdminUser();
-                   allow update: if isAdminUser() && resource.data.estado != 'CERRADO';
+                   // ══════════════════════════════════════════════════════════
+                   //  FASE 3 — CERRADO → CONTABILIZADO
+                   //  ────────────────────────────────────────────────────────
+                   //  OJO CON EL AGUJERO QUE ESTO CIERRA. La regla anterior era
+                   //  `resource.data.estado != 'CERRADO'`. En cuanto un
+                   //  inventario pasara a CONTABILIZADO esa condición se
+                   //  volvería VERDADERA —CONTABILIZADO no es CERRADO— y un
+                   //  admin podría modificar libremente un inventario que ya
+                   //  estaba sellado. Añadir el estado nuevo sin tocar esta
+                   //  regla habría ABIERTO el histórico, no protegido.
+                   //
+                   //  Ahora los dos estados finales están bloqueados, y la
+                   //  única excepción es la transición concreta, con cuatro
+                   //  campos en lista blanca. El contenido físico no entra:
+                   //  snapshotChunks sigue con update/delete en false, así que
+                   //  el conteo no se puede tocar ni con esta excepción.
+                   // ══════════════════════════════════════════════════════════
+                   //  Y OJO CON LA PRIMERA RAMA. Su primera versión permitía
+                   //  cualquier update mientras el estado no fuera final, lo que
+                   //  incluía saltar de SINCRONIZADO directamente a
+                   //  CONTABILIZADO: un inventario "contabilizado" cuyo snapshot
+                   //  nunca se escribió, es decir un stock inicial sin ninguna
+                   //  evidencia física detrás. Lo detectó la prueba P12 antes de
+                   //  desplegarse. Ahora CONTABILIZADO solo se alcanza desde
+                   //  CERRADO, por la segunda rama.
+                   allow update: if isAdminUser() && (
+                        (resource.data.estado != 'CERRADO' && resource.data.estado != 'CONTABILIZADO'
+                         && request.resource.data.estado != 'CONTABILIZADO')
+                     || ( resource.data.estado == 'CERRADO'
+                          && request.resource.data.estado == 'CONTABILIZADO'
+                          && request.resource.data.diff(resource.data).affectedKeys()
+                               .hasOnly(['estado','contabilizadoEn','contabilizadoPor','semanaDestino'])
+                          && hasPerm('inventory.post') )
+                   );
                    allow delete: if false;
-                   // Snapshot final fragmentado (mismo patrón que
-                   // ordersChunks/inventoriesChunks) — una vez escrito, es
-                   // tan inmutable como el doc padre: solo se crea DURANTE
-                   // el cierre (cuando el padre pasa a CERRADO en el MISMO
-                   // batch), nunca se actualiza después.
+                   // Snapshot final fragmentado. Una vez escrito es tan
+                   // inmutable como el doc padre.
+                   //
+                   // PASO PREVIO A FASE 3 (defecto H-2) — 'create' NO miraba el
+                   // estado del padre. Eso permitía a un admin AÑADIR
+                   // fragmentos nuevos a un inventario ya CERRADO: los
+                   // existentes no se podían alterar, pero el conjunto sí se
+                   // podía ampliar, y el lector (_readChunkedSubcollection)
+                   // concatena todo lo que encuentra ordenado por chunkIndex.
+                   // La inmutabilidad era de los documentos, no del snapshot.
+                   //
+                   // Ahora el fragmento solo nace mientras el inventario sigue
+                   // abierto. Esto convive con el cierre atómico porque las
+                   // reglas evalúan cada escritura de un batch contra el estado
+                   // YA CONFIRMADO: durante el batch de cierre el padre todavía
+                   // es SINCRONIZADO, así que los fragmentos se crean; una vez
+                   // confirmado, es CERRADO y no cabe añadir nada más.
+                   // Comprobado contra el emulador real, no deducido de la
+                   // documentación (pruebas X1-X5 de run-rules-tests.js).
                    match /snapshotChunks/{chunkId} {
                      allow read:   if request.auth != null;
-                     allow create: if isAdminUser();
+                   //
+                   // FASE 3 — hay que bloquear TAMBIÉN 'CONTABILIZADO'. Con la
+                   // condición anterior, que solo miraba 'CERRADO', el snapshot
+                   // volvía a ser ampliable en cuanto el inventario se
+                   // contabilizaba: CONTABILIZADO no es CERRADO. El agujero H-2
+                   // se reabría justo en el momento en que el inventario pasa a
+                   // ser la base del stock inicial, que es cuando más importa.
+                   // Lo detectó la prueba F4 antes de desplegarse.
+                     allow create: if isAdminUser() &&
+                       get(/databases/$(database)/documents/inventarioApp/$(docId)/inventories/$(inventoryId)).data.estado != 'CERRADO' &&
+                       get(/databases/$(database)/documents/inventarioApp/$(docId)/inventories/$(inventoryId)).data.estado != 'CONTABILIZADO';
                      allow update, delete: if false;
                    }
+                 }
+
+                 // ══════════════════════════════════════════════════════════
+                 //  FASE 3 — INVENTARIOS INICIALES (contabilizar)
+                 //  ────────────────────────────────────────────────────────
+                 //  El id del documento ES la semana destino. Combinado con
+                 //  create-sin-update-ni-delete, el documento es único e
+                 //  inmutable por semana, y la IDEMPOTENCIA la garantiza el
+                 //  servidor, no una comprobación del cliente que una carrera
+                 //  podría saltarse:
+                 //
+                 //    · contabilizar dos veces el mismo inventario → el segundo
+                 //      intento es rechazado; el cliente lee el documento, ve su
+                 //      propio origen y reporta "ya estaba hecho";
+                 //    · dos inventarios distintos a la misma semana → rechazado
+                 //      también, pero el origen NO coincide y se muestra como
+                 //      conflicto en vez de resolverse en silencio;
+                 //    · un reintento tras caída de red no duplica nada.
+                 //
+                 //  La comprobación semanaId == semanaId no es redundante:
+                 //  impide crear un documento cuyo contenido declare una semana
+                 //  distinta de la de su ruta, que sería un saldo imposible de
+                 //  encontrar después.
+                 //
+                 //  La inmutabilidad es deliberada (decisión N-2): un inicial
+                 //  equivocado NO se reescribe. Se corrige añadiendo un ajuste
+                 //  al libro de movimientos, igual que el inventario cerrado y
+                 //  que historialCambios.
+                 // ══════════════════════════════════════════════════════════
+                 match /inventariosIniciales/{semanaId} {
+                   allow read:   if request.auth != null;
+                   allow create: if hasPerm('inventory.post')
+                                    && request.resource.data.semanaId == semanaId
+                                    && request.resource.data.origen.inventoryId is string
+                                    && request.resource.data.saldos is map;
+                   allow update, delete: if false;
+                 }
+
+                 // ══════════════════════════════════════════════════════════
+                 //  RECONTEO — solo administrador; el conteo que aplica al
+                 //  finalizar viaja por userAuditoria/{uid} propio (regla ya
+                 //  existente). Este documento es el REGISTRO: quién, cuándo,
+                 //  antes → después. Sin delete: el histórico es permanente.
+                 //  El creador y la fecha de creación no se pueden reescribir,
+                 //  ni moverlo a otro inventario.
+                 // ══════════════════════════════════════════════════════════
+                 match /reconteos/{reconteoId} {
+                   allow read: if isAdminUser();
+                   allow create: if isAdminUser() && _cuentaActiva()
+                                    && _reconteoValido(request.resource.data)
+                                    && request.resource.data.creadoPorUid == request.auth.uid
+                                    && request.resource.data.estado == 'abierto'
+                                    && request.resource.data.ronda == 1
+                                    && _inventarioAbiertoPara(docId, request.resource.data.inventoryId);
+                   allow update: if isAdminUser() && _cuentaActiva()
+                                    && _reconteoValido(request.resource.data)
+                                    && request.resource.data.inventoryId  == resource.data.inventoryId
+                                    && request.resource.data.creadoPorUid == resource.data.creadoPorUid
+                                    && request.resource.data.creadoEn     == resource.data.creadoEn
+                                    && resource.data.estado != 'descartado'
+                                    && request.resource.data.ronda >= resource.data.ronda
+                                    && _inventarioAbiertoPara(docId, resource.data.inventoryId);
+                   allow delete: if false;
                  }
 
                  // Contador atómico para el número visible (#101, #102...).
@@ -358,10 +709,99 @@
                    allow write:  if isAdminUser();
                  }
                }
+               // ══════════════════════════════════════════════════════════
+               //  FASE 4 — COMPRAS (el hecho) + MOVIMIENTOS (el efecto)
+               //  ────────────────────────────────────────────────────────
+               //  Mismo patrón que inventariosIniciales: id determinista +
+               //  create sin update ni delete. Importar dos veces el mismo
+               //  documento de SAP lo rechaza el servidor, no un `if` del
+               //  cliente que una carrera podría saltarse.
+               //
+               //  compraId es el Doc SAP cuando existe (una entrada ya
+               //  sincronizada y confirmada), o el folio del portal como
+               //  respaldo para una captura manual que aún no sincronizó.
+               //  Ver claude/fase4-anexo-excel-real-2026-09-20.md.
+               //
+               //  El libro de movimientos nace con un SOLO tipo permitido:
+               //  'compra'. Abrir hoy 'consumo_venta' o 'ajuste' sería
+               //  conceder por adelantado una capacidad que nadie ha
+               //  diseñado todavía — el mismo error que P12 cazó en FASE 3
+               //  antes de desplegarse. Cada tipo se habilita en su fase,
+               //  con su propio permiso.
+               //
+               //  La lectura de 'compras' exige purchases.read, a diferencia
+               //  de inventariosIniciales (legible por cualquier
+               //  autenticado): una compra lleva proveedor, costo unitario e
+               //  importe — información comercial, no solo cantidades.
+               // ══════════════════════════════════════════════════════════
+               match /compras/{compraId} {
+                 allow read:   if hasPerm('purchases.read');
+                 allow create: if hasPerm('purchases.create')
+                                  && request.resource.data.compraId == compraId
+                                  && request.resource.data.fecha is string
+                                  && request.resource.data.lineas is list
+                                  && request.resource.data.lineas.size() > 0
+                                  && request.resource.data.lineas.size() <= 400;
+                 allow update, delete: if false;
+               }
+               match /movimientos/{movId} {
+                 allow read:   if request.auth != null;
+                 allow create: if hasPerm('purchases.create')
+                                  && request.resource.data.movId == movId
+                                  && request.resource.data.tipo == 'compra'
+                                  && request.resource.data.productoId is string
+                                  && request.resource.data.cantidad is number
+                                  && request.resource.data.origen.compraId is string;
+                 allow update, delete: if false;
+               }
+               // El match de contadores/inventarios (dentro de inventarioApp)
+               // es literal, no comodín, así que este folio necesita su
+               // propia regla — no queda cubierto por aquel.
+               match /contadores/compras {
+                 allow read:  if request.auth != null;
+                 allow write: if hasPerm('purchases.create');
+               }
+               // Único documento mutable de la fase, y lo es a propósito: el
+               // último costo es por definición un valor que cambia. Su
+               // historia queda en las líneas de compra, que sí son
+               // inmutables.
+               match /costos/{docId} {
+                 allow read:  if request.auth != null;
+                 allow write: if hasPerm('purchases.import') || hasPerm('purchases.create');
+               }
+               // FASE 7 (S2) — antes 'create' aceptaba cualquier documento de
+               // cualquier cuenta, y la pantalla de ajustes pintaba
+               // cantidadSugerida y estado sin escapar: XSS almacenado que
+               // cualquier bartender podía dejar para que lo ejecutara el
+               // admin. Ahora se valida la forma EXACTA que escribe
+               // solicitarAjuste() (y el render escapa todo, en el cliente).
+               // El id debe ser el automático de add() (20 alfanuméricos):
+               // un id elegido a mano podía romper el onclick del botón.
                match /ajustes/{ajusteId} {
                  allow read:   if request.auth != null;
-                 allow create: if request.auth != null;
-                 allow update: if isAdminUser();
+                 allow create: if _cuentaActiva()
+                   && ajusteId.matches('[A-Za-z0-9]{20}')
+                   && request.resource.data.keys().hasOnly(['productoId', 'productoNombre', 'motivo',
+                        'cantidadSugerida', 'solicitanteUid', 'estado', 'creadoEn'])
+                   && request.resource.data.keys().hasAll(['productoId', 'motivo', 'solicitanteUid', 'estado', 'creadoEn'])
+                   && request.resource.data.solicitanteUid == request.auth.uid
+                   && request.resource.data.estado == 'pendiente'
+                   && request.resource.data.productoId is string
+                   && request.resource.data.productoId.size() > 0
+                   && request.resource.data.productoId.size() <= 100
+                   && request.resource.data.get('productoNombre', '') is string
+                   && request.resource.data.get('productoNombre', '').size() <= 200
+                   && request.resource.data.motivo is string
+                   && request.resource.data.motivo.size() > 0
+                   && request.resource.data.motivo.size() <= 500
+                   && (request.resource.data.get('cantidadSugerida', null) == null
+                       || request.resource.data.cantidadSugerida is number)
+                   && request.resource.data.creadoEn is int;
+                 // Resolver: solo admin, y solo los tres campos de resolución.
+                 allow update: if isAdminUser()
+                   && request.resource.data.diff(resource.data).affectedKeys()
+                        .hasOnly(['estado', 'resolvidoEn', 'resolvidoPor'])
+                   && request.resource.data.estado in ['aprobado', 'rechazado'];
                }
                // FASE 0 — VULNERABILIDAD S-7
                // Antes: 'allow update: if request.auth != null'. Cualquier
