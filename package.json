@@ -19,8 +19,9 @@
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5",
+    "acorn": "^8",
     "firebase-tools": "^15",
-    "acorn": "^8"
+    "playwright": "^1.63.0"
   },
   "dependencies": {
     "acorn": "^8.18.0"
