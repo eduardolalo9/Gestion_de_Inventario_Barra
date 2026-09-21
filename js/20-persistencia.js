@@ -90,6 +90,40 @@
          * y ejecuta las migraciones necesarias EN ORDEN, sin perder datos.
          * Las migraciones son idempotentes: se pueden correr varias veces sin daño.
          */
+        // ══════════════════════════════════════════════════════════════════════
+        //  FASE 7 (S5) — ALMACENAMIENTO PERSISTENTE
+        //  ────────────────────────────────────────────────────────────────────
+        //  Todo lo que aún no llegó a la nube (conteos sin confirmar, outbox,
+        //  conteos huérfanos) vive en localStorage / IndexedDB. Por defecto el
+        //  navegador los trata como "desechables": con el teléfono corto de
+        //  espacio puede borrarlos sin avisar. navigator.storage.persist() pide
+        //  que no lo haga.
+        //
+        //  · Se pide una sola vez por dispositivo, después de iniciar sesión
+        //    (Chrome lo concede sin preguntar a una PWA que se usa; Firefox
+        //    puede mostrar un aviso, por eso no se pide antes del login).
+        //  · Nunca bloquea nada: si no existe la API o lo niega, la app sigue
+        //    igual que hoy. El resultado queda en consola para diagnóstico.
+        // ══════════════════════════════════════════════════════════════════════
+        async function _pedirAlmacenamientoPersistente() {
+            try {
+                if (!navigator.storage || typeof navigator.storage.persist !== 'function') return null;
+                if (typeof navigator.storage.persisted === 'function' && await navigator.storage.persisted()) {
+                    return true;
+                }
+                let yaPedido = false;
+                try { yaPedido = localStorage.getItem('inventarioApp_persistPedido') === '1'; } catch (_) {}
+                if (yaPedido) return false;
+                const ok = await navigator.storage.persist();
+                try { localStorage.setItem('inventarioApp_persistPedido', '1'); } catch (_) {}
+                console.info('[Almacenamiento] Persistente: ' + (ok ? 'concedido' : 'no concedido'));
+                return ok;
+            } catch (e) {
+                console.warn('[Almacenamiento] No se pudo pedir persistencia:', e && e.message);
+                return null;
+            }
+        }
+
         function _runMigrations() {
             const storedVersion = parseInt(localStorage.getItem('inventarioApp_dbVersion') || '1', 10);
             if (storedVersion >= DB_VERSION) return; // ya en la versión más reciente

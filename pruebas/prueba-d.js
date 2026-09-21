@@ -299,8 +299,10 @@ chk('Ese uid ya viajaba en el payload',
 chk('La bitácora de conflictos ya no se puede borrar',
     /match \/conflictos\/\{conflictoId\} \{[\s\S]{0,400}?allow delete: if isAdminUser\(\);/.test(reglas));
 
+// FASE 7: la ventana pasó de 800 a 1600 caracteres porque la regla ganó la
+// validación de autoría en 'create' (y su comentario). La intención es la misma.
 chk('La cola de cambios ya no se puede borrar',
-    /match \/cambios\/\{cambioId\} \{[\s\S]{0,800}?allow delete: if isAdminUser\(\);/.test(reglas));
+    /match \/cambios\/\{cambioId\} \{[\s\S]{0,1600}?allow delete: if isAdminUser\(\);/.test(reglas));
 
 chk('No se puede reescribir el evento de otro',
     /resource\.data\.uid == request\.auth\.uid \);/.test(reglas));

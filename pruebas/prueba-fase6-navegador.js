@@ -200,10 +200,13 @@ const PUERTO = process.env.PUERTO || '8080';
     activeTab = 'inventario'; renderTab();
     return { n: document.querySelectorAll('#sbx-res-conteo [data-sbx-item]').length,
              hayBarra: !!document.getElementById('sbx-input-conteo'),
-             v: document.getElementById('sbx-input-conteo').value };
+             v: document.getElementById('sbx-input-conteo').value,
+             // FASE 7: el conteo pinta TODO (sin tandas) para que "Finalizar
+             // área" nunca quede antes de productos sin mostrar.
+             mas: !!document.querySelector('#sbx-res-conteo [data-sbx-accion="mas"]') };
   });
-  chk('El conteo NO queda filtrado por la búsqueda del catálogo (bug de filtro oculto)',
-      conteo.hayBarra && conteo.v === '' && conteo.n === 120, JSON.stringify(conteo));
+  chk('El conteo NO queda filtrado por la búsqueda del catálogo y muestra TODOS los productos (sin tandas)',
+      conteo.hayBarra && conteo.v === '' && conteo.n === 500 && !conteo.mas, JSON.stringify(conteo));
   await p.click('#tabContent [data-sbx-filtro="contados"]'); await p.waitForTimeout(150);
   chk('Chip "Contados" deja solo lo ya contado en el área',
       await p.evaluate(() => document.querySelectorAll('#sbx-res-conteo [data-sbx-item]').length === 1), '');

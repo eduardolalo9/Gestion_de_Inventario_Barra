@@ -256,7 +256,11 @@
 
         function renderAuditoriaSeleccion() {
             const totalCompletas = auditoriaTotalAreasCompletadas();
-            const porcentaje = Math.round((totalCompletas / 3) * 100);
+            // FASE 7 (C2) — antes dividía entre 3 fijo: con una 4ª área la barra
+            // pasaba de 100 %, y con dos se quedaba corta. El texto de al lado
+            // ya usaba AREAS_CONTEO.length; ahora los dos dicen lo mismo.
+            const totalAreas = (typeof AREAS_CONTEO !== 'undefined' && AREAS_CONTEO.length) ? AREAS_CONTEO.length : 1;
+            const porcentaje = Math.min(100, Math.round((totalCompletas / totalAreas) * 100));
             const todasCompletas = auditoriaTodasCompletas();
             const statusRef = isAdmin() ? auditoriaStatus : myAuditoriaStatus;
 

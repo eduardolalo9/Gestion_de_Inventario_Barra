@@ -184,26 +184,37 @@
             }
             await writeBatch.commit();
 
-            // Eliminar docs obsoletos: chunks con índice mayor al nuevo total
-            // y cualquier doc temporal "new_chunk_N" que haya quedado de la versión anterior.
-            const existingSnap = await colRef.get();
-            const toDelete = [];
-            existingSnap.forEach(d => {
-                if (d.id.startsWith('new_')) {
-                    // Residuo de versión anterior con bug — eliminar siempre
-                    toDelete.push(d.ref);
-                } else {
-                    const idx = parseInt(d.id.replace('chunk_', ''), 10);
-                    if (isNaN(idx) || idx >= totalChunks) {
-                        // Chunk de exceso (había más chunks antes) — eliminar
-                        toDelete.push(d.ref);
+            // FASE 7 (S1) — Los fragmentos sobrantes (índice ≥ totalChunks, o
+            // residuos "new_*" de la versión vieja) YA NO los borra cualquier
+            // dispositivo: las reglas reservan el borrado a administración.
+            // No hace falta borrarlos para que desaparezcan: la lectura
+            // (_readChunkedSubcollection) solo toma chunk_0 … chunk_{T-1},
+            // con T = totalChunks de chunk_0, que se reescribe en CADA
+            // escritura. El admin los limpia cuando le toca sincronizar.
+            //
+            // La limpieza es de mejor esfuerzo: si falla (sin permiso, sin
+            // red), la sincronización NO se da por fallida, porque los datos
+            // ya quedaron escritos en el primer lote.
+            if (typeof isAdmin === 'function' && isAdmin()) {
+                try {
+                    const existingSnap = await colRef.get();
+                    const toDelete = [];
+                    existingSnap.forEach(d => {
+                        if (d.id.startsWith('new_')) {
+                            toDelete.push(d.ref);
+                        } else {
+                            const idx = parseInt(d.id.replace('chunk_', ''), 10);
+                            if (isNaN(idx) || idx >= totalChunks) toDelete.push(d.ref);
+                        }
+                    });
+                    if (toDelete.length > 0) {
+                        const delBatch = _db.batch();
+                        toDelete.forEach(ref => delBatch.delete(ref));
+                        await delBatch.commit();
                     }
+                } catch (e) {
+                    console.warn('[Firebase][Chunk] Limpieza de fragmentos sobrantes pospuesta:', e && (e.code || e.message));
                 }
-            });
-            if (toDelete.length > 0) {
-                const delBatch = _db.batch();
-                toDelete.forEach(ref => delBatch.delete(ref));
-                await delBatch.commit();
             }
 
             console.info('[Firebase][Chunk] ' + subcollName + ' → ' + totalChunks + ' chunk(s) escritos correctamente.');
@@ -354,9 +365,23 @@
             try {
                 const snap = await docRef.collection(subcollName).orderBy('chunkIndex').get();
                 if (snap.empty) return [];
+                // FASE 7 (S1) — solo cuentan chunk_0 … chunk_{T-1}, donde T es
+                // el totalChunks que dejó la ÚLTIMA escritura en chunk_0 (se
+                // reescribe siempre). Antes se leía todo lo que hubiera: un
+                // fragmento sobrante no borrado devolvía pedidos o conteos ya
+                // eliminados. Ahora que solo el admin borra, esta es la única
+                // garantía de que un sobrante no resucita nada.
+                let total = null;
+                snap.forEach(d => {
+                    if (d.id === 'chunk_0' && Number.isInteger(d.data().totalChunks)) total = d.data().totalChunks;
+                });
                 const result = [];
                 snap.forEach(d => {
-                    const items = d.data().items;
+                    const data = d.data();
+                    if (!/^chunk_\d+$/.test(d.id)) return;                      // residuos new_*
+                    if (d.id !== 'chunk_' + data.chunkIndex) return;             // id y contenido deben coincidir
+                    if (total !== null && !(data.chunkIndex < total)) return;    // sobrante de una escritura anterior
+                    const items = data.items;
                     if (Array.isArray(items)) items.forEach(item => result.push(item));
                 });
                 return result;

@@ -43,6 +43,9 @@
                 if (user) {
                     console.info('[Auth] Usuario autenticado:', user.email);
                     showApp(user);
+                    // FASE 7 (S5) — pedir que el navegador no borre los datos
+                    // sin sincronizar bajo presión de espacio. No bloquea.
+                    if (typeof _pedirAlmacenamientoPersistente === 'function') _pedirAlmacenamientoPersistente();
                     // Cargar rol — usar window.loadUserRole para garantizar acceso cross-script
                     var _loadRole = window.loadUserRole || loadUserRole;
                     if (typeof _loadRole === 'function') {

@@ -227,8 +227,12 @@
             alAplicar:  function(v) { _conteoSearchTerm = v; },
             refrescar:  function() { return _pintarRegionBusqueda('conteo', _renderConteoResultados()); },
             precalentar: function() { _motorProductos.indexar(products); },
-            // Tandas más grandes: en el conteo se recorre la lista completa.
-            paso: 120
+            // FASE 7 — corrección de FASE 6: en el conteo NO hay carga por
+            // tandas. El botón "Finalizar área" va después de la lista; con
+            // tandas quedaba visible tras los primeros 120 y se podía cerrar
+            // el área sin haber visto el resto. Aquí se pinta todo, como antes
+            // de FASE 6 (la búsqueda sigue refrescando solo la región).
+            paso: 100000
         });
 
         BusquedaUI.registrar('pedidos', {

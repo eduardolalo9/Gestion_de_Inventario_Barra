@@ -1355,12 +1355,18 @@
         async function solicitarAjuste(productoId, productoNombre, motivo, cantidadSugerida) {
             if (!_db || !currentUserUid) { showNotification('⚙️ Firebase requerido'); return; }
             if (!motivo || !motivo.trim()) { showNotification('⚠️ Escribe el motivo del ajuste'); return; }
+            // FASE 7 (S2) — mismos límites que valida firestore.rules. Mejor
+            // avisar aquí que ver "Error al enviar ajuste" sin explicación.
+            if (motivo.trim().length > 500) { showNotification('⚠️ El motivo no puede pasar de 500 caracteres'); return; }
+            // Antes: `cantidadSugerida || null` convertía un 0 sugerido en
+            // "sin sugerencia". Un 0 es un dato válido (se acabó el producto).
+            const sugerida = (typeof cantidadSugerida === 'number' && isFinite(cantidadSugerida)) ? cantidadSugerida : null;
             try {
                 await _db.collection('ajustes').add({
-                    productoId,
-                    productoNombre,
+                    productoId:       String(productoId || '').slice(0, 100),
+                    productoNombre:   String(productoNombre || productoId || '').slice(0, 200),
                     motivo:           motivo.trim(),
-                    cantidadSugerida: cantidadSugerida || null,
+                    cantidadSugerida: sugerida,
                     solicitanteUid:   currentUserUid,
                     estado:           'pendiente',
                     creadoEn:         Date.now()
@@ -1667,7 +1673,7 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
                 html += '</select>';
                 html += '<textarea id="ajusteMotivoTxt" placeholder="Motivo del ajuste (ej. conteo real vs sistema)" rows="3" style="width:100%;margin-bottom:8px;padding:8px;border-radius:6px;border:1px solid var(--border-mid);background:var(--surface);color:var(--txt-primary);font-family:inherit;font-size:.82rem;resize:vertical;"></textarea>';
                 html += '<input type="number" id="ajusteCantidadIn" placeholder="Cantidad sugerida (opcional)" min="0" step="0.01" style="width:100%;margin-bottom:10px;padding:8px;border-radius:6px;border:1px solid var(--border-mid);background:var(--surface);color:var(--txt-primary);font-family:inherit;font-size:.82rem;">';
-                html += '<button class="adm-btn primary" onclick="(function(){var s=document.getElementById(\'ajusteProductoSel\');var m=document.getElementById(\'ajusteMotivoTxt\');var c=document.getElementById(\'ajusteCantidadIn\');if(!s.value){showNotification(\'⚠️ Selecciona un producto\');return;}var p=products.find(function(x){return x.id===s.value;});solicitarAjuste(s.value,p?p.name:s.value,m.value,parseFloat(c.value)||null);m.value=\'\';c.value=\'\';s.value=\'\';})()">';
+                html += '<button class="adm-btn primary" onclick="(function(){var s=document.getElementById(\'ajusteProductoSel\');var m=document.getElementById(\'ajusteMotivoTxt\');var c=document.getElementById(\'ajusteCantidadIn\');if(!s.value){showNotification(\'⚠️ Selecciona un producto\');return;}var p=products.find(function(x){return x.id===s.value;});solicitarAjuste(s.value,p?p.name:s.value,m.value,(c.value.trim()===\'\'?null:parseFloat(c.value)));m.value=\'\';c.value=\'\';s.value=\'\';})()">';
                 html += '<i class="fa-solid fa-paper-plane"></i> Enviar solicitud</button>';
                 html += '</div>';
             }
@@ -1685,11 +1691,19 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
             } else {
                 lista.forEach(function(a) {
                     const ts = a.creadoEn ? new Date(a.creadoEn).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : '';
-                    html += '<div class="ajuste-card ' + (a.estado || 'pendiente') + '">';
-                    html += '<div class="ajuste-meta">' + escapeHtml(a.productoNombre || a.productoId) + ' · ' + ts + ' · <b>' + (a.estado || 'pendiente') + '</b></div>';
-                    html += '<div class="ajuste-desc">' + escapeHtml(a.motivo || '') + (a.cantidadSugerida != null ? ' (Sugerido: ' + a.cantidadSugerida + ')' : '') + '</div>';
-                    if (isAdmin() && a.estado === 'pendiente') {
-                        html += '<div class="ajuste-btns"><button class="ajuste-btn ok" onclick="resolverAjuste(\'' + a.id + '\',\'aprobado\')">✅ Aprobar</button><button class="ajuste-btn nok" onclick="resolverAjuste(\'' + a.id + '\',\'rechazado\')">❌ Rechazar</button></div>';
+                    // FASE 7 (S2) — todo lo que viene del documento se escapa o
+                    // se normaliza. Antes estado y cantidadSugerida se pintaban
+                    // crudos (XSS almacenado que ejecutaba quien abría la
+                    // pantalla: normalmente el admin) y el id iba sin escapar
+                    // dentro de un onclick.
+                    const estado = (['pendiente', 'aprobado', 'rechazado'].indexOf(a.estado) !== -1) ? a.estado : 'pendiente';
+                    const sug    = (typeof a.cantidadSugerida === 'number' && isFinite(a.cantidadSugerida)) ? a.cantidadSugerida : null;
+                    const idSeg  = /^[A-Za-z0-9]{1,40}$/.test(String(a.id || '')) ? a.id : '';
+                    html += '<div class="ajuste-card ' + estado + '">';
+                    html += '<div class="ajuste-meta">' + escapeHtml(a.productoNombre || a.productoId) + ' · ' + escapeHtml(ts) + ' · <b>' + estado + '</b></div>';
+                    html += '<div class="ajuste-desc">' + escapeHtml(a.motivo || '') + (sug !== null ? ' (Sugerido: ' + escapeHtml(String(sug)) + ')' : '') + '</div>';
+                    if (isAdmin() && estado === 'pendiente' && idSeg) {
+                        html += '<div class="ajuste-btns"><button class="ajuste-btn ok" onclick="resolverAjuste(\'' + idSeg + '\',\'aprobado\')">✅ Aprobar</button><button class="ajuste-btn nok" onclick="resolverAjuste(\'' + idSeg + '\',\'rechazado\')">❌ Rechazar</button></div>';
                     }
                     html += '</div>';
                 });

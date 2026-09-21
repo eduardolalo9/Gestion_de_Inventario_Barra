@@ -1425,6 +1425,108 @@ async function main() {
             .set(huerfanoDemo({ capturadoEn: '' + Date.now() })));
     });
 
+    // ══════════════════════════════════════════════════════════════════
+    //  FASE 7 — SEGURIDAD: chunks, ajustes, conflictos, cambios
+    // ══════════════════════════════════════════════════════════════════
+    const R7 = 'inventarioApp/barra-principal';
+    const chunk = (i, total, extra) => Object.assign(
+        { items: [{ id: 'PED-' + i }], chunkIndex: i, totalChunks: total, _updatedAt: Date.now() }, extra || {});
+    async function sembrarFase7() {
+        await reiniciarConDatosBase();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await ctx.firestore().doc('usuarios/baja1').set({ uid: 'baja1', role: 'BARTENDER', status: 'inactivo' });
+        });
+    }
+    const baja1 = testEnv.authenticatedContext('baja1').firestore();
+
+    await prueba('F7-1. Un bartender escribe un fragmento con la forma real de _writeChunkedSubcollection', async () => {
+        await sembrarFase7();
+        await assertSucceeds(bt1.doc(R7 + '/ordersChunks/chunk_0').set(chunk(0, 2)));
+        await assertSucceeds(bt1.doc(R7 + '/inventoriesChunks/chunk_1').set(chunk(1, 2)));
+        await assertSucceeds(bt1.doc(R7 + '/ordersChunks/chunk_0').set(chunk(0, 1)));   // sobrescribir = update
+    });
+
+    await prueba('F7-2. ★ Un bartender YA NO puede borrar fragmentos; el admin sí', async () => {
+        await sembrarFase7();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await ctx.firestore().doc(R7 + '/ordersChunks/chunk_3').set(chunk(3, 4));
+            await ctx.firestore().doc(R7 + '/inventoriesChunks/chunk_3').set(chunk(3, 4));
+        });
+        await assertFails(bt1.doc(R7 + '/ordersChunks/chunk_3').delete());
+        await assertFails(bt1.doc(R7 + '/inventoriesChunks/chunk_3').delete());
+        await assertSucceeds(admin1.doc(R7 + '/ordersChunks/chunk_3').delete());
+    });
+
+    await prueba('F7-3. Fragmentos con forma inválida se rechazan (id, índice, campos, tamaño)', async () => {
+        await sembrarFase7();
+        await assertFails(bt1.doc(R7 + '/ordersChunks/hack').set(chunk(0, 1)));
+        await assertFails(bt1.doc(R7 + '/ordersChunks/chunk_1').set(chunk(0, 2)));            // id ≠ índice
+        await assertFails(bt1.doc(R7 + '/ordersChunks/chunk_2').set(chunk(2, 2)));            // índice ≥ total
+        await assertFails(bt1.doc(R7 + '/ordersChunks/chunk_0').set(chunk(0, 1, { extra: 1 })));
+        await assertFails(bt1.doc(R7 + '/ordersChunks/chunk_0').set(
+            chunk(0, 1, { items: Array.from({ length: 81 }, (_, k) => ({ id: 'x' + k })) })));
+        await assertFails(bt1.doc(R7 + '/ordersChunks/chunk_0').set({ items: [], chunkIndex: 0, totalChunks: 1 }));
+    });
+
+    await prueba('F7-4. ★ Una cuenta dada de baja ya no escribe fragmentos ni conflictos ni ajustes', async () => {
+        await sembrarFase7();
+        await assertFails(baja1.doc(R7 + '/ordersChunks/chunk_0').set(chunk(0, 1)));
+        await assertFails(baja1.doc(R7 + '/conflictos/cX').set({ tipo: 'version_mismatch', ts: Date.now() }));
+        await assertFails(baja1.collection('ajustes').doc('AbCdEfGhIjKlMnOpQrSt').set({
+            productoId: 'P1', productoNombre: 'X', motivo: 'm', cantidadSugerida: 1,
+            solicitanteUid: 'baja1', estado: 'pendiente', creadoEn: Date.now() }));
+    });
+
+    const ajuste = (extra) => Object.assign({ productoId: 'PRD-001', productoNombre: 'DON JULIO 70',
+        motivo: 'Botella rota', cantidadSugerida: 3, solicitanteUid: 'bartender1',
+        estado: 'pendiente', creadoEn: Date.now() }, extra || {});
+    const AUTO_ID = 'AbCdEfGhIjKlMnOpQrSt';
+
+    await prueba('F7-5. Un bartender crea un ajuste con la forma real de solicitarAjuste()', async () => {
+        await sembrarFase7();
+        await assertSucceeds(bt1.collection('ajustes').add(ajuste()));
+        await assertSucceeds(bt1.collection('ajustes').add(ajuste({ cantidadSugerida: null })));
+        await assertSucceeds(bt1.collection('ajustes').add(ajuste({ cantidadSugerida: 0 })));
+    });
+
+    await prueba('F7-6. ★ Ajustes maliciosos se rechazan (XSS en cantidad, autoría, estado, id, tamaño)', async () => {
+        await sembrarFase7();
+        const a = bt1.collection('ajustes');
+        await assertFails(a.doc(AUTO_ID).set(ajuste({ cantidadSugerida: '<img src=x onerror=alert(1)>' })));
+        await assertFails(a.doc(AUTO_ID).set(ajuste({ solicitanteUid: 'bartender2' })));
+        await assertFails(a.doc(AUTO_ID).set(ajuste({ estado: 'aprobado' })));
+        await assertFails(a.doc("x');alert(1);-AAAAAAAA").set(ajuste()));    // id que rompería el onclick
+        await assertFails(a.doc(AUTO_ID).set(ajuste({ motivo: 'x'.repeat(501) })));
+        await assertFails(a.doc(AUTO_ID).set(ajuste({ motivo: '' })));
+        await assertFails(a.doc(AUTO_ID).set(ajuste({ campoExtra: true })));
+    });
+
+    await prueba('F7-7. Resolver un ajuste: solo el admin y solo los campos de resolución', async () => {
+        await sembrarFase7();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await ctx.firestore().doc('ajustes/' + AUTO_ID).set(ajuste());
+        });
+        await assertFails(bt1.doc('ajustes/' + AUTO_ID).update({ estado: 'aprobado', resolvidoEn: Date.now(), resolvidoPor: 'bartender1' }));
+        await assertFails(admin1.doc('ajustes/' + AUTO_ID).update({ estado: 'aprobado', motivo: 'otro' }));
+        await assertFails(admin1.doc('ajustes/' + AUTO_ID).update({ estado: 'cualquiera' }));
+        await assertSucceeds(admin1.doc('ajustes/' + AUTO_ID).update({ estado: 'aprobado', resolvidoEn: Date.now(), resolvidoPor: 'admin1' }));
+    });
+
+    await prueba('F7-8. ★ Un conflicto registrado ya no se puede reescribir, ni por quien lo creó', async () => {
+        await sembrarFase7();
+        await assertSucceeds(bt1.doc(R7 + '/conflictos/conf_1').set({ prodName: 'X', area: 'barra1', ts: Date.now() }));
+        await assertFails(bt1.doc(R7 + '/conflictos/conf_1').set({ prodName: 'X', area: 'barra1', ts: 0 }));
+        await assertFails(bt2.doc(R7 + '/conflictos/conf_1').update({ valorNube: 0 }));
+    });
+
+    await prueba('F7-9. ★ Un evento de la cola no se puede crear a nombre de otro', async () => {
+        await sembrarFase7();
+        await assertFails(bt1.doc(R7 + '/cambios/ev1').set({ tipo: 'inventario', uid: 'bartender2' }));
+        await assertSucceeds(bt1.doc(R7 + '/cambios/ev2').set({ tipo: 'inventario', uid: 'bartender1' }));
+        await assertSucceeds(bt1.doc(R7 + '/cambios/ev3').set({ tipo: 'inventario', uid: null }));
+        await assertSucceeds(bt1.doc(R7 + '/cambios/ev4').set({ tipo: 'inventario' }));
+    });
+
     await testEnv.cleanup();
 
     console.log('\n── Resumen ──');
