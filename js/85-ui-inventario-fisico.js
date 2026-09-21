@@ -639,7 +639,12 @@
                         html += '<div class="inv-card__conflict-badge"><i class="fa-solid fa-triangle-exclamation"></i> Conflicto abierta</div>';
                     }
                     html += '</div>';
-                    html += '<span class="inv-card__code" title="Total (enteras + fracciones de abiertas)">' + totalFinal.toFixed(2) + ' u</span>';
+                    // HOTFIX: en modo cantidad (KGS/LTS/PZA) el conteo admite hasta
+                    // 3 decimales (ver 70-conversion-render.js); toFixed(2) fijo aqui
+                    // redondeaba la vista a 2 y ocultaba, por ejemplo, 1.245 -> "1.25".
+                    // El dato guardado siempre fue exacto: esto solo corrige la vista.
+                    const totalFinalTexto = usaConversion ? totalFinal.toFixed(2) : String(Math.round(totalFinal * 1000) / 1000);
+                    html += '<span class="inv-card__code" title="Total (enteras + fracciones de abiertas)">' + totalFinalTexto + ' u</span>';
                     html += '</div>';
 
                     html += '<div class="inv-card__chips">';

@@ -18,7 +18,8 @@
     "test:f5": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-fase5-integracion.js\"",
     "test:f7": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-fase7-integracion.js\"",
     "test:f6": "node pruebas/prueba-fase6.js",
-    "test:f6nav": "node pruebas/prueba-fase6-navegador.js"
+    "test:f6nav": "node pruebas/prueba-fase6-navegador.js",
+    "test:hotfixdec": "node pruebas/prueba-hotfix-decimales.js"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5",

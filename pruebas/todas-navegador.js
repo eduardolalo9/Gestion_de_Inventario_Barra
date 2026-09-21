@@ -32,6 +32,7 @@ const PRUEBAS = [
     'prueba-f3-navegador.js',  // F3 — contabilizar: humo en la app real
     'prueba-p2-navegador.js',  // FASE 4 — importación de compras: parseo, vista previa, incidencias
     'prueba-fase6-navegador.js', // FASE 6 — buscadores en la app real
+    'prueba-hotfix-decimales.js', // HOTFIX — separador decimal (coma/punto) en conteo físico
 ];
 
 function esperarServidor(intentos) {

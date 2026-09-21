@@ -4,6 +4,45 @@
         }
 
         // ══════════════════════════════════════════════════════════════════════
+        //  CAPTURA DE CANTIDADES — saneamiento de entrada decimal (HOTFIX)
+        //  ───────────────────────────────────────────────────────────────────
+        //  Los campos de cantidad (inv_cantidadTotal, inv_abierta_N) eran
+        //  <input type="number">, que por especificación SOLO acepta el punto
+        //  como separador decimal. En un teléfono con el idioma en español, el
+        //  teclado numérico decimal suele mostrar coma en vez de punto; al
+        //  escribirla, el navegador la descarta EN SILENCIO y los dígitos que
+        //  siguen se pegan a la parte entera: "0,850" queda guardado como 850
+        //  (un error de ×1000 que ningún aviso detecta, porque 850 sigue
+        //  pareciendo una cantidad razonable). Verificado de forma reproducible
+        //  con un navegador real antes de este cambio.
+        //
+        //  La solución no es "validar mejor" un <input type="number">: ese tipo
+        //  de campo nunca deja que la coma llegue al valor, sin importar qué se
+        //  haga después en JS. Por eso estos campos pasan a ser type="text" con
+        //  inputmode="decimal"/"numeric" (mismo teclado numérico en el móvil) y
+        //  esta función sanea cada tecla: coma → punto, se descarta cualquier
+        //  carácter que no sea dígito o punto, y solo se conserva el primer
+        //  punto si el usuario alcanza a teclear más de uno.
+        // ══════════════════════════════════════════════════════════════════════
+
+        function _sanearEntradaDecimal(el) {
+            if (!el) return;
+            var v = String(el.value == null ? '' : el.value).replace(/,/g, '.');
+            v = v.replace(/[^0-9.]/g, '');
+            var partes = v.split('.');
+            if (partes.length > 2) v = partes[0] + '.' + partes.slice(1).join('');
+            if (el.value !== v) el.value = v;
+        }
+
+        // Botellas enteras (regla 13): no admite fracción — la fracción va en
+        // "Abiertas". Basta con descartar cualquier carácter no numérico.
+        function _sanearEntradaEntero(el) {
+            if (!el) return;
+            var v = String(el.value == null ? '' : el.value).replace(/[^0-9]/g, '');
+            if (el.value !== v) el.value = v;
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
         //  CONVERSIÓN OZ → PUNTOS DE BOTELLA
         // ══════════════════════════════════════════════════════════════════════
 
@@ -1022,8 +1061,8 @@ document.body.appendChild(overlay);
             const unidadLabel = usaOz ? ' (oz)' : '';
             const placeholder = usaOz ? 'ej: 33.45 oz' : '0.0';
             div.innerHTML = '<span class="text-xs font-medium text-gray-500 w-20 flex-shrink-0">Abierta ' + (idx + 1) + unidadLabel + '</span>' +
-                '<input type="number" id="inv_abierta_' + idx + '" min="0" step="0.01" value="' + val + '" ' +
-                'oninput="if(parseFloat(this.value)<0||isNaN(parseFloat(this.value)))this.value=0;" ' +
+                '<input type="text" id="inv_abierta_' + idx + '" inputmode="decimal" min="0" step="0.01" value="' + val + '" ' +
+                'oninput="_sanearEntradaDecimal(this)" ' +
                 'class="flex-1 px-3 py-2 bg-white text-gray-900 border-2 border-orange-200 rounded-xl focus:ring-2 focus:ring-orange-400 focus:border-transparent text-center font-bold" ' +
                 'placeholder="' + placeholder + '">' +
                 (idx > 0 ? '<button onclick="removeAbiertaInModal(' + idx + ')" class="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>' : '<div class="w-8"></div>');
@@ -1099,7 +1138,7 @@ document.body.appendChild(overlay);
             if (!usaBotella) {
                 // ── MODO CANTIDAD (regla 13): un solo número, con decimales ───
                 const inputCant = document.getElementById('inv_cantidadTotal');
-                const rawCant   = inputCant ? inputCant.value.trim() : '';
+                const rawCant   = inputCant ? inputCant.value.trim().replace(/,/g, '.') : '';
                 // Rechazar notación científica, que parseFloat acepta (1e5 = 100000)
                 if (/e/i.test(rawCant)) {
                     showNotification('⚠️ Cantidad no válida. Escribe el número completo, por ejemplo 1.245');
@@ -1148,7 +1187,7 @@ document.body.appendChild(overlay);
                 for (let i = 0; i < container.children.length; i++) {
                     const input = document.getElementById('inv_abierta_' + i);
                     if (input) {
-                        const raw = input.value.trim();
+                        const raw = input.value.trim().replace(/,/g, '.');
                         // FIX-SCIENTIFIC: rechazar notación científica (ej. 1e5 = 100000)
                         if (/e/i.test(raw)) { invalidAbierta = true; break; }
                         const v = parseFloat(raw);
