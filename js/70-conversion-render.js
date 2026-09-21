@@ -953,14 +953,23 @@ document.body.appendChild(overlay);
             });
         }
 
-        function openInventarioModal(productId) {
+        function openInventarioModal(productId, opciones) {
             const product = products.find(p => p.id === productId);
             if (!product) return;
             inventarioModalProductId = productId;
+            // RECONTEO — el modal es el mismo; solo cambia de dónde sale el
+            // valor inicial y a dónde va al guardar (ver saveInventarioModal).
+            const _rc = (opciones && opciones.reconteo) ? opciones.reconteo : null;
+            _reconteoEdicion = _rc ? { prodId: productId, area: _rc.area } : null;
 
             // ── Seleccionar fuente de datos (auditoría o conteo regular) ──
             let areaKey, areaLabel, conteoSource;
-            if (isAuditoriaMode && auditoriaAreaActiva) {
+            if (_rc) {
+                areaKey      = _rc.area;
+                areaLabel    = ((typeof areasAuditoria !== 'undefined' && areasAuditoria[areaKey]) || areas[areaKey] || areaKey) + ' · Reconteo';
+                conteoSource = { enteras: (_rc.valor && _rc.valor.enteras) || 0,
+                                 abiertas: (_rc.valor && Array.isArray(_rc.valor.abiertas)) ? _rc.valor.abiertas.slice() : [] };
+            } else if (isAuditoriaMode && auditoriaAreaActiva) {
                 areaKey   = auditoriaAreaActiva;
                 areaLabel = areasAuditoria[areaKey] || areaKey;
                 if (!myAuditoriaConteo[productId]) myAuditoriaConteo[productId] = {};
@@ -1101,6 +1110,7 @@ document.body.appendChild(overlay);
             document.body.classList.remove('modal-open');
             inventarioModalProductId = null;
             isInventarioModalOpen = false;
+            _reconteoEdicion = null;
             disableAreaButtons(false);
         }
 
@@ -1199,6 +1209,16 @@ document.body.appendChild(overlay);
                     showNotification('⚠️ Los valores de botellas abiertas deben ser números positivos (máx. 9999)');
                     return;
                 }
+            }
+
+            // ── RECONTEO — la corrección se ANOTA en el borrador del reconteo;
+            // no toca el conteo hasta "Finalizar reconteo". Los valores ya
+            // pasaron exactamente la misma validación que un conteo normal.
+            if (_reconteoEdicion) {
+                const _ctxRc = _reconteoEdicion;
+                closeInventarioModal();
+                _rcAplicarEdicion(_ctxRc.prodId, _ctxRc.area, enteras, abiertas);
+                return;
             }
 
             // ── CORRECCIÓN 8: Detección de cambios anómalos ─────────────────

@@ -10,6 +10,10 @@
             if (auditoriaView === 'detalle_cerrado' && _detalleInventarioCerradoId) {
                 return renderDetalleInventarioCerrado();
             }
+            // RECONTEO (js/87-reconteo.js) — solo administrador
+            if (auditoriaView === 'reconteo')           return renderReconteo();
+            if (auditoriaView === 'reconteo_historial') return renderReconteoHistorial();
+            if (auditoriaView === 'reconteo_detalle')   return renderReconteoDetalle();
             // ── PANTALLA DE SELECCIÓN DE ÁREAS (default) ───────────────────────
             return renderAuditoriaSeleccion();
         }
@@ -99,6 +103,14 @@
             html += '<div class="flex flex-col gap-2" style="align-items:flex-end;">';
             if (isAdmin() && !esCerrado && hasPermission('inventory.closeGlobal')) {
                 html += '<button onclick="cerrarInventarioFisico()" style="padding:6px 12px;border-radius:var(--r-md);background:#1f2937;color:#fff;font-size:0.7rem;font-weight:700;cursor:pointer;white-space:nowrap;">🔒 Cerrar Inventario Físico</button>';
+            }
+            // RECONTEO — solo admin. Iniciar/continuar mientras el inventario
+            // esté abierto; el histórico se consulta siempre.
+            if (isAdmin() && !esCerrado) {
+                html += '<button type="button" data-rc-accion="iniciar" style="padding:6px 12px;border-radius:var(--r-md);background:var(--accent);color:var(--accent-on,#003063);font-size:0.7rem;font-weight:700;cursor:pointer;white-space:nowrap;">🔁 Reconteo</button>';
+            }
+            if (isAdmin()) {
+                html += '<button type="button" data-rc-accion="historial" style="padding:5px 10px;border-radius:var(--r-md);background:var(--accent-dim);color:var(--accent);font-size:0.68rem;font-weight:600;cursor:pointer;white-space:nowrap;">📋 Reconteos</button>';
             }
             if (hasPermission('inventory.history')) {
                 html += '<button onclick="auditoriaView=\'historial\'; _historialInventarios=null; renderTab(); _cargarHistorialInventarios().then(renderTab);" style="padding:5px 10px;border-radius:var(--r-md);background:var(--accent-dim);color:var(--accent);font-size:0.68rem;font-weight:600;cursor:pointer;white-space:nowrap;">📜 Historial</button>';

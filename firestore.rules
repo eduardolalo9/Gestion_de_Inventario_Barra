@@ -109,6 +109,40 @@
                    && data.abiertas is list
                    && data.version is int && data.version >= 1;
                }
+               // ══════════════════════════════════════════════════════════════
+               //  RECONTEO (js/87-reconteo.js)
+               //  ────────────────────────────────────────────────────────────
+               //  Forma exacta de _rcDocParaNube(). Los mapas 'items' no se
+               //  validan en profundidad (Rules no recorre mapas), pero su
+               //  tamaño sí, igual que el tope del cliente (300 productos).
+               // ══════════════════════════════════════════════════════════════
+               function _reconteoValido(d) {
+                 return d.keys().hasOnly(['inventoryId','inventarioNumero','estado','ronda','recontadoPor',
+                                          'creadoPorUid','creadoPorEmail','creadoEn','actualizadoEn',
+                                          'finalizadoEn','finalizadoPorUid','rondas','orden','items'])
+                   && d.keys().hasAll(['inventoryId','estado','ronda','recontadoPor','creadoPorUid',
+                                       'creadoEn','actualizadoEn','rondas','orden','items'])
+                   && d.inventoryId is string && d.inventoryId.size() > 0
+                   && d.estado in ['abierto', 'finalizado', 'descartado']
+                   && d.ronda is int && d.ronda >= 1 && d.ronda <= 50
+                   && d.recontadoPor is string && d.recontadoPor.size() <= 60
+                   && d.creadoPorUid is string
+                   && d.creadoEn is number && d.actualizadoEn is number
+                   && d.rondas is list && d.rondas.size() <= 50
+                   && d.orden is list && d.orden.size() <= 300
+                   && d.items is map && d.items.size() <= 300
+                   && (!('inventarioNumero' in d) || d.inventarioNumero == null || d.inventarioNumero is number)
+                   && (d.estado != 'finalizado' || (
+                         d.finalizadoEn is number && d.finalizadoPorUid is string
+                         && d.recontadoPor.size() > 0));
+               }
+               // Un reconteo solo vive mientras su Inventario Físico está
+               // SINCRONIZADO. CERRADO y CONTABILIZADO quedan fuera, igual que
+               // el resto del histórico: el registro se congela con él.
+               function _inventarioAbiertoPara(docId, inventoryId) {
+                 return exists(/databases/$(database)/documents/inventarioApp/$(docId)/inventories/$(inventoryId))
+                   && get(/databases/$(database)/documents/inventarioApp/$(docId)/inventories/$(inventoryId)).data.estado == 'SINCRONIZADO';
+               }
                // FIX-SECURITY CRÍTICO: Evitar auto-escalación a admin.
                // - Un usuario puede crear su propio doc solo con role='user' (o 'BARTENDER').
                // - Un usuario puede actualizar su propio doc solo si NO cambia role/permissionOverrides/status.
@@ -636,6 +670,33 @@
                                     && request.resource.data.origen.inventoryId is string
                                     && request.resource.data.saldos is map;
                    allow update, delete: if false;
+                 }
+
+                 // ══════════════════════════════════════════════════════════
+                 //  RECONTEO — solo administrador; el conteo que aplica al
+                 //  finalizar viaja por userAuditoria/{uid} propio (regla ya
+                 //  existente). Este documento es el REGISTRO: quién, cuándo,
+                 //  antes → después. Sin delete: el histórico es permanente.
+                 //  El creador y la fecha de creación no se pueden reescribir,
+                 //  ni moverlo a otro inventario.
+                 // ══════════════════════════════════════════════════════════
+                 match /reconteos/{reconteoId} {
+                   allow read: if isAdminUser();
+                   allow create: if isAdminUser() && _cuentaActiva()
+                                    && _reconteoValido(request.resource.data)
+                                    && request.resource.data.creadoPorUid == request.auth.uid
+                                    && request.resource.data.estado == 'abierto'
+                                    && request.resource.data.ronda == 1
+                                    && _inventarioAbiertoPara(docId, request.resource.data.inventoryId);
+                   allow update: if isAdminUser() && _cuentaActiva()
+                                    && _reconteoValido(request.resource.data)
+                                    && request.resource.data.inventoryId  == resource.data.inventoryId
+                                    && request.resource.data.creadoPorUid == resource.data.creadoPorUid
+                                    && request.resource.data.creadoEn     == resource.data.creadoEn
+                                    && resource.data.estado != 'descartado'
+                                    && request.resource.data.ronda >= resource.data.ronda
+                                    && _inventarioAbiertoPara(docId, resource.data.inventoryId);
+                   allow delete: if false;
                  }
 
                  // Contador atómico para el número visible (#101, #102...).

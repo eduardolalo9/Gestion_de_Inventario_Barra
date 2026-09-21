@@ -1527,6 +1527,82 @@ async function main() {
         await assertSucceeds(bt1.doc(R7 + '/cambios/ev4').set({ tipo: 'inventario' }));
     });
 
+    // ══════════════════════════════════════════════════════════════════
+    //  RECONTEO — registro de reconteo (solo admin, solo inventario abierto)
+    // ══════════════════════════════════════════════════════════════════
+    const RC = 'inventarioApp/barra-principal/reconteos/';
+    const reconteo = (extra) => Object.assign({
+        inventoryId: 'inv-activo', inventarioNumero: 101, estado: 'abierto', ronda: 1,
+        recontadoPor: 'Eduardo', creadoPorUid: 'admin1', creadoPorEmail: 'a@x.mx',
+        creadoEn: 1000, actualizadoEn: 1000, finalizadoEn: null, finalizadoPorUid: null,
+        rondas: [], orden: ['P1'],
+        items: { P1: { nombre: 'GOLOS', unidad: 'KGS', agregadoEn: 1000, areas: {} } }
+    }, extra || {});
+    async function sembrarReconteo(extra) {
+        await reiniciarConDatosBase();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await ctx.firestore().doc('usuarios/adminBaja').set({ uid: 'adminBaja', role: 'ADMIN', status: 'inactivo' });
+            if (extra) await ctx.firestore().doc(RC + 'rc1').set(reconteo(extra));
+        });
+    }
+    const adminBaja = testEnv.authenticatedContext('adminBaja').firestore();
+
+    await prueba('RC-1. El admin crea un reconteo abierto; un bartender ni lo crea ni lo lee', async () => {
+        await sembrarReconteo();
+        await assertSucceeds(admin1.doc(RC + 'rc1').set(reconteo()));
+        await assertSucceeds(admin1.doc(RC + 'rc1').get());
+        await assertFails(bt1.doc(RC + 'rc2').set(reconteo({ creadoPorUid: 'bartender1' })));
+        await assertFails(bt1.doc(RC + 'rc1').get());
+    });
+
+    await prueba('RC-2. ★ No se crea sobre un inventario CERRADO ni con forma inválida', async () => {
+        await sembrarReconteo();
+        await assertFails(admin1.doc(RC + 'x1').set(reconteo({ inventoryId: 'inv-cerrado' })));
+        await assertFails(admin1.doc(RC + 'x2').set(reconteo({ inventoryId: 'no-existe' })));
+        await assertFails(admin1.doc(RC + 'x3').set(reconteo({ creadoPorUid: 'otro' })));
+        await assertFails(admin1.doc(RC + 'x4').set(reconteo({ estado: 'finalizado', finalizadoEn: 1, finalizadoPorUid: 'admin1' })));
+        await assertFails(admin1.doc(RC + 'x5').set(reconteo({ ronda: 2 })));
+        await assertFails(admin1.doc(RC + 'x6').set(reconteo({ campoExtra: 1 })));
+        await assertFails(admin1.doc(RC + 'x7').set(reconteo({ recontadoPor: 'n'.repeat(61) })));
+        await assertFails(adminBaja.doc(RC + 'x8').set(reconteo({ creadoPorUid: 'adminBaja' })));
+    });
+
+    await prueba('RC-3. Finalizar: exige fecha, autor y nombre; creador, fecha e inventario no se reescriben', async () => {
+        await sembrarReconteo({});
+        const fin = { estado: 'finalizado', finalizadoEn: 2000, finalizadoPorUid: 'admin1', actualizadoEn: 2000,
+                      rondas: [{ ronda: 1, recontadoPor: 'Eduardo', uid: 'admin1', finalizadoEn: 2000, productos: 1, correcciones: 1 }] };
+        await assertFails(admin1.doc(RC + 'rc1').set(reconteo({ estado: 'finalizado' })));
+        await assertFails(admin1.doc(RC + 'rc1').set(reconteo(Object.assign({}, fin, { recontadoPor: '' }))));
+        await assertFails(admin1.doc(RC + 'rc1').set(reconteo(Object.assign({}, fin, { creadoPorUid: 'otro' }))));
+        await assertFails(admin1.doc(RC + 'rc1').set(reconteo(Object.assign({}, fin, { creadoEn: 5 }))));
+        await assertFails(admin1.doc(RC + 'rc1').set(reconteo(Object.assign({}, fin, { inventoryId: 'inv-cerrado' }))));
+        await assertSucceeds(admin1.doc(RC + 'rc1').set(reconteo(fin)));
+    });
+
+    await prueba('RC-4. Reabrir para una segunda ronda; la ronda no puede retroceder', async () => {
+        await sembrarReconteo({ estado: 'finalizado', finalizadoEn: 2000, finalizadoPorUid: 'admin1', ronda: 1 });
+        await assertSucceeds(admin1.doc(RC + 'rc1').set(reconteo({ ronda: 2, actualizadoEn: 3000 })));
+        await assertFails(admin1.doc(RC + 'rc1').set(reconteo({ ronda: 1, actualizadoEn: 4000 })));
+    });
+
+    await prueba('RC-5. ★ Cerrado el inventario, el registro queda congelado (se lee, no se escribe)', async () => {
+        await sembrarReconteo({});
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await ctx.firestore().doc('inventarioApp/barra-principal/inventories/inv-activo').update({ estado: 'CERRADO' });
+        });
+        await assertSucceeds(admin1.doc(RC + 'rc1').get());
+        await assertFails(admin1.doc(RC + 'rc1').set(reconteo({ actualizadoEn: 9000 })));
+        await assertFails(admin1.doc(RC + 'rc1').set(reconteo({ estado: 'descartado', actualizadoEn: 9000 })));
+    });
+
+    await prueba('RC-6. Nunca se borra; un reconteo descartado ya no se modifica', async () => {
+        await sembrarReconteo({});
+        await assertFails(admin1.doc(RC + 'rc1').delete());
+        await assertSucceeds(admin1.doc(RC + 'rc1').set(reconteo({ estado: 'descartado', actualizadoEn: 2000 })));
+        await assertFails(admin1.doc(RC + 'rc1').set(reconteo({ estado: 'abierto', actualizadoEn: 3000 })));
+        await assertFails(admin1.doc(RC + 'rc1').delete());
+    });
+
     await testEnv.cleanup();
 
     console.log('\n── Resumen ──');

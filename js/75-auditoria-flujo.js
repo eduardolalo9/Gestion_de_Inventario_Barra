@@ -386,6 +386,12 @@
                 showNotification('📴 Sin conexión — conecta a internet antes de cerrar el inventario');
                 return;
             }
+            // RECONTEO — cerrar con un reconteo sin finalizar congelaría los
+            // valores anteriores a las correcciones anotadas.
+            if (typeof _hayReconteoAbierto === 'function' && await _hayReconteoAbierto(_auditoriaSessionId)) {
+                showNotification('⚠️ Hay un reconteo abierto — finalízalo o descártalo antes de cerrar el inventario');
+                return;
+            }
 
             const usuarios = Object.values(allUsersAuditoria);
             const resumenTxt = usuarios.map(function(u) {

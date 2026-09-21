@@ -46,6 +46,7 @@ const PRUEBAS = [
     'prueba-fase5.js',              // FASE 5 — reapertura de area + conteo de auditoria huerfano
     'prueba-fase6.js',              // FASE 6 — buscadores: motor unificado + integracion
     'prueba-fase7.js',              // FASE 7 — seguridad: chunks, ajustes, conflictos, cambios
+    'prueba-reconteo.js',      // RECONTEO — ventana de reconteo (estática)
 ];
 
 let fallaron = [];
