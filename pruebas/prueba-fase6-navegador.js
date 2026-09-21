@@ -12,7 +12,7 @@ const C = []; const chk = (n, ok, d) => C.push({ n, ok, d });
 const PUERTO = process.env.PUERTO || '8080';
 
 (async () => {
-  const nav = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+  const nav = await chromium.launch(require('./_lanzar-navegador')());
   const ctx = await nav.newContext({ ...devices['Pixel 5'], viewport: { width: 390, height: 844 } });
   const p = await ctx.newPage();
   const errs = []; p.on('pageerror', e => errs.push(String(e).slice(0, 200)));
