@@ -174,9 +174,13 @@ const PUERTO = process.env.PUERTO || '8080';
   await p.click('#tabContent [data-sbx-filtro="bajoMin"]'); await p.waitForTimeout(150);
 
   // ── Carga incremental ────────────────────────────────────────────────────
-  await p.click('#sbx-res-catalogo [data-sbx-accion="mas"]'); await p.waitForTimeout(150);
-  chk('"Mostrar más" agrega la siguiente tanda (120)',
-      await p.evaluate(() => document.querySelectorAll('#sbx-res-catalogo [data-sbx-item]').length === 120), '');
+  // El centinela (IntersectionObserver) también carga tandas solo, si queda
+  // a la vista: por eso se mide ANTES del clic y se exige exactamente +60,
+  // en vez de un total fijo que dependía del tamaño de pantalla y del tiempo.
+  const n0 = await p.evaluate(() => document.querySelectorAll('#sbx-res-catalogo [data-sbx-item]').length);
+  await p.evaluate(() => document.querySelector('#sbx-res-catalogo [data-sbx-accion="mas"]').click()); await p.waitForTimeout(150);
+  const n1 = await p.evaluate(() => document.querySelectorAll('#sbx-res-catalogo [data-sbx-item]').length);
+  chk('"Mostrar más" agrega la siguiente tanda (+60)', n0 >= 60 && n1 >= n0 + 60 && n1 % 60 === 0, n0 + ' → ' + n1);
 
   // ── Productos comparte estado con Inicio ─────────────────────────────────
   await p.fill(inp, 'aperol'); await p.waitForTimeout(320);

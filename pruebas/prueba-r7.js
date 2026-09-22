@@ -153,16 +153,19 @@ chk('Define Contabilizado, y ningún estado más (N-3)',
     /CONTABILIZADO: \{[\s\S]{0,300}?stock inicial de la semana siguiente/.test(_glosario) &&
     (_glosario.match(/^            [A-Z_]+: \{/gm) || []).length === 3,
     'el glosario debe tener exactamente tres estados');
-chk('El glosario aparece con el inventario vacío',
-    /renderGlosarioEstados === 'function'\) html \+= renderGlosarioEstados\(\)/.test(uiInv));
+// PREMIUM (22-sep-2026) — el dueño pidió quitar el cuadro "Sin Inventario
+// Físico abierto" con el glosario. La función sigue existiendo (y probada en
+// prueba-f3-navegador), pero ya no se pinta en el estado vacío.
+chk('PREMIUM · el glosario ya no se pinta en el estado vacío (decisión del dueño)',
+    !/html \+= renderGlosarioEstados\(\)/.test(uiInv));
 
 // ═══ 8 · El botón y el estado vacío ═════════════════════════════════════
 chk('El botón abre el formulario, ya no crea directo',
     /onclick="abrirModalNuevoInventario\(\)"/.test(uiInv));
 chk('Ya no hay un botón que llame a auditoriaResetear',
     !/onclick="auditoriaResetear\(\)"/.test(uiInv));
-chk('El estado vacío invita a crear',
-    /Sin Inventario Físico abierto/.test(uiInv));
+chk('El estado vacío invita a crear (botón directo) y deja ver el historial',
+    /➕ Crear Inventario Físico/.test(uiInv) && /📜 Historial de inventarios/.test(uiInv));
 chk('Y dice algo distinto a un bartender',
     /todavía no ha abierto el inventario de esta semana/.test(uiInv),
     'no se ofrece un botón que no puede pulsar');

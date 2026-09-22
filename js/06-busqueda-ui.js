@@ -290,14 +290,22 @@
                 _aplicar(key, st.borrador);
             }
 
-            function limpiar(key, enfocar) {
+            // conRecientes (por defecto true): con Esc desde el teclado se
+            // ofrecen las búsquedas recientes. Con el botón ✕ (dedo) NO: la
+            // lista se abre justo encima de los chips y el siguiente toque
+            // caía en una búsqueda reciente en vez de en el chip.
+            function limpiar(key, enfocar, conRecientes) {
                 establecer(key, '');
                 if (enfocar !== false) {
                     var inp = document.getElementById('sbx-input-' + _idSeguro(key));
                     if (inp) {
+                        // focus() dispara focusin, que abriría las recientes
+                        // por su cuenta: se le avisa de que esta vez no.
+                        _estado(key).sinRecientes = (conRecientes === false);
                         inp.focus();
+                        _estado(key).sinRecientes = false;
                         // Si ya tenía el foco no hay focusin: se ofrecen aquí.
-                        _mostrarRecientes(key, true);
+                        _mostrarRecientes(key, conRecientes !== false);
                     }
                 }
             }
@@ -595,7 +603,7 @@
                 switch (accion) {
                     case 'limpiar':
                         e.preventDefault();
-                        limpiar(key, true);
+                        limpiar(key, true, false);
                         break;
                     case 'modo': {
                         e.preventDefault();
@@ -627,6 +635,7 @@
                         break;
                     case 'filtro':
                         e.preventDefault();
+                        _mostrarRecientes(key, false);
                         alternarFiltro(key, btn.getAttribute('data-sbx-filtro'), btn.getAttribute('data-sbx-grupo'));
                         break;
                     case 'quitar-filtros':
@@ -645,7 +654,7 @@
                 if (!inp.classList || !inp.classList.contains('sbx__input')) return;
                 var key = _keyDe(inp);
                 if (!key) return;
-                if (inp.value === '') _mostrarRecientes(key, true);
+                if (inp.value === '' && !_estado(key).sinRecientes) _mostrarRecientes(key, true);
                 var cfg = registros[key];
                 // Precalentar el índice mientras el usuario piensa qué escribir:
                 // el primer resultado ya no paga el costo de normalizar todo.

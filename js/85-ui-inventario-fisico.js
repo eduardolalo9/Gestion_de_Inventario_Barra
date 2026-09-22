@@ -29,16 +29,27 @@
             let html = '<div class="bg-white rounded-xl p-4 sm:p-5 mb-4 shadow-md">';
 
             if (!_inventarioActivo) {
-                // R7: el estado vacio invita a crear en vez de constatar que no hay nada.
-                html += '<p style="font-size:0.86rem;font-weight:600;color:var(--txt-primary);margin-bottom:4px;">Sin Inventario Físico abierto</p>';
-                html += '<p style="font-size:0.75rem;color:var(--txt-muted);line-height:1.5;">'
-                     +  (isAdmin()
-                         ? 'Crea uno para que el equipo pueda empezar a contar. El número se asigna solo.'
-                         : 'El administrador todavía no ha abierto el inventario de esta semana.')
-                     +  '</p>';
-                if (typeof renderGlosarioEstados === 'function') html += renderGlosarioEstados();
-                html += '</div>';
-                return html;
+                // PREMIUM (sep 2026, decisión del dueño): el cuadro "Sin
+                // Inventario Físico abierto" con el glosario de estados se
+                // eliminó. En su lugar, una barra de acciones: crear (admin),
+                // historial y reconteos SIEMPRE visibles — antes el historial
+                // solo aparecía con un inventario activo, así que sin uno
+                // abierto no había forma de consultar los anteriores.
+                var hAcc = '<div class="pm-acciones">';
+                if (isAdmin() && hasPermission('inventory.create')) {
+                    hAcc += '<button type="button" class="pm-btn pm-btn--primario" onclick="abrirModalNuevoInventario()">➕ Crear Inventario Físico</button>';
+                }
+                if (hasPermission('inventory.history')) {
+                    hAcc += '<button type="button" class="pm-btn" onclick="auditoriaView=\'historial\'; _historialInventarios=null; renderTab(); _cargarHistorialInventarios().then(renderTab);">📜 Historial de inventarios</button>';
+                }
+                if (isAdmin()) {
+                    hAcc += '<button type="button" class="pm-btn" data-rc-accion="historial">📋 Reconteos</button>';
+                }
+                hAcc += '</div>';
+                if (!isAdmin()) {
+                    hAcc += '<p class="pm-nota">El administrador todavía no ha abierto el inventario de esta semana.</p>';
+                }
+                return hAcc;
             }
 
             const inv = _inventarioActivo;
@@ -66,6 +77,10 @@
                 html += '<p style="font-size:0.72rem;color:var(--txt-muted);">Cerrado: ' + new Date(inv.fechaCierre).toLocaleDateString('es-MX') + ' por ' + escapeHtml(inv.cerradoPorNombre || '—') + '</p>';
             }
             html += '<p style="font-size:0.72rem;color:var(--txt-muted);margin-top:2px;">Artículos contados: ' + productosContados.size + ' / ' + products.length + '</p>';
+            // PREMIUM — avance visible del conteo
+            var _pctCont = products.length ? Math.min(100, Math.round(productosContados.size / products.length * 100)) : 0;
+            html += '<div class="pm-progreso" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + _pctCont + '" aria-label="Avance del conteo">'
+                 +  '<div class="pm-progreso__barra" style="width:' + _pctCont + '%;"></div></div>';
 
             // ── R7: lo que el formulario dejo escrito ────────────────────────
             // Se lee siempre a la defensiva: los inventarios creados antes de R7
@@ -102,7 +117,7 @@
 
             html += '<div class="flex flex-col gap-2" style="align-items:flex-end;">';
             if (isAdmin() && !esCerrado && hasPermission('inventory.closeGlobal')) {
-                html += '<button onclick="cerrarInventarioFisico()" style="padding:6px 12px;border-radius:var(--r-md);background:#1f2937;color:#fff;font-size:0.7rem;font-weight:700;cursor:pointer;white-space:nowrap;">🔒 Cerrar Inventario Físico</button>';
+                html += '<button onclick="cerrarInventarioFisico()" class="pm-btn pm-btn--peligro">🔒 Cerrar Inventario Físico</button>';
             }
             // RECONTEO — solo admin. Iniciar/continuar mientras el inventario
             // esté abierto; el histórico se consulta siempre.

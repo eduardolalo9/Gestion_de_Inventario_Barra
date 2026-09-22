@@ -627,7 +627,7 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
             }
         })();
     </script>
-    <link rel="stylesheet" href="css/estilos.css?v=4.4">
+    <link rel="stylesheet" href="css/estilos.css?v=4.5">
 </head>
 <body class="min-h-screen">
 
@@ -779,6 +779,7 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
             </button>
         </div>
         <div id="sbFoot">
+            <div id="sbVersion" class="sb-version" aria-label="Versión instalada"></div>
             <div style="display:flex;align-items:center;gap:5px;padding:0 10px 5px;overflow:hidden;">
                 <span id="sbUserEmail" style="font-size:.66rem;color:var(--txt-muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
                 <span id="sbRoleBadge" class="role-badge"></span>
@@ -879,11 +880,13 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
             </svg>
             <span>Pedidos</span>
         </button>
-        <button type="button" class="btab-item" data-btab="historia" onclick="switchTab('historia')" aria-label="Historia">
+        <!-- PREMIUM: Compras sube a la barra inferior (antes solo en "Más").
+             Historia sigue en el menú "Más". -->
+        <button type="button" class="btab-item" data-btab="compras" onclick="switchTab('compras')" aria-label="Compras">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
             </svg>
-            <span>Historia</span>
+            <span>Compras</span>
         </button>
         <button type="button" class="btab-item" onclick="sbOpen()" aria-label="Más opciones">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1177,33 +1180,34 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
         </div>
     </div>
 
-        <script src="js/00-nucleo.js?v=4.4"></script>
-    <script src="js/05-busqueda-motor.js?v=4.4"></script>
-    <script src="js/06-busqueda-ui.js?v=4.4"></script>
-    <script src="js/10-multiusuario.js?v=4.4"></script>
-    <script src="js/15-ciclo-semanal.js?v=4.4"></script>
-    <script src="js/18-areas-config.js?v=4.4"></script>
-    <script src="js/20-persistencia.js?v=4.4"></script>
-    <script src="js/30-indexeddb.js?v=4.4"></script>
-    <script src="js/40-firestore.js?v=4.4"></script>
-    <script src="js/45-inventario-datos.js?v=4.4"></script>
-    <script src="js/50-roles-permisos.js?v=4.4"></script>
-    <script src="js/60-arranque.js?v=4.4"></script>
-    <script src="js/70-conversion-render.js?v=4.4"></script>
-    <script src="js/75-auditoria-flujo.js?v=4.4"></script>
-    <script src="js/80-buscador.js?v=4.4"></script>
-    <script src="js/85-ui-inventario-fisico.js?v=4.4"></script>
-    <script src="js/87-reconteo.js?v=4.4"></script>
-    <script src="js/88-compras.js?v=4.4"></script>
-    <script src="js/90-ciclo-admin.js?v=4.4"></script>
-    <script src="js/95-exportacion.js?v=4.4"></script>
-    <script src="js/99-window-arranque.js?v=4.4"></script>
+        <script src="js/00-nucleo.js?v=4.5"></script>
+    <script src="js/05-busqueda-motor.js?v=4.5"></script>
+    <script src="js/06-busqueda-ui.js?v=4.5"></script>
+    <script src="js/10-multiusuario.js?v=4.5"></script>
+    <script src="js/15-ciclo-semanal.js?v=4.5"></script>
+    <script src="js/18-areas-config.js?v=4.5"></script>
+    <script src="js/20-persistencia.js?v=4.5"></script>
+    <script src="js/30-indexeddb.js?v=4.5"></script>
+    <script src="js/40-firestore.js?v=4.5"></script>
+    <script src="js/45-inventario-datos.js?v=4.5"></script>
+    <script src="js/50-roles-permisos.js?v=4.5"></script>
+    <script src="js/60-arranque.js?v=4.5"></script>
+    <script src="js/70-conversion-render.js?v=4.5"></script>
+    <script src="js/75-auditoria-flujo.js?v=4.5"></script>
+    <script src="js/80-buscador.js?v=4.5"></script>
+    <script src="js/83-panel.js?v=4.5"></script>
+    <script src="js/85-ui-inventario-fisico.js?v=4.5"></script>
+    <script src="js/87-reconteo.js?v=4.5"></script>
+    <script src="js/88-compras.js?v=4.5"></script>
+    <script src="js/90-ciclo-admin.js?v=4.5"></script>
+    <script src="js/95-exportacion.js?v=4.5"></script>
+    <script src="js/99-window-arranque.js?v=4.5"></script>
 
     </div><!-- /#appWrapper -->
 
     <!-- ══════════════════════════════════════════════════════
          AUTH — Lógica de autenticación Firebase
          ══════════════════════════════════════════════════════ -->
-        <script src="js/auth.js?v=4.4"></script>
+        <script src="js/auth.js?v=4.5"></script>
 </body>
 </html>

@@ -1,6 +1,13 @@
         function getTotalStock(product) {
-            if (!product.stockByArea) return 0;
-            return (product.stockByArea.almacen || 0) + (product.stockByArea.barra1 || 0) + (product.stockByArea.barra2 || 0);
+            if (!product || !product.stockByArea) return 0;
+            // PREMIUM — suma las áreas CONFIGURADAS (R6). Antes eran tres fijas,
+            // así que un área nueva nunca contaba en el stock total ni en
+            // "bajo mínimo".
+            var areasStock = (typeof AREAS_CONTEO !== 'undefined' && AREAS_CONTEO.length)
+                ? AREAS_CONTEO : ['almacen', 'barra1', 'barra2'];
+            var t = 0;
+            areasStock.forEach(function(a) { t += (product.stockByArea[a] || 0); });
+            return Math.round(t * 1000) / 1000;
         }
 
         // ══════════════════════════════════════════════════════════════════════
@@ -493,7 +500,9 @@
                     html += '<div class="prd-card' + (hasData ? ' has-data' : '') + '" data-sbx-item style="animation-delay:' + delay + 'ms">';
                     // Top row: nombre + botones
                     html += '<div class="prd-card__top">';
-                    html += '<div class="prd-card__name">' + resaltarBusqueda(product.name, searchTerm) + '</div>';
+                    // PREMIUM — el nombre abre la ficha del producto (existencia,
+                    // compras, costo, inicial de la semana). Delegado en 83-panel.js.
+                    html += '<button type="button" class="prd-card__name pm-nombre-btn" data-pm-ficha="' + escapeHtml(product.id) + '" title="Ver ficha del producto">' + resaltarBusqueda(product.name, searchTerm) + '</button>';
                     html += '<div class="prd-card__actions">';
                     html += '<button class="prd-action-btn cart" data-sbx-principal onclick="addToCart(\'' + escapeHtml(product.id) + '\')" title="Agregar al carrito">'
                           + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg></button>';
@@ -506,6 +515,9 @@
                     html += '</div></div>';
                     // Group badge
                     html += '<div class="prd-card__group-badge">' + escapeHtml(product.group || 'General') + '</div>';
+                    if (typeof _bajoMinimo === 'function' && _bajoMinimo(product)) {
+                        html += '<span class="pm-estado pm-estado--critico" style="margin-left:6px;">⛔ Bajo mínimo (' + product.stockMinimo + ')</span>';
+                    }
                     // Meta: ID · Unit · Total
                     html += '<div class="prd-card__meta">' + resaltarBusqueda(product.id, searchTerm) + ' · ' + escapeHtml(product.unit || '') + ' · Total: ' + total.toFixed(2) + '</div>';
                     // Area chips — total contado de auditoría por área
@@ -540,25 +552,11 @@
             const ordersCount      = orders.length;
             const syncOn           = typeof _syncEnabled !== 'undefined' ? _syncEnabled : true;
 
-            // ── Stats 2×2 ─────────────────────────────────────────────────────
-            let html = '<div class="stat-grid">';
-            html += '<div class="stat-card" onclick="void(0)">'
-                  + '<div class="stat-card__icon" style="background:rgba(59,130,246,0.12);">📦</div>'
-                  + '<div><div class="stat-card__val" style="color:#60a5fa;">' + totalProducts + '</div>'
-                  + '<div class="stat-card__label">Productos</div></div></div>';
-            html += '<div class="stat-card" onclick="void(0)">'
-                  + '<div class="stat-card__icon" style="background:rgba(34,197,94,0.12);">📊</div>'
-                  + '<div><div class="stat-card__val" style="color:#4ade80;">' + totalStockAll.toFixed(1) + '</div>'
-                  + '<div class="stat-card__label">Stock Total</div></div></div>';
-            html += '<div class="stat-card" style="cursor:pointer;" onclick="openOrderModal()">'
-                  + '<div class="stat-card__icon" style="background:rgba(245,158,11,0.12);">🛒</div>'
-                  + '<div><div class="stat-card__val" style="color:#fb923c;">' + cartCount + '</div>'
-                  + '<div class="stat-card__label">En Carrito</div></div></div>';
-            html += '<div class="stat-card" onclick="switchTab(\'pedidos\')"  style="cursor:pointer;">'
-                  + '<div class="stat-card__icon" style="background:rgba(59,130,246,0.12);">📋</div>'
-                  + '<div><div class="stat-card__val" style="color:#60a5fa;">' + ordersCount + '</div>'
-                  + '<div class="stat-card__label">Pedidos</div></div></div>';
-            html += '</div>';
+            // ── PREMIUM — panel de indicadores y gráficas (js/83-panel.js).
+            // Sustituye la rejilla 2×2: conserva Productos, Carrito y Pedidos
+            // (mismas acciones) y suma bajo mínimo, valor, compras de la
+            // semana, estado del inventario y existencia de la semana.
+            let html = (typeof renderPanelInicio === 'function') ? renderPanelInicio() : '';
 
             // ── Búsqueda (FASE 6: barra unificada, comparte estado con Productos) ──
             html += BusquedaUI.barra('catalogo', {

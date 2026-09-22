@@ -21,7 +21,8 @@
     "test:f6nav": "node pruebas/prueba-fase6-navegador.js",
     "test:hotfixnav": "node pruebas/prueba-hotfix-decimales.js",
     "test:rc": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-reconteo-integracion.js\"",
-    "test:rcnav": "node pruebas/prueba-reconteo-navegador.js"
+    "test:rcnav": "node pruebas/prueba-reconteo-navegador.js",
+    "test:pmnav": "node pruebas/prueba-panel-navegador.js"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5",
