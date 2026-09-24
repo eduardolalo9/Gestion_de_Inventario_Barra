@@ -2949,4 +2949,12 @@ button.pm-tile:active { transform: scale(.98); }
 .pm-ficha__acc { display: flex; gap: 8px; margin-top: 16px; }
 .pm-ficha__acc .pm-btn { flex: 1; }
 .sb-version { font-size: 0.62rem; color: var(--txt-muted); text-align: center; padding: 0 10px 6px; }
+/* FASE 8 — comparación de las dos existencias. La gráfica va DENTRO de la
+   tarjeta, así que pierde su propio marco: dos marcos anidados se leen como
+   dos bloques separados, y aquí es un solo bloque. */
+.pm-card--compara .pm-graf { background: none; border: none; box-shadow: none; padding: 8px 0 0; }
+.pm-card--compara .pm-graf__titulo { font-size: 0.74rem; color: var(--txt-secondary); }
+/* Va con b.pm-dif y no con .pm-dif a secas: `.pm-card__fila b` ya fija el
+   color y ganaría por especificidad, dejando la diferencia sin destacar. */
+.pm-card__fila b.pm-dif { color: var(--amber-text, var(--amber)); }
 @media (prefers-reduced-motion: reduce) { .pm-progreso__barra, button.pm-tile { transition: none; } .pm-ficha { animation: none; } }

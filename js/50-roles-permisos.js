@@ -1406,76 +1406,64 @@
             if (!hasPermission('reports.export')) return;
             showNotification('⏳ Generando reporte global…');
             try {
-                // Leer conteos de todos los dispositivos desde conteoAreas
                 const AREAS = AREAS_CONTEO;
 
-                // FIX #2 — Fase 1: recopilar conteos individuales por dispositivo
-                // sin sumarlos directamente. Cada entrada = { enteras, abiertas } de un dispositivo.
-                // { prodId: { area: [ { enteras, abiertas }, ... ] } }
-                const conteoPorDispositivo = {};
+                // ── FASE 8 · EL REPORTE Y LA PANTALLA CUENTAN LO MISMO ────────
+                //
+                //  Antes esta función releía conteoAreas/{area}/dispositivos y
+                //  PROMEDIABA las cuentas de cada aparato. La pantalla de
+                //  auditoría, en cambio, usa auditoriaConteo, que aplica otra
+                //  regla: si el admin contó ese producto en esa área, su conteo
+                //  MANDA (ya vio el del bartender y corrigió encima); solo si
+                //  ningún admin contó se resuelve entre usuarios por el más
+                //  reciente (_recalcAdminAggregatedConteo, 45-inventario-datos).
+                //
+                //  Con dos reglas distintas sobre los mismos datos, el Excel
+                //  descargable podía dar una cifra y la pantalla otra, para el
+                //  mismo producto y en el mismo instante. El reporte, que es lo
+                //  que se archiva y con lo que se discute, era el que mentía.
+                //
+                //  Además aquella colección se borra entera al abrir cada nueva
+                //  auditoría (resetConteoAtomicoEnFirestore), así que el reporte
+                //  dependía de datos que otro proceso vacía.
+                //
+                //  Ahora se lee auditoriaConteo, que ya está en memoria: misma
+                //  regla que la pantalla, cero lecturas nuevas a Firestore y el
+                //  dato de conflicto viaja al reporte en vez de perderse.
+                const fuente = (typeof auditoriaConteo !== 'undefined' && auditoriaConteo) ? auditoriaConteo : {};
+                const conteoGlobal = {}; // { prodId: { area: { enteras, abiertas, numConteos, hayConflicto } } }
+                let conDatos = 0;
 
-                for (const area of AREAS) {
-                    const snapDisp = await _db
-                        .collection('inventarioApp').doc(FIRESTORE_DOC_ID)
-                        .collection('conteoAreas').doc(area)
-                        .collection('dispositivos').get();
-
-                    snapDisp.docs.forEach(function(doc) {
-                        const data = doc.data();
-                        Object.keys(data).forEach(function(key) {
-                            if (key.startsWith('_')) return;
-                            const entry = data[key];
-                            if (!entry || typeof entry !== 'object') return;
-                            if (!conteoPorDispositivo[key]) conteoPorDispositivo[key] = {};
-                            if (!conteoPorDispositivo[key][area]) conteoPorDispositivo[key][area] = [];
-                            conteoPorDispositivo[key][area].push({
-                                enteras:  typeof entry.enteras === 'number' ? entry.enteras : 0,
-                                abiertas: Array.isArray(entry.abiertas)     ? entry.abiertas : []
-                            });
-                        });
-                    });
-                }
-
-                // FIX #2 — Fase 2: calcular PROMEDIO de enteras y colección de abiertas.
-                // El conteo es "ciego": varios bartenders cuentan el mismo producto de forma
-                // independiente. El consenso se obtiene promediando las enteras.
-                // Las abiertas son botellas físicas reales (distintas por bartender), por lo
-                // que se conservan todas y se promedian individualmente.
-                const conteoGlobal = {}; // { prodId: { area: { enteras, abiertas, numConteos } } }
-
-                Object.keys(conteoPorDispositivo).forEach(function(prodId) {
+                Object.keys(fuente).forEach(function(prodId) {
                     conteoGlobal[prodId] = {};
                     AREAS.forEach(function(area) {
-                        const listaConteos = conteoPorDispositivo[prodId][area] || [];
-                        if (listaConteos.length === 0) {
-                            conteoGlobal[prodId][area] = { enteras: 0, abiertas: [], numConteos: 0 };
+                        const d = fuente[prodId] && fuente[prodId][area];
+                        if (!d) {
+                            conteoGlobal[prodId][area] = { enteras: 0, abiertas: [], numConteos: 0, hayConflicto: false };
                             return;
                         }
-                        // Promedio de botellas enteras (redondeado al entero más cercano)
-                        const sumaEnteras = listaConteos.reduce(function(s, c) { return s + c.enteras; }, 0);
-                        const promedioEnteras = Math.round(sumaEnteras / listaConteos.length);
-
-                        // Abiertas: promediar por posición (botella abierta 1, 2, …)
-                        // Si un bartender reporta 2 abiertas y otro 1, se promedian las posiciones comunes
-                        const maxAbiertas = listaConteos.reduce(function(m, c) { return Math.max(m, c.abiertas.length); }, 0);
-                        const promedioAbiertas = [];
-                        for (let i = 0; i < maxAbiertas; i++) {
-                            const vals = listaConteos
-                                .map(function(c) { return c.abiertas[i]; })
-                                .filter(function(v) { return typeof v === 'number' && v > 0; });
-                            if (vals.length > 0) {
-                                const avg = vals.reduce(function(s, v) { return s + v; }, 0) / vals.length;
-                                promedioAbiertas.push(Math.round(avg * 100) / 100);
-                            }
-                        }
-
+                        const abiertas = Array.isArray(d.abiertas)
+                            ? d.abiertas.filter(function(v) { return typeof v === 'number' && v > 0; })
+                            : [];
+                        const enteras = typeof d.enteras === 'number' ? d.enteras : 0;
+                        if (enteras > 0 || abiertas.length > 0) conDatos++;
                         conteoGlobal[prodId][area] = {
-                            enteras:    promedioEnteras,
-                            abiertas:   promedioAbiertas,
-                            numConteos: listaConteos.length
+                            enteras:      enteras,
+                            abiertas:     abiertas,
+                            numConteos:   typeof d._usuarios === 'number' ? d._usuarios : 0,
+                            hayConflicto: d._hayConflicto === true
                         };
                     });
                 });
+
+                // Un reporte con todo en cero no es un reporte: es una foto de
+                // que nadie ha contado todavía, o de que este dispositivo no ha
+                // recibido los conteos. Publicarlo en silencio haría que alguien
+                // lo descargue y lo tome por bueno.
+                if (conDatos === 0) {
+                    showNotification('⚠️ No hay conteos para reportar todavía');
+                    return;
+                }
 
                 const productosReporte = products.map(function(p) {
                     const porArea = {};

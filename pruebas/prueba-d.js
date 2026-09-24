@@ -222,14 +222,17 @@ chk('El vaciado avisa si no se pudo propagar',
         /function _mergeArrayByIdPreferLocal\(localArr, cloudArr, deletedIds\) \{[\s\S]*?\n        \}/);
     const cuerpoPurga = persistencia.match(
         /function _purgaDeCatalogoVigente\(datosNube\) \{[\s\S]*?\n        \}/);
-    if (!cuerpoMerge || !cuerpoPurga) {
+    // FASE 8: la fusión ya consulta _comparaVersion, así que viaja con ella.
+    const cuerpoVer = persistencia.match(
+        /function _comparaVersion\(a, b\) \{[\s\S]*?\n        \}/);
+    if (!cuerpoMerge || !cuerpoPurga || !cuerpoVer) {
         chk('Las funciones de catálogo se pudieron aislar', false);
         return;
     }
     chk('Las funciones de catálogo se pudieron aislar', true);
 
     const ctx = { _catalogoPurgadoEn: 0 };
-    const api = new Function('ctx', 'with (ctx) { ' + cuerpoMerge[0] + '\n' + cuerpoPurga[0] +
+    const api = new Function('ctx', 'with (ctx) { ' + cuerpoVer[0] + '\n' + cuerpoMerge[0] + '\n' + cuerpoPurga[0] +
         '\n return { merge: _mergeArrayByIdPreferLocal, purga: _purgaDeCatalogoVigente }; }')(ctx);
 
     // El catálogo real del bar: 424 productos.

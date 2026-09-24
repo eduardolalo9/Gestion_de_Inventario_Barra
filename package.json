@@ -22,7 +22,9 @@
     "test:hotfixnav": "node pruebas/prueba-hotfix-decimales.js",
     "test:rc": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-reconteo-integracion.js\"",
     "test:rcnav": "node pruebas/prueba-reconteo-navegador.js",
-    "test:pmnav": "node pruebas/prueba-panel-navegador.js"
+    "test:pmnav": "node pruebas/prueba-panel-navegador.js",
+    "test:f8": "node pruebas/prueba-fase8.js",
+    "test:f8nav": "node pruebas/prueba-fase8-navegador.js"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5",

@@ -17,10 +17,13 @@
         // ═════════════════════════════════════════════════════════════════════
 
         var PANEL_TOP = 8;
-        var _panelInicial = { semana: null, estado: 'sin_cargar', saldos: null, origen: null };
 
+        // FASE 8 — el panel ya no guarda su propia copia del inicial ni su
+        // propia forma de sumar compras: pregunta a la capa de existencia
+        // (47-existencia.js). Una sola lectura de Firestore y un solo número,
+        // compartidos con el catálogo, el buscador y la ficha.
         function _panelSemanaHoy() {
-            return (typeof semanaId === 'function') ? semanaId(new Date()) : null;
+            return existenciaSemanaHoy();
         }
 
         function _panelMoneda(n) {
@@ -32,45 +35,28 @@
             return String(Math.round((n || 0) * 100) / 100);
         }
 
-        // Carga (una vez por semana y sesión) el inicial contabilizado.
+        // Pide el inicial a la capa de existencia y se repinta cuando llegue.
         function _panelCargarInicial() {
-            var sem = _panelSemanaHoy();
-            if (!sem || !_db) return;
-            if (_panelInicial.semana === sem && _panelInicial.estado !== 'error') return;
-            _panelInicial = { semana: sem, estado: 'cargando', saldos: null, origen: null };
-            _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
-               .collection('inventariosIniciales').doc(sem).get()
-               .then(function(doc) {
-                   if (_panelInicial.semana !== sem) return;
-                   if (doc.exists) {
-                       var d = doc.data() || {};
-                       _panelInicial = { semana: sem, estado: 'ok', saldos: d.saldos || {}, origen: d.origen || null };
-                   } else {
-                       _panelInicial = { semana: sem, estado: 'no_existe', saldos: null, origen: null };
-                   }
-                   _panelRepintar();
-               })
-               .catch(function(e) {
-                   console.warn('[Panel] No se pudo leer el inventario inicial:', e);
-                   _panelInicial.estado = 'error';
-                   _panelRepintar();
-               });
+            existenciaCargarInicial(_panelRepintar);
+        }
+
+        function _panelInicialEstado() {
+            return existenciaInicialEstado();
         }
 
         function _panelRepintar() {
             var el = document.getElementById('pm-panel');
             if (el && typeof activeTab !== 'undefined' && activeTab === 'inicio') el.outerHTML = renderPanelInicio();
+            // Si la ficha está abierta cuando llega el inicial, se vuelve a
+            // dibujar: sin esto se quedaría con "—" en la comparación aunque el
+            // dato ya esté en memoria.
+            var f = document.getElementById('pm-ficha-wrap');
+            if (f && f.getAttribute('data-pid')) abrirFichaProducto(f.getAttribute('data-pid'));
         }
 
         // Entradas por compras de la semana, por producto.
         function _panelEntradasSemana() {
-            var sem = _panelSemanaHoy();
-            var r = {};
-            (typeof movimientos !== 'undefined' ? movimientos : []).forEach(function(m) {
-                if (!m || m.tipo !== 'compra' || m.semanaId !== sem) return;
-                r[m.productoId] = (r[m.productoId] || 0) + (Number(m.cantidad) || 0);
-            });
-            return r;
+            return existenciaEntradasSemana();
         }
 
         function _panelComprasSemana() {
@@ -81,7 +67,7 @@
         function _panelIndicadores() {
             var conPrecio = 0, valor = 0, bajo = [];
             products.forEach(function(p) {
-                var st = getTotalStock(p);
+                var st = existenciaMostrada(p);
                 if (typeof p.precio === 'number') { conPrecio++; valor += st * p.precio; }
                 if (typeof _bajoMinimo === 'function' && _bajoMinimo(p)) bajo.push(p);
             });
@@ -162,25 +148,86 @@
 
         function _panelExistenciaSemana() {
             _panelCargarInicial();
+            var est = _panelInicialEstado();
             var ent = _panelEntradasSemana();
             var nEnt = Object.keys(ent).length;
             var h = '<div class="pm-card">';
             h += '<div class="pm-card__titulo">📦 Existencia de la semana</div>';
-            if (_panelInicial.estado === 'cargando' || _panelInicial.estado === 'sin_cargar') {
+            if (est.estado === 'cargando' || est.estado === 'sin_cargar') {
                 h += '<div class="pm-card__sub">Cargando inventario inicial…</div>';
-            } else if (_panelInicial.estado === 'ok') {
-                var s = _panelInicial.saldos || {};
+            } else if (est.estado === 'ok') {
+                var s = est.saldos || {};
                 var ids = Object.keys(s);
                 var total = ids.reduce(function(a, k) { return a + (s[k] || 0); }, 0);
-                var o = _panelInicial.origen || {};
+                var o = est.origen || {};
                 h += '<div class="pm-card__fila"><span>Inicial (inventario #' + escapeHtml(String(o.numero || '—')) + ')</span><b>' + _panelNum(total) + ' u · ' + ids.length + ' productos</b></div>';
                 h += '<div class="pm-card__fila"><span>Entradas por compras</span><b>' + nEnt + ' productos</b></div>';
                 h += '<div class="pm-card__sub">Toca un producto para ver su existencia. Aún no descuenta ventas (el módulo de ventas es una fase pendiente).</div>';
-            } else if (_panelInicial.estado === 'no_existe') {
+            } else if (est.estado === 'no_existe') {
                 h += '<div class="pm-card__sub">Esta semana todavía no tiene inventario inicial. Se crea al <b>contabilizar</b> el inventario cerrado del domingo (Conteo → Historial → inventario cerrado → Contabilizar).</div>';
                 if (nEnt) h += '<div class="pm-card__fila"><span>Entradas por compras</span><b>' + nEnt + ' productos</b></div>';
             } else {
                 h += '<div class="pm-card__sub">No se pudo consultar el inventario inicial (¿sin conexión?).</div>';
+            }
+            h += '</div>';
+            return h;
+        }
+
+        // ── Comparación de las dos cifras (semana de observación, FASE 8) ────
+        // Mientras EXISTENCIA_FUENTE_OFICIAL_ACTIVA siga en false, esta tarjeta
+        // es el punto de la app donde se ve si las dos formas de contar lo
+        // mismo coinciden. No decide nada: informa para poder decidir.
+        function _panelComparacion() {
+            _panelCargarInicial();
+            var est = _panelInicialEstado();
+            var h = '<div class="pm-card pm-card--compara">';
+            h += '<div class="pm-card__titulo">🔍 Comparación de existencias</div>';
+
+            if (est.estado === 'cargando' || est.estado === 'sin_cargar') {
+                h += '<div class="pm-card__sub">Cargando el inventario inicial para comparar…</div></div>';
+                return h;
+            }
+            if (est.estado === 'no_existe') {
+                h += '<div class="pm-card__sub">No se puede comparar todavía: esta semana no tiene inventario inicial. '
+                   + 'Se crea al <b>contabilizar</b> el inventario cerrado del domingo.</div></div>';
+                return h;
+            }
+            if (est.estado !== 'ok') {
+                h += '<div class="pm-card__sub">No se pudo leer el inventario inicial (¿sin conexión?).</div></div>';
+                return h;
+            }
+
+            var c = existenciaComparacion();
+            h += '<div class="pm-card__sub">Operativa (conteo continuo) contra oficial (inicial + compras'
+               + (Object.keys(existenciaVentasSemana()).length ? ' − ventas' : ', aún sin ventas') + '). '
+               + 'Manda la operativa hasta que confirmes el cambio.</div>';
+            h += '<div class="pm-card__fila"><span>Coinciden</span><b>' + c.coinciden + ' de ' + c.comparados + '</b></div>';
+            h += '<div class="pm-card__fila"><span>Difieren</span><b'
+               + (c.difieren ? ' class="pm-dif"' : '') + '>' + c.difieren + '</b></div>';
+            if (c.sinInicial) {
+                h += '<div class="pm-card__fila"><span>Sin inicial <small>(no comparables)</small></span><b>' + c.sinInicial + '</b></div>';
+            }
+
+            if (c.filas.length) {
+                var maxAbs = Math.abs(c.filas[0].dif) || 1;
+                var filas = c.filas.slice(0, PANEL_TOP).map(function(f) {
+                    var ref = Math.max(Math.abs(f.operativa), Math.abs(f.oficial), 1);
+                    return {
+                        id: f.id,
+                        etiqueta: f.nombre,
+                        valor: Math.abs(f.dif),
+                        max: maxAbs,
+                        texto: _panelNum(f.operativa) + ' → ' + _panelNum(f.oficial)
+                               + ' (' + (f.dif > 0 ? '+' : '') + _panelNum(f.dif) + ')',
+                        // Crítico = la diferencia pesa más de la cuarta parte de
+                        // la cifra: ahí ya no es un redondeo, es otra historia.
+                        estado: (Math.abs(f.dif) / ref) > 0.25 ? 'critico' : 'aviso'
+                    };
+                });
+                h += _panelBarras(filas, 'Mayores diferencias',
+                        c.filas.length > PANEL_TOP ? 'Las ' + PANEL_TOP + ' mayores de ' + c.filas.length : null);
+            } else if (c.comparados) {
+                h += '<div class="pm-card__sub">✅ Las dos cifras coinciden en los ' + c.comparados + ' productos comparables.</div>';
             }
             h += '</div>';
             return h;
@@ -208,7 +255,7 @@
 
             // Bajo mínimo: existencia como fracción del mínimo (peores primero)
             var filasBajo = k.bajo.map(function(p) {
-                var st = getTotalStock(p);
+                var st = existenciaMostrada(p);
                 return { id: p.id, etiqueta: p.name || p.id, valor: st, max: p.stockMinimo,
                          texto: _panelNum(st) + ' / ' + _panelNum(p.stockMinimo),
                          estado: st <= p.stockMinimo * 0.5 ? 'critico' : 'aviso', r: p.stockMinimo ? st / p.stockMinimo : 0 };
@@ -229,6 +276,7 @@
             h += '</div>';
 
             h += _panelExistenciaSemana();
+            h += _panelComparacion();
             h += '</section>';
             return h;
         }
@@ -254,8 +302,10 @@
             var st = getTotalStock(p);
             var bajo = typeof _bajoMinimo === 'function' && _bajoMinimo(p);
             var costo = (typeof costosUltimos !== 'undefined' && costosUltimos && costosUltimos[pid]) || null;
-            var ent = _panelEntradasSemana()[pid] || 0;
-            var ini = (_panelInicial.estado === 'ok' && _panelInicial.saldos) ? _panelInicial.saldos[pid] : undefined;
+            _panelCargarInicial();
+            var ofic = existenciaOficial(p);
+            var ent  = ofic.entradas;
+            var ini  = ofic.hayInicial ? ofic.inicial : undefined;
 
             var h = '<div class="pm-ficha" role="dialog" aria-modal="true" aria-labelledby="pm-ficha-titulo">';
             h += '<div class="pm-ficha__caja">';
@@ -277,7 +327,22 @@
             h += '<div class="pm-ficha__sec">Semana actual</div>';
             h += '<div class="pm-card__fila"><span>Inicial contabilizado</span><b>' + (ini === undefined ? '—' : _panelNum(ini)) + '</b></div>';
             h += '<div class="pm-card__fila"><span>Entradas por compras</span><b>' + _panelNum(ent) + '</b></div>';
-            if (ini !== undefined) h += '<div class="pm-card__fila"><span>Inicial + entradas <small>(sin ventas)</small></span><b>' + _panelNum(ini + ent) + '</b></div>';
+            if (ini !== undefined) {
+                // Las dos cifras juntas, con su diferencia. Es el punto en el
+                // que se ve, producto por producto, si el conteo operativo y el
+                // arrastre semanal cuentan lo mismo.
+                var dif = Math.round((ofic.valor - st) * 1000) / 1000;
+                h += '<div class="pm-ficha__sec">Las dos cifras</div>';
+                h += '<div class="pm-card__fila"><span>Operativa <small>(conteo por área)</small></span><b>' + _panelNum(st) + '</b></div>';
+                h += '<div class="pm-card__fila"><span>Oficial <small>(inicial + entradas, sin ventas)</small></span><b>' + _panelNum(ofic.valor) + '</b></div>';
+                h += '<div class="pm-card__fila"><span>Diferencia</span><b' + (dif ? ' class="pm-dif"' : '') + '>'
+                   + (dif > 0 ? '+' : '') + _panelNum(dif) + '</b></div>';
+                if (!EXISTENCIA_FUENTE_OFICIAL_ACTIVA) {
+                    h += '<div class="pm-card__sub">Por ahora manda la operativa. La oficial se muestra para comprobarla antes de cambiar la fuente.</div>';
+                }
+            } else {
+                h += '<div class="pm-card__sub">Sin inicial contabilizado para este producto esta semana: no hay arrastre con el que comparar.</div>';
+            }
 
             var lineas = [];
             (typeof compras !== 'undefined' ? compras : []).forEach(function(c) {
@@ -307,6 +372,7 @@
 
             var wrap = document.createElement('div');
             wrap.id = 'pm-ficha-wrap';
+            wrap.setAttribute('data-pid', pid);   // para repintarla si llega el inicial
             wrap.innerHTML = h;
             document.body.appendChild(wrap);
             document.body.classList.add('modal-open');

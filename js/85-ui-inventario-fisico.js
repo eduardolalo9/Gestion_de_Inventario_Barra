@@ -1367,6 +1367,10 @@
                 if (proveedor)                 product.proveedor   = proveedor;   else delete product.proveedor;
                 // R2 — mismo criterio: si se vacia el campo, el dato se quita.
                 if (pv)                        product.pv          = pv;          else delete product.pv;
+                // FASE 8 — sello de versión: es lo que permite que esta edición
+                // gane sobre una copia anterior venga de donde venga, en vez de
+                // que decida quién sincroniza al final.
+                product._v = _versionProducto(product._v);
                 // stockByArea se recalcula
                 syncStockByAreaFromConteo();
                 // CORRECCIÓN 3: Auditoría obligatoria en modificación de producto
@@ -1388,7 +1392,8 @@
                     name: name,
                     unit: unit,
                     group: group,
-                    stockByArea: _stockInicialPorArea(0)
+                    stockByArea: _stockInicialPorArea(0),
+                    _v: _versionProducto(0)   // FASE 8 — nace con versión
                 };
                 if (capacidadMl !== undefined)       newProduct.capacidadMl = capacidadMl;
                 if (pesoBotellaLlenaOz !== undefined) newProduct.pesoBotellaLlenaOz = pesoBotellaLlenaOz;

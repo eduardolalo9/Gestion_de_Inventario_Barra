@@ -35,6 +35,7 @@ const PRUEBAS = [
     'prueba-hotfix-decimales.js', // HOTFIX — separador decimal (coma/punto) en conteo físico
     'prueba-reconteo-navegador.js', // RECONTEO — ventana de reconteo en la app real
     'prueba-panel-navegador.js',    // PREMIUM — panel, ficha de producto y Conteo sin inventario
+    'prueba-fase8-navegador.js',    // FASE 8 — las dos existencias y el interruptor de fuente
 ];
 
 function esperarServidor(intentos) {

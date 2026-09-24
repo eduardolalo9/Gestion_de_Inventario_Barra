@@ -54,7 +54,11 @@
         function _bajoMinimo(p) {
             // Misma regla que ya marcaba en rojo la columna Stock del catálogo.
             if (!(typeof p.stockMinimo === 'number' && p.stockMinimo > 0)) return false;
-            var total = (typeof getTotalStock === 'function') ? getTotalStock(p) : null;
+            // FASE 8 — se pregunta por la cifra que la app da por buena. Con la
+            // fuente oficial apagada devuelve el mismo getTotalStock de siempre,
+            // así que hoy marca exactamente lo mismo que antes.
+            var total = (typeof existenciaMostrada === 'function') ? existenciaMostrada(p)
+                      : ((typeof getTotalStock === 'function') ? getTotalStock(p) : null);
             return typeof total === 'number' && total < p.stockMinimo;
         }
 

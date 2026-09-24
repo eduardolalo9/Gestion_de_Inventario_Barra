@@ -585,10 +585,56 @@
             } catch(_) {}
         }
 
+        // ══════════════════════════════════════════════════════════════════════
+        //  FASE 8 — VERSIÓN POR PRODUCTO
+        //  ────────────────────────────────────────────────────────────────────
+        //  El catálogo publicado (catalogo/productos) ya llevaba versión y los
+        //  oyentes la respetaban. Pero un producto editado con "Guardar
+        //  producto" viaja por otro camino —el arreglo `products` del documento
+        //  principal— donde la fusión se decidía solo por el SENTIDO de la
+        //  sincronización: al subir ganaba siempre la copia local, al bajar
+        //  ganaba siempre la de la nube. Si dos administradores tocaban el
+        //  mismo producto casi a la vez, uno de los dos cambios desaparecía sin
+        //  un aviso en ninguna pantalla.
+        //
+        //  Ahora cada producto guardado lleva `_v`. Cuando las dos copias la
+        //  traen, gana la mayor, suba o baje. Si ninguna la trae —productos de
+        //  antes de esta versión, pedidos, inventarios— la fusión se comporta
+        //  EXACTAMENTE como antes, que es lo que permite desplegarla sin migrar
+        //  nada ni tocar las reglas.
+        //
+        //  `_v` es un reloj: Date.now(), igual que el `version` del catálogo
+        //  publicado. Para que el reloj atrasado de un teléfono no pueda
+        //  producir una versión menor que la ya grabada, nunca baja.
+        // ══════════════════════════════════════════════════════════════════════
+
+        function _versionProducto(anterior) {
+            const prev = (typeof anterior === 'number' && isFinite(anterior)) ? anterior : 0;
+            return Math.max(Date.now(), prev + 1);
+        }
+
+        /**
+         * ¿Gana `a` sobre `b` por versión?
+         *   1  → sí, `a` es más nueva
+         *  -1  → no, `b` es más nueva
+         *   0  → la versión no decide (ninguna la tiene, o son iguales) → se
+         *        aplica el criterio de siempre de cada fusión.
+         */
+        function _comparaVersion(a, b) {
+            const va = (a && typeof a._v === 'number' && isFinite(a._v)) ? a._v : null;
+            const vb = (b && typeof b._v === 'number' && isFinite(b._v)) ? b._v : null;
+            if (va === null && vb === null) return 0;
+            if (va === null) return -1;   // solo la otra copia pasó por una app con versión
+            if (vb === null) return 1;
+            if (va === vb)   return 0;
+            return va > vb ? 1 : -1;
+        }
+
         /**
          * _mergeArrayByIdPreferLocal(localArr, cloudArr, deletedIds)
          * Fusiona dos arrays de objetos {id,...} sin perder altas concurrentes:
-         *   - Id en ambos          → gana la versión LOCAL (la que se acaba de tocar aquí).
+         *   - Id en ambos          → gana la versión LOCAL, salvo que la copia de
+         *                            la nube traiga un `_v` mayor (FASE 8).
          *   - Id solo en la nube   → se conserva, salvo que esté en deletedIds (tombstone).
          *   - Id solo en local     → se conserva (es lo que este dispositivo acaba de crear).
          */
@@ -596,12 +642,19 @@
             localArr  = Array.isArray(localArr) ? localArr : [];
             cloudArr  = Array.isArray(cloudArr) ? cloudArr : [];
             const deletedSet = new Set(Array.isArray(deletedIds) ? deletedIds : []);
-            const localIds   = new Set(localArr.filter(function(x){return x && x.id;}).map(function(x){return x.id;}));
             const merged = localArr.slice();
+            const posLocal = new Map();
+            merged.forEach(function(x, i) { if (x && x.id) posLocal.set(x.id, i); });
             cloudArr.forEach(function(item) {
                 if (!item || !item.id) return;
                 if (deletedSet.has(item.id)) return;   // tombstone: no resucitar
-                if (localIds.has(item.id)) return;      // ya presente localmente (gana local)
+                if (posLocal.has(item.id)) {
+                    const i = posLocal.get(item.id);
+                    // La nube solo desplaza a la copia local si demuestra ser
+                    // posterior. Sin `_v` en juego, gana local como siempre.
+                    if (_comparaVersion(item, merged[i]) === 1) merged[i] = item;
+                    return;
+                }
                 merged.push(item);                      // solo existe en la nube → conservar
             });
             return merged;
@@ -620,11 +673,18 @@
         function _mergeArrayByIdPreferCloud(localArr, cloudArr) {
             localArr = Array.isArray(localArr) ? localArr : [];
             cloudArr = Array.isArray(cloudArr) ? cloudArr : [];
-            const cloudIds = new Set(cloudArr.filter(function(x){return x && x.id;}).map(function(x){return x.id;}));
             const merged = cloudArr.slice();
+            const posCloud = new Map();
+            merged.forEach(function(x, i) { if (x && x.id) posCloud.set(x.id, i); });
             localArr.forEach(function(item) {
                 if (!item || !item.id) return;
-                if (cloudIds.has(item.id)) return; // la nube ya tiene este id → prevalece la nube
+                if (posCloud.has(item.id)) {
+                    // FASE 8: una edición local que todavía no subió ya no se
+                    // pierde cuando llega un snapshot con la copia anterior.
+                    const i = posCloud.get(item.id);
+                    if (_comparaVersion(item, merged[i]) === 1) merged[i] = item;
+                    return;                         // si no, prevalece la nube, como siempre
+                }
                 merged.push(item);                  // solo existe localmente (alta aún no sincronizada)
             });
             return merged;

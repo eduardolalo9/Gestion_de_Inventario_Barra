@@ -779,7 +779,9 @@
             html += '</tr></thead><tbody>';
 
             filteredProducts.slice(0, lim).forEach(function(product) {
-                var total    = (typeof getTotalStock === 'function') ? getTotalStock(product) : null;
+                // FASE 8 — misma cifra que el resto de la app (ver 47-existencia).
+                var total    = (typeof existenciaMostrada === 'function') ? existenciaMostrada(product)
+                             : ((typeof getTotalStock === 'function') ? getTotalStock(product) : null);
                 var bajoMin  = (typeof product.stockMinimo === 'number' && product.stockMinimo > 0 &&
                                 typeof total === 'number' && total < product.stockMinimo);
                 var usaOz    = tieneConversion(product);
