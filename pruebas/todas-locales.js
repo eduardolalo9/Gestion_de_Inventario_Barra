@@ -48,6 +48,7 @@ const PRUEBAS = [
     'prueba-fase7.js',              // FASE 7 — seguridad: chunks, ajustes, conflictos, cambios
     'prueba-reconteo.js',      // RECONTEO — ventana de reconteo (estática)
     'prueba-fase8.js',         // FASE 8 — existencia oficial, versión de catálogo y reporte
+    'prueba-contabilizar-conteo.js', // Contabilizar en Conteo + CONTABILIZADO ya no es "abierto"
 ];
 
 let fallaron = [];

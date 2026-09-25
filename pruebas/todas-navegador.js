@@ -36,6 +36,7 @@ const PRUEBAS = [
     'prueba-reconteo-navegador.js', // RECONTEO — ventana de reconteo en la app real
     'prueba-panel-navegador.js',    // PREMIUM — panel, ficha de producto y Conteo sin inventario
     'prueba-fase8-navegador.js',    // FASE 8 — las dos existencias y el interruptor de fuente
+    'prueba-contabilizar-navegador.js', // Contabilizar en Conteo y estado CONTABILIZADO
 ];
 
 function esperarServidor(intentos) {

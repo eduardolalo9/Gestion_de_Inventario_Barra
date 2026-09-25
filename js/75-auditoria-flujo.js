@@ -57,8 +57,8 @@
                 showNotification('⚠️ No tienes asignada el área ' + nombreArea);
                 return;
             }
-            if (_inventarioActivo && _inventarioActivo.estado === 'CERRADO') {
-                showNotification('🔒 El inventario está cerrado');
+            if (_inventarioActivo && !inventarioAbierto(_inventarioActivo)) {
+                showNotification('🔒 El inventario está ' + (_inventarioActivo.estado || 'cerrado') + ' — ya no se cuenta');
                 return;
             }
 
@@ -153,8 +153,8 @@
                 showNotification('⚠️ No tienes permiso para cerrar el área completa');
                 return;
             }
-            if (_inventarioActivo && _inventarioActivo.estado === 'CERRADO') {
-                showNotification('🔒 El inventario está cerrado');
+            if (_inventarioActivo && !inventarioAbierto(_inventarioActivo)) {
+                showNotification('🔒 El inventario está ' + (_inventarioActivo.estado || 'cerrado') + ' — ya no se cuenta');
                 return;
             }
             const nombreArea = areasAuditoria[area] || area;
@@ -378,8 +378,8 @@
                 showNotification('⚠️ No tienes permiso para cerrar el Inventario Físico');
                 return;
             }
-            if (!_inventarioActivo || _inventarioActivo.estado === 'CERRADO') {
-                showNotification('⚠️ No hay un Inventario Físico activo para cerrar');
+            if (!inventarioAbierto(_inventarioActivo)) {
+                showNotification('⚠️ No hay un Inventario Físico abierto para cerrar');
                 return;
             }
             if (!navigator.onLine) {
@@ -647,6 +647,51 @@
             }
         }
 
+        // ── ¿Se puede contabilizar este inventario? — LA regla, en un sitio ──
+        //
+        //  La usan tres lugares: el encabezado de Conteo (para decidir si
+        //  dibuja el botón o explica por qué no), el detalle del Historial, y
+        //  contabilizarInventario() — que la vuelve a aplicar sobre el
+        //  documento recién leído del servidor, porque lo que hay en pantalla
+        //  puede ir un paso por detrás. Antes cada uno tenía su propia copia de
+        //  las condiciones, y dos copias de una regla acaban diciendo cosas
+        //  distintas.
+        //
+        //  Pura: no lee Firestore ni toca el DOM.
+        //  @returns { puede, hecho?, motivo?, semanaDestino? }
+        function evaluarContabilizable(inv) {
+            if (!inv) return { puede: false, motivo: 'No hay inventario.' };
+            if (inv.estado === 'CONTABILIZADO') {
+                return { puede: false, hecho: true, semanaDestino: inv.semanaDestino || null,
+                         motivo: 'Este inventario ya está contabilizado.' };
+            }
+            if (inv.estado !== 'CERRADO') {
+                return { puede: false, motivo: 'Primero hay que cerrar el inventario: solo se contabiliza uno CERRADO.' };
+            }
+            // Decisión N-4: FASE 3 opera sobre inventarios cerrados a partir
+            // del paso previo, que es cuando semanaId empezó a guardarse en
+            // la cabecera. Un inventario anterior se bloquea con un motivo
+            // legible en vez de inventarle una semana.
+            if (!inv.semanaId) {
+                return { puede: false, motivo: 'Este inventario se cerró antes de que se guardara la semana '
+                                             + 'en su cabecera, así que no se puede contabilizar.' };
+            }
+            // Decisión N-1: solo un recuento fechado en domingo arrastra.
+            // La regla ya existía en clasificarRecuento(); aquí se explica.
+            const clase = (typeof clasificarRecuento === 'function' && inv.fechaRecuento)
+                          ? clasificarRecuento(inv.fechaRecuento) : null;
+            if (!clase || !clase.cierraSemana) {
+                return { puede: false, motivo: 'Solo se contabiliza un recuento fechado en DOMINGO. '
+                                             + 'Este está fechado ' + (inv.fechaRecuento || 'sin fecha de recuento')
+                                             + ', y un corte a media semana partiría el ciclo en dos.' };
+            }
+            const semanaDestino = (typeof semanaSiguiente === 'function')
+                                  ? semanaSiguiente(inv.fechaRecuento) : null;
+            if (!semanaDestino) return { puede: false, motivo: 'No se pudo calcular la semana destino.' };
+            return { puede: true, semanaDestino: semanaDestino };
+        }
+        window.evaluarContabilizable = evaluarContabilizable;
+
         async function contabilizarInventario(inventoryId, numero) {
             if (!hasPermission('inventory.post')) {
                 showNotification('⚠️ No tienes permiso para contabilizar inventarios');
@@ -674,29 +719,15 @@
                 }
 
                 // ── La semana destino ────────────────────────────────────────
-                // Decisión N-4: FASE 3 opera sobre inventarios cerrados a partir
-                // del paso previo, que es cuando semanaId empezó a guardarse en
-                // la cabecera. Un inventario anterior se bloquea con un motivo
-                // legible en vez de inventarle una semana.
-                if (!inv.semanaId) {
-                    showNotification('⚠️ Este inventario se cerró antes de que se guardara la semana '
-                        + 'en su cabecera, así que no se puede contabilizar.');
+                // Semana en cabecera (N-4), recuento en domingo (N-1) y semana
+                // destino: la misma regla que decide si la pantalla ofrece el
+                // botón, aplicada aquí al documento recién leído del servidor.
+                const ev = evaluarContabilizable(inv);
+                if (!ev.puede) {
+                    showNotification('⚠️ ' + ev.motivo);
                     return;
                 }
-                // Decisión N-1: solo un recuento fechado en domingo arrastra.
-                // La regla ya existía en clasificarRecuento(); aquí se explica.
-                const clase = (typeof clasificarRecuento === 'function' && inv.fechaRecuento)
-                              ? clasificarRecuento(inv.fechaRecuento) : null;
-                if (!clase || !clase.cierraSemana) {
-                    showNotification('⚠️ Solo se contabiliza un recuento fechado en DOMINGO. '
-                        + 'Este está fechado ' + (inv.fechaRecuento || 'sin fecha de recuento')
-                        + ', y un corte a media semana partiría el ciclo en dos.');
-                    return;
-                }
-
-                const semanaDestino = (typeof semanaSiguiente === 'function')
-                                      ? semanaSiguiente(inv.fechaRecuento) : null;
-                if (!semanaDestino) { showNotification('❌ No se pudo calcular la semana destino'); return; }
+                const semanaDestino = ev.semanaDestino;
 
                 // ── ¿Ya está hecho? ──────────────────────────────────────────
                 const previo = await _verificarInicialExistente(semanaDestino, inventoryId);
@@ -788,6 +819,10 @@
                             showNotification('✅ Contabilizado — el inicial de la semana '
                                 + inicial.semanaId + ' quedó registrado');
                             _historialInventarios = null;
+                            // Si se contabilizó tarde (ya en la semana destino),
+                            // el panel tenía guardado "esta semana no tiene
+                            // inicial". Se olvida para que lo vuelva a leer.
+                            if (typeof existenciaInvalidarInicial === 'function') existenciaInvalidarInicial();
                             renderTab();
                         } catch (err) {
                             // ── El manejo que hace que la idempotencia funcione ──
@@ -931,8 +966,8 @@
             // Firestore ya lo protege a nivel de datos (inventories/{id}
             // inmutable); este chequeo evita además que la UI intente
             // siquiera ofrecer la acción.
-            if (_inventarioActivo && _inventarioActivo.estado === 'CERRADO') {
-                showNotification('🔒 Este Inventario Físico está CERRADO — solo lectura');
+            if (_inventarioActivo && !inventarioAbierto(_inventarioActivo)) {
+                showNotification('🔒 Este Inventario Físico está ' + (_inventarioActivo.estado || 'CERRADO') + ' — solo lectura');
                 return;
             }
             // Bloquear entrada si el usuario ya finalizó esa área (solo admin puede entrar igual)
@@ -989,7 +1024,7 @@
                 showNotification('📴 Sin conexión — conecta a internet antes de iniciar nueva auditoría');
                 return;
             }
-            if (_inventarioActivo && _inventarioActivo.estado !== 'CERRADO') {
+            if (inventarioAbierto(_inventarioActivo)) {
                 showNotification('🔒 Debes cerrar el Inventario Físico #' + _inventarioActivo.numero + ' antes de iniciar uno nuevo — los conteos en curso se perderían');
                 return;
             }
@@ -1323,17 +1358,38 @@
         //  se lleven el mismo número.
         // ══════════════════════════════════════════════════════════════════════
 
+        let _saltarAvisoContabilizar = false;
+
         function abrirModalNuevoInventario() {
             if (!isAdmin() || !hasPermission('inventory.create')) {
                 showNotification('⚠️ Solo el administrador puede crear un Inventario Físico');
                 return;
             }
-            if (_inventarioActivo && _inventarioActivo.estado !== 'CERRADO') {
+            if (inventarioAbierto(_inventarioActivo)) {
                 showNotification('🔒 Cierra el Inventario Físico #' + _inventarioActivo.numero + ' antes de crear otro');
                 return;
             }
             if (!navigator.onLine) {
                 showNotification('📴 Sin conexión — el número de inventario se pide al servidor');
+                return;
+            }
+            // El inventario cerrado cierra semana y todavía no se contabilizó.
+            // Crear el siguiente no lo impide (se puede contabilizar después
+            // desde Historial), pero lo saca del encabezado de Conteo, que es
+            // donde está el botón. Se pregunta una vez, no se bloquea.
+            // (evaluarContabilizable solo dice "puede" de un CERRADO que cierra
+            // semana, así que un CONTABILIZADO no pasa por aquí.)
+            if (!_saltarAvisoContabilizar && _inventarioActivo
+                && hasPermission('inventory.post') && evaluarContabilizable(_inventarioActivo).puede) {
+                showConfirm('📘 El Inventario Físico #' + (_inventarioActivo.numero || '—') + ' cierra semana '
+                    + 'y todavía NO está contabilizado.\n\n'
+                    + 'Si creas el siguiente ahora, lo podrás contabilizar después desde Historial.\n\n'
+                    + '¿Crear el siguiente de todos modos?',
+                    function() {
+                        _saltarAvisoContabilizar = true;
+                        try { abrirModalNuevoInventario(); }
+                        finally { _saltarAvisoContabilizar = false; }
+                    });
                 return;
             }
 

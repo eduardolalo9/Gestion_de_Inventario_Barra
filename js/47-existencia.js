@@ -105,9 +105,24 @@
                })
                .catch(function(e) {
                    console.warn('[Existencia] No se pudo leer el inventario inicial:', e);
+                   if (_existenciaInicial.semana !== sem) return;   // estado ya invalidado
                    _existenciaInicial.estado = 'error';
                    _existenciaNotificar();
                });
+        }
+
+        /**
+         * Olvida el inicial en memoria para que la próxima consulta lo lea de
+         * nuevo. Se llama al contabilizar: sin esto, si se contabiliza ya
+         * dentro de la semana destino, el panel seguiría diciendo "esta semana
+         * no tiene inicial" hasta recargar la app.
+         */
+        function existenciaInvalidarInicial() {
+            // Incondicional, también con una consulta en vuelo: esa consulta
+            // pudo salir ANTES de contabilizar y traer "no existe". Al poner
+            // semana en null, su respuesta llega a un estado que ya no es el
+            // suyo y se descarta (ver la guarda en existenciaCargarInicial).
+            _existenciaInicial = { semana: null, estado: 'sin_cargar', saldos: null, origen: null };
         }
 
         function _existenciaNotificar() {

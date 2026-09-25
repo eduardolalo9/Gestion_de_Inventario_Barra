@@ -2925,6 +2925,17 @@ button.pm-tile:active { transform: scale(.98); }
 .pm-estado--abierto { background: var(--green-dim); color: var(--green-text, var(--green)); }
 .pm-estado--cerrado { background: var(--border); color: var(--txt-secondary); }
 .pm-estado--critico { background: var(--red-dim); color: var(--red-text, var(--red)); }
+.pm-estado--contab { background: var(--accent-dim); color: var(--accent); }
+.pm-estado--cab { padding: 3px 10px; font-size: 0.68rem; }
+/* Siguiente paso de un inventario cerrado (Conteo). Borde a la izquierda con
+   el color del estado: pendiente = acento, hecho = verde, aviso = ámbar. */
+.pm-paso { margin-top: 12px; padding: 10px 12px; border-radius: var(--r-md); border: 1px solid var(--border); border-left: 3px solid var(--accent); background: var(--accent-dim); }
+.pm-paso--hecho { border-left-color: var(--green); background: var(--green-dim); }
+.pm-paso--aviso { border-left-color: var(--amber); background: var(--card-high, var(--card)); }
+.pm-paso__titulo { font-size: 0.8rem; font-weight: 800; color: var(--txt-primary); }
+.pm-paso__txt { font-size: 0.74rem; color: var(--txt-secondary); line-height: 1.5; margin-top: 3px; }
+.pm-paso__acc { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.pm-paso__acc .pm-btn:disabled { opacity: .55; cursor: progress; }
 .pm-btn { padding: 8px 12px; border-radius: var(--r-md); border: 1px solid var(--border-mid); background: var(--card); color: var(--accent); font-size: 0.76rem; font-weight: 700; cursor: pointer; white-space: nowrap; font-family: inherit; }
 .pm-btn:hover, .pm-btn:focus-visible { border-color: var(--accent); outline: none; }
 .pm-btn--primario { background: var(--accent); color: var(--accent-on, #003063); border-color: var(--accent); }

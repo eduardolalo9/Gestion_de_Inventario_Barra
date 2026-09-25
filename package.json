@@ -24,7 +24,9 @@
     "test:rcnav": "node pruebas/prueba-reconteo-navegador.js",
     "test:pmnav": "node pruebas/prueba-panel-navegador.js",
     "test:f8": "node pruebas/prueba-fase8.js",
-    "test:f8nav": "node pruebas/prueba-fase8-navegador.js"
+    "test:f8nav": "node pruebas/prueba-fase8-navegador.js",
+    "test:ct": "node pruebas/prueba-contabilizar-conteo.js",
+    "test:ctnav": "node pruebas/prueba-contabilizar-navegador.js"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5",

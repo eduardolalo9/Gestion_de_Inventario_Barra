@@ -112,8 +112,10 @@ const iniAbrir = flujo.indexOf('function abrirModalNuevoInventario() {');
 const abrir    = iniAbrir !== -1 ? flujo.slice(iniAbrir, iniAbrir + 1400) : '';
 chk('Solo el admin abre el formulario',
     /!isAdmin\(\) \|\| !hasPermission\('inventory\.create'\)/.test(abrir));
+// Contabilizar en Conteo: la pregunta pasó de "¿no está CERRADO?" a
+// "¿está abierto?", porque un CONTABILIZADO no es CERRADO y bloqueaba crear.
 chk('No se abre con un inventario sin cerrar',
-    /_inventarioActivo\.estado !== 'CERRADO'/.test(abrir),
+    /if \(inventarioAbierto\(_inventarioActivo\)\)/.test(abrir),
     'crear otro perdería los conteos en curso');
 chk('No se abre sin conexión',
     /!navigator\.onLine/.test(abrir),

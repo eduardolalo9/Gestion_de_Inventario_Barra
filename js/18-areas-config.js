@@ -271,8 +271,7 @@
             }
             // Con un inventario abierto no se toca el reparto de áreas: los
             // bartenders pueden estar contando en ella en este momento.
-            if (typeof _inventarioActivo !== 'undefined' && _inventarioActivo &&
-                _inventarioActivo.estado !== 'CERRADO') {
+            if (typeof _inventarioActivo !== 'undefined' && inventarioAbierto(_inventarioActivo)) {
                 return { ok: false, error: 'Hay un Inventario Físico abierto. Ciérralo antes de cambiar las áreas.' };
             }
 

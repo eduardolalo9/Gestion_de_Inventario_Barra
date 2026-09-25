@@ -39,6 +39,11 @@ function eq(nombre, recibido, esperado, nota) {
 }
 
 const src = fs.readFileSync(path.join(RAIZ, 'js/18-areas-config.js'), 'utf8');
+// El módulo pregunta "¿está abierto el inventario?" a inventarioAbierto()
+// (10-multiusuario.js). Se trae la función REAL, no una copia: si la regla
+// cambia allí, esta prueba tiene que enterarse.
+const multi = fs.readFileSync(path.join(RAIZ, 'js/10-multiusuario.js'), 'utf8');
+const srcAbierto = (multi.match(/function inventarioAbierto\(inv\) \{[\s\S]*?\n        \}/) || [''])[0];
 
 // Se monta el entorno mínimo que el módulo espera: las cinco estructuras que
 // muta, más los pocos globales que consulta.
@@ -66,7 +71,7 @@ function nuevoEntorno(esAdmin) {
         })(),
         console: { warn() {}, info() {} },
     });
-    vm.runInContext(src + `
+    vm.runInContext(srcAbierto + '\n' + src + `
         globalThis.API = { areasDefinidas, areaInfo, crearAreaConteo, editarAreaConteo,
             eliminarAreaConteo, aplicarDefinicionAreas, cargarAreasLocal, conteosEnArea,
             sugerirIdArea, _stockInicialPorArea, _esAreaDeSistema, renderAreasConteoAdmin };
@@ -155,6 +160,12 @@ vm.runInContext("_inventarioActivo = { estado: 'SINCRONIZADO' };", ctx);
 chk('Con un Inventario Físico abierto no se eliminan áreas',
     ctx.API.eliminarAreaConteo('barra-terraza').ok === false,
     'puede haber bartenders contando en ella ahora mismo');
+// Un inventario CONTABILIZADO ya no se cuenta: antes se tomaba por abierto
+// (no era 'CERRADO') y dejaba las áreas bloqueadas para siempre.
+vm.runInContext("_inventarioActivo = { estado: 'CONTABILIZADO' };", ctx);
+chk('★ Con el inventario CONTABILIZADO las áreas vuelven a editarse',
+    !!srcAbierto && ctx.API.eliminarAreaConteo('barra-terraza').ok === true,
+    'un contabilizado es de solo lectura, no un inventario abierto');
 
 // ═══ 6 · Permisos ════════════════════════════════════════════════════════
 const noAdmin = nuevoEntorno(false);

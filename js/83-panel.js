@@ -164,7 +164,7 @@
                 h += '<div class="pm-card__fila"><span>Entradas por compras</span><b>' + nEnt + ' productos</b></div>';
                 h += '<div class="pm-card__sub">Toca un producto para ver su existencia. Aún no descuenta ventas (el módulo de ventas es una fase pendiente).</div>';
             } else if (est.estado === 'no_existe') {
-                h += '<div class="pm-card__sub">Esta semana todavía no tiene inventario inicial. Se crea al <b>contabilizar</b> el inventario cerrado del domingo (Conteo → Historial → inventario cerrado → Contabilizar).</div>';
+                h += '<div class="pm-card__sub">Esta semana todavía no tiene inventario inicial. Se crea al <b>contabilizar</b> el inventario cerrado del domingo: en Conteo, botón 📘 Contabilizar.</div>';
                 if (nEnt) h += '<div class="pm-card__fila"><span>Entradas por compras</span><b>' + nEnt + ' productos</b></div>';
             } else {
                 h += '<div class="pm-card__sub">No se pudo consultar el inventario inicial (¿sin conexión?).</div>';

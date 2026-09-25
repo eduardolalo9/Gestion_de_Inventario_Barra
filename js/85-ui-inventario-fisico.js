@@ -53,10 +53,19 @@
             }
 
             const inv = _inventarioActivo;
-            const esCerrado = inv.estado === 'CERRADO';
-            const badge = esCerrado
-                ? '<span style="background:rgba(107,114,128,.12);color:#4b5563;padding:3px 10px;border-radius:999px;font-size:0.68rem;font-weight:700;">🔒 INVENTARIO BARRA CERRADO</span>'
-                : '<span style="background:rgba(34,197,94,.12);color:#16a34a;padding:3px 10px;border-radius:999px;font-size:0.68rem;font-weight:700;">🟢 INVENTARIO BARRA SINCRONIZADO</span>';
+            // Antes: esCerrado = (estado === 'CERRADO'). Un inventario
+            // CONTABILIZADO salía como "SINCRONIZADO", con el botón rojo de
+            // cerrar y el de reconteo. Solo lectura es todo lo que no está
+            // abierto (ver inventarioAbierto, 10-multiusuario).
+            const esCerrado = !inventarioAbierto(inv);
+            const esContab  = inv.estado === 'CONTABILIZADO';
+            // Los tres con clases del tema: los colores fijos anteriores
+            // (#4b5563 sobre gris) casi no se leían en modo oscuro.
+            const badge = !esCerrado
+                ? '<span class="pm-estado pm-estado--abierto pm-estado--cab">🟢 INVENTARIO BARRA SINCRONIZADO</span>'
+                : (esContab
+                    ? '<span class="pm-estado pm-estado--contab pm-estado--cab">📘 INVENTARIO BARRA CONTABILIZADO</span>'
+                    : '<span class="pm-estado pm-estado--cerrado pm-estado--cab">🔒 INVENTARIO BARRA CERRADO</span>');
 
             // Artículos contados = productos con al menos una entrada de conteo
             // de ALGÚN usuario (unión, no suma) — dato ya disponible en memoria,
@@ -132,9 +141,98 @@
             }
             html += '</div>';
             html += '</div>';
+            html += _renderSiguientePasoInventario(inv);
             html += '</div>';
             return html;
         }
+
+        // ── Siguiente paso de un inventario que ya no se cuenta ─────────────
+        //
+        //  Antes, al cerrar un inventario el encabezado de Conteo se quedaba
+        //  mudo: ni "Contabilizar" (vivía tres pantallas más adentro:
+        //  Historial → inventario → Contabilizar) ni "Crear el siguiente".
+        //  Y tras contabilizar, la app creía que el inventario seguía abierto
+        //  y no dejaba crear otro. Aquí se dice qué toca hacer ahora y se
+        //  ofrece el botón para hacerlo, sin salir de Conteo.
+        //
+        //  Solo pinta. La regla de si se puede contabilizar es
+        //  evaluarContabilizable(); la acción es contabilizarInventario(), la
+        //  misma que usa el Historial.
+        function _renderSiguientePasoInventario(inv) {
+            if (!inv || inventarioAbierto(inv)) return '';
+            var ev          = evaluarContabilizable(inv);
+            var puedeContab = hasPermission('inventory.post');
+            var puedeCrear  = isAdmin() && hasPermission('inventory.create');
+            var semana = function(id) {
+                return (id && typeof etiquetaSemana === 'function') ? etiquetaSemana(id) : ('semana ' + (id || '—'));
+            };
+            var btnCrear = function(principal) {
+                return puedeCrear
+                    ? '<button type="button" class="pm-btn' + (principal ? ' pm-btn--primario' : '') + '" onclick="abrirModalNuevoInventario()">➕ Crear el siguiente inventario</button>'
+                    : '';
+            };
+            var h = '';
+
+            if (ev.hecho) {
+                h += '<div class="pm-paso pm-paso--hecho" role="status">'
+                   + '<div class="pm-paso__titulo">📘 Contabilizado</div>'
+                   + '<div class="pm-paso__txt">Su resultado ya es el stock inicial de la ' + escapeHtml(semana(ev.semanaDestino))
+                   + (inv.contabilizadoEn ? ' · ' + escapeHtml(new Date(inv.contabilizadoEn).toLocaleDateString('es-MX')) : '')
+                   + '. Queda de solo lectura.</div>';
+                if (puedeCrear) h += '<div class="pm-paso__acc">' + btnCrear(true) + '</div>';
+                h += '</div>';
+                return h;
+            }
+
+            if (ev.puede) {
+                h += '<div class="pm-paso pm-paso--pendiente">'
+                   + '<div class="pm-paso__titulo">📘 Siguiente paso: contabilizar</div>'
+                   + '<div class="pm-paso__txt">'
+                   + (puedeContab
+                        ? 'El resultado físico de este inventario pasará a ser el stock inicial de la '
+                          + escapeHtml(semana(ev.semanaDestino)) + '. <b>Es irreversible</b>: el inicial no se corrige ni se deshace.'
+                        : 'Pendiente de que administración lo contabilice como stock inicial de la '
+                          + escapeHtml(semana(ev.semanaDestino)) + '.')
+                   + '</div>';
+                var acc = '';
+                if (puedeContab) acc += '<button type="button" class="pm-btn pm-btn--primario" data-inv-accion="contabilizar">📘 Contabilizar</button>';
+                acc += btnCrear(false);
+                if (acc) h += '<div class="pm-paso__acc">' + acc + '</div>';
+                h += '</div>';
+                return h;
+            }
+
+            // Cerrado, pero no se puede contabilizar (recuento a media semana,
+            // o inventario anterior a que se guardara la semana). Se dice por
+            // qué, con el mismo texto que usa el Historial.
+            h += '<div class="pm-paso pm-paso--aviso">'
+               + '<div class="pm-paso__titulo">🔒 Inventario cerrado</div>'
+               + '<div class="pm-paso__txt">'
+               + (puedeContab ? '📘 No se puede contabilizar. ' + escapeHtml(ev.motivo) : 'Queda de solo lectura.')
+               + '</div>';
+            if (puedeCrear) h += '<div class="pm-paso__acc">' + btnCrear(true) + '</div>';
+            h += '</div>';
+            return h;
+        }
+
+        // Contabilizar desde Conteo: acción delegada, sin onclick en línea. El
+        // id se toma al hacer clic de _inventarioActivoId —el inventario que
+        // está escuchando la app— y no de un atributo pintado en el HTML, que
+        // podría haberse quedado viejo si el inventario activo cambió.
+        document.addEventListener('click', function(e) {
+            var b = e.target && e.target.closest ? e.target.closest('[data-inv-accion="contabilizar"]') : null;
+            if (!b) return;
+            if (!_inventarioActivo || !_inventarioActivoId) return;
+            // Evita el doble toque mientras se prepara. El servidor ya es
+            // idempotente (el inicial solo se puede crear una vez); esto evita
+            // además dos ventanas de confirmación seguidas. Se rehabilita solo:
+            // si el administrador cancela la confirmación, tiene que poder
+            // volver a intentarlo sin salir de la pantalla.
+            if (b.disabled) return;
+            b.disabled = true;
+            setTimeout(function() { b.disabled = false; }, 2000);
+            contabilizarInventario(_inventarioActivoId, _inventarioActivo.numero);
+        });
 
         // Historial — carga bajo demanda (ver _cargarHistorialInventarios).
         // Admin ve todos los cerrados; usuario normal ve solo aquellos donde
@@ -246,16 +344,10 @@
                      +  (meta.contabilizadoEn ? ' · ' + new Date(meta.contabilizadoEn).toLocaleDateString('es-MX') : '')
                      +  '</p></div>';
             } else if (hasPermission('inventory.post')) {
-                var _cl = (typeof clasificarRecuento === 'function' && meta.fechaRecuento)
-                          ? clasificarRecuento(meta.fechaRecuento) : null;
-                var _motivo = null;
-                if (!meta.semanaId) {
-                    _motivo = 'Este inventario se cerró antes de que se guardara la semana en su cabecera.';
-                } else if (!_cl || !_cl.cierraSemana) {
-                    _motivo = 'Solo se contabiliza un recuento fechado en DOMINGO. Este está fechado '
-                            + (meta.fechaRecuento || 'sin fecha de recuento')
-                            + ', y un corte a media semana partiría el ciclo en dos.';
-                }
+                // Misma regla que el encabezado de Conteo y que la propia
+                // contabilización (evaluarContabilizable, 75-auditoria-flujo).
+                var _ev = evaluarContabilizable(meta);
+                var _motivo = _ev.puede ? null : _ev.motivo;
                 if (_motivo) {
                     html += '<div style="padding:9px 12px;border-radius:var(--r-md);background:var(--bg-soft);'
                          +  'border-left:3px solid var(--amber,#f59e0b);margin-bottom:10px;">'
@@ -310,7 +402,7 @@
             // guard que auditoriaResetear() — el botón no se ofrece si hay un
             // Inventario Físico activo que no esté CERRADO, para que el admin
             // ni siquiera vea la opción que la función rechazaría.
-            if (isAdmin() && hasPermission('inventory.create') && (!_inventarioActivo || _inventarioActivo.estado === 'CERRADO')) {
+            if (isAdmin() && hasPermission('inventory.create') && !inventarioAbierto(_inventarioActivo)) {
                 html += '<button onclick="abrirModalNuevoInventario()" title="Crear nuevo Inventario Físico (solo admin)" style="flex-shrink:0;padding:6px 10px;border-radius:var(--r-md);background:var(--red-dim);border:1px solid rgba(239,68,68,0.18);color:var(--red-text);font-size:0.7rem;font-weight:600;cursor:pointer;white-space:nowrap;" class="flex items-center gap-1">';
                 html += '<svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>';
                 html += ' Nuevo Inventario Físico</button>';

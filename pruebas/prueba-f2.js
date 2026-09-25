@@ -369,7 +369,7 @@ chk('P28 · cada operación tiene su propio permiso',
     !!cerrarArea && /hasPermission\('inventory\.closeOther'\)/.test(cerrarArea));
 chk('P28 · finalizar comprueba además el área asignada y el inventario abierto',
     !!finalizar && /puedeOperarArea\(area\)/.test(finalizar) &&
-    /_inventarioActivo\.estado === 'CERRADO'/.test(finalizar),
+    /_inventarioActivo && !inventarioAbierto\(_inventarioActivo\)/.test(finalizar),
     'antes no verificaba absolutamente nada');
 
 // ═══════════════════════════════════════════════════════════════════════════
