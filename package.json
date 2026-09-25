@@ -27,7 +27,8 @@
     "test:f8nav": "node pruebas/prueba-fase8-navegador.js",
     "test:ct": "node pruebas/prueba-contabilizar-conteo.js",
     "test:ctnav": "node pruebas/prueba-contabilizar-navegador.js",
-    "test:ses": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-sesion-integracion.js\""
+    "test:ses": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-sesion-integracion.js\"",
+    "test:h40nav": "node pruebas/prueba-h40-navegador.js"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5",

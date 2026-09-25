@@ -123,6 +123,20 @@
                      +  (_cl && typeof etiquetaSemana === 'function' ? ' · ' + escapeHtml(etiquetaSemana(inv.fechaRecuento)) : '')
                      +  (_cl && _cl.cierraSemana ? ' · <span style="color:var(--green,#4ade80);font-weight:600;">cierra semana</span>' : '')
                      +  '</p>';
+            } else {
+                // H-40 (hotfix 4.9): inventarios creados antes de R7/FASE 3 no
+                // tienen fechaRecuento. Antes esto no se mostraba — parecía que
+                // la línea faltaba por un error de la pantalla, y no había
+                // forma de saber (ni de arreglar) que ese inventario, tal cual,
+                // nunca se va a poder contabilizar. Mientras siga abierto, el
+                // admin puede registrarla una sola vez (ver _renderSiguientePasoInventario
+                // no aplica aquí: eso es para cuando ya está cerrado).
+                html += '<p style="font-size:0.72rem;color:var(--amber,#fbbf24);margin-top:2px;">'
+                     +  'Recuento: no registrado (inventario creado antes de esta regla)</p>';
+                if (!esCerrado && isAdmin() && hasPermission('inventory.create')) {
+                    html += '<p style="margin-top:4px;"><button type="button" class="pm-btn" style="padding:5px 10px;font-size:.68rem;" '
+                         +  'onclick="abrirModalRegistrarFechaRecuento()">🗓️ Registrar fecha de recuento</button></p>';
+                }
             }
             if (Array.isArray(inv.warehousesSnapshot) && inv.warehousesSnapshot.length) {
                 html += '<p style="font-size:0.72rem;color:var(--txt-muted);margin-top:2px;">Áreas: '

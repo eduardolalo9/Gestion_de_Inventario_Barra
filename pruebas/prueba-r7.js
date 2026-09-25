@@ -79,12 +79,22 @@ chk('Se avisa a qué semana pertenece la fecha',
     /clasificarRecuento\(f\.value\)/.test(flujo));
 chk('Se distingue el domingo, que cierra semana',
     /cl\.cierraSemana[\s\S]{0,200}?cierra la/.test(flujo));
-chk('Y el fin de mes, que NO la cierra',
-    /No cierra semana: el inicial del lunes seguirá saliendo del domingo/.test(flujo),
+chk('Y el fin de mes, que NO cierra semana pero sí se puede contabilizar',
+    /No cierra semana[\s\S]{0,40}el inicial del lunes seguirá saliendo/.test(flujo),
     'es la regla 4 dicha donde el administrador la necesita');
-chk('El aviso no bloquea: solo informa',
-    !/return;[\s\S]{0,80}?_pintarAvisoFechaNuevoInv/.test(flujo),
-    'contar a media semana es legítimo');
+// H-40 (hotfix 4.9): decisión explícita del dueño — un inventario fuera de
+// domingo/fin de mes NUNCA podrá contabilizarse (evaluarContabilizable lo
+// rechaza para siempre tras cerrarlo), así que ahora SÍ se bloquea al
+// crear, en vez de solo avisar. Defensa en dos capas: el botón se
+// deshabilita en la pantalla, y confirmarNuevoInventario() lo vuelve a
+// comprobar por si el estado del botón se pierde.
+chk('Fuera de domingo/fin de mes se deshabilita el botón de crear',
+    /no es domingo ni fin de mes[\s\S]{0,400}btn\.disabled = true/.test(flujo));
+chk('…y confirmarNuevoInventario() lo bloquea también, no solo la pantalla',
+    /cierraSemana && !_cl\.esCorteMensual\)[\s\S]{0,200}?return;/.test(flujo));
+chk('La fecha por defecto ya no es "hoy": se propone la próxima fecha válida',
+    /proximaFechaRecuentoValida\(new Date\(\)\)/.test(flujo),
+    'proponer "hoy" casi siempre generaba un inventario que no se podía contabilizar');
 
 // ═══ 4 · La bandera de confirmación ═════════════════════════════════════
 chk('Existe el envoltorio de confirmación', /function _confirmarOSaltar\(/.test(flujo));
@@ -180,6 +190,32 @@ chk('La confirmación lista las áreas reales',
     /AREAS_CONTEO\.map\(function\(a\) \{ return areasAuditoria\[a\]; \}\)\.join/.test(flujo));
 chk('No quedan "/3 áreas" en la pantalla de inventario',
     !/\/3 áreas/.test(uiInv) && !/ \/ 3 áreas/.test(uiInv));
+
+// ═══ 10.5 · H-40 (hotfix 4.9): registrar fecha en un inventario legado ══
+// El caso real que lo motivó: un inventario abierto creado antes de esta
+// regla no tiene fechaRecuento, así que jamás se podrá contabilizar tras
+// cerrarlo (evaluarContabilizable lo rechaza para siempre). Esto deja
+// completarla UNA vez, sin violar la inmutabilidad de FASE 7.
+chk('Existe abrirModalRegistrarFechaRecuento()', /function abrirModalRegistrarFechaRecuento\(\)/.test(flujo));
+chk('Solo el administrador con permiso puede abrirlo',
+    /function abrirModalRegistrarFechaRecuento[\s\S]{0,120}isAdmin\(\)[\s\S]{0,40}hasPermission\('inventory\.create'\)/.test(flujo));
+chk('No se ofrece si el inventario ya tiene fecha registrada',
+    /function abrirModalRegistrarFechaRecuento[\s\S]{0,700}_inventarioActivo\.fechaRecuento\)[\s\S]{0,200}return;/.test(flujo));
+chk('★ confirmarRegistrarFechaRecuento() relee el documento del SERVIDOR antes de escribir',
+    /function confirmarRegistrarFechaRecuento[\s\S]{0,1400}await ref\.get\(\)/.test(flujo),
+    'no se confía en el estado en memoria: pudo cambiar entre abrir el modal y pulsar Guardar');
+chk('★ No escribe si el servidor ya tenía fechaRecuento (evita una carrera entre dos admins)',
+    /if \(inv\.fechaRecuento\) \{[\s\S]{0,250}return;/.test(flujo));
+chk('★ No escribe si el inventario ya no está abierto (FASE 7: nada retroactivo sobre CERRADO/CONTABILIZADO)',
+    /if \(!inventarioAbierto\(inv\)\) \{[\s\S]{0,250}return;/.test(flujo));
+chk('Solo escribe fechaRecuento y semanaId — nada más del documento',
+    /ref\.update\(\{ fechaRecuento: fecha, semanaId: cl\.semanaId \}\)/.test(flujo));
+chk('La fecha se valida con la misma regla que "Nuevo Inventario" (domingo o fin de mes)',
+    /function confirmarRegistrarFechaRecuento[\s\S]{0,600}!cl\.cierraSemana && !cl\.esCorteMensual/.test(flujo));
+chk('El encabezado ofrece el botón solo mientras el inventario sigue abierto',
+    /!esCerrado && isAdmin\(\) && hasPermission\('inventory\.create'\)\)[\s\S]{0,200}abrirModalRegistrarFechaRecuento/.test(uiInv));
+chk('Sin fechaRecuento, el encabezado avisa en vez de mostrar una línea vacía',
+    /Recuento: no registrado \(inventario creado antes de esta regla\)/.test(uiInv));
 
 // ═══ 10 · Caché ═════════════════════════════════════════════════════════
 const vTags = [...new Set([...html.matchAll(/<script\s+src="js\/[^"?]+\.js\?v=([^"]*)"/g)].map(m => m[1]))];

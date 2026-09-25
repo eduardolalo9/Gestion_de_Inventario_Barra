@@ -627,7 +627,7 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
             }
         })();
     </script>
-    <link rel="stylesheet" href="css/estilos.css?v=4.8">
+    <link rel="stylesheet" href="css/estilos.css?v=4.9">
 </head>
 <body class="min-h-screen">
 
@@ -1109,7 +1109,8 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
             <label for="nuevoInvFecha" style="display:block;font-size:.78rem;font-weight:600;color:var(--txt-secondary);margin-bottom:5px;">Fecha del recuento</label>
             <input type="date" id="nuevoInvFecha" onchange="_pintarAvisoFechaNuevoInv()"
                 style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border-mid);background:var(--surface);color:var(--txt-primary);font-family:inherit;font-size:.86rem;">
-            <p id="nuevoInvAvisoFecha" style="font-size:.72rem;margin:6px 0 14px;line-height:1.5;"></p>
+            <p style="font-size:.7rem;color:var(--txt-muted);margin:5px 0 0;">Solo domingo o fin de mes: son los únicos días que cierran semana y permiten contabilizar después.</p>
+            <p id="nuevoInvAvisoFecha" style="font-size:.72rem;margin:6px 0 14px;line-height:1.5;font-weight:600;"></p>
 
             <div style="font-size:.78rem;font-weight:600;color:var(--txt-secondary);margin-bottom:5px;">Creado por</div>
             <div id="nuevoInvCreadoPor" style="font-size:.84rem;color:var(--txt-primary);margin-bottom:14px;"></div>
@@ -1124,7 +1125,31 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
 
             <div style="display:flex;gap:10px;">
                 <button type="button" onclick="cerrarModalNuevoInventario()" style="flex:1;min-height:44px;border-radius:9999px;border:1px solid var(--border-mid);background:transparent;color:var(--txt-secondary);font-family:inherit;font-size:.86rem;font-weight:500;cursor:pointer;">Cancelar</button>
-                <button type="button" onclick="confirmarNuevoInventario()" style="flex:1;min-height:44px;border-radius:9999px;border:none;background:var(--accent);color:var(--accent-on,#003063);font-family:inherit;font-size:.86rem;font-weight:600;cursor:pointer;">Crear inventario</button>
+                <button type="button" id="nuevoInvBtnCrear" onclick="confirmarNuevoInventario()" style="flex:1;min-height:44px;border-radius:9999px;border:none;background:var(--accent);color:var(--accent-on,#003063);font-family:inherit;font-size:.86rem;font-weight:600;cursor:pointer;">Crear inventario</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         H-40 (hotfix 4.9): registrar la fecha de recuento en un inventario
+         ABIERTO creado antes de que ese campo existiera. Una sola vez —
+         una vez guardada, este modal ya no se ofrece para ese inventario.
+         ══════════════════════════════════════════════════════════════════ -->
+    <div id="regFechaRecuentoModal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[300] hidden" style="padding:12px;" role="dialog" aria-modal="true" aria-labelledby="regFechaRecuentoTitulo">
+        <div class="modal-box" style="background:var(--modal-bg,#fff);border-radius:18px;max-width:24rem;width:100%;padding:18px;">
+            <div style="width:48px;height:5px;background:var(--border-mid,#d1d5db);border-radius:999px;margin:0 auto 14px;"></div>
+            <h2 id="regFechaRecuentoTitulo" style="font-size:1.1rem;font-weight:700;color:var(--txt-primary);margin-bottom:2px;">Registrar fecha de recuento</h2>
+            <p style="font-size:.76rem;color:var(--txt-muted);margin-bottom:14px;">Este inventario se creó antes de que se guardara esta fecha. Sin ella no se va a poder contabilizar cuando lo cierres. Se registra una sola vez.</p>
+
+            <label for="regFechaRecuentoInput" style="display:block;font-size:.78rem;font-weight:600;color:var(--txt-secondary);margin-bottom:5px;">Fecha del recuento</label>
+            <input type="date" id="regFechaRecuentoInput" onchange="_pintarAvisoFechaRegistrar()"
+                style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border-mid);background:var(--surface);color:var(--txt-primary);font-family:inherit;font-size:.86rem;">
+            <p style="font-size:.7rem;color:var(--txt-muted);margin:5px 0 0;">Solo domingo o fin de mes.</p>
+            <p id="regFechaRecuentoAviso" style="font-size:.72rem;margin:6px 0 16px;line-height:1.5;font-weight:600;"></p>
+
+            <div style="display:flex;gap:10px;">
+                <button type="button" onclick="cerrarModalRegistrarFechaRecuento()" style="flex:1;min-height:44px;border-radius:9999px;border:1px solid var(--border-mid);background:transparent;color:var(--txt-secondary);font-family:inherit;font-size:.86rem;font-weight:500;cursor:pointer;">Cancelar</button>
+                <button type="button" id="regFechaRecuentoBtnGuardar" onclick="confirmarRegistrarFechaRecuento()" style="flex:1;min-height:44px;border-radius:9999px;border:none;background:var(--accent);color:var(--accent-on,#003063);font-family:inherit;font-size:.86rem;font-weight:600;cursor:pointer;">Guardar</button>
             </div>
         </div>
     </div>
@@ -1180,35 +1205,35 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
         </div>
     </div>
 
-        <script src="js/00-nucleo.js?v=4.8"></script>
-    <script src="js/05-busqueda-motor.js?v=4.8"></script>
-    <script src="js/06-busqueda-ui.js?v=4.8"></script>
-    <script src="js/10-multiusuario.js?v=4.8"></script>
-    <script src="js/15-ciclo-semanal.js?v=4.8"></script>
-    <script src="js/18-areas-config.js?v=4.8"></script>
-    <script src="js/20-persistencia.js?v=4.8"></script>
-    <script src="js/30-indexeddb.js?v=4.8"></script>
-    <script src="js/40-firestore.js?v=4.8"></script>
-    <script src="js/45-inventario-datos.js?v=4.8"></script>
-    <script src="js/47-existencia.js?v=4.8"></script>
-    <script src="js/50-roles-permisos.js?v=4.8"></script>
-    <script src="js/60-arranque.js?v=4.8"></script>
-    <script src="js/70-conversion-render.js?v=4.8"></script>
-    <script src="js/75-auditoria-flujo.js?v=4.8"></script>
-    <script src="js/80-buscador.js?v=4.8"></script>
-    <script src="js/83-panel.js?v=4.8"></script>
-    <script src="js/85-ui-inventario-fisico.js?v=4.8"></script>
-    <script src="js/87-reconteo.js?v=4.8"></script>
-    <script src="js/88-compras.js?v=4.8"></script>
-    <script src="js/90-ciclo-admin.js?v=4.8"></script>
-    <script src="js/95-exportacion.js?v=4.8"></script>
-    <script src="js/99-window-arranque.js?v=4.8"></script>
+        <script src="js/00-nucleo.js?v=4.9"></script>
+    <script src="js/05-busqueda-motor.js?v=4.9"></script>
+    <script src="js/06-busqueda-ui.js?v=4.9"></script>
+    <script src="js/10-multiusuario.js?v=4.9"></script>
+    <script src="js/15-ciclo-semanal.js?v=4.9"></script>
+    <script src="js/18-areas-config.js?v=4.9"></script>
+    <script src="js/20-persistencia.js?v=4.9"></script>
+    <script src="js/30-indexeddb.js?v=4.9"></script>
+    <script src="js/40-firestore.js?v=4.9"></script>
+    <script src="js/45-inventario-datos.js?v=4.9"></script>
+    <script src="js/47-existencia.js?v=4.9"></script>
+    <script src="js/50-roles-permisos.js?v=4.9"></script>
+    <script src="js/60-arranque.js?v=4.9"></script>
+    <script src="js/70-conversion-render.js?v=4.9"></script>
+    <script src="js/75-auditoria-flujo.js?v=4.9"></script>
+    <script src="js/80-buscador.js?v=4.9"></script>
+    <script src="js/83-panel.js?v=4.9"></script>
+    <script src="js/85-ui-inventario-fisico.js?v=4.9"></script>
+    <script src="js/87-reconteo.js?v=4.9"></script>
+    <script src="js/88-compras.js?v=4.9"></script>
+    <script src="js/90-ciclo-admin.js?v=4.9"></script>
+    <script src="js/95-exportacion.js?v=4.9"></script>
+    <script src="js/99-window-arranque.js?v=4.9"></script>
 
     </div><!-- /#appWrapper -->
 
     <!-- ══════════════════════════════════════════════════════
          AUTH — Lógica de autenticación Firebase
          ══════════════════════════════════════════════════════ -->
-        <script src="js/auth.js?v=4.8"></script>
+        <script src="js/auth.js?v=4.9"></script>
 </body>
 </html>

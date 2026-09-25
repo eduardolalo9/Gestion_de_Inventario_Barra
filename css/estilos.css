@@ -2936,6 +2936,10 @@ button.pm-tile:active { transform: scale(.98); }
 .pm-paso__txt { font-size: 0.74rem; color: var(--txt-secondary); line-height: 1.5; margin-top: 3px; }
 .pm-paso__acc { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .pm-paso__acc .pm-btn:disabled { opacity: .55; cursor: progress; }
+/* H-40 (hotfix 4.9): fecha inválida en 'Nuevo Inventario Físico' o en
+   'Registrar fecha de recuento' — el botón se deshabilita, no solo se avisa. */
+#nuevoInvBtnCrear:disabled,
+#regFechaRecuentoBtnGuardar:disabled { opacity: .45; cursor: not-allowed; }
 .pm-btn { padding: 8px 12px; border-radius: var(--r-md); border: 1px solid var(--border-mid); background: var(--card); color: var(--accent); font-size: 0.76rem; font-weight: 700; cursor: pointer; white-space: nowrap; font-family: inherit; }
 .pm-btn:hover, .pm-btn:focus-visible { border-color: var(--accent); outline: none; }
 .pm-btn--primario { background: var(--accent); color: var(--accent-on, #003063); border-color: var(--accent); }

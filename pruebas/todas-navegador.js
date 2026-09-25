@@ -37,6 +37,7 @@ const PRUEBAS = [
     'prueba-panel-navegador.js',    // PREMIUM — panel, ficha de producto y Conteo sin inventario
     'prueba-fase8-navegador.js',    // FASE 8 — las dos existencias y el interruptor de fuente
     'prueba-contabilizar-navegador.js', // Contabilizar en Conteo y estado CONTABILIZADO
+    'prueba-h40-navegador.js',          // H-40 (hotfix 4.9) — fecha de recuento domingo/fin de mes
 ];
 
 function esperarServidor(intentos) {

@@ -1450,9 +1450,14 @@
                 return;
             }
 
-            var hoy = (typeof fechaISOLocal === 'function')
-                      ? fechaISOLocal(new Date())
-                      : new Date().toISOString().slice(0, 10);
+            // H-40 (hotfix 4.9): 'hoy' casi nunca sirve — solo domingo o fin de
+            // mes cierran algo. Proponer 'hoy' llevaba a crear inventarios que
+            // después nunca se podían contabilizar, sin que nadie lo notara
+            // hasta el momento de cerrar. Se propone la próxima fecha válida.
+            var hoy = (typeof proximaFechaRecuentoValida === 'function')
+                      ? proximaFechaRecuentoValida(new Date())
+                      : ((typeof fechaISOLocal === 'function') ? fechaISOLocal(new Date())
+                                                                : new Date().toISOString().slice(0, 10));
 
             var cont = document.getElementById('nuevoInvAreas');
             if (cont) {
@@ -1485,28 +1490,47 @@
         }
 
         /**
-         * Dice a qué semana pertenece la fecha elegida y si ese día cierra
-         * semana. No bloquea nada: un conteo a media semana es legítimo, pero
-         * el administrador debe saber que ese NO arrastra el inicial.
+         * H-40 (hotfix 4.9): antes solo avisaba de color; un inventario podía
+         * crearse con cualquier fecha y quedar, tras cerrarlo, sin ninguna vía
+         * para contabilizarse (evaluarContabilizable lo rechaza para siempre).
+         * Ahora, si la fecha no cierra semana ni es corte de mes, se BLOQUEA
+         * la creación: se explica por qué y se deshabilita 'Crear inventario'.
+         * Un corte de fin de mes entre semana sigue permitido (no cierra
+         * semana, pero sirve de corte contable — evaluarContabilizable lo
+         * distingue igual que antes).
          */
         function _pintarAvisoFechaNuevoInv() {
-            var el = document.getElementById('nuevoInvAvisoFecha');
-            var f  = document.getElementById('nuevoInvFecha');
+            var el  = document.getElementById('nuevoInvAvisoFecha');
+            var f   = document.getElementById('nuevoInvFecha');
+            var btn = document.getElementById('nuevoInvBtnCrear');
             if (!el || !f || typeof clasificarRecuento !== 'function') return;
             var cl = clasificarRecuento(f.value);
-            if (!cl) { el.textContent = ''; return; }
+
+            if (!cl) {
+                el.style.color = 'var(--red, #f87171)';
+                el.textContent = '⚠️ Elige una fecha válida.';
+                if (btn) btn.disabled = true;
+                return;
+            }
 
             var semana = (typeof etiquetaSemana === 'function') ? etiquetaSemana(f.value) : cl.semanaId;
             if (cl.cierraSemana) {
                 el.style.color = 'var(--green, #4ade80)';
                 el.textContent = '✓ Domingo — cierra la ' + semana +
                                  (cl.esCorteMensual ? ' y además es corte de fin de mes.' : '.');
+                if (btn) btn.disabled = false;
             } else if (cl.esCorteMensual) {
                 el.style.color = 'var(--amber, #fbbf24)';
-                el.textContent = 'Corte de fin de mes. No cierra semana: el inicial del lunes seguirá saliendo del domingo.';
+                el.textContent = 'Corte de fin de mes. No cierra semana — el inicial del lunes seguirá saliendo '
+                                + 'del domingo, pero este corte sí se podrá contabilizar como corte mensual.';
+                if (btn) btn.disabled = false;
             } else {
-                el.style.color = 'var(--txt-muted)';
-                el.textContent = 'Pertenece a la ' + semana + '. Al no ser domingo, no arrastra el inicial.';
+                el.style.color = 'var(--red, #f87171)';
+                // textContent, no innerHTML: no hace falta escapeHtml aquí.
+                el.textContent = '⚠️ ' + f.value + ' no es domingo ni fin de mes. Un inventario con esta fecha '
+                                + 'no se podrá contabilizar nunca. Elige un domingo (por ejemplo, ' + semana
+                                + ') o el último día del mes.';
+                if (btn) btn.disabled = true;
             }
         }
 
@@ -1521,6 +1545,14 @@
             var fecha   = fechaEl ? fechaEl.value : '';
             if (typeof parseFechaLocal === 'function' && !parseFechaLocal(fecha)) {
                 showNotification('⚠️ La fecha no es válida');
+                return;
+            }
+            // Defensa en profundidad: _pintarAvisoFechaNuevoInv ya deshabilita
+            // el botón, pero esto es lo que de verdad decide si se crea.
+            var _cl = (typeof clasificarRecuento === 'function') ? clasificarRecuento(fecha) : null;
+            if (!_cl || (!_cl.cierraSemana && !_cl.esCorteMensual)) {
+                showNotification('⚠️ Esa fecha no es domingo ni fin de mes — elige una de esas para poder '
+                    + 'contabilizar este inventario después');
                 return;
             }
 
@@ -1543,6 +1575,110 @@
                 auditoriaResetear();
             } finally {
                 _saltarConfirmacionNuevoInv = false;
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  H-40 (hotfix 4.9) — REGISTRAR FECHA DE RECUENTO EN UN INVENTARIO
+        //  ANTIGUO SIN ESE CAMPO
+        //  ────────────────────────────────────────────────────────────────────
+        //  Los inventarios creados antes de R7/FASE 3 no tienen fechaRecuento
+        //  ni semanaId. Sin ellos, evaluarContabilizable() los rechaza para
+        //  siempre en cuanto se cierran — no hay forma de arreglarlo después.
+        //  Esto deja completar esos dos campos UNA sola vez, mientras el
+        //  inventario sigue abierto (nunca sobre uno CERRADO/CONTABILIZADO:
+        //  eso violaría la inmutabilidad de FASE 7). Las reglas de Firestore
+        //  ya permiten esta escritura (admin + estado != CERRADO/CONTABILIZADO,
+        //  ver inventories/{id}), así que no hace falta tocarlas.
+        // ══════════════════════════════════════════════════════════════════════
+
+        function abrirModalRegistrarFechaRecuento() {
+            if (!isAdmin() || !hasPermission('inventory.create')) {
+                showNotification('⚠️ Solo el administrador puede registrar la fecha de recuento');
+                return;
+            }
+            if (!_inventarioActivo || !inventarioAbierto(_inventarioActivo)) {
+                showNotification('⚠️ No hay un inventario abierto al que registrarle la fecha');
+                return;
+            }
+            if (_inventarioActivo.fechaRecuento) {
+                showNotification('ℹ️ Este inventario ya tiene fecha de recuento registrada');
+                return;
+            }
+            var f = document.getElementById('regFechaRecuentoInput');
+            if (f) {
+                f.value = (typeof proximaFechaRecuentoValida === 'function')
+                          ? proximaFechaRecuentoValida(new Date()) : '';
+            }
+            _pintarAvisoFechaRegistrar();
+            var m = document.getElementById('regFechaRecuentoModal');
+            if (m) { m.classList.remove('hidden'); document.body.classList.add('modal-open'); }
+        }
+
+        function cerrarModalRegistrarFechaRecuento() {
+            var m = document.getElementById('regFechaRecuentoModal');
+            if (m) { m.classList.add('hidden'); document.body.classList.remove('modal-open'); }
+        }
+
+        function _pintarAvisoFechaRegistrar() {
+            var el  = document.getElementById('regFechaRecuentoAviso');
+            var f   = document.getElementById('regFechaRecuentoInput');
+            var btn = document.getElementById('regFechaRecuentoBtnGuardar');
+            if (!el || !f || typeof clasificarRecuento !== 'function') return;
+            var cl = clasificarRecuento(f.value);
+            if (!cl || (!cl.cierraSemana && !cl.esCorteMensual)) {
+                el.style.color = 'var(--red, #f87171)';
+                el.textContent = '⚠️ Debe ser domingo o fin de mes — si no, este inventario tampoco podrá '
+                                + 'contabilizarse después.';
+                if (btn) btn.disabled = true;
+                return;
+            }
+            el.style.color = 'var(--green, #4ade80)';
+            el.textContent = cl.cierraSemana ? '✓ Domingo — cierra semana.' : '✓ Corte de fin de mes.';
+            if (btn) btn.disabled = false;
+        }
+
+        async function confirmarRegistrarFechaRecuento() {
+            if (!isAdmin() || !hasPermission('inventory.create')) return;
+            if (!_db) { showNotification('📴 Sin conexión a Firestore'); return; }
+
+            var f     = document.getElementById('regFechaRecuentoInput');
+            var fecha = f ? f.value : '';
+            var cl    = (typeof clasificarRecuento === 'function') ? clasificarRecuento(fecha) : null;
+            if (!cl || (!cl.cierraSemana && !cl.esCorteMensual)) {
+                showNotification('⚠️ Elige domingo o fin de mes');
+                return;
+            }
+            var invId = _inventarioActivoId;
+            if (!invId) { showNotification('❌ No se encontró el inventario activo'); return; }
+
+            showNotification('⏳ Guardando…');
+            try {
+                var ref  = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
+                              .collection('inventories').doc(invId);
+                // Se relee del servidor: entre abrir el modal y pulsar Guardar
+                // pudo haberse cerrado el inventario, o (dos admins a la vez)
+                // ya haberle puesto fecha. No se confía en el estado en memoria
+                // para decidir si se escribe.
+                var snap = await ref.get();
+                if (!snap.exists) { showNotification('❌ No se encontró el inventario'); return; }
+                var inv = snap.data() || {};
+                if (inv.fechaRecuento) {
+                    showNotification('ℹ️ Ya tenía una fecha registrada — no se cambió nada');
+                    cerrarModalRegistrarFechaRecuento();
+                    return;
+                }
+                if (!inventarioAbierto(inv)) {
+                    showNotification('⚠️ Este inventario ya no está abierto — no se puede registrar aquí');
+                    cerrarModalRegistrarFechaRecuento();
+                    return;
+                }
+                await ref.update({ fechaRecuento: fecha, semanaId: cl.semanaId });
+                showNotification('✅ Fecha de recuento registrada: ' + fecha);
+                cerrarModalRegistrarFechaRecuento();
+            } catch (e) {
+                console.error('confirmarRegistrarFechaRecuento', e);
+                showNotification('❌ No se pudo guardar: ' + (e && e.message ? e.message : e));
             }
         }
 
