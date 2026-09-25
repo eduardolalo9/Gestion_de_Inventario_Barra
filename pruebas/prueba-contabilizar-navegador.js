@@ -113,6 +113,34 @@ const PUERTO = process.env.PUERTO || '8080';
       crearD.abierto && crearD.c === 0 && !crearD.av.some(m => /antes de crear otro/.test(m)), JSON.stringify(crearD));
   await p.evaluate(() => cerrarModalNuevoInventario());
 
+  // ── E · Recién abierta la app: hay sesión, el inventario aún no llega ──
+  // Es lo que se vio en producción (4.7): con las tres áreas contadas, Conteo
+  // ofrecía "Crear Inventario Físico" porque el inventario no se había leído.
+  const e = await p.evaluate(() => {
+    _authzState.permissions = new Set(['*']);
+    _auditoriaSessionId = 'S1'; _inventarioActivo = null; _inventarioActivoCarga = 'cargando';
+    // Conteos con decimales, como los de la captura (2482.3869999999997 ent)
+    allUsersAuditoria = { a: { email: 'admin2@barra', isAdmin: true, updatedAt: Date.now(),
+      status: { almacen: 'completada', barra1: 'completada', barra2: 'completada' },
+      conteo: { A: { almacen: { enteras: 0.1, abiertas: [] } }, B: { almacen: { enteras: 0.2, abiertas: [] } } } } };
+    products = [{ id: 'A', name: 'A', unit: 'KGS', stockByArea: {} }, { id: 'B', name: 'B', unit: 'KGS', stockByArea: {} }];
+    activeTab = 'inventario'; auditoriaView = 'selection'; renderTab();
+    const t = document.getElementById('tabContent');
+    const botones = [...t.querySelectorAll('button')].map(b => b.textContent);
+    return { txt: t.innerText.replace(/\s+/g, ' '), crear: botones.some(b => /Crear Inventario Físico|Nuevo Inventario Físico|Crear el siguiente/.test(b)) };
+  });
+  chk('★ Mientras el inventario no se ha leído, Conteo dice "Cargando" en vez de "sin inventario"',
+      /Cargando el Inventario Físico activo/.test(e.txt), e.txt.slice(0, 200));
+  chk('★ …y no ofrece ningún botón para crear otro encima', !e.crear);
+  chk('Los totales por área ya no muestran colas de coma flotante',
+      /0\.3 ent/.test(e.txt) && !/0\.30000000000000004/.test(e.txt), (e.txt.match(/[\d.]+ ent/g) || []).join(' '));
+  const eErr = await p.evaluate(() => { _inventarioActivoCarga = 'error'; renderTab();
+    return document.getElementById('tabContent').innerText.replace(/\s+/g, ' '); });
+  chk('Si no se pudo leer, lo dice y tampoco ofrece crear', /No se pudo leer el Inventario Físico activo/.test(eErr) && !/Crear Inventario Físico/.test(eErr));
+  await p.evaluate(() => { _inventarioActivoCarga = 'no_existe'; renderTab(); });
+  chk('Cuando se confirma que no hay inventario, vuelve a ofrecer "Crear"',
+      await p.evaluate(() => /Crear Inventario Físico/.test(document.getElementById('tabContent').innerText)));
+
   chk('Sin errores de JS en toda la prueba', errs.length === 0, errs.join(' | '));
   await nav.close();
 

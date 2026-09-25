@@ -1015,6 +1015,28 @@
             showConfirm(mensaje, alAceptar);
         }
 
+        // ── ¿Hay un Inventario Físico ABIERTO según el servidor? ─────────────
+        //  Lee la sesión vigente del documento principal y su inventario, SIEMPRE
+        //  del servidor (source: 'server'): la caché local es justo lo que puede
+        //  ir desfasado. Dos lecturas, solo al crear un inventario (una vez por
+        //  semana), así que el coste es despreciable frente a lo que protege.
+        //  @returns { abierto, sesion?, numero?, estado? } | { error: true }
+        async function _inventarioAbiertoEnServidor() {
+            try {
+                const raiz = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID);
+                const principal = await raiz.get({ source: 'server' });
+                const sesion = principal.exists ? (principal.data() || {})._auditoriaSessionId : null;
+                if (!sesion) return { abierto: false };
+                const inv = await raiz.collection('inventories').doc(String(sesion)).get({ source: 'server' });
+                if (!inv.exists) return { abierto: false, sesion: String(sesion) };
+                const d = inv.data() || {};
+                return { abierto: inventarioAbierto(d), sesion: String(sesion), numero: d.numero || null, estado: d.estado || null };
+            } catch (e) {
+                console.warn('[InventarioFisico] No se pudo comprobar el inventario vigente en el servidor:', e);
+                return { error: true };
+            }
+        }
+
         function auditoriaResetear() {
             if (!isAdmin()) {
                 showNotification('⚠️ Solo el administrador puede iniciar un nuevo ciclo de inventario');
@@ -1064,6 +1086,41 @@
                                 return;
                             }
                             _auditoriaCreandoEnProgreso = true;
+
+                            // ── GUARDA DE SERVIDOR (sep 2026) ────────────────────
+                            // Lo que sigue BORRA los conteos de todos los usuarios
+                            // de la sesión actual. La única protección era
+                            // `inventarioAbierto(_inventarioActivo)`, una variable en
+                            // memoria — y esa variable se quedaba en null tras
+                            // reabrir la app (ver handleAuditSessionChange). Con un
+                            // inventario ABIERTO y contado, la pantalla ofrecía
+                            // "Crear" y esta función lo habría vaciado sin cerrarlo
+                            // ni congelarlo. Por el formulario de R7, además, sin
+                            // pasar por los dos avisos de arriba.
+                            //
+                            // Una acción que destruye datos no se decide con lo que
+                            // la pantalla cree: se pregunta al servidor. Si no se
+                            // puede preguntar, no se borra nada.
+                            const vigente = await _inventarioAbiertoEnServidor();
+                            if (vigente.error) {
+                                _auditoriaCreandoEnProgreso = false;
+                                _opcionesNuevoInventario = null;
+                                showNotification('📴 No se pudo comprobar en el servidor si hay un inventario abierto. '
+                                    + 'No se borró nada — revisa la conexión e inténtalo de nuevo.');
+                                return;
+                            }
+                            if (vigente.abierto) {
+                                _auditoriaCreandoEnProgreso = false;
+                                _opcionesNuevoInventario = null;
+                                showNotification('🛑 El Inventario Físico #' + (vigente.numero || '—')
+                                    + ' sigue ABIERTO, con sus conteos. Ciérralo (y contabilízalo) antes de crear otro. '
+                                    + 'No se borró nada.');
+                                // Y se engancha a ese inventario, para que la
+                                // pantalla deje de decir que no hay ninguno.
+                                if (typeof _suscribirInventarioActivo === 'function') _suscribirInventarioActivo(vigente.sesion);
+                                renderTab();
+                                return;
+                            }
 
                             // Crear respaldo antes de resetear. Se hace con el
                             // estado AÚN vigente (sesión anterior) — nada se ha

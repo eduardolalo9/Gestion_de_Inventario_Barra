@@ -125,7 +125,10 @@
         function _panelEstadoInventario() {
             var inv = (typeof _inventarioActivo !== 'undefined') ? _inventarioActivo : null;
             var h = '<div class="pm-inv">';
-            if (!inv) {
+            if (!inv && typeof _inventarioActivoSinResolver === 'function' && _inventarioActivoSinResolver()) {
+                h += '<div><div class="pm-inv__titulo">⏳ Cargando el inventario físico…</div>'
+                   + '<div class="pm-inv__sub">Leyendo el inventario de la sesión actual.</div></div>';
+            } else if (!inv) {
                 h += '<div><div class="pm-inv__titulo">Sin inventario físico abierto</div>'
                    + '<div class="pm-inv__sub">' + (isAdmin() ? 'Créalo desde Conteo para que el equipo empiece.' : 'El administrador aún no lo abre.') + '</div></div>';
             } else {

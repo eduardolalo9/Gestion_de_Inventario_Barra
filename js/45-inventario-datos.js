@@ -84,18 +84,32 @@
         //  cambia, se destruye el listener anterior y se crea uno nuevo,
         //  mismo patrón de desduplicación que _suscribirRolActual() (14.1.1).
         // ══════════════════════════════════════════════════════════════════════
+        // Estado de carga del inventario activo. `_inventarioActivo === null`
+        // significaba dos cosas distintas: "no hay inventario" y "todavía no
+        // lo he leído". La pantalla las trataba igual y ofrecía "Crear
+        // Inventario Físico" mientras el inventario abierto aún no llegaba.
+        //   'sin_sesion' | 'cargando' | 'ok' | 'no_existe' | 'error'
+        let _inventarioActivoCarga = 'sin_sesion';
+
         function _suscribirInventarioActivo(inventoryId) {
-            if (!_db || !inventoryId) { _inventarioActivo = null; return; }
+            if (!_db || !inventoryId) { _inventarioActivo = null; _inventarioActivoCarga = 'sin_sesion'; return; }
             if (_unsubInventarioActivo && _inventarioActivoId === inventoryId) return; // ya escuchando este mismo inventario
             if (typeof _unsubInventarioActivo === 'function') { _unsubInventarioActivo(); _unsubInventarioActivo = null; }
             _inventarioActivoId = inventoryId;
+            _inventarioActivoCarga = 'cargando';
             _unsubInventarioActivo = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
                 .collection('inventories').doc(inventoryId)
                 .onSnapshot(function(snap) {
                     _inventarioActivo = snap.exists ? snap.data() : null;
+                    _inventarioActivoCarga = snap.exists ? 'ok' : 'no_existe';
                     renderTab(); // refleja número/estado (SINCRONIZADO/CERRADO) en tiempo real
                 }, function(err) {
+                    _inventarioActivoCarga = 'error';
+                    // Se suelta el listener caído para que el siguiente
+                    // intento vuelva a suscribirse en vez de creer que ya escucha.
+                    _unsubInventarioActivo = null;
                     console.warn('[InventarioFisico] Error en listener de inventories/' + inventoryId + ':', err);
+                    renderTab();
                 });
         }
 
@@ -112,6 +126,21 @@
             if (nuevoSessionId === _auditoriaSessionId) {
                 console.info('[AuditSession] (' + origen + ') sessionId', nuevoSessionId,
                     'ya es la sesión activa — sin cambios, no se reprocesa.');
+                // ── ARREGLO (sep 2026): EL INVENTARIO SE PERDÍA AL REABRIR ──
+                // La suscripción al Inventario Físico solo se hacía más abajo,
+                // cuando la sesión CAMBIA. Pero al abrir la app, la sesión ya
+                // viene restaurada de localStorage/IndexedDB, así que la que
+                // llega de Firestore es la MISMA y se salía por aquí: nadie se
+                // suscribía, _inventarioActivo se quedaba en null para toda la
+                // sesión y Conteo mostraba "sin inventario" — sin "Cerrar", sin
+                // "Contabilizar", y ofreciendo "Crear" encima de un inventario
+                // abierto con conteos. Solo funcionaba en el dispositivo que lo
+                // creó, hasta que se cerrara la app.
+                //
+                // No hay nada que reprocesar, pero sí hay que asegurarse de
+                // estar escuchando el inventario de esta sesión. La suscripción
+                // es idempotente: si ya escucha este id, no hace nada.
+                _suscribirInventarioActivo(nuevoSessionId);
                 return { procesado: false, motivo: 'sin_cambio' };
             }
 
@@ -146,6 +175,8 @@
                 console.warn('[AuditSession] (' + origen + ') sessionId ' + nuevoSessionId +
                     ' es ANTERIOR al vigente ' + _auditoriaSessionId +
                     ' — documento rezagado, se ignora. NO se resetea el conteo.');
+                // La sesión que vale es la vigente: se asegura su inventario.
+                _suscribirInventarioActivo(_auditoriaSessionId);
                 return { procesado: false, motivo: 'sessionId_retrocede' };
             }
 

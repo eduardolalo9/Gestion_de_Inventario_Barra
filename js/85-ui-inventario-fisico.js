@@ -25,8 +25,30 @@
 
         // Tarjeta de estado en tiempo real — visible para admin y usuario.
         // Se alimenta de _inventarioActivo (mantenido por _suscribirInventarioActivo).
+        // ¿Hay una sesión de conteo cuyo Inventario Físico todavía no se ha
+        // podido leer? En ese estado `_inventarioActivo` vale null igual que
+        // cuando no hay inventario, pero NO significa lo mismo: puede haber uno
+        // abierto con conteos. Mientras no se sepa, no se ofrece "Crear".
+        function _inventarioActivoSinResolver() {
+            return !!_auditoriaSessionId && typeof _inventarioActivoCarga !== 'undefined'
+                && (_inventarioActivoCarga === 'cargando' || _inventarioActivoCarga === 'error');
+        }
+
         function _renderInventarioFisicoHeader() {
             let html = '<div class="bg-white rounded-xl p-4 sm:p-5 mb-4 shadow-md">';
+
+            if (!_inventarioActivo && _inventarioActivoSinResolver()) {
+                var hCarga = '<div class="pm-paso' + (_inventarioActivoCarga === 'error' ? ' pm-paso--aviso' : '') + '" role="status">';
+                if (_inventarioActivoCarga === 'error') {
+                    hCarga += '<div class="pm-paso__titulo">⚠️ No se pudo leer el Inventario Físico activo</div>'
+                           +  '<div class="pm-paso__txt">Revisa la conexión. Mientras tanto no se ofrece crear otro: '
+                           +  'podría haber uno abierto con conteos.</div>';
+                } else {
+                    hCarga += '<div class="pm-paso__titulo">⏳ Cargando el Inventario Físico activo…</div>';
+                }
+                hCarga += '</div>';
+                return hCarga;
+            }
 
             if (!_inventarioActivo) {
                 // PREMIUM (sep 2026, decisión del dueño): el cuadro "Sin
@@ -402,7 +424,8 @@
             // guard que auditoriaResetear() — el botón no se ofrece si hay un
             // Inventario Físico activo que no esté CERRADO, para que el admin
             // ni siquiera vea la opción que la función rechazaría.
-            if (isAdmin() && hasPermission('inventory.create') && !inventarioAbierto(_inventarioActivo)) {
+            if (isAdmin() && hasPermission('inventory.create') && !inventarioAbierto(_inventarioActivo)
+                && !_inventarioActivoSinResolver()) {
                 html += '<button onclick="abrirModalNuevoInventario()" title="Crear nuevo Inventario Físico (solo admin)" style="flex-shrink:0;padding:6px 10px;border-radius:var(--r-md);background:var(--red-dim);border:1px solid rgba(239,68,68,0.18);color:var(--red-text);font-size:0.7rem;font-weight:600;cursor:pointer;white-space:nowrap;" class="flex items-center gap-1">';
                 html += '<svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>';
                 html += ' Nuevo Inventario Físico</button>';
@@ -637,7 +660,9 @@
                         html += '<span class="audit-area-row-count">'
                               + numProds + ' prod'
                               + (numProds !== 1 ? 's' : '')
-                              + ' · ' + totalEnteras + ' ent'
+                              // Redondeo de presentación: sumar decimales en coma
+                              // flotante dejaba "2482.3869999999997 ent" en pantalla.
+                              + ' · ' + (Math.round(totalEnteras * 1000) / 1000) + ' ent'
                               + (totalAbiertas > 0 ? ' · ' + totalAbiertas.toFixed(2) + ' ab' : '')
                               + '</span>';
                     }

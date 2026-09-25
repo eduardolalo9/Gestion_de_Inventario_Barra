@@ -167,6 +167,31 @@ chk('Crear el siguiente sin contabilizar pregunta antes, no bloquea',
 chk('El panel de Inicio ya no manda al Historial para contabilizar',
     !/Conteo → Historial → inventario cerrado → Contabilizar/.test(panel));
 
+// ═══ 6 · El inventario activo sobrevive a reabrir la app (4.8) ═════════════
+// Visto en producción con la 4.7: sesión con las tres áreas contadas y Conteo
+// ofreciendo "Crear Inventario Físico". La prueba de integración
+// prueba-sesion-integracion.js lo reproduce contra Firestore real; aquí se
+// vigila que las piezas sigan en su sitio.
+const datos = leer('js/45-inventario-datos.js');
+const hasc  = extraer(datos, 'handleAuditSessionChange') || '';
+const sinCambio = (hasc.match(/if \(nuevoSessionId === _auditoriaSessionId\) \{[\s\S]*?return \{ procesado: false, motivo: 'sin_cambio' \};/) || [''])[0];
+chk('★ Con la misma sesión (app reabierta) se engancha igualmente el inventario',
+    /_suscribirInventarioActivo\(nuevoSessionId\);/.test(sinCambio));
+chk('La suscripción distingue "cargando" de "no existe"',
+    /_inventarioActivoCarga = 'cargando';/.test(datos) &&
+    /_inventarioActivoCarga = snap\.exists \? 'ok' : 'no_existe';/.test(datos));
+const reset = extraer(flujo, 'auditoriaResetear') || '';
+chk('★ Crear un inventario pregunta al SERVIDOR si hay uno abierto antes de borrar',
+    /await _inventarioAbiertoEnServidor\(\)/.test(reset) &&
+    reset.indexOf('_inventarioAbiertoEnServidor()') < reset.indexOf('_adminIniciarSesionFirestore(') &&
+    reset.indexOf('_inventarioAbiertoEnServidor()') < reset.indexOf('_obtenerSiguienteNumeroInventario('));
+chk('★ La consulta va al servidor, no a la caché local',
+    /source: 'server'/.test(extraer(flujo, '_inventarioAbiertoEnServidor') || ''));
+chk('Si no se puede consultar, no se borra nada',
+    /if \(vigente\.error\) \{[\s\S]{0,700}?return;/.test(reset));
+chk('Conteo no ofrece crear mientras el inventario no se ha leído',
+    /_inventarioActivoSinResolver\(\)/.test(cab) && /!_inventarioActivoSinResolver\(\)/.test(ui));
+
 // ═══ Resultado ═════════════════════════════════════════════════════════════
 const ancho = Math.max.apply(null, casos.map(c => c.nombre.length));
 console.log('\n  ── Contabilizar dentro de Conteo · y CONTABILIZADO ya no es "abierto" ──\n');
