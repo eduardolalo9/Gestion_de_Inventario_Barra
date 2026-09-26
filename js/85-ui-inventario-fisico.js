@@ -783,7 +783,10 @@
                     );
 
                     // FIX #4: onkeydown para activar la tarjeta con Enter/Espacio desde teclado
-                    html += '<div class="inv-card' + (hasData ? ' has-data' : '') + (areaData.alerta_conflicto ? ' inv-card--conflict' : '') + '" data-sbx-item'
+                    // FASE 8C: alerta_conflicto (conteoAreas, retirada) → _hayConflicto,
+                    // que vive en auditoriaConteo vía _recalcAdminAggregatedConteo y ahora
+                    // cubre enteras Y abiertas (ver js/45-inventario-datos.js).
+                    html += '<div class="inv-card' + (hasData ? ' has-data' : '') + (areaData._hayConflicto ? ' inv-card--conflict' : '') + '" data-sbx-item'
                           + ' onclick="openInventarioModal(\'' + escapeHtml(product.id) + '\')"'
                           + ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();openInventarioModal(\'' + escapeHtml(product.id) + '\');}"'
                           + ' role="button" tabindex="0" aria-label="Contar ' + escapeHtml(product.name) + '" style="animation-delay:' + delay + 'ms">';
@@ -793,8 +796,8 @@
                     html += '<div style="min-width:0;flex:1">';
                     html += '<div class="inv-card__name">' + resaltarBusqueda(product.name, _conteoSearchTerm) + '</div>';
                     html += '<span class="inv-card__group-badge">' + escapeHtml(product.group || 'General') + '</span>';
-                    if (areaData.alerta_conflicto) {
-                        html += '<div class="inv-card__conflict-badge"><i class="fa-solid fa-triangle-exclamation"></i> Conflicto abierta</div>';
+                    if (areaData._hayConflicto) {
+                        html += '<div class="inv-card__conflict-badge"><i class="fa-solid fa-triangle-exclamation"></i> Conflicto de conteo</div>';
                     }
                     html += '</div>';
                     // HOTFIX: en modo cantidad (KGS/LTS/PZA) el conteo admite hasta

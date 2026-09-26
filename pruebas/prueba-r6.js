@@ -255,8 +255,10 @@ chk('La pantalla de áreas está en Ajustes',
 chk('Las rutas de Firestore ya no llevan las áreas fijas',
     !/doc\('barra1'\)/.test(datos) && !/doc\('barra2'\)/.test(datos),
     'una cuarta área no se leería de la nube');
-chk('Los conteos se cargan recorriendo las áreas definidas',
-    /AREAS_CONTEO\.map\(function\(a\) \{\s*\n?\s*return _cargarYAgeregarConteos\(a\);/.test(datos));
+// FASE 8C (26/09/2026): loadConflictosDesdeFirestore() / _cargarYAgeregarConteos()
+// (conteoAreas, colección heredada) se retiraron — ver prueba-8c.js para la
+// cobertura de ese retiro. El resto de esta suite (R6: áreas configurables,
+// no fijas) sigue vigente sobre lo que queda.
 chk('Las etiquetas de la pestaña Inicio salen de la configuración',
     /CHIP_LABELS\s*=\s*areas;/.test(rend));
 chk('El stock inicial al importar se construye por área',

@@ -73,7 +73,17 @@ chk('La barra de progreso usa el número real de áreas', /totalCompletas \/ tot
 chk('El conteo no usa carga por tandas (Finalizar área nunca antes de productos ocultos)',
     /BusquedaUI\.registrar\('conteo', \{[\s\S]*?paso: 100000/.test(busc));
 chk('La versión de caché subió por encima de 4.1',
-    (() => { const m = /const APP_VERSION = '([^']+)'/.exec(sw); return m && parseFloat(m[1]) > 4.1; })());
+    (() => {
+        // FASE 8C: parseFloat('4.10') === parseFloat('4.1') === 4.1 — la
+        // primera vez que la versión cruza a dos dígitos en el minor,
+        // parseFloat deja de distinguirla de un valor menor (y '4.10' incluso
+        // parsea POR DEBAJO de '4.9'). Se compara por partes numéricas, como
+        // corresponde a un número de versión, no a un decimal.
+        const m = /const APP_VERSION = '([^']+)'/.exec(sw);
+        if (!m) return false;
+        const partes = m[1].split('.').map(Number);
+        return partes[0] > 4 || (partes[0] === 4 && partes[1] > 1);
+    })());
 
 const w = Math.max(...casos.map(c => c.n.length));
 console.log('\n  ── FASE 7 · seguridad (estática) ──\n');

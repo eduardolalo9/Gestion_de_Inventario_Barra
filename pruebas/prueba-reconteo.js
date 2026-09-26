@@ -33,7 +33,14 @@ chk('index.html carga 87-reconteo.js entre 85 y 88',
     /85-ui-inventario-fisico\.js\?v=[\d.]+"><\/script>\n\s*<script src="js\/87-reconteo\.js\?v=[\d.]+"><\/script>\n\s*<script src="js\/88-compras/.test(html));
 chk('El Service Worker precalienta 87-reconteo.js', /'\.\/js\/87-reconteo\.js\?v=' \+ APP_VERSION/.test(sw));
 chk('La versión de caché subió por encima de 4.3',
-    (() => { const m = /const APP_VERSION = '([^']+)'/.exec(sw); return m && parseFloat(m[1]) > 4.3; })());
+    (() => {
+        // FASE 8C: parseFloat('4.10') === 4.1, indistinguible de '4.1' y por
+        // debajo de '4.9' — comparar por partes numéricas, no como decimal.
+        const m = /const APP_VERSION = '([^']+)'/.exec(sw);
+        if (!m) return false;
+        const partes = m[1].split('.').map(Number);
+        return partes[0] > 4 || (partes[0] === 4 && partes[1] > 3);
+    })());
 
 // ── Rutas y acceso ──
 const rit = cuerpo(ui, 'function renderInventarioTab(');

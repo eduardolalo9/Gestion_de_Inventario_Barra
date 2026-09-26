@@ -290,13 +290,15 @@ chk('P25 · la purga se ejecuta al resolver el contexto de autorización',
     (roles.match(/_purgarConteosAjenosLocales\(\);/g) || []).length >= 3,
     'arranque, reconciliación en vivo y degradación de rol');
 
-// Las tres consultas que traían conteos ajenos se cortan en el cliente.
-chk('P25 · _cargarYAgeregarConteos se corta sin permiso',
-    /async function _cargarYAgeregarConteos\(area\) \{[\s\S]{0,900}?if \(!puedeVerConteosAjenos\(\)\) return;/.test(firest));
+// De las tres consultas que traían conteos ajenos y se cortaban en el
+// cliente, dos vivían en funciones que FASE 8C retiró por completo
+// (_cargarYAgeregarConteos y loadConflictosDesdeFirestore — colección
+// conteoAreas heredada, sin consumidor real; ver prueba-8c.js, que confirma
+// que ya no existen en vez de repetir aquí una comprobación sobre código
+// que ya no está). La tercera sigue activa (conteoMultiUsuario) y se
+// verifica igual que siempre:
 chk('P25 · loadConteoPorUsuarioFromFirestore se corta sin permiso',
     /async function loadConteoPorUsuarioFromFirestore\(\) \{[\s\S]{0,900}?if \(!puedeVerConteosAjenos\(\)\) return;/.test(persis));
-chk('P25 · loadConflictosDesdeFirestore se corta sin permiso',
-    /async function loadConflictosDesdeFirestore\(\) \{[\s\S]{0,900}?if \(!puedeVerConteosAjenos\(\)\) return;/.test(invDatos));
 
 // Y las superficies que los mostraban.
 chk('P25 · el desglose por persona depende del permiso, no del avance del conteo',

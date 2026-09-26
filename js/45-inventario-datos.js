@@ -431,6 +431,30 @@ function subscribeAllUsersAuditoria() {
             }, function(err) { console.warn('[AuditAdmin] Error listener usuarios:', err); });
         }
 
+        /**
+         * _abiertasDivergen(a, b)
+         * ───────────────────────
+         * Compara dos listas de pesos de botellas abiertas para el mismo
+         * producto/área SIN importar el orden en que cada persona las
+         * capturó (dos personas pueden anotar [0.5, 0.3] y [0.3, 0.5] para
+         * la misma realidad física). Tolerancia de 0.001, igual que la
+         * usada en js/47-existencia.js para no marcar como conflicto lo que
+         * solo es cola de coma flotante.
+         *
+         * FASE 8C: sustituye a la detección de "abiertas" que hacía la
+         * transacción de syncConteoAtomicoPorArea (retirada) — ver el
+         * comentario de cabecera en js/40-firestore.js.
+         */
+        function _abiertasDivergen(a, b) {
+            const listaA = Array.isArray(a) ? a.slice().sort(function(x, y) { return x - y; }) : [];
+            const listaB = Array.isArray(b) ? b.slice().sort(function(x, y) { return x - y; }) : [];
+            if (listaA.length !== listaB.length) return true;
+            for (let i = 0; i < listaA.length; i++) {
+                if (Math.abs((listaA[i] || 0) - (listaB[i] || 0)) > 0.001) return true;
+            }
+            return false;
+        }
+
         /** Recalcula auditoriaConteo con la estrategia ADMIN-PRIORITY.
          *
          *  Lógica de prioridad por producto/área:
@@ -501,8 +525,11 @@ const usersList = Object.values(allUsersAuditoria);
                         enteras:       winner.enteras  || 0,
                         abiertas:      winner.abiertas || [],
                         _usuarios:     entries.length,
+                        // FASE 8C: además de enteras, compara abiertas — esto es
+                        // lo que antes cubría alerta_conflicto de conteoAreas.
                         _hayConflicto: entries.length > 1 &&
-                            entries.some(e => (e.d.enteras || 0) !== (winner.enteras || 0)),
+                            entries.some(e => (e.d.enteras || 0) !== (winner.enteras || 0)
+                                || _abiertasDivergen(e.d.abiertas, winner.abiertas)),
                         _adminCorrigió: false
                     };
                 });
@@ -759,31 +786,14 @@ const usersList = Object.values(allUsersAuditoria);
             exportToExcelConDatos('AUDITORIA', auditoriaConteo, products,
                 'inventario_total_' + new Date().toISOString().split('T')[0] + '.xlsx');
         }
-        /**
-         * loadConflictosDesdeFirestore()
-         * ─────────────────────────────
-         * Al iniciar la app, descarga el estado de conflictos de abiertas
-         * para mostrarlo en las tarjetas de auditoría.
-         */
-        async function loadConflictosDesdeFirestore() {
-            if (!_db || !navigator.onLine || !_haySesionFirebase()) return; // M2a
-            // FASE 2B — se invoca en el arranque sin ninguna guarda de rol y
-            // agrega los conteos de todos los dispositivos. La guarda real
-            // vive dentro de _cargarYAgeregarConteos(), pero se corta también
-            // aquí para no lanzar una consulta por área que no llevará a nada.
-            if (!puedeVerConteosAjenos()) return;
-            try {
-                // R6: una por cada area definida, no tres fijas. Con las areas
-                // escritas a mano, una cuarta area se contaba en el telefono y
-                // nunca llegaba al panel del administrador.
-                await Promise.all(AREAS_CONTEO.map(function(a) {
-                    return _cargarYAgeregarConteos(a);
-                }));
-                console.info('[MultiDisp] Conteos de todos los dispositivos cargados ✓');
-            } catch (err) {
-                console.warn('[MultiDisp] No se pudieron cargar conteos desde Firestore:', err);
-            }
-        }
+        // FASE 8C (26/09/2026): aquí vivía loadConflictosDesdeFirestore(), que
+        // al arranque llamaba a _cargarYAgeregarConteos() por cada área para
+        // traer el estado de conflicto de conteoAreas (colección heredada,
+        // retirada). El aviso de conflicto de "abiertas" ahora sale en vivo de
+        // _hayConflicto dentro de _recalcAdminAggregatedConteo — ya corriendo
+        // por el listener subscribeAllUsersAuditoria(), sin esta llamada
+        // aparte al arranque. Ver el comentario de cabecera en
+        // js/40-firestore.js (sección "FASE 8C — RETIRO DE conteoAreas").
 
         /**
          * loadFromCloud()

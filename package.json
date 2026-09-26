@@ -29,6 +29,7 @@
     "test:ctnav": "node pruebas/prueba-contabilizar-navegador.js",
     "test:ses": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-sesion-integracion.js\"",
     "test:h40nav": "node pruebas/prueba-h40-navegador.js",
+    "test:8c": "node pruebas/prueba-8c.js",
     "test:integracion": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-d-integracion.js && node pruebas/prueba-f1-integracion.js && node pruebas/prueba-f3-integracion.js && node pruebas/prueba-p2-integracion.js && node pruebas/prueba-fase5-integracion.js && node pruebas/prueba-fase7-integracion.js && node pruebas/prueba-reconteo-integracion.js && node pruebas/prueba-sesion-integracion.js\"",
     "respaldo": "node herramientas/respaldo-firestore.js --salida respaldos"
   },

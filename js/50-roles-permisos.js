@@ -28,17 +28,24 @@
                             console.warn('[AuditHuerfano] Reintento fallido:', e)
                         );
                     }
-                    // FIX 3: Reintentar syncs de área que fallaron en auditoriaFinalizarConteo
-                    if (window._pendingAreaSyncs && window._pendingAreaSyncs.size > 0) {
-                        console.info('[Atomico] Reintentando ' + window._pendingAreaSyncs.size + ' área(s) pendiente(s)…');
-                        window._pendingAreaSyncs.forEach(function(area) {
-                            syncConteoAtomicoPorArea(area)
-                                .then(function() { window._pendingAreaSyncs.delete(area); })
-                                .catch(function(e) { console.warn('[Atomico] Reintento fallido para ' + area + ':', e); });
-                            syncConteoPorUsuarioToFirestore(area)
-                                .catch(function(e) { console.warn('[MultiUser] Reintento fallido para ' + area + ':', e); });
-                        });
-                    }
+                    // FASE 8C (26/09/2026): aquí vivía el reintento de
+                    // _pendingAreaSyncs para syncConteoAtomicoPorArea (colección
+                    // heredada conteoAreas, retirada — ver js/40-firestore.js).
+                    // _pendingAreaSyncs solo lo poblaba esa función: al
+                    // retirarla, el Set nunca vuelve a tener elementos y este
+                    // bloque quedaba muerto. Se quita entero.
+                    //
+                    // Nota honesta (no es objetivo de esta fase, queda anotado
+                    // para no perderlo): syncConteoPorUsuarioToFirestore()
+                    // —conteoMultiUsuario, sigue activo— no tiene hoy un
+                    // reintento inmediato propio al reconectar; si falla, su
+                    // único respaldo es el sync periódico general (3 min) vía
+                    // _cloudSyncPending, que hoy tampoco activa en su catch().
+                    // Antes de este retiro, ese reintento inmediato solo
+                    // ocurría de rebote cuando el área TAMBIÉN fallaba en
+                    // syncConteoAtomicoPorArea — nunca en un fallo aislado de
+                    // syncConteoPorUsuarioToFirestore. No es una regresión
+                    // nueva, pero conviene decirlo con nombre y apellido.
                     loadFromCloud().then(function() {
                         // D — los conteos que se hicieron sin señal se suben
                         // aquí. Va después de loadFromCloud a propósito: así
@@ -1423,13 +1430,19 @@
                 //  mismo producto y en el mismo instante. El reporte, que es lo
                 //  que se archiva y con lo que se discute, era el que mentía.
                 //
-                //  Además aquella colección se borra entera al abrir cada nueva
-                //  auditoría (resetConteoAtomicoEnFirestore), así que el reporte
-                //  dependía de datos que otro proceso vacía.
+                //  Además aquella colección se borraba entera al abrir cada
+                //  nueva auditoría, así que el reporte dependía de datos que
+                //  otro proceso vaciaba.
                 //
                 //  Ahora se lee auditoriaConteo, que ya está en memoria: misma
                 //  regla que la pantalla, cero lecturas nuevas a Firestore y el
                 //  dato de conflicto viaja al reporte en vez de perderse.
+                //
+                //  FASE 8C (26/09/2026): conteoAreas se retiró por completo
+                //  (ver js/40-firestore.js). La función que la borraba en cada
+                //  reinicio de auditoría se renombró a
+                //  resetConteoMultiUsuarioEnFirestore() — ya solo limpia
+                //  conteoMultiUsuario, que sigue activo.
                 const fuente = (typeof auditoriaConteo !== 'undefined' && auditoriaConteo) ? auditoriaConteo : {};
                 const conteoGlobal = {}; // { prodId: { area: { enteras, abiertas, numConteos, hayConflicto } } }
                 let conDatos = 0;

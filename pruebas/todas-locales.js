@@ -49,6 +49,7 @@ const PRUEBAS = [
     'prueba-reconteo.js',      // RECONTEO — ventana de reconteo (estática)
     'prueba-fase8.js',         // FASE 8 — existencia oficial, versión de catálogo y reporte
     'prueba-contabilizar-conteo.js', // Contabilizar en Conteo + CONTABILIZADO ya no es "abierto"
+    'prueba-8c.js',                  // FASE 8C — retiro de la escritura heredada de conteoAreas
 ];
 
 let fallaron = [];

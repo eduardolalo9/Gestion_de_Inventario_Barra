@@ -183,7 +183,9 @@
                                 return drenarConteosPendientes();
                             })
                             .catch(err => console.warn('[Firebase] loadFromCloud silenciado:', err));
-                        loadConflictosDesdeFirestore().catch(() => {});
+                        // FASE 8C (26/09/2026): aquí se llamaba a
+                        // loadConflictosDesdeFirestore() (colección heredada
+                        // conteoAreas, retirada). Ver js/40-firestore.js.
                         loadConteoPorUsuarioFromFirestore().catch(err =>
                             console.warn('[MultiUser] loadConteoPorUsuarioFromFirestore silenciado:', err)
                         );

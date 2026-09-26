@@ -100,9 +100,15 @@
                 // ── SINCRONIZACIÓN A FIREBASE ──────────────────────────────────
                 // Estas llamadas son fire-and-forget pero con mecanismos de retry:
                 //  • syncMyAuditoriaToFirestore tiene su propio retry vía _auditSyncPending
-                //  • syncConteoAtomicoPorArea y syncConteoPorUsuarioToFirestore se marcan
-                //    en _pendingAreaSyncs para reintento en el próximo sync periódico.
+                //  • syncConteoPorUsuarioToFirestore, si falla, activa _cloudSyncPending
+                //    (sync periódico de 3 min).
                 // El dato está seguro en localStorage; Firebase es la capa de distribución.
+                //
+                // FASE 8C (26/09/2026): aquí vivía también syncConteoAtomicoPorArea(area)
+                // —la escritura a la colección heredada conteoAreas— con su propio
+                // registro en _pendingAreaSyncs. Se retiró: ver el comentario de cabecera
+                // en js/40-firestore.js (sección "FASE 8C — RETIRO DE conteoAreas") para
+                // la evidencia de por qué ya no tenía consumidor.
 
                 // Subir conteo propio a Firestore (bajo mi UID, aislado)
                 // syncMyAuditoriaToFirestore tiene retry automático vía _auditSyncPending.
@@ -111,20 +117,6 @@
                     // _auditSyncPending ya se setea internamente en syncMyAuditoriaToFirestore
                 });
 
-                // FIX 2: Registrar áreas pendientes de sync para retry en caso de fallo.
-                // Si el dispositivo está offline o Firebase falla en este momento,
-                // _pendingAreaSyncs garantiza que el conteo llega al admin en el próximo
-                // ciclo de sincronización (updateNetworkStatus → online → reintento).
-                if (!window._pendingAreaSyncs) window._pendingAreaSyncs = new Set();
-                window._pendingAreaSyncs.add(area);
-
-                syncConteoAtomicoPorArea(area)
-                    .then(function() { window._pendingAreaSyncs.delete(area); })
-                    .catch(err => {
-                        console.warn('[Atomico] Error en sync final — reintento pendiente:', err);
-                        // El área queda en _pendingAreaSyncs para reintento
-                        _cloudSyncPending = true; // activa sync periódico de 3 min
-                    });
                 syncConteoPorUsuarioToFirestore(area)
                     .catch(err => {
                         console.warn('[MultiUser] Error en sync multiusuario — reintento pendiente:', err);
@@ -1210,21 +1202,27 @@
                                 saveToLocalStorage();
                                 renderTab();
 
-                                // FIX P0.1: la limpieza de colecciones LEGACY
-                                // (conteoAreas/dispositivos, conteoMultiUsuario — usadas
-                                // solo por generarYPublicarReporte(), ver comentarios en
-                                // resetConteoAtomicoEnFirestore) se trata como paso
+                                // FIX P0.1: la limpieza de la colección LEGACY conteoMultiUsuario
+                                // (usada por renderAuditComparePanel(), ver comentarios en
+                                // resetConteoMultiUsuarioEnFirestore) se trata como paso
                                 // SECUNDARIO y NO bloqueante: la sesión de auditoría ya
                                 // quedó confirmada en Firestore aunque este paso falle, así
                                 // que NO se revierte la sesión por un fallo aquí. Si falla,
                                 // se avisa honestamente (nunca se muestra un "✅" que
                                 // implique éxito total) y queda marcado para reintento.
+                                //
+                                // FASE 8C (26/09/2026): esta llamada limpiaba también
+                                // conteoAreas/dispositivos. Esa colección dejó de escribirse
+                                // (ver js/40-firestore.js) así que ya no hace falta borrarla
+                                // aquí — la función se renombró a
+                                // resetConteoMultiUsuarioEnFirestore() para reflejar su
+                                // alcance real.
                                 try {
-                                    await resetConteoAtomicoEnFirestore();
+                                    await resetConteoMultiUsuarioEnFirestore();
                                     try { localStorage.removeItem('inventarioApp_legacyCleanupPending'); } catch(_) {}
                                     showNotification('✅ Inventario Físico #' + numeroInventario + ' iniciado — todos los conteos en ceros');
                                 } catch (errLegacy) {
-                                    console.error('[AuditReset] Sesión ' + newSessionId + ' confirmada en Firestore, pero falló la limpieza de conteos legacy (conteoAreas/conteoMultiUsuario):', errLegacy);
+                                    console.error('[AuditReset] Sesión ' + newSessionId + ' confirmada en Firestore, pero falló la limpieza de conteoMultiUsuario:', errLegacy);
                                     try { localStorage.setItem('inventarioApp_legacyCleanupPending', newSessionId); } catch(_) {}
                                     showNotification('⚠️ Nueva auditoría iniciada, pero algunos datos históricos de reportes no se limpiaron — reintenta desde Ajustes o contacta soporte');
                                 }

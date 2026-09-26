@@ -124,7 +124,14 @@ chk('index.html carga el motor y la barra antes que el resto de la app',
 chk('El Service Worker incluye los dos archivos nuevos',
     /05-busqueda-motor\.js/.test(sw) && /06-busqueda-ui\.js/.test(sw));
 chk('La versión de caché subió por encima de 4.0 (FASE 5)',
-    (() => { const m = /const APP_VERSION = '([^']+)'/.exec(sw); return m && parseFloat(m[1]) > 4.0; })());
+    (() => {
+        // FASE 8C: parseFloat('4.10') === 4.1, indistinguible de '4.1' y por
+        // debajo de '4.9' — comparar por partes numéricas, no como decimal.
+        const m = /const APP_VERSION = '([^']+)'/.exec(sw);
+        if (!m) return false;
+        const partes = m[1].split('.').map(Number);
+        return partes[0] > 4 || (partes[0] === 4 && partes[1] > 0);
+    })());
 
 ['catalogo', 'conteo', 'pedidos', 'historia'].forEach(k => {
     chk('Buscador "' + k + '" registrado con alAplicar y refrescar',

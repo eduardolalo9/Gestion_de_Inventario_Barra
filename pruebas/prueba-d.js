@@ -296,8 +296,11 @@ chk('El lector sigue indexando por userId (no se duplican personas)',
 chk('El documento por dispositivo exige que el uid coincida',
     /allow create, update: if request\.auth != null\s*\n\s*&& _cuentaActiva\(\)\s*\n\s*&& request\.resource\.data\._userUid == request\.auth\.uid;/.test(reglas));
 
-chk('Ese uid ya viajaba en el payload',
-    /_userUid:\s*currentUserUid \|\| 'anonymous',/.test(firestore));
+// FASE 8C (26/09/2026): "Ese uid ya viajaba en el payload" comprobaba el
+// payload de syncConteoAtomicoPorArea() (colección conteoAreas), retirada
+// por completo — ver prueba-8c.js. La regla de arriba (documento por
+// dispositivo, _userUid == request.auth.uid) se deja tal cual en
+// firestore.rules a propósito: no se tocan reglas en este retiro.
 
 chk('La bitácora de conflictos ya no se puede borrar',
     /match \/conflictos\/\{conflictoId\} \{[\s\S]{0,400}?allow delete: if isAdminUser\(\);/.test(reglas));
