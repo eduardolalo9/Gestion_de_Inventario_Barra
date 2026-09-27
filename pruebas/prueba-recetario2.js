@@ -111,6 +111,22 @@ chk('★ Código que no existe en el catálogo NO se descarta: se guarda con des
     /tipo: 'sin_catalogo'/.test(importa) &&
     /linea: \{ productoId: codigoStr, cantidad: cantidad, uom: uom,/.test(importa) &&
     /descripcionExcel: String\(cruda\.descripcion \|\| ''\)\.trim\(\) \|\| undefined/.test(importa));
+// ═══ 4b · Migración del esquema anterior (hotfix 4.14) ═════════════════════
+const receta91 = leer('js/91-recetario.js');
+chk('★ Existe la migración idempotente pv → nombre para las recetas del esquema anterior',
+    /function _migrarRecetasNomenclatura\(lista\)/.test(receta91) &&
+    /if \(r\.nombre && String\(r\.nombre\)\.trim\(\)\) return;/.test(receta91) &&
+    /r\.nombre = pv;/.test(receta91));
+chk('★ La migración solo borra `pv` cuando NO parece un código real (una importada sin nombre conserva el suyo)',
+    /function _pareceCodigoPV/.test(receta91) &&
+    /if \(!_pareceCodigoPV\(pv\)\) delete r\.pv;/.test(receta91));
+chk('La migración se aplica en los TRES puntos de entrada: localStorage, IndexedDB y el documento publicado',
+    /_migrarRecetasNomenclatura\(recetas\)/.test(leer('js/40-firestore.js')) &&
+    /_migrarRecetasNomenclatura\(recetas\)/.test(leer('js/30-indexeddb.js')) &&
+    /_migrarRecetasNomenclatura\(recetas\)/.test(leer('js/50-roles-permisos.js')));
+chk('★ El repositorio declara el proyecto de Firebase (.firebaserc), para que `firebase deploy` no falle por falta de proyecto activo',
+    /"default":\s*"gestor-de-inventarios-76c19"/.test(leer('.firebaserc')));
+
 chk('costoReceta y la ficha muestran descripcionExcel cuando el producto no existe (no solo el código)',
     /faltantes\.push\(\(producto && producto\.name\) \? producto\.name : \(ing\.descripcionExcel \|\| ing\.productoId/.test(leer('js/91-recetario.js')) &&
     /escapeHtml\(producto \? producto\.name : \(ing\.descripcionExcel \|\| ing\.productoId\)\)/.test(leer('js/91-recetario.js')));

@@ -130,7 +130,7 @@ chk('_idbSaveAll guarda recetas en IndexedDB',
 chk('_idbLoadAll lee recetas de IndexedDB',
     /_idbGet\('recetas'\)/.test(idb));
 chk('_applyIDBData restaura recetas si IDB trae algo',
-    /if \(Array\.isArray\(idbData\.recetas\)\)\s*\n\s*recetas = idbData\.recetas;/.test(idb));
+    /if \(Array\.isArray\(idbData\.recetas\)\)\s*\{?\s*recetas = idbData\.recetas;/.test(idb));
 chk('loadFromLocalStorage restaura recetas desde LS',
     /recetas\s*=\s*safeGet\('inventarioApp_recetas',\s*\[\]\);/.test(firest));
 

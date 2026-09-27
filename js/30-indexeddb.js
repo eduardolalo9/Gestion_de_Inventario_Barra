@@ -557,8 +557,11 @@ function _idbPruneSyncedQueue() {
             if (idbData.costosUltimos && typeof idbData.costosUltimos === 'object')
                 costosUltimos = idbData.costosUltimos;
             // RECETARIO-1 — mismo criterio que compras/movimientos arriba.
-            if (Array.isArray(idbData.recetas))
+            if (Array.isArray(idbData.recetas)) {
                 recetas = idbData.recetas;
+                // Hotfix 4.14 — mismo saneo que en loadFromLocalStorage.
+                if (typeof _migrarRecetasNomenclatura === 'function') _migrarRecetasNomenclatura(recetas);
+            }
             if (Array.isArray(idbData.ventas))
                 ventas = idbData.ventas;
             if (typeof idbData.ventasSemanaId === 'string')

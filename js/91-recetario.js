@@ -108,6 +108,50 @@
             return recetas.find(function(r) { return r.id === id; }) || null;
         }
 
+        // ══════════════════════════════════════════════════════════════════════
+        //  MIGRACIÓN DEL ESQUEMA ANTERIOR (hotfix 4.14)
+        //  ────────────────────────────────────────────────────────────────────
+        //  RECETARIO-2 separó `pv` (código) de `nombre` (nombre visible), pero
+        //  NO migró las recetas que ya existían. Una receta tecleada a mano con
+        //  la versión 4.11 guardó el nombre en `pv` y no tiene `nombre`: tras
+        //  actualizar, su tarjeta muestra "(sin nombre)" y su nombre aparece
+        //  etiquetado como "Código". El dato nunca se perdió, pero se mostraba
+        //  en el lugar equivocado — que es exactamente lo que reportó el
+        //  propietario.
+        //
+        //  La migración es idempotente y se aplica en los TRES puntos por donde
+        //  entran recetas a memoria (localStorage, IndexedDB y el documento
+        //  publicado en Firestore), así que cada dispositivo se cura solo al
+        //  abrir la app, sin depender de que alguien republique.
+        //
+        //  `pv` solo se borra cuando NO parece un código real: si una receta
+        //  importada llegó sin nombre (columna "Receta" vacía), su `pv` sí es
+        //  un código y debe conservarse además de copiarse al nombre.
+        // ══════════════════════════════════════════════════════════════════════
+        function _pareceCodigoPV(v) {
+            return /^(PV[A-Z]?\d{3,}|SUB-\d+)$/i.test(String(v == null ? '' : v).trim());
+        }
+        window._pareceCodigoPV = _pareceCodigoPV;
+
+        function _migrarRecetasNomenclatura(lista) {
+            if (!Array.isArray(lista)) return 0;
+            var migradas = 0;
+            lista.forEach(function(r) {
+                if (!r || typeof r !== 'object') return;
+                if (r.nombre && String(r.nombre).trim()) return;   // ya está migrada
+                var pv = (r.pv === undefined || r.pv === null) ? '' : String(r.pv).trim();
+                if (!pv) return;                                    // nada que recuperar
+                r.nombre = pv;
+                if (!_pareceCodigoPV(pv)) delete r.pv;              // era un nombre tecleado, no un código
+                migradas++;
+            });
+            if (migradas) {
+                console.info('[Recetario] Migradas ' + migradas + ' receta(s) del esquema anterior (pv → nombre).');
+            }
+            return migradas;
+        }
+        window._migrarRecetasNomenclatura = _migrarRecetasNomenclatura;
+
         // ── Navegación de la pestaña ─────────────────────────────────────────
         function _recetarioAbrirFicha(id) {
             recetarioView = 'ficha';

@@ -26,6 +26,9 @@
             // solo lo que había mientras esa suscripción se conecta o si
             // arranca sin red.
             recetas       = safeGet('inventarioApp_recetas',       []);
+            // Hotfix 4.14 — cura las recetas guardadas con el esquema anterior
+            // (nombre dentro de `pv`). Idempotente: ver js/91-recetario.js.
+            if (typeof _migrarRecetasNomenclatura === 'function') _migrarRecetasNomenclatura(recetas);
             // FASE 10 — las ventas de la última semana consultada, para que la
             // pestaña muestre algo al abrir la app sin red.
             ventas         = safeGet('inventarioApp_ventas',         []);

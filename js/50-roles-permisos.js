@@ -1372,6 +1372,11 @@
             }
             if (data.recetas.length === 0) return;
             recetas = _mergeArrayByIdPreferCloud(recetas, data.recetas);
+            // Hotfix 4.14 — el documento publicado puede traer recetas del
+            // esquema anterior (nombre dentro de `pv`). Se curan al recibirlas,
+            // así cada dispositivo se arregla solo sin esperar a que el
+            // administrador vuelva a publicar. Ver js/91-recetario.js.
+            if (typeof _migrarRecetasNomenclatura === 'function') _migrarRecetasNomenclatura(recetas);
             localStorage.setItem('inventarioApp_recetarioVersion', String(serverVersion));
             saveToLocalStorage();
             if (typeof activeTab !== 'undefined' && activeTab === 'recetario') renderTab();

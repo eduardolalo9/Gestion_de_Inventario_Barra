@@ -149,6 +149,39 @@ const PUERTO = process.env.PUERTO || '8080';
   const notifAntes = await p.evaluate(() => document.querySelectorAll('.notification, [class*=notif]').length);
   await p.evaluate(() => recetarioImportarExcel());
   chk('Sin recipe.edit, recetarioImportarExcel() no revienta y no abre nada (gateado igual que Nueva receta)', true, ''); // humo: no debe lanzar excepción
+
+  // ── Hotfix 4.14: recetas guardadas con el esquema anterior ──────────────
+  await p.evaluate(() => { _authzState.permissions = new Set(['*']); });
+  const mig = await p.evaluate(() => {
+    // Tal cual las guardó la versión 4.11: el nombre vivía dentro de `pv`.
+    const lista = [
+      { id: 'vieja_1', pv: 'MARGARITA', categoria: 'Cocteles', activa: true, ingredientes: [], _v: 1 },
+      { id: 'vieja_2', pv: 'PVB1000777', categoria: 'Cocteles', activa: true, ingredientes: [], _v: 1 }, // importada sin nombre
+      { id: 'nueva_1', pv: 'PVB1000001', nombre: 'YA MIGRADA', categoria: '', activa: true, ingredientes: [], _v: 1 }
+    ];
+    const migradas = _migrarRecetasNomenclatura(lista);
+    const otraVez  = _migrarRecetasNomenclatura(lista); // idempotencia
+    return { migradas, otraVez, lista };
+  });
+  chk('★ Una receta vieja (nombre dentro de pv) recupera su nombre y deja de fingir un código',
+      mig.lista[0].nombre === 'MARGARITA' && mig.lista[0].pv === undefined, JSON.stringify(mig.lista[0]));
+  chk('★ Una importada sin nombre toma el código como nombre PERO conserva el código (cero pérdida de datos)',
+      mig.lista[1].nombre === 'PVB1000777' && mig.lista[1].pv === 'PVB1000777', JSON.stringify(mig.lista[1]));
+  chk('Una receta ya migrada no se toca',
+      mig.lista[2].nombre === 'YA MIGRADA' && mig.lista[2].pv === 'PVB1000001', JSON.stringify(mig.lista[2]));
+  chk('Migra 2 y es idempotente (la segunda pasada no migra nada)',
+      mig.migradas === 2 && mig.otraVez === 0, mig.migradas + '/' + mig.otraVez);
+
+  await p.evaluate(() => {
+    recetas = [{ id: 'vieja_x', pv: 'PALOMA VIEJA', categoria: 'Cocteles', activa: true, ingredientes: [], _v: 1 }];
+    _migrarRecetasNomenclatura(recetas);
+    recetarioView = 'lista'; recetarioImportView = 'lista'; _recetarioSearchTerm = ''; renderTab();
+  });
+  await p.waitForTimeout(120);
+  const listaMig = await p.evaluate(() => document.getElementById('tabContent').innerText);
+  chk('★ Tras migrar, la tarjeta muestra el nombre real y ya no "(sin nombre)"',
+      /PALOMA VIEJA/.test(listaMig) && !/\(sin nombre\)/.test(listaMig), listaMig.slice(0, 200));
+
   chk('Sin errores de JS en toda la prueba', errs.length === 0, errs.join(' | '));
 
   await nav.close();
