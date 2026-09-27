@@ -10,17 +10,27 @@
         //  Modelo (cada elemento del arreglo `recetas`, publicado como
         //  documento único en recetario/recetas — mismo patrón que catálogo,
         //  ver publicarRecetarioFirestore() en js/50-roles-permisos.js):
-        //    { id, pv, categoria, activa, ingredientes:[{productoId,cantidad,uom}],
+        //    { id, nombre, pv, categoria, activa, ingredientes:[{productoId,cantidad,uom}],
         //      metodo, cristaleria, hielo, decoracion, _v, creadoPor, creadoEn,
         //      actualizadoPor, actualizadoEn }
         //
-        //  Permisos: recipe.read (todos los roles por defecto) / recipe.edit
-        //  (solo ADMIN por defecto) — ver js/50-roles-permisos.js. Regla de
-        //  Firestore en firestore.rules, match /recetario/{docId}.
+        //  RECETARIO-2 (27/09/2026) — corrección de nomenclatura, antes de
+        //  construir el importador: se verificó contra el Excel real que "PV"
+        //  es un código único (ej. PVB1000001, igual significado que
+        //  product.pv en el catálogo — el SKU de Parrot) y "Receta" es el
+        //  nombre visible (ej. "1800 AÑEJO BOTELLA") — 1,326 de cada uno, sin
+        //  cruces entre sí. El campo `pv` de este módulo originalmente hacía
+        //  de nombre a mostrar, lo cual habría mostrado códigos en las
+        //  tarjetas al importar. Se corrige: `nombre` es el nombre visible
+        //  (obligatorio, lo llena el admin a mano o lo trae el importador) y
+        //  `pv` vuelve a significar lo mismo que en el catálogo — el código,
+        //  opcional, solo se llena vía importación (ver claude/recetario2-analisis-2026-09-27.md).
         //
         //  Decisiones confirmadas por el propietario (2026-09-27):
-        //    - El PV puede repetirse entre recetas activas (sin bloqueo de
-        //      unicidad).
+        //    - El nombre puede repetirse entre recetas creadas a mano (sin
+        //      bloqueo de unicidad) — pero el importador SÍ usa `pv` (código
+        //      único) como llave de coincidencia para actualizar en vez de
+        //      duplicar (ver Recetario-2).
         //    - UoM es texto libre, sin lista cerrada — coincide con el Excel
         //      real (ml, oz, PZA, KGS, LTS mezclados sin una lista fija).
         //    - Sin sub-recetas por ahora. El Excel sí tiene la noción
@@ -76,7 +86,10 @@
                 var producto = products.find(function(p) { return p.id === ing.productoId; });
                 var cu = producto ? costoPorUnidadBase(producto) : null;
                 if (cu === null) {
-                    faltantes.push((producto && producto.name) ? producto.name : (ing.productoId || '(insumo desconocido)'));
+                    // ing.descripcionExcel: solo la trae una línea importada (RECETARIO-2)
+                    // cuyo código no existía en el catálogo al momento de importar — se
+                    // preserva el nombre que traía el Excel en vez de mostrar solo el código.
+                    faltantes.push((producto && producto.name) ? producto.name : (ing.descripcionExcel || ing.productoId || '(insumo desconocido)'));
                     continue;
                 }
                 total += cu * (typeof ing.cantidad === 'number' ? ing.cantidad : 0);
@@ -139,7 +152,7 @@
             var title = document.getElementById('recetaModalTitle');
             if (!modal || !title) return;
 
-            document.getElementById('recetaPV').value = '';
+            document.getElementById('recetaNombre').value = '';
             document.getElementById('recetaCategoria').value = '';
             document.getElementById('recetaActiva').checked = true;
             document.getElementById('recetaMetodo').value = '';
@@ -154,7 +167,7 @@
                 if (receta) {
                     editingRecetaId = receta.id;
                     title.textContent = 'Editar receta';
-                    document.getElementById('recetaPV').value = receta.pv || '';
+                    document.getElementById('recetaNombre').value = receta.nombre || '';
                     document.getElementById('recetaCategoria').value = receta.categoria || '';
                     document.getElementById('recetaActiva').checked = receta.activa !== false;
                     document.getElementById('recetaMetodo').value = receta.metodo || '';
@@ -247,7 +260,8 @@
                         'onchange="_recetaOnCambioIngrediente(' + idx + ',\'insumo\',this.value)" ' +
                         'class="w-full px-2 py-2 bg-white text-gray-900 border border-gray-200 rounded text-sm" placeholder="Código o nombre del insumo">';
                 if (ing.productoId && !producto) {
-                    html += '<p class="text-xs mt-1" style="color:#dc2626">⚠️ No existe en el catálogo</p>';
+                    html += '<p class="text-xs mt-1" style="color:#dc2626">⚠️ No existe en el catálogo' +
+                            (ing.descripcionExcel ? ' — el Excel lo traía como "' + escapeHtml(ing.descripcionExcel) + '"' : '') + '</p>';
                 }
                 html += '</div>';
                 html += '<div style="width:92px;">';
@@ -274,9 +288,9 @@
                 showNotification('⚠️ No tienes permiso para editar el recetario');
                 return;
             }
-            var pvInput = document.getElementById('recetaPV');
-            var pv = (pvInput.value || '').trim();
-            if (!pv) { showNotification('⚠️ El nombre de venta (PV) es obligatorio'); return; }
+            var nombreInput = document.getElementById('recetaNombre');
+            var nombre = (nombreInput.value || '').trim();
+            if (!nombre) { showNotification('⚠️ El nombre de la receta es obligatorio'); return; }
 
             var ingredientesValidos = [];
             for (var i = 0; i < _recetaEditIngredientes.length; i++) {
@@ -303,7 +317,7 @@
             if (editingRecetaId) {
                 var receta = _recetaPorId(editingRecetaId);
                 if (!receta) { showNotification('❌ La receta ya no existe — probablemente otro admin la eliminó'); closeRecetaModal(); return; }
-                receta.pv = pv;
+                receta.nombre = nombre;
                 receta.categoria = categoria;
                 receta.activa = activa;
                 receta.ingredientes = ingredientesValidos;
@@ -316,7 +330,7 @@
                 receta.actualizadoEn = now;
             } else {
                 recetas.push({
-                    id: _generarRecetaId(), pv: pv, categoria: categoria, activa: activa,
+                    id: _generarRecetaId(), nombre: nombre, categoria: categoria, activa: activa,
                     ingredientes: ingredientesValidos, metodo: metodo, cristaleria: cristaleria,
                     hielo: hielo, decoracion: decoracion, _v: 1,
                     creadoPor: currentUserUid, creadoEn: now, actualizadoPor: currentUserUid, actualizadoEn: now
@@ -346,7 +360,7 @@
             if (!hasPermission('recipe.edit')) return;
             var receta = _recetaPorId(id);
             if (!receta) return;
-            showConfirm('¿Eliminar la receta "' + receta.pv + '"? No se puede deshacer una vez que publiques el recetario.', function() {
+            showConfirm('¿Eliminar la receta "' + receta.nombre + '"? No se puede deshacer una vez que publiques el recetario.', function() {
                 recetas = recetas.filter(function(r) { return r.id !== id; });
                 saveToLocalStorage();
                 if (recetarioFichaId === id) { recetarioView = 'lista'; recetarioFichaId = null; }
@@ -362,6 +376,15 @@
                 return '<div style="text-align:center;padding:60px 20px;color:var(--txt-secondary);">' +
                        '<p style="font-size:1rem;">🔒 No tienes acceso al recetario.</p></div>';
             }
+            // RECETARIO-2 — la vista de importación tiene prioridad sobre lista/ficha,
+            // mismo patrón que renderComprasTab() con comprasImportView.
+            if (typeof recetarioImportView === 'undefined') recetarioImportView = 'lista';
+            if (recetarioImportView === 'vista_previa' && _recetarioImportPendiente) {
+                return '<div style="padding:4px 0 8px">' + renderVistaPreviaRecetario(_recetarioImportPendiente) + '</div>';
+            }
+            if (recetarioImportView === 'incidencias' && _recetarioImportResultado) {
+                return '<div style="padding:4px 0 8px">' + renderIncidenciasImportacionRecetario(_recetarioImportResultado) + '</div>';
+            }
             if (recetarioView === 'ficha' && recetarioFichaId) {
                 return _renderRecetaFicha(recetarioFichaId);
             }
@@ -374,9 +397,9 @@
             var q = (_recetarioSearchTerm || '').trim().toLowerCase();
             var lista = recetas.filter(function(r) {
                 if (!q) return true;
-                return (r.pv || '').toLowerCase().indexOf(q) !== -1 ||
+                return (r.nombre || '').toLowerCase().indexOf(q) !== -1 ||
                        (r.categoria || '').toLowerCase().indexOf(q) !== -1;
-            }).sort(function(a, b) { return (a.pv || '').localeCompare(b.pv || ''); });
+            }).sort(function(a, b) { return (a.nombre || '').localeCompare(b.nombre || ''); });
 
             var html = '<div style="margin-bottom:16px;">';
             html += '<input type="text" value="' + escapeHtml(_recetarioSearchTerm) + '" oninput="updateRecetarioSearch(this.value)" ' +
@@ -404,7 +427,7 @@
                 html += '<div onclick="_recetarioAbrirFicha(\'' + r.id + '\')" ' +
                         'style="cursor:pointer;background:var(--card,#fff);border:1px solid var(--border-mid,#e5e7eb);border-radius:14px;padding:14px 16px;">';
                 html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">';
-                html += '<p style="font-weight:700;color:var(--txt-primary);margin:0;">' + escapeHtml(r.pv || '(sin nombre)') + '</p>';
+                html += '<p style="font-weight:700;color:var(--txt-primary);margin:0;">' + escapeHtml(r.nombre || '(sin nombre)') + '</p>';
                 if (!r.activa) html += '<span style="font-size:.68rem;background:#4b5563;color:#fff;padding:2px 8px;border-radius:999px;white-space:nowrap;">Inactiva</span>';
                 html += '</div>';
                 if (r.categoria) html += '<p style="font-size:.78rem;color:var(--txt-secondary);margin:4px 0 0;">' + escapeHtml(r.categoria) + '</p>';
@@ -434,8 +457,11 @@
                        'style="background:none;border:none;color:var(--accent);font-size:.85rem;cursor:pointer;margin-bottom:14px;padding:0;">← Volver al recetario</button>';
             html += '<div style="background:var(--card,#fff);border:1px solid var(--border-mid,#e5e7eb);border-radius:16px;padding:20px;">';
             html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">';
-            html += '<div><h2 style="font-size:1.4rem;font-weight:800;margin:0;color:var(--txt-primary);">' + escapeHtml(r.pv || '') + '</h2>';
+            html += '<div><h2 style="font-size:1.4rem;font-weight:800;margin:0;color:var(--txt-primary);">' + escapeHtml(r.nombre || '') + '</h2>';
             if (r.categoria) html += '<p style="color:var(--txt-secondary);margin:4px 0 0;">' + escapeHtml(r.categoria) + '</p>';
+            // r.pv (código, ej. PVB1000001) solo existe si la receta vino de una
+            // importación (Recetario-2) — nunca lo llena el editor manual.
+            if (r.pv) html += '<p style="color:var(--txt-secondary);font-size:.76rem;margin:4px 0 0;">Código: ' + escapeHtml(r.pv) + '</p>';
             html += '</div>';
             if (puedeEditar) {
                 html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
@@ -454,7 +480,7 @@
                 var producto = products.find(function(p) { return p.id === ing.productoId; });
                 var cu = producto ? costoPorUnidadBase(producto) : null;
                 html += '<tr style="border-bottom:1px solid var(--border-mid,#e5e7eb);">';
-                html += '<td style="padding:8px 4px;color:var(--txt-primary);">' + escapeHtml(producto ? producto.name : ing.productoId) +
+                html += '<td style="padding:8px 4px;color:var(--txt-primary);">' + escapeHtml(producto ? producto.name : (ing.descripcionExcel || ing.productoId)) +
                         (producto ? '' : ' <span style="color:#dc2626;font-size:.72rem;">(no está en el catálogo)</span>') + '</td>';
                 html += '<td style="padding:8px 4px;text-align:right;color:var(--txt-secondary);white-space:nowrap;">' +
                         escapeHtml(ing.cantidad) + ' ' + escapeHtml(ing.uom || '') + '</td>';

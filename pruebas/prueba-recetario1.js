@@ -135,9 +135,14 @@ chk('loadFromLocalStorage restaura recetas desde LS',
     /recetas\s*=\s*safeGet\('inventarioApp_recetas',\s*\[\]\);/.test(firest));
 
 // ═══ 6 · Decisiones confirmadas 2026-09-27 ═════════════════════════════════
-chk('SIN bloqueo de PV duplicado (decisión explícita del propietario)',
-    !/pv duplicad/i.test(soloCodigoVivo(receta)) &&
-    !/recetas\.some\(function\(r\) \{ return r\.pv/.test(receta));
+chk('SIN bloqueo de nombre duplicado en el editor manual (decisión del propietario)',
+    !/nombre duplicad/i.test(soloCodigoVivo(receta)) &&
+    !/recetas\.some\(function\(r\) \{ return r\.nombre/.test(receta));
+chk('★ receta.nombre es el nombre visible; receta.pv es el código (RECETARIO-2, corrección de nomenclatura)',
+    /receta\.nombre = nombre;/.test(receta) &&
+    /nombre: nombre, categoria: categoria/.test(receta) &&
+    !/receta\.pv = pv;/.test(receta) &&
+    !/id: _generarRecetaId\(\), pv: pv/.test(receta));
 chk('SIN lista cerrada de UoM (texto libre, coincide con el Excel real)',
     !/UOM_VALIDAS/.test(receta) && !/uom.*\[.*'ml'.*'oz'.*'pza'/i.test(receta));
 
@@ -149,12 +154,12 @@ chk("La pestaña 'recetario' respeta recipe.read / recipe.edit para su header",
 chk("index.html tiene un botón de navegación a 'recetario'",
     /data-sb-tab="recetario" onclick="switchTab\('recetario'\); sbClose\(\)"/.test(html));
 chk('index.html declara el modal #recetaModal con los campos del schema',
-    /id="recetaModal"/.test(html) && /id="recetaPV"/.test(html) && /id="recetaCategoria"/.test(html) &&
+    /id="recetaModal"/.test(html) && /id="recetaNombre"/.test(html) && /id="recetaCategoria"/.test(html) &&
     /id="recetaActiva"/.test(html) && /id="recetaIngredientesLista"/.test(html) &&
     /id="recetaInsumosDatalist"/.test(html) && /id="recetaMetodo"/.test(html) &&
     /id="recetaCristaleria"/.test(html) && /id="recetaHielo"/.test(html) && /id="recetaDecoracion"/.test(html));
-chk('index.html carga js/91-recetario.js entre 90-ciclo-admin.js y 95-exportacion.js',
-    /90-ciclo-admin\.js\?v=[\d.]+"><\/script>\s*<script src="js\/91-recetario\.js\?v=[\d.]+"><\/script>\s*<script src="js\/95-exportacion/.test(html));
+chk('index.html carga js/91-recetario.js entre 90-ciclo-admin.js y 92-recetario-importar.js (RECETARIO-2)',
+    /90-ciclo-admin\.js\?v=[\d.]+"><\/script>\s*<script src="js\/91-recetario\.js\?v=[\d.]+"><\/script>\s*<script src="js\/92-recetario-importar\.js\?v=[\d.]+"><\/script>\s*<script src="js\/95-exportacion/.test(html));
 chk('sw.js precalienta js/91-recetario.js',
     /'\.\/js\/91-recetario\.js\?v=' \+ APP_VERSION/.test(sw));
 

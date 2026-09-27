@@ -51,6 +51,7 @@ const PRUEBAS = [
     'prueba-contabilizar-conteo.js', // Contabilizar en Conteo + CONTABILIZADO ya no es "abierto"
     'prueba-8c.js',                  // FASE 8C — retiro de la escritura heredada de conteoAreas
     'prueba-recetario1.js',          // RECETARIO-1 — bill of materials, costeo, publicar/suscribir
+    'prueba-recetario2.js',          // RECETARIO-2 — importador de recetas desde Excel
 ];
 
 let fallaron = [];

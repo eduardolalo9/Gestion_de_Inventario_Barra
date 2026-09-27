@@ -97,15 +97,22 @@
         // 2026-09-26 y verificación contra Excel 2026-09-27). Mismo patrón que
         // `products`: el admin edita este arreglo localmente y lo PUBLICA a
         // `recetario/recetas` (documento único) — ver js/50-roles-permisos.js.
-        // Cada elemento: { id, pv, categoria, activa, ingredientes:[{productoId,
-        // cantidad, uom}], metodo, cristaleria, hielo, decoracion, _v, creadoPor,
-        // creadoEn, actualizadoPor, actualizadoEn }.
+        // Cada elemento: { id, nombre, pv, categoria, activa, ingredientes:[{productoId,
+        // cantidad, uom, descripcionExcel?}], metodo, cristaleria, hielo, decoracion,
+        // _v, creadoPor, creadoEn, actualizadoPor, actualizadoEn }. `pv` es el código
+        // único (ej. PVB1000001) — solo lo llena la importación (js/92-recetario-importar.js),
+        // nunca el editor manual (ver corrección de nomenclatura, RECETARIO-2).
         let recetas = [];
         // Estado de la pantalla de Recetario (js/91-recetario.js).
         // 'lista' | 'ficha'. La búsqueda de texto vive en _recetarioSearchTerm.
         let recetarioView = 'lista';
         let recetarioFichaId = null;
         let _recetarioSearchTerm = '';
+        // Estado de la importación de recetas desde Excel (RECETARIO-2,
+        // js/92-recetario-importar.js) — mismo patrón que comprasImportView.
+        let recetarioImportView = 'lista'; // 'lista' | 'vista_previa' | 'incidencias'
+        let _recetarioImportPendiente = null;
+        let _recetarioImportResultado = null;
         let activeTab = 'inicio';
         let editingProductId = null;
         let searchTerm = '';

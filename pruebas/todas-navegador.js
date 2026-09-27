@@ -39,6 +39,7 @@ const PRUEBAS = [
     'prueba-contabilizar-navegador.js', // Contabilizar en Conteo y estado CONTABILIZADO
     'prueba-h40-navegador.js',          // H-40 (hotfix 4.9) — fecha de recuento domingo/fin de mes
     'prueba-recetario1-navegador.js',   // RECETARIO-1 — pestaña, editor, costeo y permisos
+    'prueba-recetario2-navegador.js',   // RECETARIO-2 — importador: parseo, vista previa, merge por PV/nombre
 ];
 
 function esperarServidor(intentos) {

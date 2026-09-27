@@ -41,7 +41,7 @@ const PUERTO = process.env.PUERTO || '8080';
   // ── Crear una receta con dos ingredientes ──────────────────────────────
   await p.evaluate(() => openRecetaModal());
   chk('El modal de receta abre', await p.evaluate(() => !document.getElementById('recetaModal').classList.contains('hidden')), '');
-  await p.fill('#recetaPV', 'MARGARITA');
+  await p.fill('#recetaNombre', 'MARGARITA');
   await p.fill('#recetaCategoria', 'Cocteles');
 
   // Línea 1: tequila, 45 ml
@@ -65,7 +65,7 @@ const PUERTO = process.env.PUERTO || '8080';
   await p.waitForTimeout(150);
   chk('Guardar cierra el modal', await p.evaluate(() => document.getElementById('recetaModal').classList.contains('hidden')), '');
   chk('La receta queda en el arreglo local con sus dos ingredientes',
-      await p.evaluate(() => recetas.length === 1 && recetas[0].pv === 'MARGARITA' && recetas[0].ingredientes.length === 2), '');
+      await p.evaluate(() => recetas.length === 1 && recetas[0].nombre === 'MARGARITA' && recetas[0].ingredientes.length === 2), '');
 
   // ── Costeo: 45ml×(350/700) + 30ml×(30/1000) = 22.50 + 0.90 = 23.40 ──────
   const costoEsperado = 45 * (350 / 700) + 30 * (30 / 1000);
