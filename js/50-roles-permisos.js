@@ -131,7 +131,12 @@
             // decision del propietario fue "admin edita, todos consultan", y
             // este catalogo es CERRADO, asi que la capacidad de consulta
             // necesita su propio permiso explicito en vez de quedar implicita.
-            'recipe.read', 'recipe.edit'
+            'recipe.read', 'recipe.edit',
+            // FASE 10 (2026-09-27) — VENTAS del POS. Mismo criterio que
+            // compras: es informacion comercial, asi que NO entra en los roles
+            // por defecto de subjefe ni bartender; se delega por override
+            // desde la pantalla de permisos cuando haga falta.
+            'sales.read', 'sales.import'
         ];
         const PERMISOS_CATALOGO_SET = new Set(PERMISOS_CATALOGO);
 
@@ -216,12 +221,14 @@
 
             // ── Recetario (RECETARIO-1, 2026-09-27) ─────────────────────────
             'recipe.read':           { nombre: 'Ver recetario',                descripcion: 'Consultar recetas, ingredientes y costo por porcion.',                        grupo: 'Recetario',           delegable: true,  sensible: false, efectivo: true  },
-            'recipe.edit':           { nombre: 'Editar recetario',             descripcion: 'Crear, modificar y publicar recetas a todos los dispositivos.',                grupo: 'Recetario',           delegable: true,  sensible: true,  efectivo: true  }
+            'recipe.edit':           { nombre: 'Editar recetario',             descripcion: 'Crear, modificar y publicar recetas a todos los dispositivos.',                grupo: 'Recetario',           delegable: true,  sensible: true,  efectivo: true  },
+            'sales.read':            { nombre: 'Ver ventas',                   descripcion: 'Consultar las ventas del POS cargadas por semana.',                            grupo: 'Ventas',              delegable: true,  sensible: true,  efectivo: true  },
+            'sales.import':          { nombre: 'Importar ventas',              descripcion: 'Cargar el reporte de ventas del POS de una semana desde Excel.',                grupo: 'Ventas',              delegable: true,  sensible: true,  efectivo: true  }
         };
 
         // Orden de los grupos en la pantalla de administracion.
         const PERMISOS_GRUPOS_ORDEN = [
-            'Inventario fisico', 'Catalogo', 'Recetario', 'Areas de conteo', 'Compras',
+            'Inventario fisico', 'Catalogo', 'Recetario', 'Areas de conteo', 'Compras', 'Ventas',
             'Reportes y datos', 'Configuracion', 'Usuarios y permisos', 'Sucursales'
         ];
 

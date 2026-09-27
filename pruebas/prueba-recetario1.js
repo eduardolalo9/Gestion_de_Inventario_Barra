@@ -158,8 +158,8 @@ chk('index.html declara el modal #recetaModal con los campos del schema',
     /id="recetaActiva"/.test(html) && /id="recetaIngredientesLista"/.test(html) &&
     /id="recetaInsumosDatalist"/.test(html) && /id="recetaMetodo"/.test(html) &&
     /id="recetaCristaleria"/.test(html) && /id="recetaHielo"/.test(html) && /id="recetaDecoracion"/.test(html));
-chk('index.html carga js/91-recetario.js entre 90-ciclo-admin.js y 92-recetario-importar.js (RECETARIO-2)',
-    /90-ciclo-admin\.js\?v=[\d.]+"><\/script>\s*<script src="js\/91-recetario\.js\?v=[\d.]+"><\/script>\s*<script src="js\/92-recetario-importar\.js\?v=[\d.]+"><\/script>\s*<script src="js\/95-exportacion/.test(html));
+chk('index.html carga js/91-recetario.js justo entre 90-ciclo-admin.js y 92-recetario-importar.js',
+    /90-ciclo-admin\.js\?v=[\d.]+"><\/script>\s*<script src="js\/91-recetario\.js\?v=[\d.]+"><\/script>\s*<script src="js\/92-recetario-importar\.js\?v=[\d.]+"><\/script>/.test(html));
 chk('sw.js precalienta js/91-recetario.js',
     /'\.\/js\/91-recetario\.js\?v=' \+ APP_VERSION/.test(sw));
 

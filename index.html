@@ -627,7 +627,7 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
             }
         })();
     </script>
-    <link rel="stylesheet" href="css/estilos.css?v=4.12">
+    <link rel="stylesheet" href="css/estilos.css?v=4.13">
 </head>
 <body class="min-h-screen">
 
@@ -704,6 +704,8 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
     <!-- RECETARIO-2 — mismo motivo que fileInputCompras: input propio, nunca
          compartido con #fileInput/#fileInputCompras. -->
     <input type="file" id="fileInputRecetario" accept=".xlsx,.xls,.xlsm" class="hidden">
+    <!-- FASE 10 — input propio para el reporte de ventas del POS. -->
+    <input type="file" id="fileInputVentas" accept=".xlsx,.xls,.xlsm,.csv" class="hidden">
     <!-- Input oculto para importar respaldo JSON -->
     <input type="file" id="importDataInput" accept=".json" class="hidden">
 
@@ -746,6 +748,10 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
             <button type="button" class="sb-item" data-sb-tab="recetario" onclick="switchTab('recetario'); sbClose()">
                 <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
                 Recetario
+            </button>
+            <button type="button" class="sb-item" data-sb-tab="ventas" onclick="switchTab('ventas'); sbClose()">
+                <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 17l6-6 4 4 8-8m0 0h-5m5 0v5"/></svg>
+                Ventas
             </button>
             <button type="button" class="sb-item" data-sb-tab="historia" onclick="switchTab('historia'); sbClose()">
                 <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -1266,37 +1272,38 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
         </div>
     </div>
 
-        <script src="js/00-nucleo.js?v=4.12"></script>
-    <script src="js/05-busqueda-motor.js?v=4.12"></script>
-    <script src="js/06-busqueda-ui.js?v=4.12"></script>
-    <script src="js/10-multiusuario.js?v=4.12"></script>
-    <script src="js/15-ciclo-semanal.js?v=4.12"></script>
-    <script src="js/18-areas-config.js?v=4.12"></script>
-    <script src="js/20-persistencia.js?v=4.12"></script>
-    <script src="js/30-indexeddb.js?v=4.12"></script>
-    <script src="js/40-firestore.js?v=4.12"></script>
-    <script src="js/45-inventario-datos.js?v=4.12"></script>
-    <script src="js/47-existencia.js?v=4.12"></script>
-    <script src="js/50-roles-permisos.js?v=4.12"></script>
-    <script src="js/60-arranque.js?v=4.12"></script>
-    <script src="js/70-conversion-render.js?v=4.12"></script>
-    <script src="js/75-auditoria-flujo.js?v=4.12"></script>
-    <script src="js/80-buscador.js?v=4.12"></script>
-    <script src="js/83-panel.js?v=4.12"></script>
-    <script src="js/85-ui-inventario-fisico.js?v=4.12"></script>
-    <script src="js/87-reconteo.js?v=4.12"></script>
-    <script src="js/88-compras.js?v=4.12"></script>
-    <script src="js/90-ciclo-admin.js?v=4.12"></script>
-    <script src="js/91-recetario.js?v=4.12"></script>
-    <script src="js/92-recetario-importar.js?v=4.12"></script>
-    <script src="js/95-exportacion.js?v=4.12"></script>
-    <script src="js/99-window-arranque.js?v=4.12"></script>
+        <script src="js/00-nucleo.js?v=4.13"></script>
+    <script src="js/05-busqueda-motor.js?v=4.13"></script>
+    <script src="js/06-busqueda-ui.js?v=4.13"></script>
+    <script src="js/10-multiusuario.js?v=4.13"></script>
+    <script src="js/15-ciclo-semanal.js?v=4.13"></script>
+    <script src="js/18-areas-config.js?v=4.13"></script>
+    <script src="js/20-persistencia.js?v=4.13"></script>
+    <script src="js/30-indexeddb.js?v=4.13"></script>
+    <script src="js/40-firestore.js?v=4.13"></script>
+    <script src="js/45-inventario-datos.js?v=4.13"></script>
+    <script src="js/47-existencia.js?v=4.13"></script>
+    <script src="js/50-roles-permisos.js?v=4.13"></script>
+    <script src="js/60-arranque.js?v=4.13"></script>
+    <script src="js/70-conversion-render.js?v=4.13"></script>
+    <script src="js/75-auditoria-flujo.js?v=4.13"></script>
+    <script src="js/80-buscador.js?v=4.13"></script>
+    <script src="js/83-panel.js?v=4.13"></script>
+    <script src="js/85-ui-inventario-fisico.js?v=4.13"></script>
+    <script src="js/87-reconteo.js?v=4.13"></script>
+    <script src="js/88-compras.js?v=4.13"></script>
+    <script src="js/90-ciclo-admin.js?v=4.13"></script>
+    <script src="js/91-recetario.js?v=4.13"></script>
+    <script src="js/92-recetario-importar.js?v=4.13"></script>
+    <script src="js/93-ventas.js?v=4.13"></script>
+    <script src="js/95-exportacion.js?v=4.13"></script>
+    <script src="js/99-window-arranque.js?v=4.13"></script>
 
     </div><!-- /#appWrapper -->
 
     <!-- ══════════════════════════════════════════════════════
          AUTH — Lógica de autenticación Firebase
          ══════════════════════════════════════════════════════ -->
-        <script src="js/auth.js?v=4.12"></script>
+        <script src="js/auth.js?v=4.13"></script>
 </body>
 </html>

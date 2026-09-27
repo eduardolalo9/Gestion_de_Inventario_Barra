@@ -1647,6 +1647,77 @@ async function main() {
         await assertFails(rutaRecetario(anonimo).set({ recetas: [], version: Date.now() }));
     });
 
+    // ══════════════════════════════════════════════════════════════════════
+    //  FASE 10 — VENTAS DEL POS (inventarioApp/{docId}/ventas/{semanaId})
+    // ══════════════════════════════════════════════════════════════════════
+    const rutaVentas = (db, semana) => db.doc('inventarioApp/barra-principal/ventas/' + (semana || '2026-09-21'));
+    const ventasValidas = (semana) => ({
+        semanaId: semana || '2026-09-21',
+        lineas: [{ sku: 'PVB1000001', nombre: '1800 ANEJO BOTELLA', tipo: 'Bebidas', cantidad: 3, ventaNeta: 100 }],
+        totalSkus: 1, totalUnidades: 3, origen: 'excel',
+        importadoPor: 'admin1', importadoEn: Date.now()
+    });
+
+    await prueba('VEN-1. Sin sales.read NO se pueden leer las ventas (información comercial, como compras)', async () => {
+        await sembrarFase2();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await ctx.firestore().doc('inventarioApp/barra-principal/ventas/2026-09-21').set(ventasValidas());
+        });
+        await assertFails(rutaVentas(bt1).get());
+        await assertFails(rutaVentas(subjefe1).get());
+        await assertSucceeds(rutaVentas(admin1).get());
+    });
+
+    await prueba('VEN-2. Sin sales.import NO se pueden escribir ventas', async () => {
+        await sembrarFase2();
+        await assertFails(rutaVentas(bt1).set(ventasValidas()));
+        await assertFails(rutaVentas(subjefe1).set(ventasValidas()));
+        await assertSucceeds(rutaVentas(admin1).set(ventasValidas()));
+    });
+
+    await prueba('VEN-3. ★ Reimportar la misma semana SÍ se permite (update): el POS reexporta reportes corregidos', async () => {
+        await sembrarFase2();
+        await assertSucceeds(rutaVentas(admin1).set(ventasValidas()));
+        const corregido = ventasValidas();
+        corregido.lineas = [{ sku: 'PVB1000001', nombre: '1800 ANEJO BOTELLA', tipo: 'Bebidas', cantidad: 9, ventaNeta: 300 }];
+        corregido.totalUnidades = 9;
+        await assertSucceeds(rutaVentas(admin1).set(corregido));
+    });
+
+    await prueba('VEN-4. ★ Una semana de ventas NUNCA se borra (se reemplaza)', async () => {
+        await sembrarFase2();
+        await assertSucceeds(rutaVentas(admin1).set(ventasValidas()));
+        await assertFails(rutaVentas(admin1).delete());
+    });
+
+    await prueba('VEN-5. El semanaId del documento debe coincidir con el id, y la lista tiene tope', async () => {
+        await sembrarFase2();
+        const cruzado = ventasValidas('2026-09-14');   // id 2026-09-21, campo 2026-09-14
+        await assertFails(rutaVentas(admin1, '2026-09-21').set(cruzado));
+        const enorme = ventasValidas();
+        enorme.lineas = Array.from({ length: 3001 }, (_, i) => ({ sku: 'S' + i, cantidad: 1 }));
+        await assertFails(rutaVentas(admin1).set(enorme));
+    });
+
+    await prueba('VEN-6. Un override "allow" de sales.read concede la lectura real a un bartender', async () => {
+        await sembrarFase2(async (db) => {
+            await db.doc('usuarios/bartender1').set({
+                uid: 'bartender1', role: 'BARTENDER',
+                permissionOverrides: { 'sales.read': 'allow' }
+            });
+            await db.doc('inventarioApp/barra-principal/ventas/2026-09-21').set(ventasValidas());
+        });
+        await assertSucceeds(rutaVentas(bt1).get());
+        await assertFails(rutaVentas(bt1).set(ventasValidas()));   // leer no es escribir
+    });
+
+    await prueba('VEN-7. Sin autenticación no se puede ni leer ni escribir ventas', async () => {
+        await sembrarFase2();
+        const anonimo = testEnv.unauthenticatedContext().firestore();
+        await assertFails(rutaVentas(anonimo).get());
+        await assertFails(rutaVentas(anonimo).set(ventasValidas()));
+    });
+
     await testEnv.cleanup();
 
     console.log('\n── Resumen ──');

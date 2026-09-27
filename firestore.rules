@@ -684,6 +684,36 @@
                  }
 
                  // ══════════════════════════════════════════════════════════
+                 //  FASE 10 — VENTAS DEL POS, un documento por semana, aquí
+                 //  junto a inventariosIniciales porque es dato del ciclo
+                 //  semanal (js/93-ventas.js escribe en
+                 //  inventarioApp/{docId}/ventas/{semanaId}). Ojo: compras y
+                 //  movimientos NO viven aquí, están en la raíz — el nombre
+                 //  del bloque no basta para saberlo, hay que mirar el código.
+                 //
+                 //  Lectura con sales.read, no abierta a cualquier
+                 //  autenticado: igual que compras, lleva importes.
+                 //
+                 //  ¿Por qué SÍ se permite 'update', si un inicial de arriba
+                 //  es inmutable? Porque un inicial es un hecho contable y
+                 //  una compra es un documento de SAP, pero un reporte de
+                 //  ventas es una FOTO que el POS puede volver a exportar
+                 //  corregida. Bloquear la reimportación obligaría a
+                 //  arrastrar un dato malo toda la semana. Decisión explícita
+                 //  del propietario (2026-09-27). 'delete' sigue cerrado: una
+                 //  semana no se borra, se reemplaza.
+                 // ══════════════════════════════════════════════════════════
+                 match /ventas/{semanaId} {
+                   allow read: if hasPerm('sales.read');
+                   allow create, update: if hasPerm('sales.import')
+                                    && request.resource.data.semanaId == semanaId
+                                    && request.resource.data.lineas is list
+                                    && request.resource.data.lineas.size() <= 3000
+                                    && request.resource.data.origen is string;
+                   allow delete: if false;
+                 }
+
+                 // ══════════════════════════════════════════════════════════
                  //  RECONTEO — solo administrador; el conteo que aplica al
                  //  finalizar viaja por userAuditoria/{uid} propio (regla ya
                  //  existente). Este documento es el REGISTRO: quién, cuándo,

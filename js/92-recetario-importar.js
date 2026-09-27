@@ -9,9 +9,10 @@
         //  claude/recetario2-analisis-2026-09-27.md). Columnas reales:
         //    PV, Receta, Categoría, Activa, Código insumo, Descripción insumo,
         //    Cantidad, UoM, Almacén, Nombre almacén, VENTA, CONSUMO
-        //  Se usan las primeras ocho; Almacén/Nombre almacén/VENTA/CONSUMO
-        //  quedan fuera de alcance de esta fase (motor de consumo teórico,
-        //  FASE 11 — decisión ya confirmada en Recetario-1).
+        //  Se usan las primeras ocho MÁS `Almacén`, que es el filtro de
+        //  alcance de la barra (ver COLUMNAS_EXCEL_RECETARIO y la corrección
+        //  de FASE 10). `Nombre almacén`, `VENTA` y `CONSUMO` sí quedan fuera:
+        //  son el motor de consumo teórico (FASE 11).
         //
         //  ARQUITECTURA — mismo patrón que Compras (js/88-compras.js), NO el
         //  de Catálogo: cada PV agrupa varias filas (una por ingrediente) y
@@ -70,7 +71,17 @@
             codigo:      ['Código insumo', 'Codigo insumo', 'codigo insumo'],
             descripcion: ['Descripción insumo', 'Descripcion insumo', 'descripcion insumo'],
             cantidad:    ['Cantidad', 'cantidad'],
-            uom:         ['UoM', 'uom', 'Unidad', 'UOM']
+            uom:         ['UoM', 'uom', 'Unidad', 'UOM'],
+            // FASE 10 — corrección: `Almacén` NO era un dato de FASE 11 como
+            // supuse al construir Recetario-2, es el filtro de alcance de toda
+            // la app. La fórmula real del Excel es
+            //   VENTA = IF(Almacén="12", SUMIF(Venta!SKU, PV, Venta!Cantidad), 0)
+            // es decir: solo las líneas de la BARRA generan consumo. Sin este
+            // filtro se importaban ~393 recetas de cocina y cava (aceites,
+            // aguachiles, vinos, las 45 sub-recetas SUB-0XX) y 1,383 líneas de
+            // insumos que el catálogo de barra no tiene ni debe tener.
+            // Mismo criterio y misma constante que js/88-compras.js (D-2).
+            almacen:     ['Almacén', 'Almacen', 'almacen']
         };
 
         /**
@@ -147,6 +158,7 @@
             const grupos = {};
             const orden = [];
             let filasSinPV = 0;
+            let lineasFueraDeAlcance = 0;   // líneas de cocina (11) / cava (13)
 
             (filas || []).forEach(function(fila) {
                 const pvCrudo = _findColCompras(fila, COLUMNAS_EXCEL_RECETARIO.pv);
@@ -163,7 +175,9 @@
                         categoria: String(_findColCompras(fila, COLUMNAS_EXCEL_RECETARIO.categoria) || '').trim(),
                         activa: _activaExcelBool(_findColCompras(fila, COLUMNAS_EXCEL_RECETARIO.activa)),
                         ingredientes: [],
-                        incidencias: []
+                        incidencias: [],
+                        lineasOtroAlmacen: 0,
+                        lineasConCodigo: 0
                     };
                     orden.push(pv);
                 }
@@ -171,6 +185,23 @@
 
                 const codigo = _findColCompras(fila, COLUMNAS_EXCEL_RECETARIO.codigo);
                 const codigoStr = (codigo === undefined || codigo === null) ? '' : String(codigo).trim();
+
+                // ── Filtro de alcance (D-2, mismo que Compras): solo almacén 12 ──
+                // Se aplica por LÍNEA, no por receta, porque es como lo hace el
+                // Excel: un platillo de cocina que lleva una cerveza SÍ consume
+                // inventario de barra por esa línea, y sus demás líneas no.
+                // Sin código no hay línea real que filtrar (receta sin
+                // ingredientes) — ese caso lo resuelve _normalizarLineaReceta.
+                if (codigoStr) {
+                    g.lineasConCodigo++;
+                    var almacenCrudo = _findColCompras(fila, COLUMNAS_EXCEL_RECETARIO.almacen);
+                    var almacen = (almacenCrudo === undefined || almacenCrudo === null) ? '' : String(almacenCrudo).trim();
+                    if (almacen !== ALMACEN_BARRA_CODIGO) {
+                        g.lineasOtroAlmacen++;
+                        lineasFueraDeAlcance++;
+                        return; // cocina, cava o sin almacén: no le compete a la barra
+                    }
+                }
                 const producto = codigoStr ? products.find(function(p) { return String(p.id) === codigoStr; }) : null;
                 const cruda = {
                     codigo: codigo,
@@ -187,8 +218,25 @@
                 if (norm.incidencia) g.incidencias.push(norm.incidencia);
             });
 
+            // ── Recetas que NO son de la barra ───────────────────────────────
+            // Una receta que traía líneas de ingrediente y NINGUNA es de
+            // almacén 12 es de cocina o cava (aguachiles, aceites, vinos, las
+            // sub-recetas SUB-0XX): no se importa. Se cuenta en bloque, no
+            // como ~393 incidencias que no se pueden leer.
+            // Una receta SIN ninguna línea de ingrediente (caso real:
+            // PVB1001308 "TE GOURMET") sí se importa: no hay línea que
+            // clasificar, y ya está documentada como el caso borde de
+            // Recetario-2.
+            const recetasOtroAlmacen = [];
+            const ordenBarra = orden.filter(function(pv) {
+                const g = grupos[pv];
+                const esDeOtroAlmacen = g.lineasConCodigo > 0 && g.ingredientes.length === 0 && g.lineasOtroAlmacen === g.lineasConCodigo;
+                if (esDeOtroAlmacen) { recetasOtroAlmacen.push(g.nombre); return false; }
+                return true;
+            });
+
             // ── Decidir alta vs actualización contra el `recetas` en memoria ──
-            const gruposList = orden.map(function(pv) {
+            const gruposList = ordenBarra.map(function(pv) {
                 const g = grupos[pv];
                 var existente = recetas.find(function(r) {
                     return r.pv && String(r.pv).toUpperCase() === pv.toUpperCase();
@@ -213,7 +261,14 @@
                 };
             });
 
-            return { recetas: gruposList, filasSinPV: filasSinPV, totalFilas: (filas || []).length };
+            return {
+                recetas: gruposList,
+                filasSinPV: filasSinPV,
+                totalFilas: (filas || []).length,
+                lineasFueraDeAlcance: lineasFueraDeAlcance,
+                recetasOtroAlmacen: recetasOtroAlmacen.length,
+                ejemplosOtroAlmacen: recetasOtroAlmacen.slice(0, 5)
+            };
         }
 
         // ══════════════════════════════════════════════════════════════════════
@@ -251,6 +306,23 @@
                   + '⚠️ Esto reemplaza los ingredientes de cada receta que ya existe con el mismo PV. '
                   + 'No se publica todavía — después de confirmar, sigue haciendo falta "Publicar recetario" '
                   + 'para que lo vean los demás.</div>';
+
+            // FASE 10 — lo descartado por almacén se informa en bloque: son
+            // cientos de líneas y de recetas, y verlas como incidencias una por
+            // una escondería las que sí importan.
+            if (parsed.recetasOtroAlmacen || parsed.lineasFueraDeAlcance) {
+                html += '<div style="padding:10px 12px;margin-bottom:14px;border-radius:10px;'
+                      + 'background:rgba(148,163,184,.10);border:1px solid rgba(148,163,184,.28);'
+                      + 'color:var(--txt-secondary);font-size:.82rem;line-height:1.5">'
+                      + '🏷️ Fuera de alcance de la barra (almacén ' + ALMACEN_BARRA_CODIGO + '): '
+                      + '<b>' + (parsed.recetasOtroAlmacen || 0) + '</b> receta(s) de cocina o cava no se importan'
+                      + ((parsed.ejemplosOtroAlmacen && parsed.ejemplosOtroAlmacen.length)
+                          ? ' (' + escapeHtml(parsed.ejemplosOtroAlmacen.join(', ')) + '…)' : '')
+                      + (parsed.lineasFueraDeAlcance
+                          ? ', y <b>' + parsed.lineasFueraDeAlcance + '</b> línea(s) de insumo de otros almacenes se omiten '
+                            + 'dentro de las recetas que sí son de barra.' : '.')
+                      + '</div>';
+            }
 
             var actualizadasPorNombre = parsed.recetas.filter(function(r) { return !r.esNueva && r.coincidenciaPorNombre; });
             if (actualizadasPorNombre.length) {

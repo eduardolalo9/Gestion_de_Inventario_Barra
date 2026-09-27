@@ -34,20 +34,39 @@ const PUERTO = process.env.PUERTO || '8080';
     activeTab = 'recetario'; renderTab();
   });
 
-  // ── Filas simuladas — mismas columnas reales de la hoja "Recetas" ───────
+  // ── Filas simuladas — mismas columnas reales de la hoja "Recetas",
+  //    incluida Almacén (12 = barra, 11 = cocina, 13 = cava) ───────────────
   const FILAS_BASE = () => ([
-    { PV: 'PVB1000001', Receta: 'MARGARITA', 'Categoría': 'Cocteles', Activa: 'Sí', 'Código insumo': '1180001', 'Descripción insumo': 'TEQUILA 1800 ANEJO', Cantidad: 45, UoM: 'ml' },
-    { PV: 'PVB1000001', Receta: 'MARGARITA', 'Categoría': 'Cocteles', Activa: 'Sí', 'Código insumo': '1100017', 'Descripción insumo': 'JUGO DE PIÑA', Cantidad: 30, UoM: 'ml' },
-    { PV: 'PVB1000002', Receta: 'MOJITO', 'Categoría': 'Cocteles', Activa: 'Sí', 'Código insumo': '9999999', 'Descripción insumo': 'RON BLANCO', Cantidad: 60, UoM: 'ml' },
-    { PV: 'PVB1000003', Receta: 'TE GOURMET', 'Categoría': 'producto_terminado', Activa: 'Sí', 'Código insumo': null, 'Descripción insumo': null, Cantidad: null, UoM: null },
-    { PV: 'PVB1000004', Receta: 'AGUA MINERAL', 'Categoría': 'Cocteles', Activa: 'Sí', 'Código insumo': '1180001', 'Descripción insumo': 'TEQUILA', Cantidad: 'no-es-numero', UoM: 'ml' },
-    { PV: '', Receta: 'FILA SIN PV', 'Categoría': 'x', Activa: 'Sí', 'Código insumo': '1180001', Cantidad: 10, UoM: 'ml' }
+    { PV: 'PVB1000001', Receta: 'MARGARITA', 'Categoría': 'Cocteles', Activa: 'Sí', 'Código insumo': '1180001', 'Descripción insumo': 'TEQUILA 1800 ANEJO', Cantidad: 45, UoM: 'ml', 'Almacén': '12' },
+    { PV: 'PVB1000001', Receta: 'MARGARITA', 'Categoría': 'Cocteles', Activa: 'Sí', 'Código insumo': '1100017', 'Descripción insumo': 'JUGO DE PIÑA', Cantidad: 30, UoM: 'ml', 'Almacén': '12' },
+    { PV: 'PVB1000002', Receta: 'MOJITO', 'Categoría': 'Cocteles', Activa: 'Sí', 'Código insumo': '9999999', 'Descripción insumo': 'RON BLANCO', Cantidad: 60, UoM: 'ml', 'Almacén': '12' },
+    { PV: 'PVB1000003', Receta: 'TE GOURMET', 'Categoría': 'producto_terminado', Activa: 'Sí', 'Código insumo': null, 'Descripción insumo': null, Cantidad: null, UoM: null, 'Almacén': null },
+    { PV: 'PVB1000004', Receta: 'AGUA MINERAL', 'Categoría': 'Cocteles', Activa: 'Sí', 'Código insumo': '1180001', 'Descripción insumo': 'TEQUILA', Cantidad: 'no-es-numero', UoM: 'ml', 'Almacén': '12' },
+    { PV: '', Receta: 'FILA SIN PV', 'Categoría': 'x', Activa: 'Sí', 'Código insumo': '1180001', Cantidad: 10, UoM: 'ml', 'Almacén': '12' },
+    // Receta de cocina pura (almacén 11): NO debe importarse
+    { PV: 'PVA1000015', Receta: 'AGUACHILE DE CAMARON', 'Categoría': 'producto_terminado', Activa: 'Sí', 'Código insumo': '1020033', 'Descripción insumo': 'CILANTRO KG', Cantidad: 0.01, UoM: 'KGS', 'Almacén': '11' },
+    { PV: 'PVA1000015', Receta: 'AGUACHILE DE CAMARON', 'Categoría': 'producto_terminado', Activa: 'Sí', 'Código insumo': '1020064', 'Descripción insumo': 'LIMON KG', Cantidad: 0.02, UoM: 'KGS', 'Almacén': '11' },
+    // Receta MIXTA (platillo de cocina que sí consume barra): se importa,
+    // pero solo con su línea de almacén 12
+    { PV: 'PVA1000088', Receta: 'BARBACOA DE SHORT RIB', 'Categoría': 'producto_terminado', Activa: 'Sí', 'Código insumo': '1290172', 'Descripción insumo': 'SHORT RIB 450 GR', Cantidad: 1, UoM: 'PZA', 'Almacén': '11' },
+    { PV: 'PVA1000088', Receta: 'BARBACOA DE SHORT RIB', 'Categoría': 'producto_terminado', Activa: 'Sí', 'Código insumo': '1180001', 'Descripción insumo': 'TEQUILA 1800 ANEJO', Cantidad: 20, UoM: 'ml', 'Almacén': '12' },
+    // Vino de cava (almacén 13): NO debe importarse
+    { PV: 'PVV1000080', Receta: '3V CASA MADERO', 'Categoría': 'producto_terminado', Activa: 'Sí', 'Código insumo': '1260001', 'Descripción insumo': 'CASA MADERO 3V 750 ML', Cantidad: 1, UoM: 'PZA', 'Almacén': '13' }
   ]);
 
   // ── Parseo: agrupación, incidencias, "receta sin ingredientes" ──────────
   const parsed1 = await p.evaluate((filas) => _parsearExcelRecetario(filas), FILAS_BASE());
-  chk('Agrupa 4 PV distintos (la fila sin PV se descarta aparte)', parsed1.recetas.length === 4, JSON.stringify(parsed1.recetas.map(r => r.pv)));
+  chk('Importa 5 recetas de barra (4 PVB + la mixta PVA), descartando cocina y cava', parsed1.recetas.length === 5, JSON.stringify(parsed1.recetas.map(r => r.pv)));
   chk('filasSinPV cuenta la fila sin PV', parsed1.filasSinPV === 1, '');
+  chk('★ La receta de cocina pura (AGUACHILE, almacén 11) NO se importa', !parsed1.recetas.some(r => r.pv === 'PVA1000015'), '');
+  chk('★ El vino de cava (almacén 13) NO se importa', !parsed1.recetas.some(r => r.pv === 'PVV1000080'), '');
+  chk('★ La receta MIXTA sí se importa, pero solo con su línea de barra (el platillo consume una bebida)',
+      (() => { const b = parsed1.recetas.find(r => r.pv === 'PVA1000088');
+               return b && b.totalIngredientes === 1 && b.ingredientes[0].productoId === '1180001'; })(),
+      JSON.stringify(parsed1.recetas.find(r => r.pv === 'PVA1000088')));
+  chk('Se informa en bloque lo descartado por almacén (recetas y líneas), no como incidencias sueltas',
+      parsed1.recetasOtroAlmacen === 2 && parsed1.lineasFueraDeAlcance === 4,
+      'recetas:' + parsed1.recetasOtroAlmacen + ' lineas:' + parsed1.lineasFueraDeAlcance);
   const margarita1 = parsed1.recetas.find(r => r.pv === 'PVB1000001');
   chk('MARGARITA agrupa sus dos líneas de ingrediente bajo el mismo PV', margarita1 && margarita1.totalIngredientes === 2, JSON.stringify(margarita1));
   chk('Todas son "nueva" en el primer import (recetas está vacío)', parsed1.recetas.every(r => r.esNueva), '');
@@ -63,7 +82,7 @@ const PUERTO = process.env.PUERTO || '8080';
   await p.evaluate((parsed) => { _recetarioImportPendiente = parsed; recetarioImportView = 'vista_previa'; renderTab(); }, parsed1);
   await p.waitForTimeout(100);
   const previaTxt = await p.evaluate(() => document.getElementById('tabContent').innerText);
-  chk('La vista previa muestra el resumen (4 recetas, 4 nuevas) y las tarjetas por PV', /4 receta/.test(previaTxt) && /4 nueva/.test(previaTxt) && /MARGARITA/.test(previaTxt) && /MOJITO/.test(previaTxt), previaTxt.slice(0, 300));
+  chk('La vista previa muestra el resumen (5 recetas, 5 nuevas) y las tarjetas por PV', /5 receta/.test(previaTxt) && /5 nueva/.test(previaTxt) && /MARGARITA/.test(previaTxt) && /MOJITO/.test(previaTxt), previaTxt.slice(0, 300));
   chk('La vista previa avisa de la receta sin ingredientes', /sin ingredientes/.test(previaTxt), '');
 
   // ── Confirmar: se guarda en `recetas`, NO se publica solo ────────────────
@@ -74,7 +93,7 @@ const PUERTO = process.env.PUERTO || '8080';
     margarita: recetas.find(r => r.pv === 'PVB1000001'),
     vista: recetarioImportView
   }));
-  chk('Tras confirmar, las 4 recetas quedan en el arreglo local', estado1.total === 4, String(estado1.total));
+  chk('Tras confirmar, las 5 recetas de barra quedan en el arreglo local', estado1.total === 5, String(estado1.total));
   chk('MARGARITA trae nombre correcto y sus dos ingredientes con costo calculable', estado1.margarita && estado1.margarita.nombre === 'MARGARITA' && estado1.margarita.ingredientes.length === 2, JSON.stringify(estado1.margarita));
   chk('La pantalla pasa a mostrar el resultado de la importación', estado1.vista === 'incidencias', estado1.vista);
   const costoMargarita = await p.evaluate(() => costoReceta(recetas.find(r => r.pv === 'PVB1000001')));
@@ -92,7 +111,7 @@ const PUERTO = process.env.PUERTO || '8080';
   await p.evaluate((parsed) => { _recetarioImportPendiente = parsed; confirmarImportacionRecetario(); }, parsed2);
   await p.waitForTimeout(100);
   const estado2 = await p.evaluate(() => ({ total: recetas.length, cantidad: recetas.find(r => r.pv === 'PVB1000001').ingredientes[0].cantidad }));
-  chk('Reimportar NO duplica — sigue habiendo 4 recetas', estado2.total === 4, String(estado2.total));
+  chk('Reimportar NO duplica — sigue habiendo 5 recetas', estado2.total === 5, String(estado2.total));
   chk('…y el ingrediente quedó con la cantidad nueva (45→50)', estado2.cantidad === 50, String(estado2.cantidad));
 
   // ── Coincidencia por nombre: una receta manual sin PV se adopta ─────────
@@ -100,7 +119,7 @@ const PUERTO = process.env.PUERTO || '8080';
     recetas.push({ id: 'rec_manual_1', nombre: 'PALOMA', categoria: 'Cocteles', activa: true, ingredientes: [{ productoId: '1180001', cantidad: 40, uom: 'ml' }], metodo: '', cristaleria: '', hielo: '', decoracion: '', _v: 1, creadoPor: 'admin1', creadoEn: Date.now(), actualizadoPor: 'admin1', actualizadoEn: Date.now() });
   });
   const parsedPaloma = await p.evaluate(() => _parsearExcelRecetario([
-    { PV: 'PVB2000099', Receta: 'PALOMA', 'Categoría': 'Cocteles', Activa: 'Sí', 'Código insumo': '1180001', 'Descripción insumo': 'TEQUILA', Cantidad: 50, UoM: 'ml' }
+    { PV: 'PVB2000099', Receta: 'PALOMA', 'Categoría': 'Cocteles', Activa: 'Sí', 'Código insumo': '1180001', 'Descripción insumo': 'TEQUILA', Cantidad: 50, UoM: 'ml', 'Almacén': '12' }
   ]));
   chk('★ Una receta creada a mano (sin pv) se reconoce por NOMBRE cuando es inequívoca — se actualiza, no se duplica', parsedPaloma.recetas[0].esNueva === false && parsedPaloma.recetas[0].coincidenciaPorNombre === true, JSON.stringify(parsedPaloma.recetas[0]));
   await p.evaluate((parsed) => { _recetarioImportPendiente = parsed; confirmarImportacionRecetario(); }, parsedPaloma);
@@ -117,7 +136,7 @@ const PUERTO = process.env.PUERTO || '8080';
   });
   const totalAntesDup = await p.evaluate(() => recetas.length);
   const parsedDup = await p.evaluate(() => _parsearExcelRecetario([
-    { PV: 'PVB3000001', Receta: 'DUPLICADO', 'Categoría': '', Activa: 'Sí', 'Código insumo': '1180001', Cantidad: 10, UoM: 'ml' }
+    { PV: 'PVB3000001', Receta: 'DUPLICADO', 'Categoría': '', Activa: 'Sí', 'Código insumo': '1180001', Cantidad: 10, UoM: 'ml', 'Almacén': '12' }
   ]));
   chk('★ Con dos candidatas manuales del mismo nombre, NO adivina — se trata como receta nueva', parsedDup.recetas[0].esNueva === true, JSON.stringify(parsedDup.recetas[0]));
   await p.evaluate((parsed) => { _recetarioImportPendiente = parsed; confirmarImportacionRecetario(); }, parsedDup);

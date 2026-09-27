@@ -52,6 +52,7 @@ const PRUEBAS = [
     'prueba-8c.js',                  // FASE 8C — retiro de la escritura heredada de conteoAreas
     'prueba-recetario1.js',          // RECETARIO-1 — bill of materials, costeo, publicar/suscribir
     'prueba-recetario2.js',          // RECETARIO-2 — importador de recetas desde Excel
+    'prueba-fase10.js',              // FASE 10 — ventas del POS: permisos, reglas, parser
 ];
 
 let fallaron = [];

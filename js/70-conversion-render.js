@@ -366,6 +366,7 @@
                 case 'historia':        content.innerHTML = renderHistoriaTab(); break;
                 case 'compras':         content.innerHTML = renderComprasTab(); break;
                 case 'recetario':       content.innerHTML = renderRecetarioTab(); break;
+                case 'ventas':          content.innerHTML = renderVentasTab(); break;
                 case 'ajustes':         content.innerHTML = renderAjustesTab(); break;
                 case 'notificaciones':  content.innerHTML = renderNotificacionesTab(); break;
                 case 'admin':           content.innerHTML = isAdmin() ? renderAdminTab() : renderInicioTab(); break;
@@ -425,6 +426,18 @@
                         '<i class="fa-solid fa-file-arrow-up"></i><span class="hidden sm:inline">Importar Excel</span><span class="sm:hidden">Importar</span></button>' +
                         '<button onclick="publicarRecetarioFirestore()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:#1a3a5f;border:1px solid rgba(59,130,246,0.28);color:#93c5fd;">' +
                         '<i class="fa-solid fa-cloud-arrow-up"></i><span class="hidden sm:inline">Publicar recetario</span><span class="sm:hidden">Publicar</span></button>' +
+                        '</div>';
+                } else {
+                    headerActions.innerHTML = '<span style="font-size:.72rem;color:rgba(255,255,255,.55);padding:6px 10px;background:rgba(255,255,255,.08);border-radius:6px;">📋 Solo lectura</span>';
+                }
+            } else if (activeTab === 'ventas') {
+                // FASE 10 — mismo criterio: sin sales.import no hay botón de
+                // escritura, solo la etiqueta de solo lectura.
+                if (hasPermission('sales.import')) {
+                    headerActions.innerHTML =
+                        '<div class="flex gap-2 sm:gap-3 flex-wrap">' +
+                        '<button onclick="ventasImportarExcel()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:#1a4731;border:1px solid rgba(34,197,94,0.28);color:#86efac;">' +
+                        '<i class="fa-solid fa-file-arrow-up"></i><span class="hidden sm:inline">Importar ventas</span><span class="sm:hidden">Importar</span></button>' +
                         '</div>';
                 } else {
                     headerActions.innerHTML = '<span style="font-size:.72rem;color:rgba(255,255,255,.55);padding:6px 10px;background:rgba(255,255,255,.08);border-radius:6px;">📋 Solo lectura</span>';

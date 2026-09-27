@@ -113,6 +113,16 @@
         let recetarioImportView = 'lista'; // 'lista' | 'vista_previa' | 'incidencias'
         let _recetarioImportPendiente = null;
         let _recetarioImportResultado = null;
+        // FASE 10 — VENTAS del POS (js/93-ventas.js). `ventas` son las líneas
+        // de UNA semana (la que indica ventasSemanaId), no un histórico: el
+        // histórico vive en Firestore, un documento por semana
+        // (inventarioApp/{docId}/ventas/{semanaId}). Cada línea:
+        // { sku, nombre, tipo, cantidad, ventaNeta }.
+        let ventas = [];
+        let ventasSemanaId = null;
+        let ventasImportView = 'lista'; // 'lista' | 'vista_previa' | 'incidencias'
+        let _ventasImportPendiente = null;
+        let _ventasImportResultado = null;
         let activeTab = 'inicio';
         let editingProductId = null;
         let searchTerm = '';

@@ -68,11 +68,25 @@ chk('El importador reutiliza _numeroExcel/_normCabCompras/_findColCompras de Com
     /_findColCompras\(fila,/.test(importa) &&
     !/function _numeroExcel\(/.test(importa) &&
     !/function _findColCompras\(/.test(importa));
-chk('Las columnas reales del Excel están mapeadas (PV, Receta, Categoría, Activa, Código insumo, Descripción insumo, Cantidad, UoM)',
+chk('Las columnas reales del Excel están mapeadas (PV, Receta, Categoría, Activa, Código insumo, Descripción insumo, Cantidad, UoM, Almacén)',
     /pv:\s*\['PV'/.test(importa) && /nombre:\s*\['Receta'/.test(importa) &&
     /categoria:\s*\['Categoría'/.test(importa) && /activa:\s*\['Activa'/.test(importa) &&
     /codigo:\s*\['Código insumo'/.test(importa) && /descripcion:\s*\['Descripción insumo'/.test(importa) &&
-    /cantidad:\s*\['Cantidad'/.test(importa) && /uom:\s*\['UoM'/.test(importa));
+    /cantidad:\s*\['Cantidad'/.test(importa) && /uom:\s*\['UoM'/.test(importa) &&
+    /almacen:\s*\['Almacén'/.test(importa));
+
+// ═══ 2b · Filtro de alcance por almacén (corrección de FASE 10) ════════════
+chk('★ El filtro de almacén usa la MISMA constante que Compras (ALMACEN_BARRA_CODIGO), no un 12 suelto',
+    /almacen !== ALMACEN_BARRA_CODIGO/.test(importa) && !/almacen !== '12'/.test(importa));
+chk('★ El filtro se aplica por LÍNEA, no por receta — una receta mixta conserva sus líneas de barra',
+    /if \(codigoStr\) \{[\s\S]{0,600}?lineasFueraDeAlcance\+\+/.test(importa));
+chk('★ Una receta cuyas líneas son TODAS de otro almacén no se importa (cocina/cava)',
+    /esDeOtroAlmacen = g\.lineasConCodigo > 0 && g\.ingredientes\.length === 0 && g\.lineasOtroAlmacen === g\.lineasConCodigo/.test(importa));
+chk('★ Una receta SIN ninguna línea de ingrediente sí se importa (no hay línea que clasificar — caso TE GOURMET)',
+    /g\.lineasConCodigo > 0 &&/.test(importa));
+chk('Lo descartado por almacén se informa en bloque en la vista previa, no como cientos de incidencias',
+    /recetasOtroAlmacen/.test(importa) && /lineasFueraDeAlcance/.test(importa) &&
+    /Fuera de alcance de la barra/.test(importa));
 
 // ═══ 3 · Agrupación por PV y decisión alta/actualización ═══════════════════
 chk('_parsearExcelRecetario agrupa por PV (código único), no por nombre',
@@ -121,8 +135,8 @@ chk('index.html declara #fileInputRecetario, propio y nunca compartido con #file
 chk('js/99-window-arranque.js cablea el listener de #fileInputRecetario a handleFileImportRecetario',
     /getElementById\('fileInputRecetario'\)/.test(arranque) &&
     /handleFileImportRecetario\(e\)/.test(arranque));
-chk('index.html carga js/92-recetario-importar.js entre 91-recetario.js y 95-exportacion.js',
-    /91-recetario\.js\?v=[\d.]+"><\/script>\s*<script src="js\/92-recetario-importar\.js\?v=[\d.]+"><\/script>\s*<script src="js\/95-exportacion/.test(html));
+chk('index.html carga js/92-recetario-importar.js justo después de 91-recetario.js (necesita sus funciones)',
+    /91-recetario\.js\?v=[\d.]+"><\/script>\s*<script src="js\/92-recetario-importar\.js\?v=[\d.]+"><\/script>/.test(html));
 chk('sw.js precalienta js/92-recetario-importar.js',
     /'\.\/js\/92-recetario-importar\.js\?v=' \+ APP_VERSION/.test(sw));
 

@@ -385,6 +385,9 @@ function _idbPruneSyncedQueue() {
                     store.put((typeof costosUltimos !== 'undefined') ? costosUltimos : {}, 'costosUltimos');
                     // RECETARIO-1
                     store.put((typeof recetas !== 'undefined') ? recetas : [],           'recetas');
+                    // FASE 10 — ventas de la semana cargada (no el histórico)
+                    store.put((typeof ventas !== 'undefined') ? ventas : [],             'ventas');
+                    store.put((typeof ventasSemanaId !== 'undefined') ? ventasSemanaId : null, 'ventasSemanaId');
                     // TIER 3 — Estado UI
                     store.put(cart,                      'cart');
                     store.put(activeTab,                 'activeTab');
@@ -460,7 +463,8 @@ function _idbPruneSyncedQueue() {
                     idbAuditoriaStatus, idbMyAuditoriaStatus, idbMyAuditoriaUnlocks,
                     idbSessionId, idbCicloEstado, idbCicloInfo,
                     idbSyncQueue, idbCart, idbActiveTab, idbSelectedArea, idbSelectedGroup,
-                    idbCompras, idbMovimientos, idbCostosUltimos, idbRecetas
+                    idbCompras, idbMovimientos, idbCostosUltimos, idbRecetas,
+                    idbVentas, idbVentasSemanaId
                 ] = await Promise.all([
                     _idbGet('products'),              _idbGet('inventarioConteo'),
                     _idbGet('myAuditoriaConteo'),     _idbGet('auditoriaConteo'),
@@ -471,7 +475,8 @@ function _idbPruneSyncedQueue() {
                     _idbGet('cart'),                  _idbGet('activeTab'),
                     _idbGet('selectedArea'),          _idbGet('selectedGroup'),
                     _idbGet('compras'),               _idbGet('movimientos'),
-                    _idbGet('costosUltimos'),         _idbGet('recetas')
+                    _idbGet('costosUltimos'),         _idbGet('recetas'),
+                    _idbGet('ventas'),                _idbGet('ventasSemanaId')
                 ]);
                 return {
                     products:                  idbProducts,
@@ -494,6 +499,8 @@ function _idbPruneSyncedQueue() {
                     movimientos:               idbMovimientos,
                     costosUltimos:             idbCostosUltimos,
                     recetas:                   idbRecetas,
+                    ventas:                    idbVentas,
+                    ventasSemanaId:            idbVentasSemanaId,
                     _savedAt:                  savedAt
                 };
             } catch(e) {
@@ -552,6 +559,10 @@ function _idbPruneSyncedQueue() {
             // RECETARIO-1 — mismo criterio que compras/movimientos arriba.
             if (Array.isArray(idbData.recetas))
                 recetas = idbData.recetas;
+            if (Array.isArray(idbData.ventas))
+                ventas = idbData.ventas;
+            if (typeof idbData.ventasSemanaId === 'string')
+                ventasSemanaId = idbData.ventasSemanaId;
             isAuditoriaMode = (auditoriaView === 'counting' && !!auditoriaAreaActiva);
             console.info('[IDB] Estado restaurado desde IndexedDB (' +
                 new Date(idbData._savedAt).toLocaleString('es-MX') + ') — ' +
@@ -713,6 +724,10 @@ function _idbPruneSyncedQueue() {
                 // sí datos ya publicados que no deben perderse entre sesiones.
                 ['inventarioApp_recetas',                  JSON.stringify(
                     (typeof recetas !== 'undefined') ? recetas : [])],
+                ['inventarioApp_ventas',                   JSON.stringify(
+                    (typeof ventas !== 'undefined') ? ventas : [])],
+                ['inventarioApp_ventasSemanaId',           JSON.stringify(
+                    (typeof ventasSemanaId !== 'undefined') ? ventasSemanaId : null)],
                 // ── TIER 3: Estado de UI ─────────────────────────────────────────────────
                 ['inventarioApp_cart',                     JSON.stringify(cart)],
                 ['inventarioApp_activeTab',                activeTab],

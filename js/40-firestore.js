@@ -26,6 +26,10 @@
             // solo lo que había mientras esa suscripción se conecta o si
             // arranca sin red.
             recetas       = safeGet('inventarioApp_recetas',       []);
+            // FASE 10 — las ventas de la última semana consultada, para que la
+            // pestaña muestre algo al abrir la app sin red.
+            ventas         = safeGet('inventarioApp_ventas',         []);
+            ventasSemanaId = safeGet('inventarioApp_ventasSemanaId', null);
 
             // FIX-CONCURRENCIA: restaurar tombstones de borrado (ver _mergeArrayByIdPreferLocal)
             const rawDelProd = safeGet('inventarioApp_deletedProductIds',   []);

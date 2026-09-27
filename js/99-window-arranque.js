@@ -109,6 +109,9 @@
             // RECETARIO-2 — mismo criterio: input propio, nunca comparte #fileInput.
             const fileInputRecetario = document.getElementById('fileInputRecetario');
             if (fileInputRecetario) fileInputRecetario.addEventListener('change', function(e) { window.handleFileImportRecetario(e); });
+            // FASE 10 — input propio del reporte de ventas del POS.
+            const fileInputVentas = document.getElementById('fileInputVentas');
+            if (fileInputVentas) fileInputVentas.addEventListener('change', function(e) { window.handleFileImportVentas(e); });
 
             // --- App principal ---
             // R6: la configuracion de areas se carga antes que nada. Si se
