@@ -1603,6 +1603,50 @@ async function main() {
         await assertFails(admin1.doc(RC + 'rc1').delete());
     });
 
+    // ══════════════════════════════════════════════════════════════════
+    //  RECETARIO-1 (27/09/2026) — recetario/{docId}
+    //  ────────────────────────────────────────────────────────────────
+    //  Mismo patrón de "documento único" que catalogo/productos (ver P5),
+    //  pero con una asimetría deliberada: la LECTURA no exige recipe.read
+    //  (decisión del propietario: "admin edita, todos consultan"), solo
+    //  estar autenticado — igual que catalogo NO exige catalog.read para
+    //  leer. La ESCRITURA sí exige recipe.edit explícito, sin excepción.
+    //  La matriz genérica rol × permiso × override para recipe.edit ya
+    //  queda cubierta por P21/P21b (paridad, extraída mecánicamente del
+    //  catálogo real de permisos); esto prueba el match del documento.
+    // ══════════════════════════════════════════════════════════════════
+    const rutaRecetario = (db) => db.doc('recetario/recetas');
+
+    await prueba('REC-1. Cualquier autenticado puede LEER recetario/recetas, aunque no tenga recipe.read', async () => {
+        await sembrarFase2();
+        await assertSucceeds(rutaRecetario(bt1).get());
+        await assertSucceeds(rutaRecetario(subjefe1).get());
+    });
+
+    await prueba('REC-2. Sin recipe.edit no se puede escribir recetario/recetas DIRECTAMENTE', async () => {
+        await sembrarFase2();
+        await assertFails(rutaRecetario(bt1).set({ recetas: [], version: Date.now() }));
+        await assertFails(rutaRecetario(subjefe1).set({ recetas: [], version: Date.now() }));
+        await assertSucceeds(rutaRecetario(admin1).set({ recetas: [], version: Date.now() }));
+    });
+
+    await prueba('REC-3. Un override "allow" de recipe.edit concede la escritura real', async () => {
+        await sembrarFase2(async (db) => {
+            await db.doc('usuarios/bartender1').set({
+                uid: 'bartender1', role: 'BARTENDER',
+                permissionOverrides: { 'recipe.edit': 'allow' }
+            });
+        });
+        await assertSucceeds(rutaRecetario(bt1).set({ recetas: [], version: Date.now() }));
+    });
+
+    await prueba('REC-4. Sin autenticación no se puede ni leer ni escribir recetario/recetas', async () => {
+        await sembrarFase2();
+        const anonimo = testEnv.unauthenticatedContext().firestore();
+        await assertFails(rutaRecetario(anonimo).get());
+        await assertFails(rutaRecetario(anonimo).set({ recetas: [], version: Date.now() }));
+    });
+
     await testEnv.cleanup();
 
     console.log('\n── Resumen ──');

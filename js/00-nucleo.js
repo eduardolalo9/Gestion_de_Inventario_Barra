@@ -93,6 +93,19 @@
         // Resultado YA guardado (o con errores) de confirmarImportacionCompras(),
         // para la pantalla de incidencias (D-4).
         let _comprasImportResultado = null;
+        // RECETARIO-1 — bill of materials plano (sin sub-recetas, ver diseño
+        // 2026-09-26 y verificación contra Excel 2026-09-27). Mismo patrón que
+        // `products`: el admin edita este arreglo localmente y lo PUBLICA a
+        // `recetario/recetas` (documento único) — ver js/50-roles-permisos.js.
+        // Cada elemento: { id, pv, categoria, activa, ingredientes:[{productoId,
+        // cantidad, uom}], metodo, cristaleria, hielo, decoracion, _v, creadoPor,
+        // creadoEn, actualizadoPor, actualizadoEn }.
+        let recetas = [];
+        // Estado de la pantalla de Recetario (js/91-recetario.js).
+        // 'lista' | 'ficha'. La búsqueda de texto vive en _recetarioSearchTerm.
+        let recetarioView = 'lista';
+        let recetarioFichaId = null;
+        let _recetarioSearchTerm = '';
         let activeTab = 'inicio';
         let editingProductId = null;
         let searchTerm = '';

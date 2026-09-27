@@ -21,6 +21,11 @@
             compras       = safeGet('inventarioApp_compras',       []);
             movimientos   = safeGet('inventarioApp_movimientos',   []);
             costosUltimos = safeGet('inventarioApp_costosUltimos', {});
+            // RECETARIO-1 — mismo respaldo local que products: se recibe la
+            // versión definitiva vía subscribeRecetarioUsuario/Admin, esto es
+            // solo lo que había mientras esa suscripción se conecta o si
+            // arranca sin red.
+            recetas       = safeGet('inventarioApp_recetas',       []);
 
             // FIX-CONCURRENCIA: restaurar tombstones de borrado (ver _mergeArrayByIdPreferLocal)
             const rawDelProd = safeGet('inventarioApp_deletedProductIds',   []);

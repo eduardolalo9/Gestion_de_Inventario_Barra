@@ -209,6 +209,17 @@
                  // FASE 2A — catalog.publish en vez de "eres admin".
                  allow write: if hasPerm('catalog.publish');
                }
+               // RECETARIO-1 (27/09/2026) — mismo patron que /catalogo: un
+               // documento unico (recetario/recetas) que el admin publica y
+               // todos los autenticados leen. Decision del propietario:
+               // "admin edita, todos consultan" — por eso la lectura NO exige
+               // recipe.read (igual que /catalogo no exige catalog.read para
+               // leer), solo estar autenticado. La escritura si exige
+               // recipe.edit explicito.
+               match /recetario/{docId} {
+                 allow read:  if request.auth != null;
+                 allow write: if hasPerm('recipe.edit');
+               }
                match /inventarioApp/{docId} {
                  // FASE 0 — VULNERABILIDAD S-1 (CRÍTICA)
                  // Antes: 'allow read, write: if request.auth != null'. Este

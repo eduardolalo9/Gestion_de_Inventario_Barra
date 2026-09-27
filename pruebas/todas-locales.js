@@ -50,6 +50,7 @@ const PRUEBAS = [
     'prueba-fase8.js',         // FASE 8 — existencia oficial, versión de catálogo y reporte
     'prueba-contabilizar-conteo.js', // Contabilizar en Conteo + CONTABILIZADO ya no es "abierto"
     'prueba-8c.js',                  // FASE 8C — retiro de la escritura heredada de conteoAreas
+    'prueba-recetario1.js',          // RECETARIO-1 — bill of materials, costeo, publicar/suscribir
 ];
 
 let fallaron = [];

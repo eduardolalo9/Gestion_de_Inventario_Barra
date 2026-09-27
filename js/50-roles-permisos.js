@@ -125,7 +125,13 @@
             //                      auditoriaConteoPorUsuario, es decir el
             //                      conteo individual de OTRAS personas.
             'inventory.post',
-            'data.exportFull'
+            'data.exportFull',
+            // RECETARIO-1 (2026-09-27) — recipe.read separado de recipe.edit
+            // siguiendo exactamente el patron catalog.read/catalog.edit: la
+            // decision del propietario fue "admin edita, todos consultan", y
+            // este catalogo es CERRADO, asi que la capacidad de consulta
+            // necesita su propio permiso explicito en vez de quedar implicita.
+            'recipe.read', 'recipe.edit'
         ];
         const PERMISOS_CATALOGO_SET = new Set(PERMISOS_CATALOGO);
 
@@ -206,12 +212,16 @@
             'branches.read':         { nombre: 'Ver sucursales',               descripcion: 'Reservado: el sistema todavia no maneja varias sucursales.',                   grupo: 'Sucursales',          delegable: false, sensible: false, efectivo: false },
             'branches.create':       { nombre: 'Crear sucursales',             descripcion: 'Reservado: el sistema todavia no maneja varias sucursales.',                   grupo: 'Sucursales',          delegable: false, sensible: true,  efectivo: false },
             'branches.update':       { nombre: 'Editar sucursales',            descripcion: 'Reservado: el sistema todavia no maneja varias sucursales.',                   grupo: 'Sucursales',          delegable: false, sensible: true,  efectivo: false },
-            'branches.disable':      { nombre: 'Eliminar sucursales',          descripcion: 'Reservado: el sistema todavia no maneja varias sucursales.',                   grupo: 'Sucursales',          delegable: false, sensible: true,  efectivo: false }
+            'branches.disable':      { nombre: 'Eliminar sucursales',          descripcion: 'Reservado: el sistema todavia no maneja varias sucursales.',                   grupo: 'Sucursales',          delegable: false, sensible: true,  efectivo: false },
+
+            // ── Recetario (RECETARIO-1, 2026-09-27) ─────────────────────────
+            'recipe.read':           { nombre: 'Ver recetario',                descripcion: 'Consultar recetas, ingredientes y costo por porcion.',                        grupo: 'Recetario',           delegable: true,  sensible: false, efectivo: true  },
+            'recipe.edit':           { nombre: 'Editar recetario',             descripcion: 'Crear, modificar y publicar recetas a todos los dispositivos.',                grupo: 'Recetario',           delegable: true,  sensible: true,  efectivo: true  }
         };
 
         // Orden de los grupos en la pantalla de administracion.
         const PERMISOS_GRUPOS_ORDEN = [
-            'Inventario fisico', 'Catalogo', 'Areas de conteo', 'Compras',
+            'Inventario fisico', 'Catalogo', 'Recetario', 'Areas de conteo', 'Compras',
             'Reportes y datos', 'Configuracion', 'Usuarios y permisos', 'Sucursales'
         ];
 
@@ -257,7 +267,11 @@
                 permissions: [
                     'inventory.count', 'inventory.viewOwn', 'inventory.closeOwn',
                     'inventory.history', 'catalog.read', 'warehouses.read',
-                    'inventory.closeOther', 'inventory.export'
+                    'inventory.closeOther', 'inventory.export',
+                    // RECETARIO-1 — "todos consultan" (decision del propietario,
+                    // 2026-09-26): recipe.read va en los roles por defecto igual
+                    // que catalog.read, no como una excepcion sin permiso.
+                    'recipe.read'
                 ],
                 esSistema: true
             },
@@ -265,7 +279,8 @@
                 nombre: 'Bartender',
                 permissions: [
                     'inventory.count', 'inventory.viewOwn', 'inventory.closeOwn',
-                    'inventory.history', 'catalog.read', 'warehouses.read'
+                    'inventory.history', 'catalog.read', 'warehouses.read',
+                    'recipe.read'
                 ],
                 esSistema: true
             }
@@ -735,9 +750,13 @@
                 // catálogo, no necesita escucharlo) — se apaga igualmente el
                 // listener de catálogo de usuario para no dejarlo huérfano.
                 if (typeof _unsubCatalogo === 'function') { _unsubCatalogo(); _unsubCatalogo = null; }
+                // RECETARIO-1 — a diferencia del catálogo, subscribeRecetarioAdmin()
+                // SÍ es un listener real (ver comentario en su definición).
+                if (typeof _unsubRecetario === 'function') { _unsubRecetario(); _unsubRecetario = null; }
 
                 subscribeAjustesPendientes();
                 subscribeCatalogoAdmin();
+                subscribeRecetarioAdmin();
                 subscribeAllUsersAuditoria(); // Admin ve todos los conteos en tiempo real
 
                 console.info('[Permisos] Listeners reconciliados → modo ADMIN' + (modoAnterior ? ' (antes: ' + modoAnterior + ')' : ' (arranque)'));
@@ -749,6 +768,7 @@
                 if (typeof _unsubAllUsers === 'function') { _unsubAllUsers(); _unsubAllUsers = null; }
                 if (typeof _unsubAjustes  === 'function') { _unsubAjustes();  _unsubAjustes  = null; }
                 if (typeof _unsubCatalogo === 'function') { _unsubCatalogo(); _unsubCatalogo = null; }
+                if (typeof _unsubRecetario === 'function') { _unsubRecetario(); _unsubRecetario = null; }
 
                 // REQUISITO P1.2 (pasos 6-7-9 del ticket): sin esto, los
                 // conteos de TODOS los usuarios y los ajustes administrativos
@@ -762,6 +782,7 @@
                 _purgarConteosAjenosLocales();
 
                 subscribeCatalogoUsuario();
+                subscribeRecetarioUsuario();
                 subscribeNotificacionesUsuario();
                 subscribeMyAuditoria(); // Usuario escucha sus propios desbloqueos
 
@@ -815,6 +836,7 @@
         let _unsubCatalogo  = null;
         let _unsubNotifs    = null;
         let _unsubMainDoc   = null;  // FIX SYNC-3: listener del documento principal de inventario
+        let _unsubRecetario = null;  // RECETARIO-1 — mismo patron que _unsubCatalogo
 
         // ══════════════════════════════════════════════════════════════════════
         //  FIX SYNC-3: LISTENER EN TIEMPO REAL DEL DOCUMENTO PRINCIPAL
@@ -1275,6 +1297,99 @@
                     console.info('[Catalogo][Admin] Catálogo recibido de otra instancia admin:', products.length, 'productos');
                 }, function(err) { console.warn('[Catalogo][Admin] Error en listener:', err); });
         }
+
+        // ── MÓDULO: RECETARIO (RECETARIO-1, 2026-09-27) ────────────────────
+        // Mismo patron de documento unico "publicar/suscribir" que el
+        // catalogo (ver arriba) — probado ya en produccion con 424 productos,
+        // sin Cloud Functions ni lecturas por documento. Unica diferencia de
+        // fondo: la LECTURA no exige catalog.publish/catalog.edit para
+        // suscribirse, solo recipe.read (decision del propietario: "admin
+        // edita, todos consultan" — ver claude/recetario-diseno-tecnico-2026-09-26.md).
+        async function publicarRecetarioFirestore() {
+            if (!_db || !hasPermission('recipe.edit')) return;
+            try {
+                await _db.collection('recetario').doc('recetas').set({
+                    recetas:      recetas,
+                    publicadoPor: currentUserUid,
+                    publicadoEn:  Date.now(),
+                    version:      Date.now()
+                });
+                await crearNotificacion('recetario', 'Admin publicó el recetario actualizado (' + recetas.length + ' recetas)', null, true);
+                showNotification('✅ Recetario publicado a todos los usuarios');
+            } catch (e) {
+                console.error('[Recetario] Error publicando:', e);
+                showNotification('❌ Error al publicar recetario');
+            }
+        }
+        window.publicarRecetarioFirestore = publicarRecetarioFirestore;
+
+        /**
+         * _vaciarRecetarioPublicado()
+         * Mismo mecanismo que _vaciarCatalogoPublicado(): un documento vacio
+         * con version mas nueva, nunca un delete (ver el comentario de esa
+         * funcion para el porque — onSnapshot necesita snap.exists===true).
+         */
+        async function _vaciarRecetarioPublicado() {
+            if (!_db || !hasPermission('recipe.edit')) return false;
+            const version = Date.now();
+            await _db.collection('recetario').doc('recetas').set({
+                recetas:      [],
+                publicadoPor: currentUserUid,
+                publicadoEn:  version,
+                version:      version,
+                vaciado:      true
+            });
+            try {
+                localStorage.setItem('inventarioApp_recetarioVersion', String(version));
+            } catch(_) {}
+            console.info('[Recetario] Recetario publicado vaciado (v' + version + ').');
+            return true;
+        }
+        window._vaciarRecetarioPublicado = _vaciarRecetarioPublicado;
+
+        function _aplicarSnapshotRecetario(snap, origenLog) {
+            if (!snap.exists) return;
+            const data = snap.data();
+            if (!Array.isArray(data.recetas)) return;
+            const serverVersion = data.version || 0;
+            const localVersion  = parseInt(localStorage.getItem('inventarioApp_recetarioVersion') || '0', 10);
+            if (serverVersion <= localVersion) return; // ya lo tenemos (incluye "yo mismo lo publiqué")
+
+            if (data.recetas.length === 0 && data.vaciado) {
+                recetas = [];
+                localStorage.setItem('inventarioApp_recetarioVersion', String(serverVersion));
+                saveToLocalStorage();
+                if (typeof activeTab !== 'undefined' && activeTab === 'recetario') renderTab();
+                showNotification('🗑️ El administrador vació el recetario');
+                return;
+            }
+            if (data.recetas.length === 0) return;
+            recetas = _mergeArrayByIdPreferCloud(recetas, data.recetas);
+            localStorage.setItem('inventarioApp_recetarioVersion', String(serverVersion));
+            saveToLocalStorage();
+            if (typeof activeTab !== 'undefined' && activeTab === 'recetario') renderTab();
+            showNotification('📖 Recetario actualizado');
+            console.info('[Recetario]' + (origenLog ? '[' + origenLog + ']' : ''), 'Recetario recibido:', recetas.length, 'recetas');
+        }
+
+        function subscribeRecetarioUsuario() {
+            if (!_db || _unsubRecetario) return;
+            _unsubRecetario = _db.collection('recetario').doc('recetas')
+                .onSnapshot(function(snap) { _aplicarSnapshotRecetario(snap); },
+                            function(err) { console.warn('[Recetario] Error en listener:', err); });
+        }
+        window.subscribeRecetarioUsuario = subscribeRecetarioUsuario;
+
+        // El admin tambien escucha (no es un no-op como en catalogo): un
+        // segundo dispositivo admin necesita ver en tiempo real lo que OTRO
+        // admin publica, igual que subscribeCatalogoAdmin().
+        function subscribeRecetarioAdmin() {
+            if (!_db || _unsubRecetario) return;
+            _unsubRecetario = _db.collection('recetario').doc('recetas')
+                .onSnapshot(function(snap) { _aplicarSnapshotRecetario(snap, 'Admin'); },
+                            function(err) { console.warn('[Recetario][Admin] Error en listener:', err); });
+        }
+        window.subscribeRecetarioAdmin = subscribeRecetarioAdmin;
 
         // ── MÓDULO: NOTIFICACIONES ─────────────────────────────────────────
         async function crearNotificacion(tipo, texto, destinatarioUid, broadcast) {

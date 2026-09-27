@@ -38,6 +38,7 @@ const PRUEBAS = [
     'prueba-fase8-navegador.js',    // FASE 8 — las dos existencias y el interruptor de fuente
     'prueba-contabilizar-navegador.js', // Contabilizar en Conteo y estado CONTABILIZADO
     'prueba-h40-navegador.js',          // H-40 (hotfix 4.9) — fecha de recuento domingo/fin de mes
+    'prueba-recetario1-navegador.js',   // RECETARIO-1 — pestaña, editor, costeo y permisos
 ];
 
 function esperarServidor(intentos) {
