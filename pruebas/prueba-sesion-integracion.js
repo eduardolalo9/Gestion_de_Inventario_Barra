@@ -50,6 +50,20 @@ function chk(nombre, ok, detalle) {
 const esperar = (ms) => new Promise(r => setTimeout(r, ms));
 const leer = (f) => fs.readFileSync(path.join(RAIZ, f), 'utf8');
 
+// _suscribirInventarioActivo() marca 'cargando' de forma SÍNCRONA y resuelve
+// a 'ok'/'no_existe'/'error' cuando el listener de Firestore dispara — un
+// tiempo que depende de cuánta carga tenga la máquina en ese instante. Una
+// espera fija (antes: esperar(600)) es una carrera: con la suite corriendo
+// dentro de aplicar-bundle.sh, junto a otros procesos, 600 ms no siempre
+// alcanzan y la prueba reporta "cargando" en falso. Se sondea el estado real
+// en vez de adivinar cuánto tardará.
+async function esperarCarga(deps, timeoutMs) {
+    const limite = Date.now() + (timeoutMs || 3000);
+    while (deps._inventarioActivoCarga === 'cargando' && Date.now() < limite) {
+        await esperar(25);
+    }
+}
+
 function extraerFuncion(fuente, nombre) {
     const m = new RegExp('(async\\s+)?function ' + nombre + '\\(').exec(fuente);
     if (!m) throw new Error('No se encontró ' + nombre);
@@ -171,7 +185,7 @@ async function main() {
     let app = montar(testEnv.authenticatedContext('jefe').firestore(), 'jefe');
     app.deps._auditoriaSessionId = 'S1';                 // restaurada de localStorage
     const r1 = app.handleAuditSessionChange('S1', 'applyCloudData', 'jefe', 'otro-dispositivo');
-    await esperar(600);
+    await esperarCarga(app.deps, 3000);
     chk('Reabrir con la misma sesión no reprocesa nada (no borra el conteo local)',
         r1 && r1.procesado === false && r1.motivo === 'sin_cambio', JSON.stringify(r1));
     chk('★ S1 · …pero ahora SÍ engancha el inventario abierto (#7)',
@@ -195,7 +209,7 @@ async function main() {
         JSON.stringify(s2.inventarios) === JSON.stringify(['S1:SINCRONIZADO']), JSON.stringify(s2.inventarios));
     chk('S2 · Avisa por qué, con el número del inventario abierto',
         app.avisos.some(a => /#7 sigue ABIERTO/.test(a) && /No se borró nada/.test(a)), JSON.stringify(app.avisos));
-    await esperar(300);
+    await esperarCarga(app.deps, 3000);
     chk('S2 · Y engancha la pantalla a ese inventario',
         app.deps._inventarioActivo && app.deps._inventarioActivo.numero === 7, JSON.stringify(app.deps._inventarioActivo));
     if (typeof app.deps._unsubInventarioActivo === 'function') app.deps._unsubInventarioActivo();

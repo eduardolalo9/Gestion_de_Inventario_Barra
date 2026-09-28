@@ -210,8 +210,17 @@ if (trozos.some(function(t) { return !t; })) {
     chk('Pedidos e inventarios (sin versión) no cambian de comportamiento',
         pedidos.length === 2 && pedidos[0].total === 20, JSON.stringify(pedidos));
 
+    // OJO: la aserción original llamaba a Date.now() dos veces —una para el
+    // argumento, otra para comparar el resultado— con un margen de solo 1 ms
+    // entre _versionProducto() y Math.max(Date.now(), prev+1). Bajo carga
+    // (el archivo corriendo dentro de una tanda grande de pruebas) esos dos
+    // Date.now() podían caer en milisegundos distintos y la prueba fallaba
+    // en falso, aunque la función es correcta. Se fija el "reloj atrasado"
+    // en una sola lectura para que la comparación no dependa del reloj real.
+    const relojAtrasado = Date.now() + 60000;
+    const versionCorregida = fus.ver(relojAtrasado);
     chk('★ La versión nunca baja, aunque el reloj del teléfono esté atrasado',
-        fus.ver(Date.now() + 60000) > Date.now() + 60000, String(fus.ver(Date.now() + 60000)));
+        versionCorregida > relojAtrasado, versionCorregida + ' vs ' + relojAtrasado);
     chk('Un producto nuevo nace con versión',
         typeof fus.ver(0) === 'number' && fus.ver(0) > 0);
 }
