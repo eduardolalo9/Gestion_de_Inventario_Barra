@@ -53,6 +53,7 @@ const PRUEBAS = [
     'prueba-recetario1.js',          // RECETARIO-1 — bill of materials, costeo, publicar/suscribir
     'prueba-recetario2.js',          // RECETARIO-2 — importador de recetas desde Excel
     'prueba-fase10.js',              // FASE 10 — ventas del POS: permisos, reglas, parser
+    'prueba-fase11a.js',             // FASE 11A — costeo por unidad y consumo teórico
 ];
 
 let fallaron = [];

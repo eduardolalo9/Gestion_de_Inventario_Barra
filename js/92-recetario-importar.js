@@ -497,6 +497,8 @@
             });
 
             saveToLocalStorage();
+            // FASE 11A — cambió el recetario: el consumo teórico se recalcula.
+            if (typeof consumoTeoricoInvalidar === 'function') consumoTeoricoInvalidar();
             _recetarioImportPendiente = null;
             _recetarioImportResultado = { creadas: creadas, actualizadas: actualizadas, recetas: parsed.recetas };
             recetarioImportView = 'incidencias';

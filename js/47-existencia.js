@@ -165,13 +165,27 @@
         /**
          * Salidas por venta de la semana en curso, por producto.
          *
-         * FASE 10. Hoy devuelve {} — no es un descuido: hasta que exista la
-         * importación de ventas de Parrot y el recetario (bebida → insumos),
-         * NO HAY forma honesta de saber cuánto salió. Restar una estimación
-         * daría un número que parece exacto y no lo es.
+         * FASE 11A — este hueco se reservó en FASE 8 y ya se puede rellenar:
+         * existen la importación de ventas del POS (FASE 10) y el recetario
+         * filtrado a barra (RECETARIO-2). El cruce vive en su propia capa,
+         * js/48-consumo-teorico.js, que traduce la cadena del Excel
+         * (VENTA → CONSUMO → Tabla!Venta).
+         *
+         * DOS GUARDAS, y las dos importan:
+         *
+         * · Si las ventas cargadas en memoria son de OTRA semana, se devuelve
+         *   {} en vez de restarlas. Restar la venta de la semana pasada a la
+         *   existencia de esta daría un número que parece exacto y está mal —
+         *   justo la clase de mentira que esta capa existe para evitar.
+         * · Si el motor todavía no cargó, se devuelve {}: se comporta igual que
+         *   antes de FASE 11A y nunca revienta.
          */
         function existenciaVentasSemana() {
-            return {};
+            if (typeof consumoTeorico !== 'function') return {};
+            var sem = existenciaSemanaHoy();
+            var r = consumoTeorico();
+            if (!r || !r.semana || r.semana !== sem) return {};
+            return r.consumo || {};
         }
 
         /** La cifra heredada: suma de stockByArea en todas las áreas. */

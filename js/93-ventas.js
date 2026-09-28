@@ -459,6 +459,8 @@
                 ventas = parsed.lineas;
                 ventasSemanaId = parsed.semanaDestino;
                 saveToLocalStorage();
+                // FASE 11A — el cruce recetario×ventas cambió: se recalcula.
+                if (typeof consumoTeoricoInvalidar === 'function') consumoTeoricoInvalidar();
             }
 
             _ventasImportPendiente = null;
@@ -541,6 +543,9 @@
                   + 'El cruce contra el recetario (consumo teórico y desviación) llega en la siguiente fase.</div>'
                   + '</div>';
 
+            // ── FASE 11A — consumo teórico calculado con el recetario ────────
+            html += _renderConsumoTeorico();
+
             var ordenadas = ventas.slice().sort(function(a, b) { return (b.cantidad || 0) - (a.cantidad || 0); });
             html += '<table style="width:100%;border-collapse:collapse;font-size:.86rem">';
             ordenadas.forEach(function(l) {
@@ -554,3 +559,73 @@
             return html;
         }
         window.renderVentasTab = renderVentasTab;
+
+        /**
+         * _renderConsumoTeorico()
+         * FASE 11A — la pantalla donde se verifica el cruce contra el Excel
+         * antes de confiar en él. Muestra los insumos más consumidos y, sobre
+         * todo, los avisos: un PV vendido sin receta no descuenta nada de
+         * ningún insumo y haría que el stock teórico salga alto sin que nada
+         * falle a la vista.
+         */
+        function _renderConsumoTeorico() {
+            if (typeof consumoTeorico !== 'function') return '';
+            var r = consumoTeorico();
+            var html = '<div style="background:var(--surface);border:1px solid var(--border-mid);border-radius:12px;padding:14px 16px;margin-bottom:12px">'
+                     + '<div style="font-weight:700;margin-bottom:2px">Consumo teórico</div>'
+                     + '<div style="color:var(--txt-secondary);font-size:.8rem;line-height:1.5;margin-bottom:8px">'
+                     + 'Lo que el recetario dice que debió salir de la barra con estas ventas. '
+                     + 'Es el mismo cálculo del Excel: unidades vendidas × cantidad de cada receta.</div>';
+
+            if (!recetas || !recetas.length) {
+                html += '<div style="color:#fbbf24;font-size:.84rem">⚠️ No hay recetario cargado: sin recetas no hay consumo que calcular.</div></div>';
+                return html;
+            }
+
+            var top = consumoTeoricoTop(10);
+            if (!top.length) {
+                html += '<div style="color:var(--txt-secondary);font-size:.84rem">Ningún SKU vendido cruzó con una receta.</div>';
+            } else {
+                html += '<div style="color:var(--txt-secondary);font-size:.78rem;margin-bottom:6px">'
+                      + Object.keys(r.consumo).length + ' insumo(s) con consumo · ' + r.lineasCalculadas + ' línea(s) de receta aplicadas</div>'
+                      + '<table style="width:100%;border-collapse:collapse;font-size:.84rem">';
+                top.forEach(function(x) {
+                    html += '<tr style="border-bottom:1px solid var(--border-mid)">'
+                          + '<td style="padding:6px 4px">' + escapeHtml(x.nombre)
+                          + (x.enCatalogo ? '' : ' <span style="color:#dc2626;font-size:.72rem">(no está en el catálogo)</span>') + '</td>'
+                          + '<td style="padding:6px 4px;text-align:right;color:var(--txt-secondary);white-space:nowrap">'
+                          + x.cantidad + ' ' + escapeHtml(x.unidad) + '</td></tr>';
+                });
+                html += '</table>';
+            }
+
+            var a = r.avisos;
+            if (a.sinReceta.length) {
+                html += '<div style="margin-top:10px;padding:8px 10px;border-radius:8px;background:rgba(251,191,36,.10);'
+                      + 'border:1px solid rgba(251,191,36,.28);color:#fbbf24;font-size:.8rem;line-height:1.5">'
+                      + '⚠️ <b>' + a.sinReceta.length + ' producto(s) vendidos sin receta</b> — su consumo NO se descuenta de ningún insumo, '
+                      + 'así que el stock teórico de esos insumos saldrá alto: '
+                      + escapeHtml(a.sinReceta.slice(0, 4).map(function(x) { return x.nombre; }).join(', '))
+                      + (a.sinReceta.length > 4 ? '…' : '') + '</div>';
+            }
+            if (a.sinCatalogo.length) {
+                html += '<div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:rgba(239,68,68,.10);'
+                      + 'border:1px solid rgba(239,68,68,.28);color:#f87171;font-size:.8rem;line-height:1.5">'
+                      + '🛑 <b>' + a.sinCatalogo.length + ' insumo(s) de receta no están en el catálogo</b> — su consumo se calcula pero no hay stock del cual restarlo: '
+                      + escapeHtml(a.sinCatalogo.slice(0, 4).map(function(x) { return x.descripcion; }).join(', '))
+                      + (a.sinCatalogo.length > 4 ? '…' : '') + '</div>';
+            }
+            if (a.uomDistinta.length) {
+                html += '<div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:rgba(148,163,184,.10);'
+                      + 'border:1px solid rgba(148,163,184,.28);color:var(--txt-secondary);font-size:.8rem;line-height:1.5">'
+                      + 'ℹ️ ' + a.uomDistinta.length + ' insumo(s) con unidad de receta distinta a la del catálogo. Se calculan como hace el Excel '
+                      + '(sin convertir), pero conviene revisarlos: '
+                      + escapeHtml(a.uomDistinta.slice(0, 3).map(function(x) { return x.nombre + ' (' + x.uomReceta + ' vs ' + x.unidadProducto + ')'; }).join(', '))
+                      + (a.uomDistinta.length > 3 ? '…' : '') + '</div>';
+            }
+
+            html += '<div style="margin-top:10px;color:var(--txt-secondary);font-size:.76rem">'
+                  + 'La app todavía NO decide con esta cifra: la fuente oficial sigue apagada hasta que la compares con tu Excel.</div>';
+            html += '</div>';
+            return html;
+        }

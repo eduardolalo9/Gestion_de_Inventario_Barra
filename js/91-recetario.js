@@ -69,6 +69,76 @@
         }
         window.costoPorUnidadBase = costoPorUnidadBase;
 
+        // ══════════════════════════════════════════════════════════════════════
+        //  FASE 11A — EL COSTEO DEPENDE DE LA UNIDAD DE LA LÍNEA
+        //  ────────────────────────────────────────────────────────────────────
+        //  Recetario-1 asumió que la cantidad de un ingrediente venía en
+        //  MILILITROS (45 ml de tequila), porque así se teclea a mano. El Excel
+        //  real no funciona así: verificadas las 1,416 líneas de barra, la UoM
+        //  es siempre PZA (1,099), LTS (167) o KGS (150) — nunca ml — y la
+        //  cantidad es una FRACCIÓN de la unidad del propio insumo: una copa de
+        //  1800 Añejo es 0.06 PZA, el 6 % de la botella. En 1,351 de esas 1,416
+        //  líneas la UoM coincide exactamente con la UoM maestra del insumo.
+        //
+        //  Con la fórmula vieja, esa copa costaba 0.06 × (350/700) = $0.03 en
+        //  vez de 0.06 × 350 = $21. Todas las recetas importadas mostraban el
+        //  costo dividido entre la conversión.
+        //
+        //  factorAUnidadProducto() responde "cuántas unidades de inventario del
+        //  producto vale 1 <uom>", que es lo único que hace falta para costear
+        //  y para el consumo teórico:
+        //    · UoM de stock (PZA/KGS/LTS/botella/pieza…) o igual a la unidad
+        //      del producto → 1. La cantidad YA está en unidades de producto.
+        //    · Sub-unidad (ml, oz) → se convierte con la conversión del
+        //      catálogo, que es el caso de una receta tecleada a mano.
+        //    · Cualquier otra cosa → null, y la receta se marca "incompleto".
+        //      Nunca se adivina un factor.
+        // ══════════════════════════════════════════════════════════════════════
+        var _UOM_DE_STOCK = ['pza', 'pz', 'pieza', 'piezas', 'botella', 'botellas',
+                             'kgs', 'kg', 'kilo', 'kilos', 'lts', 'lt', 'litro', 'litros',
+                             'unidad', 'unidades', 'c/u', 'pieza(s)'];
+        var _ML_POR_OZ = 29.5735;
+
+        function _normUom(v) {
+            return String(v == null ? '' : v).trim().toLowerCase()
+                   .normalize('NFD').replace(/[̀-ͯ]/g, '');
+        }
+
+        function factorAUnidadProducto(uom, producto) {
+            var u = _normUom(uom);
+            // Sin unidad declarada se asume la del producto — es lo que hace el
+            // Excel, que no convierte nada: la cantidad vive en la unidad del insumo.
+            if (!u) return 1;
+            if (_UOM_DE_STOCK.indexOf(u) !== -1) return 1;
+            if (producto && _normUom(producto.unit) === u) return 1;
+
+            var conv = null;
+            if (producto && typeof producto.conversion === 'number' && producto.conversion > 0) conv = producto.conversion;
+            else if (producto && typeof producto.capacidadMl === 'number' && producto.capacidadMl > 0) conv = producto.capacidadMl;
+            if (conv === null) return null;
+
+            if (u === 'ml' || u === 'mililitro' || u === 'mililitros') return 1 / conv;
+            if (u === 'oz' || u === 'onza' || u === 'onzas') return _ML_POR_OZ / conv;
+            return null;   // unidad que no sabemos interpretar: no se inventa
+        }
+        window.factorAUnidadProducto = factorAUnidadProducto;
+
+        /**
+         * costoLineaReceta(ing, producto)
+         * Costo de UNA línea, en pesos. null si no se puede calcular con
+         * honestidad (sin precio, sin cantidad o sin poder interpretar la UoM).
+         */
+        function costoLineaReceta(ing, producto) {
+            if (!ing || !producto) return null;
+            if (typeof producto.precio !== 'number' || producto.precio < 0) return null;
+            var cant = (typeof ing.cantidad === 'number' && isFinite(ing.cantidad)) ? ing.cantidad : null;
+            if (cant === null) return null;
+            var factor = factorAUnidadProducto(ing.uom, producto);
+            if (factor === null) return null;
+            return cant * factor * producto.precio;
+        }
+        window.costoLineaReceta = costoLineaReceta;
+
         /**
          * costoReceta(receta)
          * Devuelve { costo, incompleto, faltantes }. `faltantes` lista los
@@ -84,15 +154,17 @@
             for (var i = 0; i < ingredientes.length; i++) {
                 var ing = ingredientes[i];
                 var producto = products.find(function(p) { return p.id === ing.productoId; });
-                var cu = producto ? costoPorUnidadBase(producto) : null;
-                if (cu === null) {
+                // FASE 11A — el costo depende de la unidad de la línea, no se
+                // asume que la cantidad venga en mililitros.
+                var costoLinea = producto ? costoLineaReceta(ing, producto) : null;
+                if (costoLinea === null) {
                     // ing.descripcionExcel: solo la trae una línea importada (RECETARIO-2)
                     // cuyo código no existía en el catálogo al momento de importar — se
                     // preserva el nombre que traía el Excel en vez de mostrar solo el código.
                     faltantes.push((producto && producto.name) ? producto.name : (ing.descripcionExcel || ing.productoId || '(insumo desconocido)'));
                     continue;
                 }
-                total += cu * (typeof ing.cantidad === 'number' ? ing.cantidad : 0);
+                total += costoLinea;
             }
             if (faltantes.length > 0) return { costo: null, incompleto: true, faltantes: faltantes };
             return { costo: total, incompleto: false, faltantes: [] };
@@ -281,6 +353,14 @@
                 // coincide con ninguna opción, se guarda tal cual: saveRecetaModal
                 // y la ficha avisan si el código no existe en el catálogo.
                 _recetaEditIngredientes[idx].productoId = String(valor).split(' — ')[0].trim();
+                // FASE 11A — al elegir el insumo se prellena su unidad si el
+                // campo está vacío. Sin unidad, "45" es ambiguo entre 45 ml y
+                // 45 botellas, y el costeo depende de eso: mejor dejarlo
+                // explícito desde el principio que adivinarlo después.
+                if (!_recetaEditIngredientes[idx].uom) {
+                    var prodElegido = products.find(function(p) { return p.id === _recetaEditIngredientes[idx].productoId; });
+                    if (prodElegido && prodElegido.unit) _recetaEditIngredientes[idx].uom = prodElegido.unit;
+                }
             } else if (campo === 'cantidad') {
                 var n = parseFloat(valor);
                 _recetaEditIngredientes[idx].cantidad = isNaN(n) ? '' : n;
@@ -522,7 +602,7 @@
             html += '<table style="width:100%;border-collapse:collapse;font-size:.85rem;">';
             r.ingredientes.forEach(function(ing) {
                 var producto = products.find(function(p) { return p.id === ing.productoId; });
-                var cu = producto ? costoPorUnidadBase(producto) : null;
+                var costoLinea = producto ? costoLineaReceta(ing, producto) : null;
                 html += '<tr style="border-bottom:1px solid var(--border-mid,#e5e7eb);">';
                 html += '<td style="padding:8px 4px;color:var(--txt-primary);">' + escapeHtml(producto ? producto.name : (ing.descripcionExcel || ing.productoId)) +
                         (producto ? '' : ' <span style="color:#dc2626;font-size:.72rem;">(no está en el catálogo)</span>') + '</td>';
@@ -530,7 +610,7 @@
                         escapeHtml(ing.cantidad) + ' ' + escapeHtml(ing.uom || '') + '</td>';
                 if (puedeEditar) {
                     html += '<td style="padding:8px 4px;text-align:right;color:var(--txt-secondary);white-space:nowrap;">' +
-                            (cu === null ? '<span style="color:#d97706;">sin costo</span>' : ('$' + (cu * ing.cantidad).toFixed(2))) + '</td>';
+                            (costoLinea === null ? '<span style="color:#d97706;">sin costo</span>' : ('$' + costoLinea.toFixed(2))) + '</td>';
                 }
                 html += '</tr>';
             });

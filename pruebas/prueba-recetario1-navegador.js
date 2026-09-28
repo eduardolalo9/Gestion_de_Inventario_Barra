@@ -51,6 +51,10 @@ const PUERTO = process.env.PUERTO || '8080';
     lineas[0].dispatchEvent(new Event('change'));
     const cants = document.querySelectorAll('#recetaIngredientesLista input[type=number]');
     cants[0].value = '45'; cants[0].dispatchEvent(new Event('change'));
+    // FASE 11A — la unidad es parte de la receta: "45" sin unidad significaría
+    // 45 botellas, no 45 ml. Se escribe como lo haría una persona.
+    const uoms = document.querySelectorAll('#recetaIngredientesLista input[placeholder^="ml"]');
+    uoms[0].value = 'ml'; uoms[0].dispatchEvent(new Event('change'));
   });
   // Línea 2: agrega una fila y captura jugo de piña, 30 ml
   await p.evaluate(() => _recetaAgregarIngrediente());
@@ -60,6 +64,8 @@ const PUERTO = process.env.PUERTO || '8080';
     lineas[1].dispatchEvent(new Event('change'));
     const cants = document.querySelectorAll('#recetaIngredientesLista input[type=number]');
     cants[1].value = '30'; cants[1].dispatchEvent(new Event('change'));
+    const uoms = document.querySelectorAll('#recetaIngredientesLista input[placeholder^="ml"]');
+    uoms[1].value = 'ml'; uoms[1].dispatchEvent(new Event('change'));
   });
   await p.evaluate(() => saveRecetaModal());
   await p.waitForTimeout(150);
@@ -85,7 +91,7 @@ const PUERTO = process.env.PUERTO || '8080';
   chk('La ficha muestra el costo total por porción', /Costo por porción/.test(ficha) && /\$23\.40/.test(ficha), '');
 
   await p.evaluate(() => {
-    recetas[0].ingredientes.push({ productoId: '2000099', cantidad: 1, uom: 'pza' });
+    recetas[0].ingredientes.push({ productoId: '2000099', cantidad: 1, uom: 'PZA' });
     renderTab();
   });
   await p.waitForTimeout(100);

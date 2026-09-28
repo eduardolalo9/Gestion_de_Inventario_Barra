@@ -98,9 +98,15 @@ chk('Si la semana destino ya tenía ventas, la vista previa lo avisa antes de re
     /yaExistia/.test(ventas) && /ya tenía/.test(ventas));
 
 // ═══ 5 · Alcance: no calcula consumo teórico ════════════════════════════════
-chk('★ FASE 10 NO calcula consumo teórico ni stock teórico (eso es FASE 11)',
-    !/function .*consumoTeorico/i.test(ventas) && !/stockTeorico/.test(ventas) &&
-    !/function calcularDesviacion/.test(ventas));
+// FASE 11A añadió a esta pestaña la PANTALLA del consumo teórico, pero el
+// cálculo sigue viviendo en su propia capa (js/48-consumo-teorico.js): el
+// módulo de ventas lo muestra, no lo calcula. Eso es lo que se comprueba.
+chk('★ El módulo de ventas MUESTRA el consumo teórico pero no lo calcula (el motor vive en js/48)',
+    /_renderConsumoTeorico/.test(ventas) &&
+    !/function consumoTeorico\(\)/.test(ventas) &&
+    !/unidades \* cant/.test(ventas));
+chk('★ FASE 10 sigue sin calcular stock teórico ni desviación (eso es 11B)',
+    !/stockTeorico/.test(ventas) && !/function calcularDesviacion/.test(ventas));
 chk('confirmarImportacionVentas() toma respaldo antes de escribir y guarda en local',
     /_crearBackupNombrado\('pre_importacion_ventas_'/.test(ventas) &&
     /saveToLocalStorage\(\);/.test(ventas));
