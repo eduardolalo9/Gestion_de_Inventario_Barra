@@ -1144,8 +1144,8 @@
                                 _auditoriaCreandoEnProgreso = false;
                                 _opcionesNuevoInventario = null;
                                 showNotification('🛑 El Inventario Físico #' + (vigente.numero || '—')
-                                    + ' sigue ABIERTO, con sus conteos. Ciérralo (y contabilízalo) antes de crear otro. '
-                                    + 'No se borró nada.');
+                                    + ' sigue ABIERTO, con sus conteos. Para empezar de cero: primero "Cerrar Inventario Físico" '
+                                    + '(al final de la pantalla de Conteo) y después "Crear". No se borró nada.');
                                 // Y se engancha a ese inventario, para que la
                                 // pantalla deje de decir que no hay ninguno.
                                 if (typeof _suscribirInventarioActivo === 'function') _suscribirInventarioActivo(vigente.sesion);

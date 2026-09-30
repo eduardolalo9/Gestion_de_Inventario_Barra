@@ -71,6 +71,20 @@ chk('Al crear se vacían conteo propio, agregado, estados y los de todos los usu
 chk('★ Al crear, la app va a la primera pantalla de Conteo',
     /switchTab\('inventario'\)/.test(reset) && /auditoriaView\s+= 'selection'/.test(reset));
 
+// ═══ 5 · HOTFIX 4.18 — el inventario reaparece al reabrir ═══════════════════
+const roles = leer('js/50-roles-permisos.js');
+const cargaNube = extraer(datos, 'loadFromCloud');
+const principal = extraer(roles, 'subscribeMainDoc');
+chk('★ 4.18 · loadFromCloud reconcilia la sesión ANTES de comparar fechas',
+    cargaNube.indexOf("_reconciliarSesionDesdeDocPrincipal(cloudData") > 0 &&
+    cargaNube.indexOf("_reconciliarSesionDesdeDocPrincipal(cloudData") < cargaNube.indexOf('cloudTs > localTs'));
+chk('★ 4.18 · subscribeMainDoc reconcilia la sesión ANTES del filtro por uid y de la comparación de fechas',
+    principal.indexOf("_reconciliarSesionDesdeDocPrincipal(data") > 0 &&
+    principal.indexOf("_reconciliarSesionDesdeDocPrincipal(data") < principal.indexOf('writerUid === currentUserUid') &&
+    principal.indexOf("_reconciliarSesionDesdeDocPrincipal(data") < principal.indexOf('cloudTs <= localTs'));
+chk('4.18 · diagnosticoInventario() existe y es de solo lectura (sin set/update/delete)',
+    /function diagnosticoInventario/.test(datos) && !/\.(set|update|delete)\(/.test(extraer(datos, 'diagnosticoInventario')));
+
 const ancho = Math.max.apply(null, casos.map(c => c.nombre.length));
 console.log('\n  ── FASE 12 · folio, anti-solapamiento y consistencia (estática) ──\n');
 casos.forEach(c => console.log('  ' + (c.ok ? '✅' : '❌') + '  ' + c.nombre.padEnd(ancho) + (c.ok ? '' : '   ← ' + c.detalle)));

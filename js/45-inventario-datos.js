@@ -113,6 +113,62 @@
                 });
         }
 
+        // ══════════════════════════════════════════════════════════════════════
+        //  HOTFIX 4.18 (30/09/2026) — LA SESIÓN SE RECONCILIA SIEMPRE
+        //  Video del propietario: con el Inventario #122 abierto, al cerrar y
+        //  reabrir la app la pantalla de Conteo no mostraba el inventario y
+        //  volvía a ofrecer "Crear". Causa: la única forma de engancharse al
+        //  inventario activo era pasar por _applyCloudData(), y a esa función
+        //  solo se llega si el documento de la nube es MÁS NUEVO que el local
+        //  (loadFromCloud y subscribeMainDoc comparan _lastModified). Un admin
+        //  que ya contó en ese teléfono tiene lo local igual o más nuevo: la
+        //  app nunca preguntaba "¿en qué sesión estamos?" y se quedaba en
+        //  'sin_sesion'. Además subscribeMainDoc descartaba lo escrito por el
+        //  mismo uid, así que la laptop de la MISMA cuenta tampoco se enteraba
+        //  de un inventario creado desde el teléfono.
+        //
+        //  Qué sesión rige NO es un dato que se compare por fecha de
+        //  modificación: lo decide el documento principal. Esta función se
+        //  llama desde los dos puntos de entrada, ANTES de cualquier
+        //  comparación de fechas o de autoría, y delega en
+        //  handleAuditSessionChange (idempotente, con guarda de monotonía: un
+        //  documento rezagado no retrocede la sesión ni borra conteos).
+        // ══════════════════════════════════════════════════════════════════════
+        function _reconciliarSesionDesdeDocPrincipal(data, origen) {
+            if (!data || !data._auditoriaSessionId) return null;
+            return handleAuditSessionChange(
+                String(data._auditoriaSessionId),
+                origen || 'docPrincipal',
+                data._auditoriaStartedBy,
+                data._auditoriaStartedByDeviceId
+            );
+        }
+
+        // Solo lectura. Para consola: muestra en qué se basa esta pantalla y qué
+        // hay en el servidor. Útil si algún dispositivo vuelve a ver algo distinto.
+        async function diagnosticoInventario() {
+            const r = { local: {
+                sesion: _auditoriaSessionId || null, inventarioId: _inventarioActivoId || null,
+                carga: _inventarioActivoCarga,
+                inventario: _inventarioActivo ? { numero: _inventarioActivo.numero, estado: _inventarioActivo.estado } : null } };
+            if (!_db) return r;
+            const raiz = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID);
+            const res = await Promise.all([
+                raiz.get({ source: 'server' }),
+                raiz.collection('inventories').get({ source: 'server' }),
+                raiz.collection('userAuditoria').get({ source: 'server' })
+            ]);
+            const p = res[0].exists ? res[0].data() : {};
+            r.servidor = {
+                sesion: p._auditoriaSessionId || null,
+                inventarios: res[1].docs.map(function(d) { const x = d.data(); return { id: d.id, numero: x.numero, estado: x.estado }; }),
+                usuarios: res[2].docs.map(function(d) { const x = d.data(); return { uid: d.id, sesion: x.sessionId, productos: Object.keys(x.conteo || {}).length }; })
+            };
+            console.log('[diagnosticoInventario]', JSON.stringify(r, null, 2));
+            return r;
+        }
+        if (typeof window !== 'undefined') window.diagnosticoInventario = diagnosticoInventario;
+
         function handleAuditSessionChange(nuevoSessionId, origen, iniciadoPorUid, iniciadoPorDeviceId) {
             // 1. Validación
             if (!nuevoSessionId) {
@@ -837,6 +893,9 @@ const usersList = Object.values(allUsersAuditoria);
                 }
 
                 const cloudData = snap.data();
+                // HOTFIX 4.18: qué sesión rige (y su Inventario Físico) se
+                // reconcilia SIEMPRE, sin depender de quién tenga la fecha más nueva.
+                _reconciliarSesionDesdeDocPrincipal(cloudData, 'loadFromCloud');
                 const cloudTs   = cloudData._lastModified || 0;
                 const localTs   = parseInt(localStorage.getItem('inventarioApp_lastModified') || '0', 10);
 

@@ -886,6 +886,15 @@
 
                     const data = snapshot.data();
 
+                    // HOTFIX 4.18: la sesión vigente (y su Inventario Físico) se
+                    // reconcilia ANTES de las capas siguientes. Capa 2 descarta lo
+                    // escrito por el mismo uid (la laptop de la misma cuenta no se
+                    // enteraba de lo creado en el teléfono) y la comparación de
+                    // _lastModified descarta todo si lo local es igual o más nuevo
+                    // (el inventario no reaparecía al reabrir la app). Idempotente:
+                    // si la sesión es la misma solo asegura la suscripción.
+                    _reconciliarSesionDesdeDocPrincipal(data, 'mainDoc');
+
                     // Capa 2: ignorar si fue este mismo usuario/dispositivo quien escribió
                     const writerUid = data._lastWrittenBy;
                     if (writerUid && writerUid === currentUserUid) return;
