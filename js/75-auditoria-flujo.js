@@ -496,6 +496,7 @@
                             motivo:       'Cierre de Inventario Físico'
                         });
                         showNotification('🔒 Inventario Físico #' + numeroParaLog + ' cerrado correctamente');
+                        _historialInventarios = null;   // el recién cerrado entra al Historial
                     } catch (err) {
                         console.error('[InventarioFisico] Error al cerrar:', err);
                         showNotification('❌ Error al cerrar el inventario — revisa la conexión y vuelve a intentarlo');
@@ -840,6 +841,9 @@
                             showNotification('✅ Contabilizado — el inicial de la semana '
                                 + inicial.semanaId + ' quedó registrado');
                             _historialInventarios = null;
+                            // El detalle abierto se relee para que diga
+                            // "📘 Contabilizado" en vez de seguir ofreciendo el botón.
+                            if (typeof _detalleInventarioCerradoData !== 'undefined') _detalleInventarioCerradoData = null;
                             // Si se contabilizó tarde (ya en la semana destino),
                             // el panel tenía guardado "esta semana no tiene
                             // inicial". Se olvida para que lo vuelva a leer.
@@ -858,6 +862,7 @@
                                     showNotification('✅ Ya estaba contabilizado — la operación se había '
                                         + 'completado antes. No se duplicó nada.');
                                     _historialInventarios = null;
+                                    if (typeof _detalleInventarioCerradoData !== 'undefined') _detalleInventarioCerradoData = null;
                                     renderTab();
                                     return;
                                 }
@@ -962,23 +967,70 @@
 
         // Historial — carga BAJO DEMANDA (no listener en vivo, ver
         // "RENDIMIENTO" del ticket: evitar escuchar toda la colección).
-        let _historialInventarios = null; // cache en memoria de la última carga
+        //
+        // HOTFIX 4.19 (30/09/2026) — LOS CONTABILIZADOS DESAPARECÍAN.
+        // La consulta era where('estado','==','CERRADO'): en cuanto un
+        // inventario pasaba a CONTABILIZADO dejaba de cumplirla y se esfumaba
+        // del Historial, justo cuando más importa consultarlo. El dato nunca
+        // se perdió (inventories/{id} es inmutable y no se borra); lo que
+        // fallaba era la lista. Ahora se piden los más recientes por folio y
+        // se muestran TODOS los que ya no se cuentan (CERRADO y CONTABILIZADO).
+        //
+        // Además, igualdad + orderBy sobre otro campo exige un índice
+        // compuesto que el emulador no pide y producción sí: si faltaba, la
+        // consulta fallaba en silencio y el Historial salía vacío. orderBy
+        // sobre un solo campo usa el índice automático: no depende de nada.
+        let _historialInventarios = null;      // cache en memoria de la última carga
+        let _historialCargando    = false;     // evita dos cargas a la vez
+        let _historialHayMas      = false;     // ¿hay inventarios más antiguos?
+        let _historialLimite      = 30;        // cuántos mostrar ("Ver más antiguos" suma 30)
+        const _HISTORIAL_ESTADOS  = ['CERRADO', 'CONTABILIZADO'];
+
         async function _cargarHistorialInventarios() {
-            if (!_db) return [];
+            // Sin Firestore se marca vacío (no null): si se quedara en null,
+            // renderHistorialInventarios lo volvería a pedir en cada repintado.
+            if (!_db) { _historialInventarios = []; _historialHayMas = false; return []; }
+            _historialCargando = true;
             try {
+                // +5: el inventario abierto (y algún huérfano de versiones
+                // anteriores) ocupan lugar en la consulta y se descartan abajo.
                 const snap = await _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
                                        .collection('inventories')
-                                       .where('estado', '==', 'CERRADO')
                                        .orderBy('numero', 'desc')
-                                       .limit(30)
+                                       .limit(_historialLimite + 5)
                                        .get();
-                _historialInventarios = snap.docs.map(function(d) { return d.data(); });
+                const terminados = snap.docs.map(function(d) {
+                    const x = d.data() || {};
+                    if (!x.inventoryId) x.inventoryId = d.id;
+                    return x;
+                }).filter(function(x) { return _HISTORIAL_ESTADOS.indexOf(x.estado) !== -1; });
+                _historialHayMas = snap.size >= _historialLimite + 5 || terminados.length > _historialLimite;
+                _historialInventarios = terminados.slice(0, _historialLimite);
                 return _historialInventarios;
             } catch (err) {
                 console.warn('[InventarioFisico] Error cargando historial:', err);
-                return _historialInventarios || [];
+                if (_historialInventarios === null) _historialInventarios = [];
+                return _historialInventarios;
+            } finally {
+                _historialCargando = false;
             }
         }
+        window._cargarHistorialInventarios = _cargarHistorialInventarios;
+
+        // Cualquier pantalla que invalide el historial (contabilizar, cerrar)
+        // lo pone en null; esta función lo vuelve a pedir una sola vez y
+        // repinta. Antes, volver al Historial después de contabilizar se
+        // quedaba para siempre en "⏳ Cargando historial…".
+        function _asegurarHistorialCargado() {
+            if (_historialInventarios !== null || _historialCargando) return;
+            _cargarHistorialInventarios().then(function() { renderTab(); });
+        }
+        function historialVerMas() {
+            _historialLimite += 30;
+            _historialInventarios = null;
+            renderTab();
+        }
+        window.historialVerMas = historialVerMas;
 
 
         function auditoriaEntrarArea(area) {

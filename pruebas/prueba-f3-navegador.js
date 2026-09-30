@@ -87,6 +87,28 @@ const C = []; const chk = (n, ok, d) => { C.push({ n, ok, d }); };
   chk('Ya contabilizado: informa, y no ofrece repetirlo',
       /[Cc]ontabilizado/.test(yaContab) && !/contabilizarInventario\(/.test(yaContab), '');
 
+  // ── HOTFIX 4.19: el Historial no se queda en "Cargando" y ofrece más ────
+  const recarga = await p.evaluate(async () => {
+    auditoriaView = 'historial';
+    _historialInventarios = null;          // lo que deja contabilizar / cerrar
+    const antes = renderHistorialInventarios();
+    for (let i = 0; i < 40 && _historialInventarios === null; i++) await new Promise(r => setTimeout(r, 100));
+    return { antes: /Cargando historial/.test(antes), despues: Array.isArray(_historialInventarios) };
+  });
+  chk('4.19 · Al volver al Historial invalidado, se vuelve a cargar solo',
+      recarga.antes && recarga.despues, JSON.stringify(recarga));
+  const verMas = await p.evaluate(() => {
+    _historialInventarios = [{ inventoryId: 'inv-b', numero: 42, estado: 'CONTABILIZADO', semanaDestino: '2026-09-14',
+                               fechaCreacion: Date.now(), totalProductos: 1 }];
+    _historialHayMas = true;
+    const conMas = renderHistorialInventarios();
+    _historialHayMas = false;
+    const sinMas = renderHistorialInventarios();
+    return { conMas: /historialVerMas\(\)/.test(conMas), sinMas: /historialVerMas\(\)/.test(sinMas) };
+  });
+  chk('4.19 · "Ver inventarios más antiguos" aparece solo si hay más',
+      verMas.conMas && !verMas.sinMas, JSON.stringify(verMas));
+
   chk('Ningún error de JS en toda la prueba', errs.length === 0, errs.join(' | '));
 
   await nav.close();

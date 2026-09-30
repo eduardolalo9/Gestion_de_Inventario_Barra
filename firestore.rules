@@ -549,8 +549,20 @@
                    // siguiera vivo, porque 'status' solo se respetaba en el
                    // cliente. Los usuarios sin el campo siguen siendo activos
                    // por defecto, así que nadie queda bloqueado al desplegar.
+                   // HOTFIX 4.19 — el documento PROPIO solo se escribe para el
+                   // inventario vigente. Un teléfono sin señal (o con una versión
+                   // vieja en caché) que sube tarde su conteo del inventario
+                   // anterior regresaba el documento a esa sesión: el conteo de
+                   // esa persona en el inventario nuevo dejaba de verse y no
+                   // entraba al cierre. getAfter y no get: en el batch que crea
+                   // un inventario, la sesión del documento raíz cambia en la
+                   // MISMA escritura que el documento del admin. Lo rechazado
+                   // no se pierde: el cliente lo marca pendiente y, al pasar a
+                   // la sesión nueva, lo archiva en conteosAuditoriaHuerfanos (5B).
                    allow create, update: if request.auth != null && _cuentaActiva() && (
-                     request.auth.uid == uid
+                     (request.auth.uid == uid
+                      && request.resource.data.sessionId
+                         == getAfter(/databases/$(database)/documents/inventarioApp/$(docId)).data._auditoriaSessionId)
                      || (
                        isAdminUser() &&
                        get(/databases/$(database)/documents/inventarioApp/$(docId)/inventories/$(request.resource.data.sessionId)).data.estado != 'CERRADO'

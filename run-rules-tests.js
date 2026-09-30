@@ -54,6 +54,10 @@ async function reiniciarConDatosBase() {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
         const db = ctx.firestore();
         await db.doc('usuarios/admin1').set({ uid: 'admin1', role: 'ADMIN' });
+        // HOTFIX 4.19 — como en producción, el documento raíz anuncia la
+        // sesión vigente: el documento PROPIO de userAuditoria solo se
+        // escribe para ella.
+        await db.doc('inventarioApp/barra-principal').set({ _auditoriaSessionId: 'inv-activo' });
         await db.doc('usuarios/bartender1').set({ uid: 'bartender1', role: 'BARTENDER' });
         await db.doc('usuarios/bartender2').set({ uid: 'bartender2', role: 'BARTENDER' });
         await db.doc('roles/BARTENDER').set({ roleId: 'BARTENDER', nombre: 'Bartender', permissions: ['inventory.count'], esSistema: true });
@@ -98,6 +102,17 @@ async function main() {
     await prueba('1. Un usuario normal puede escribir su propio userAuditoria', async () => {
         await reiniciarConDatosBase();
         await assertSucceeds(rutaAuditoria(bt1, 'bartender1').set({ sessionId: 'inv-activo', conteo: {} }));
+    });
+
+    await prueba('UA-1. HOTFIX 4.19: NO se escribe el documento propio con la sesión de un inventario anterior', async () => {
+        await reiniciarConDatosBase();
+        // El teléfono sin señal que sube tarde su conteo del inventario cerrado.
+        await assertFails(rutaAuditoria(bt1, 'bartender1').set({ sessionId: 'inv-cerrado', conteo: { P: { almacen: { enteras: 9 } } } }));
+        await assertFails(rutaAuditoria(bt1, 'bartender1').set({ conteo: {} }));   // sin sesión tampoco
+        // Y si ya contó en el vigente, no puede regresar su documento al anterior.
+        await assertSucceeds(rutaAuditoria(bt1, 'bartender1').set({ sessionId: 'inv-activo', conteo: {} }));
+        await assertFails(rutaAuditoria(bt1, 'bartender1').set({ sessionId: 'inv-cerrado' }, { merge: true }));
+        await assertSucceeds(rutaAuditoria(bt1, 'bartender1').set({ status: { almacen: 'completada' } }, { merge: true }));
     });
 
     await prueba('2. Un usuario normal NO puede escribir userAuditoria de otro usuario', async () => {

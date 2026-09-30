@@ -85,6 +85,19 @@ chk('★ 4.18 · subscribeMainDoc reconcilia la sesión ANTES del filtro por uid
 chk('4.18 · diagnosticoInventario() existe y es de solo lectura (sin set/update/delete)',
     /function diagnosticoInventario/.test(datos) && !/\.(set|update|delete)\(/.test(extraer(datos, 'diagnosticoInventario')));
 
+// ═══ 6 · HOTFIX 4.19 — historial con contabilizados y conteos sin mezclas ═══
+const hist = extraer(flujo, '_cargarHistorialInventarios');
+chk('★ 4.19 · El Historial incluye CERRADO y CONTABILIZADO (ya no filtra estado == CERRADO)',
+    hist.length > 0 && !/where\('estado'/.test(hist) && /_HISTORIAL_ESTADOS/.test(hist) &&
+    /_HISTORIAL_ESTADOS\s*=\s*\['CERRADO', 'CONTABILIZADO'\]/.test(flujo));
+chk('4.19 · El Historial se recarga solo al volver a él (no se queda en "Cargando")',
+    /_asegurarHistorialCargado\(\)/.test(extraer(leer('js/85-ui-inventario-fisico.js'), 'renderHistorialInventarios')));
+const miSync = extraer(fire, 'syncMyAuditoriaToFirestore');
+chk('★ 4.19 · El conteo propio se sube en transacción: reemplaza el de otro inventario y no pisa uno más nuevo',
+    /runTransaction/.test(miSync) && /aparato_atrasado/.test(miSync) && /tx\.set\(ref, datos\);/.test(miSync) && !/await ref\.set\(/.test(miSync));
+chk('★ 4.19 · Reglas: el documento propio de userAuditoria solo se escribe para la sesión vigente (getAfter)',
+    /request\.auth\.uid == uid\s*&& request\.resource\.data\.sessionId\s*== getAfter\(/.test(reglas));
+
 const ancho = Math.max.apply(null, casos.map(c => c.nombre.length));
 console.log('\n  ── FASE 12 · folio, anti-solapamiento y consistencia (estática) ──\n');
 casos.forEach(c => console.log('  ' + (c.ok ? '✅' : '❌') + '  ' + c.nombre.padEnd(ancho) + (c.ok ? '' : '   ← ' + c.detalle)));

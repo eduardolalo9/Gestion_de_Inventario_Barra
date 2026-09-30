@@ -54,7 +54,9 @@
         function _ifBtn(clase, contenido, atributos) {
             return '<button type="button" class="bt ' + clase + '" ' + (atributos || '') + '>' + contenido + '</button>';
         }
-        var _IF_ABRIR_HISTORIAL = 'onclick="auditoriaView=\'historial\'; _historialInventarios=null; renderTab(); _cargarHistorialInventarios().then(renderTab);"';
+        // Abrir el Historial: se invalida y renderHistorialInventarios() lo
+        // carga una sola vez (_asegurarHistorialCargado). Antes se pedía dos veces.
+        var _IF_ABRIR_HISTORIAL = 'onclick="auditoriaView=\'historial\'; _historialInventarios=null; _historialLimite=30; renderTab();"';
 
         function _renderInventarioFisicoHeader() {
             if (!_inventarioActivo && _inventarioActivoSinResolver()) {
@@ -299,6 +301,7 @@
 
             if (_historialInventarios === null) {
                 html += '<p style="font-size:0.8rem;color:var(--txt-muted);">⏳ Cargando historial…</p></div></div>';
+                if (typeof _asegurarHistorialCargado === 'function') _asegurarHistorialCargado();
                 return html;
             }
 
@@ -310,7 +313,7 @@
             }
 
             if (lista.length === 0) {
-                html += '<p style="font-size:0.8rem;color:var(--txt-muted);">' + (isAdmin() ? 'Todavía no hay inventarios cerrados.' : 'Todavía no participaste en ningún inventario cerrado.') + '</p>';
+                html += '<p style="font-size:0.8rem;color:var(--txt-muted);">' + (isAdmin() ? 'Todavía no hay inventarios cerrados ni contabilizados.' : 'Todavía no participaste en ningún inventario cerrado.') + '</p>';
             } else {
                 lista.forEach(function(inv) {
                     html += '<div onclick="_detalleInventarioCerradoId=\'' + inv.inventoryId + '\'; _detalleInventarioCerradoData=null; auditoriaView=\'detalle_cerrado\'; renderTab();" style="cursor:pointer;padding:10px 12px;border:1px solid var(--border-soft);border-radius:var(--r-md);margin-bottom:8px;">';
@@ -331,6 +334,9 @@
                     }
                     html += '</div>';
                 });
+                if (typeof _historialHayMas !== 'undefined' && _historialHayMas) {
+                    html += '<button type="button" class="bt bt--secundario" onclick="historialVerMas()">Ver inventarios más antiguos</button>';
+                }
             }
             html += '</div></div>';
             return html;

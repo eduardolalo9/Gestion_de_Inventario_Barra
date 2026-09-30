@@ -1370,10 +1370,11 @@
                     showNotification('⚠️ Tu conteo bajó de ' + ultimoConfirmado + ' a ' + entradasActuales + ' productos contados — revisa antes de seguir');
                 }
 
-                await ref.set({
+                const sesionLocal = _auditoriaSessionId;
+                const datos = {
                     uid:        currentUserUid,
                     email:      (_auth && _auth.currentUser) ? _auth.currentUser.email : currentUserUid,
-                    sessionId:  _auditoriaSessionId,
+                    sessionId:  sesionLocal,
                     status:     myAuditoriaStatus,
                     // D — quién finalizó cada área y cuándo. Viaja con el
                     // conteo porque pertenece al mismo acto: cerrar el área.
@@ -1382,7 +1383,46 @@
                     conteo:     conteoConTs,   // BUG-5 FIX: conteo con _ts por producto
                     updatedAt:  now,
                     isAdmin:    isAdmin()
-                }, { merge: true }); // merge:true → preserva 'unlocks' y otros campos del admin
+                };
+                // ══════════════════════════════════════════════════════════
+                //  HOTFIX 4.19 — UN CONTEO VIEJO YA NO SE MEZCLA NI REGRESA
+                //  Antes era un set(..., {merge:true}) a ciegas. merge:true
+                //  fusiona los mapas campo por campo, así que:
+                //   · si el documento traía productos de un inventario
+                //     ANTERIOR (un teléfono sin señal que subió tarde su
+                //     conteo), esos productos se quedaban dentro del
+                //     inventario nuevo: las áreas no empezaban en cero;
+                //   · y si el que subía tarde era el teléfono atrasado,
+                //     regresaba el documento a la sesión vieja: el conteo de
+                //     esa persona en el inventario nuevo dejaba de verse y
+                //     no entraba al cierre.
+                //  Ahora se lee el documento en una transacción y se decide:
+                //   · misma sesión            → merge (conserva los 'unlocks' del admin)
+                //   · sesión ANTERIOR         → se reemplaza completo
+                //   · sesión MÁS NUEVA que la de este aparato → no se escribe:
+                //     este aparato va atrasado. Se deja pendiente para que,
+                //     al pasar a la sesión nueva, se archive como huérfano (5B)
+                //     en vez de perderse.
+                // ══════════════════════════════════════════════════════════
+                const resultado = await _db.runTransaction(async function(tx) {
+                    const actual = await tx.get(ref);
+                    const sesionDoc = actual.exists ? ((actual.data() || {}).sessionId || null) : null;
+                    if (sesionDoc && sesionLocal && sesionDoc !== sesionLocal) {
+                        const nDoc = Number(sesionDoc), nLocal = Number(sesionLocal);
+                        if (isFinite(nDoc) && isFinite(nLocal) && nDoc > nLocal) return 'aparato_atrasado';
+                        tx.set(ref, datos);
+                        return 'reemplazado';
+                    }
+                    tx.set(ref, datos, { merge: true });
+                    return 'ok';
+                });
+                if (resultado === 'aparato_atrasado') {
+                    _auditSyncPending = true;
+                    try { localStorage.setItem('inventarioApp_auditSyncPending', '1'); } catch(_) {}
+                    console.warn('[AuditUser] El servidor ya está en un inventario más nuevo que este aparato — '
+                        + 'no se sube el conteo del anterior (se archivará al actualizarse).');
+                    return;
+                }
                 _auditSyncPending = false;
                 try { localStorage.setItem('inventarioApp_lastSyncedConteoSize', String(entradasActuales)); } catch(_) {}
                 console.info('[AuditUser] Mi conteo sincronizado ✓');

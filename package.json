@@ -28,8 +28,9 @@
     "test:ct": "node pruebas/prueba-contabilizar-conteo.js",
     "test:ctnav": "node pruebas/prueba-contabilizar-navegador.js",
     "test:f12": "node pruebas/prueba-fase12.js",
-    "test:folio": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-folio-integracion.js && node pruebas/prueba-arranque-integracion.js\"",
-    "test:arranque": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-arranque-integracion.js\"",
+    "test:folio": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-folio-integracion.js && node pruebas/prueba-arranque-integracion.js && node pruebas/prueba-ciclo-completo-integracion.js\"",
+    "test:arranque": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-arranque-integracion.js && node pruebas/prueba-ciclo-completo-integracion.js\"",
+    "test:ciclo": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-ciclo-completo-integracion.js\"",
     "test:ses": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-sesion-integracion.js\"",
     "test:h40nav": "node pruebas/prueba-h40-navegador.js",
     "test:8c": "node pruebas/prueba-8c.js",
@@ -40,7 +41,7 @@
     "test:f11a": "node pruebas/prueba-fase11a.js",
     "test:f11anav": "node pruebas/prueba-fase11a-navegador.js",
     "test:f10bnav": "node pruebas/prueba-fase10b-ui-navegador.js",
-    "test:integracion": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-d-integracion.js && node pruebas/prueba-f1-integracion.js && node pruebas/prueba-f3-integracion.js && node pruebas/prueba-p2-integracion.js && node pruebas/prueba-fase5-integracion.js && node pruebas/prueba-fase7-integracion.js && node pruebas/prueba-reconteo-integracion.js && node pruebas/prueba-sesion-integracion.js && node pruebas/prueba-folio-integracion.js && node pruebas/prueba-arranque-integracion.js\"",
+    "test:integracion": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-d-integracion.js && node pruebas/prueba-f1-integracion.js && node pruebas/prueba-f3-integracion.js && node pruebas/prueba-p2-integracion.js && node pruebas/prueba-fase5-integracion.js && node pruebas/prueba-fase7-integracion.js && node pruebas/prueba-reconteo-integracion.js && node pruebas/prueba-sesion-integracion.js && node pruebas/prueba-folio-integracion.js && node pruebas/prueba-arranque-integracion.js && node pruebas/prueba-ciclo-completo-integracion.js\"",
     "respaldo": "node herramientas/respaldo-firestore.js --salida respaldos"
   },
   "devDependencies": {
