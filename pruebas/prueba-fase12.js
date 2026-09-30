@@ -98,6 +98,19 @@ chk('★ 4.19 · El conteo propio se sube en transacción: reemplaza el de otro 
 chk('★ 4.19 · Reglas: el documento propio de userAuditoria solo se escribe para la sesión vigente (getAfter)',
     /request\.auth\.uid == uid\s*&& request\.resource\.data\.sessionId\s*== getAfter\(/.test(reglas));
 
+// ═══ 7 · HOTFIX 4.20 — huérfanos y reinicio ═══════════════════════════════
+const cerrarFis = extraer(flujo, 'cerrarInventarioFisico');
+chk('★ 4.20 · "Cerrar" no cierra la sesión vigente cuando lo que se ve es un huérfano',
+    /_inventarioActivoId\) !== String\(_auditoriaSessionId\)[\s\S]{0,80}cerrarInventarioHuerfano\(_inventarioActivoId\)/.test(cerrarFis));
+chk('4.20 · Un huérfano se cierra como abandonado y no se contabiliza',
+    /cierreTipo:\s*'abandonado'/.test(extraer(flujo, 'cerrarInventarioHuerfano')) && /cierreTipo === 'abandonado'/.test(extraer(flujo, 'evaluarContabilizable')));
+chk('★ 4.20 · El reinicio se aplica ANTES de reconciliar la sesión',
+    /_aplicarReinicioSiCorresponde\(data\);\s*if \(!data \|\| !data\._auditoriaSessionId\)/.test(extraer(datos, '_reconciliarSesionDesdeDocPrincipal')));
+const script = leer('herramientas/reiniciar-inventarios.js');
+chk('★ 4.20 · El script simula por defecto, respalda antes de borrar y pide BORRAR',
+    /if \(!tiene\('ejecutar'\)\)/.test(script) && script.indexOf("respaldo-firestore.js") < script.indexOf('borrarProfundo(db, raiz') &&
+    /resp !== 'BORRAR'/.test(script));
+
 const ancho = Math.max.apply(null, casos.map(c => c.nombre.length));
 console.log('\n  ── FASE 12 · folio, anti-solapamiento y consistencia (estática) ──\n');
 casos.forEach(c => console.log('  ' + (c.ok ? '✅' : '❌') + '  ' + c.nombre.padEnd(ancho) + (c.ok ? '' : '   ← ' + c.detalle)));

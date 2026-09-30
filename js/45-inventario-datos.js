@@ -134,7 +134,84 @@
         //  handleAuditSessionChange (idempotente, con guarda de monotonía: un
         //  documento rezagado no retrocede la sesión ni borra conteos).
         // ══════════════════════════════════════════════════════════════════════
+        // ══════════════════════════════════════════════════════════════════════
+        //  HOTFIX 4.20 — REINICIO DE INVENTARIOS ORDENADO DESDE ADMINISTRACIÓN
+        //  herramientas/reiniciar-inventarios.js borra en el servidor los
+        //  inventarios físicos, conteos, iniciales, ventas y existencias, y deja
+        //  en el documento raíz la marca _reinicioInventariosEn. Pero cada
+        //  teléfono guarda su propia copia (localStorage/IndexedDB): sin esto,
+        //  un aparato seguiría mostrando existencias y ventas viejas, y su cola
+        //  de pendientes volvería a subir conteos de antes del reinicio.
+        //
+        //  Al ver una marca más nueva que la última que aplicó, el aparato
+        //  vacía SU copia de esos datos. Lo único que conserva es lo contado
+        //  DESPUÉS del reinicio que todavía no subió (cola con ts >= marca):
+        //  ese trabajo es nuevo y no se toca. Idempotente: la marca aplicada
+        //  se guarda y no se repite.
+        //  (Los conteos del Inventario Físico se vacían por el camino normal:
+        //  el script deja una sesión nueva sin inventario y
+        //  handleAuditSessionChange los reinicia en cada aparato.)
+        // ══════════════════════════════════════════════════════════════════════
+        function _aplicarReinicioSiCorresponde(data) {
+            // (Dentro de la función: las pruebas extraen funciones por nombre.)
+            const _CLAVE_REINICIO_VISTO = 'inventarioApp_reinicioInventariosVisto';
+            const marca = Number(data && data._reinicioInventariosEn) || 0;
+            if (!marca) return false;
+            let visto = 0;
+            try { visto = Number(localStorage.getItem(_CLAVE_REINICIO_VISTO)) || 0; } catch (_) {}
+            if (marca <= visto) return false;
+
+            // 1) Cola de conteos de existencias: solo sobrevive lo posterior.
+            const conservar = {};
+            if (typeof _outboxConteo === 'object' && _outboxConteo) {
+                Object.keys(_outboxConteo).forEach(function(clave) {
+                    const e = _outboxConteo[clave];
+                    if (e && (e.ts || 0) >= marca) conservar[clave] = { ts: e.ts, base: null };
+                    delete _outboxConteo[clave];
+                });
+                Object.keys(conservar).forEach(function(clave) { _outboxConteo[clave] = conservar[clave]; });
+                if (typeof _outboxGuardar === 'function') _outboxGuardar();
+            }
+            // 2) Existencias operativas: en cero, salvo lo conservado.
+            const nuevoConteo = {};
+            Object.keys(conservar).forEach(function(clave) {
+                const corte = clave.indexOf('|');
+                const pid = clave.slice(0, corte), area = clave.slice(corte + 1);
+                const v = inventarioConteo && inventarioConteo[pid] && inventarioConteo[pid][area];
+                if (v) { nuevoConteo[pid] = nuevoConteo[pid] || {}; nuevoConteo[pid][area] = v; }
+            });
+            inventarioConteo = nuevoConteo;
+            if (typeof _versionesConteoProducto === 'object') _versionesConteoProducto = {};
+            (products || []).forEach(function(p) {
+                const antes = p.stockByArea || {};
+                const cero = {};
+                Object.keys(antes).concat(AREAS_CONTEO).forEach(function(a) { cero[a] = 0; });
+                p.stockByArea = cero;
+            });
+            if (typeof syncStockByAreaFromConteo === 'function') syncStockByAreaFromConteo();
+            // 3) Ventas, historial e inicial en memoria.
+            if (typeof ventasPeriodos !== 'undefined') ventasPeriodos = [];
+            if (typeof _historialInventarios !== 'undefined') _historialInventarios = null;
+            if (typeof existenciaInvalidarInicial === 'function') existenciaInvalidarInicial();
+            // 4) Un conteo de Inventario Físico pendiente de subir es del
+            //    inventario borrado: no se archiva como huérfano.
+            if (typeof _auditSyncPending !== 'undefined') _auditSyncPending = false;
+            try { localStorage.removeItem('inventarioApp_auditSyncPending'); } catch (_) {}
+
+            try { localStorage.setItem(_CLAVE_REINICIO_VISTO, String(marca)); } catch (_) {}
+            saveToLocalStorage({ skipSyncTrigger: true });
+            console.info('[Reinicio] Aplicado el reinicio de inventarios del', new Date(marca).toISOString(),
+                '— se conservaron', Object.keys(conservar).length, 'conteo(s) posteriores sin subir.');
+            setTimeout(function() {
+                showNotification('🧹 Administración reinició los inventarios: esta app quedó en cero.');
+            }, 600);
+            return true;
+        }
+
         function _reconciliarSesionDesdeDocPrincipal(data, origen) {
+            // El reinicio va ANTES que la sesión: así el conteo pendiente del
+            // inventario borrado ya no se archiva al cambiar de sesión.
+            if (typeof _aplicarReinicioSiCorresponde === 'function') _aplicarReinicioSiCorresponde(data);
             if (!data || !data._auditoriaSessionId) return null;
             return handleAuditSessionChange(
                 String(data._auditoriaSessionId),

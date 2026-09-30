@@ -114,7 +114,7 @@ function montar(db, uid, deviceId, opts) {
          '_adminIniciarSesionFirestore', 'loadFromCloud'].map(n => extraerFuncion(datos, n)).join('\n') + '\n' +
         extraerFuncion(leer('js/30-indexeddb.js'), '_contarEntradasConteo') + '\n' +
         ['convertirOzAPuntos', 'tieneDatosConversion', 'tieneConversion'].map(n => extraerFuncion(leer('js/70-conversion-render.js'), n)).join('\n') + '\n' +
-        opcional(datos, '_reconciliarSesionDesdeDocPrincipal') + '\n' + extraerFuncion(roles, 'subscribeMainDoc') + '\n' +
+        opcional(datos, '_reconciliarSesionDesdeDocPrincipal') + '\n' + opcional(datos, '_aplicarReinicioSiCorresponde') + '\n' + extraerFuncion(roles, 'subscribeMainDoc') + '\n' +
         leer('js/40-firestore.js') + '\n' + leer('js/75-auditoria-flujo.js') + '\n' +
         '; return { syncMyAuditoriaToFirestore, confirmarNuevoInventario, contabilizarInventario, _cargarHistorialInventarios, historialVerMas, ' +
         '           leerHistorial: function() { return _historialInventarios; }, hayMas: function() { return _historialHayMas; }, ' +

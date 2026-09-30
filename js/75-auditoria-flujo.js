@@ -407,6 +407,15 @@
                 showNotification('📴 Sin conexión — conecta a internet antes de cerrar el inventario');
                 return;
             }
+            // HOTFIX 4.20 — el cierre congela los conteos de la sesión vigente
+            // y escribe en inventories/{sesión vigente}. Si lo que está en
+            // pantalla es OTRO inventario (un huérfano de una versión
+            // anterior, como el #102 de agosto), cerrarlo así fallaba contra
+            // el servidor o, peor, congelaría conteos que no son suyos.
+            if (_inventarioActivoId && String(_inventarioActivoId) !== String(_auditoriaSessionId)) {
+                cerrarInventarioHuerfano(_inventarioActivoId);
+                return;
+            }
             // RECONTEO — cerrar con un reconteo sin finalizar congelaría los
             // valores anteriores a las correcciones anotadas.
             if (typeof _hayReconteoAbierto === 'function' && await _hayReconteoAbierto(_auditoriaSessionId)) {
@@ -504,6 +513,76 @@
                 }
             );
         }
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  HOTFIX 4.20 — CERRAR UN INVENTARIO ABANDONADO (HUÉRFANO)
+        //  Versiones anteriores a FASE 12 permitían abrir un inventario nuevo
+        //  dejando el anterior en SINCRONIZADO. Ese "huérfano" ya no tiene
+        //  conteos (se borraron al abrir el siguiente) y bloqueaba crear otro
+        //  sin que ningún botón pudiera cerrarlo. Se cierra marcado como
+        //  abandonado, SIN snapshot: no hay conteo que congelar, así que
+        //  tampoco se puede contabilizar (evaluarContabilizable lo explica).
+        //  Las reglas ya permiten al admin pasar SINCRONIZADO → CERRADO.
+        // ══════════════════════════════════════════════════════════════════════
+        async function cerrarInventarioHuerfano(inventoryId) {
+            if (!hasPermission('inventory.closeGlobal')) {
+                showNotification('⚠️ No tienes permiso para cerrar inventarios');
+                return;
+            }
+            if (!inventoryId || String(inventoryId) === String(_auditoriaSessionId)) return;
+            if (!navigator.onLine) {
+                showNotification('📴 Sin conexión — conecta a internet antes de cerrar el inventario');
+                return;
+            }
+            const ref = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID).collection('inventories').doc(String(inventoryId));
+            let inv;
+            try {
+                const snap = await ref.get({ source: 'server' });
+                if (!snap.exists) { showNotification('❌ No se encontró ese inventario'); return; }
+                inv = snap.data() || {};
+            } catch (e) {
+                showNotification('❌ No se pudo leer el inventario — revisa la conexión');
+                return;
+            }
+            if (!inventarioAbierto(inv)) {
+                showNotification('ℹ️ El Inventario #' + (inv.numero || '—') + ' ya estaba cerrado');
+                return;
+            }
+            showConfirm(
+                '🗂️ CERRAR INVENTARIO ABANDONADO #' + (inv.numero || '—') + '\n\n' +
+                'Quedó abierto de una versión anterior y no pertenece a la sesión actual: ' +
+                'sus conteos ya no existen.\n\n' +
+                'Se cerrará como ABANDONADO (sin conteo congelado) y no se podrá contabilizar. ' +
+                'Después podrás crear el inventario nuevo.\n\n¿Confirmar?',
+                async function() {
+                    try {
+                        await ref.update({
+                            estado:           'CERRADO',
+                            cierreTipo:       'abandonado',
+                            fechaCierre:      Date.now(),
+                            cerradoPorUid:    currentUserUid,
+                            cerradoPorNombre: (_auth && _auth.currentUser) ? _auth.currentUser.email : currentUserUid
+                        });
+                        _registrarEnSyncQueue({
+                            tipo: 'cierre_inventario_abandonado',
+                            detalle: 'Inventario Físico #' + (inv.numero || '—') + ' cerrado como abandonado',
+                            valorAntes: JSON.stringify({ estado: 'SINCRONIZADO' }),
+                            valorDespues: JSON.stringify({ estado: 'CERRADO', cierreTipo: 'abandonado' }),
+                            motivo: 'Inventario huérfano de una versión anterior'
+                        });
+                        _historialInventarios = null;
+                        // Vuelve a escuchar el inventario de la sesión vigente.
+                        if (typeof _suscribirInventarioActivo === 'function') _suscribirInventarioActivo(_auditoriaSessionId);
+                        showNotification('✅ Inventario #' + (inv.numero || '—') + ' cerrado como abandonado. Ya puedes crear el nuevo.');
+                        renderTab();
+                    } catch (err) {
+                        console.error('[InventarioFisico] Error al cerrar abandonado:', err);
+                        showNotification('❌ No se pudo cerrar — revisa la conexión y vuelve a intentarlo');
+                    }
+                }
+            );
+        }
+        window.cerrarInventarioHuerfano = cerrarInventarioHuerfano;
 
         // Exporta un inventario CERRADO reutilizando el motor Excel EXISTENTE
         // (exportToExcelConDatos) — nunca crea productos ni toca el catálogo
@@ -689,6 +768,9 @@
             }
             if (inv.estado !== 'CERRADO') {
                 return { puede: false, motivo: 'Primero hay que cerrar el inventario: solo se contabiliza uno CERRADO.' };
+            }
+            if (inv.cierreTipo === 'abandonado') {
+                return { puede: false, motivo: 'Se cerró como ABANDONADO (quedó abierto de una versión anterior, sin conteos): no hay nada que contabilizar.' };
             }
             // Decisión N-4: FASE 3 opera sobre inventarios cerrados a partir
             // del paso previo, que es cuando semanaId empezó a guardarse en
@@ -1111,7 +1193,10 @@
                 const activos = await raiz.collection('inventories').where('estado', '==', 'SINCRONIZADO').limit(1).get({ source: 'server' });
                 if (!activos.empty) {
                     const otro = activos.docs[0];
-                    return { abierto: true, sesion: otro.id, numero: (otro.data() || {}).numero || null, estado: 'SINCRONIZADO' };
+                    // Si no es el de la sesión vigente, es un HUÉRFANO de una
+                    // versión anterior: su "Cerrar" normal no lo alcanza.
+                    return { abierto: true, sesion: otro.id, numero: (otro.data() || {}).numero || null, estado: 'SINCRONIZADO',
+                             huerfano: String(otro.id) !== String(sesion || '') };
                 }
                 return { abierto: false, sesion: sesion ? String(sesion) : null, numero: d.numero || null, estado: d.estado || null };
             } catch (e) {
@@ -1195,9 +1280,13 @@
                             if (vigente.abierto) {
                                 _auditoriaCreandoEnProgreso = false;
                                 _opcionesNuevoInventario = null;
-                                showNotification('🛑 El Inventario Físico #' + (vigente.numero || '—')
-                                    + ' sigue ABIERTO, con sus conteos. Para empezar de cero: primero "Cerrar Inventario Físico" '
-                                    + '(al final de la pantalla de Conteo) y después "Crear". No se borró nada.');
+                                showNotification(vigente.huerfano
+                                    ? ('🛑 El Inventario Físico #' + (vigente.numero || '—') + ' quedó ABIERTO de una versión anterior '
+                                       + 'y no pertenece a la sesión actual. En Conteo aparece "Cerrar inventario abandonado": '
+                                       + 'ciérralo y después crea el nuevo. No se borró nada.')
+                                    : ('🛑 El Inventario Físico #' + (vigente.numero || '—')
+                                       + ' sigue ABIERTO, con sus conteos. Para empezar de cero: primero "Cerrar Inventario Físico" '
+                                       + '(al final de la pantalla de Conteo) y después "Crear". No se borró nada.'));
                                 // Y se engancha a ese inventario, para que la
                                 // pantalla deje de decir que no hay ninguno.
                                 if (typeof _suscribirInventarioActivo === 'function') _suscribirInventarioActivo(vigente.sesion);

@@ -111,7 +111,7 @@ function montar(db, uid, deviceId) {
         ['_suscribirInventarioActivo', 'handleAuditSessionChange', 'subscribeAllUsersAuditoria', '_abiertasDivergen',
          '_recalcAdminAggregatedConteo', '_obtenerSiguienteNumeroInventario', '_opcNuevoInv', '_areasDelNuevoInventario',
          '_adminIniciarSesionFirestore', 'loadFromCloud'].map(n => extraerFuncion(datos, n)).join('\n') + '\n' +
-        opcional(datos, '_reconciliarSesionDesdeDocPrincipal') + '\n' + extraerFuncion(roles, 'subscribeMainDoc') + '\n' +
+        opcional(datos, '_reconciliarSesionDesdeDocPrincipal') + '\n' + opcional(datos, '_aplicarReinicioSiCorresponde') + '\n' + extraerFuncion(roles, 'subscribeMainDoc') + '\n' +
         leer('js/40-firestore.js') + '\n' + leer('js/75-auditoria-flujo.js') + '\n' +
         '; return { handleAuditSessionChange, loadFromCloud, subscribeMainDoc, auditoriaResetear, syncToCloud, subscribeAllUsersAuditoria, ' +
         '           _obtenerSiguienteNumeroInventario, _adminIniciarSesionFirestore, cerrarInventarioFisico: (typeof cerrarInventarioFisico === "function" ? cerrarInventarioFisico : null) };';

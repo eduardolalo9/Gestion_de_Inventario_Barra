@@ -162,13 +162,19 @@
                 html += '<div class="if-comentario">' + escapeHtml(inv.comentario) + '</div>';
             }
 
+            if (_esInventarioHuerfano()) {
+                html += '<div class="pm-paso pm-paso--aviso" role="status"><div class="pm-paso__titulo">🗂️ Inventario abandonado</div>'
+                     +  '<div class="pm-paso__txt">Este inventario quedó abierto de una versión anterior y no pertenece a la sesión actual: '
+                     +  'sus conteos ya no existen. Ciérralo con el botón del final ("Cerrar inventario abandonado") y después crea el nuevo.</div></div>';
+            }
+
             // ── 3. Acciones de consulta, apiladas a lo ancho ────────────────
             var acc = '';
             if (!inv.fechaRecuento && !esCerrado && isAdmin() && hasPermission('inventory.create')) {
                 acc += _ifBtn('bt--secundario', '🗓️ Registrar fecha de recuento', 'onclick="abrirModalRegistrarFechaRecuento()"');
             }
             // RECONTEO — solo admin, mientras el inventario esté abierto.
-            if (isAdmin() && !esCerrado) {
+            if (isAdmin() && !esCerrado && !_esInventarioHuerfano()) {
                 acc += _ifBtn('bt--primario', '🔁 Reconteo', 'data-rc-accion="iniciar"');
             }
             if (isAdmin()) {
@@ -184,6 +190,13 @@
             return html;
         }
 
+        // HOTFIX 4.20 — ¿Lo que se ve es un inventario abierto que NO es el de
+        // la sesión vigente? (huérfano de una versión anterior, p. ej. #102).
+        function _esInventarioHuerfano() {
+            return !!(_inventarioActivo && inventarioAbierto(_inventarioActivo) && _inventarioActivoId
+                      && _auditoriaSessionId && String(_inventarioActivoId) !== String(_auditoriaSessionId));
+        }
+
         /**
          * Zona de peligro: "Cerrar Inventario Físico" va SOLO y AL FINAL de la
          * pantalla, después de las áreas — que es donde termina el trabajo —
@@ -193,6 +206,12 @@
             var inv = _inventarioActivo;
             if (!inv || !inventarioAbierto(inv)) return '';
             if (!(isAdmin() && hasPermission('inventory.closeGlobal'))) return '';
+            if (_esInventarioHuerfano()) {
+                return '<div class="bt-zona-peligro">'
+                     + '<button type="button" onclick="cerrarInventarioHuerfano(_inventarioActivoId)" class="bt bt--peligro">🗂️ Cerrar inventario abandonado #' + (inv.numero || '—') + '</button>'
+                     + '<p class="bt-nota">Quedó abierto de una versión anterior y ya no tiene conteos. Se cierra sin contabilizar.</p>'
+                     + '</div>';
+            }
             return '<div class="bt-zona-peligro">'
                  + '<button type="button" onclick="cerrarInventarioFisico()" class="bt bt--peligro">🔒 Cerrar Inventario Físico</button>'
                  + '<p class="bt-nota">Congela los conteos de todas las áreas. No se puede deshacer.</p>'
@@ -325,7 +344,7 @@
                     var _contab = (inv.estado === 'CONTABILIZADO');
                     html += '<span style="font-size:0.68rem;font-weight:700;color:'
                          +  (_contab ? '#2563eb' : '#16a34a') + ';">'
-                         +  (_contab ? 'CONTABILIZADO' : 'CERRADO') + '</span>';
+                         +  (_contab ? 'CONTABILIZADO' : (inv.cierreTipo === 'abandonado' ? 'CERRADO · ABANDONADO' : 'CERRADO')) + '</span>';
                     html += '</div>';
                     html += '<p style="font-size:0.72rem;color:var(--txt-muted);">Fecha: ' + new Date(inv.fechaCreacion).toLocaleDateString('es-MX') + ' &nbsp;·&nbsp; Artículos: ' + (inv.totalProductos || '—') + '</p>';
                     if (_contab && inv.semanaDestino) {
