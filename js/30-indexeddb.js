@@ -388,6 +388,8 @@ function _idbPruneSyncedQueue() {
                     // FASE 10 — ventas de la semana cargada (no el histórico)
                     store.put((typeof ventas !== 'undefined') ? ventas : [],             'ventas');
                     store.put((typeof ventasSemanaId !== 'undefined') ? ventasSemanaId : null, 'ventasSemanaId');
+                    // FASE 10B — qué días de esa semana tienen ventas cargadas
+                    store.put((typeof ventasPeriodos !== 'undefined') ? ventasPeriodos : [], 'ventasPeriodos');
                     // TIER 3 — Estado UI
                     store.put(cart,                      'cart');
                     store.put(activeTab,                 'activeTab');
@@ -464,7 +466,7 @@ function _idbPruneSyncedQueue() {
                     idbSessionId, idbCicloEstado, idbCicloInfo,
                     idbSyncQueue, idbCart, idbActiveTab, idbSelectedArea, idbSelectedGroup,
                     idbCompras, idbMovimientos, idbCostosUltimos, idbRecetas,
-                    idbVentas, idbVentasSemanaId
+                    idbVentas, idbVentasSemanaId, idbVentasPeriodos
                 ] = await Promise.all([
                     _idbGet('products'),              _idbGet('inventarioConteo'),
                     _idbGet('myAuditoriaConteo'),     _idbGet('auditoriaConteo'),
@@ -476,7 +478,8 @@ function _idbPruneSyncedQueue() {
                     _idbGet('selectedArea'),          _idbGet('selectedGroup'),
                     _idbGet('compras'),               _idbGet('movimientos'),
                     _idbGet('costosUltimos'),         _idbGet('recetas'),
-                    _idbGet('ventas'),                _idbGet('ventasSemanaId')
+                    _idbGet('ventas'),                _idbGet('ventasSemanaId'),
+                    _idbGet('ventasPeriodos')
                 ]);
                 return {
                     products:                  idbProducts,
@@ -501,6 +504,7 @@ function _idbPruneSyncedQueue() {
                     recetas:                   idbRecetas,
                     ventas:                    idbVentas,
                     ventasSemanaId:            idbVentasSemanaId,
+                    ventasPeriodos:            idbVentasPeriodos,
                     _savedAt:                  savedAt
                 };
             } catch(e) {
@@ -566,6 +570,8 @@ function _idbPruneSyncedQueue() {
                 ventas = idbData.ventas;
             if (typeof idbData.ventasSemanaId === 'string')
                 ventasSemanaId = idbData.ventasSemanaId;
+            if (Array.isArray(idbData.ventasPeriodos))
+                ventasPeriodos = idbData.ventasPeriodos;
             isAuditoriaMode = (auditoriaView === 'counting' && !!auditoriaAreaActiva);
             console.info('[IDB] Estado restaurado desde IndexedDB (' +
                 new Date(idbData._savedAt).toLocaleString('es-MX') + ') — ' +
@@ -731,6 +737,8 @@ function _idbPruneSyncedQueue() {
                     (typeof ventas !== 'undefined') ? ventas : [])],
                 ['inventarioApp_ventasSemanaId',           JSON.stringify(
                     (typeof ventasSemanaId !== 'undefined') ? ventasSemanaId : null)],
+                ['inventarioApp_ventasPeriodos',           JSON.stringify(
+                    (typeof ventasPeriodos !== 'undefined') ? ventasPeriodos : [])],
                 // ── TIER 3: Estado de UI ─────────────────────────────────────────────────
                 ['inventarioApp_cart',                     JSON.stringify(cart)],
                 ['inventarioApp_activeTab',                activeTab],

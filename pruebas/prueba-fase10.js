@@ -59,22 +59,29 @@ chk('★ Ni SUBJEFE_BARRA ni BARTENDER traen sales.* por defecto (mismo criterio
     !/BARTENDER:[\s\S]*?'sales\./.test(roles));
 
 // ═══ 2 · Reglas de Firestore ════════════════════════════════════════════════
-chk('firestore.rules define match /ventas/{semanaId}',
-    /match \/ventas\/\{semanaId\} \{/.test(reglas));
+// FASE 10B (30/09): un documento por PERIODO y create-only — decisión del
+// propietario: una fecha ya cargada no se vuelve a subir.
+chk('firestore.rules define match /ventas/{periodoId}',
+    /match \/ventas\/\{periodoId\} \{/.test(reglas));
 chk('Ventas: lectura exige sales.read (no queda abierta a cualquier autenticado)',
-    /match \/ventas\/\{semanaId\} \{[\s\S]{0,400}?allow read: if hasPerm\('sales\.read'\)/.test(reglas));
-chk('Ventas: escritura exige sales.import y valida semanaId, lista y tope',
-    /allow create, update: if hasPerm\('sales\.import'\)[\s\S]{0,400}?request\.resource\.data\.semanaId == semanaId[\s\S]{0,400}?lineas\.size\(\) <= 3000/.test(reglas));
-chk('★ Ventas: update SÍ se permite (reimportar reemplaza) pero delete NO',
-    /match \/ventas\/\{semanaId\} \{[\s\S]{0,700}?allow delete: if false;/.test(reglas));
+    /match \/ventas\/\{periodoId\} \{[\s\S]{0,400}?allow read: if hasPerm\('sales\.read'\)/.test(reglas));
+chk('Ventas: crear exige sales.import y un periodo válido (id = inicio_fin, dentro de su semana, lista con tope)',
+    /allow create: if hasPerm\('sales\.import'\)[\s\S]{0,200}?_periodoVentasValido\(periodoId, request\.resource\.data\)/.test(reglas) &&
+    /periodoId == d\.fechaInicio \+ '_' \+ d\.fechaFin/.test(reglas) &&
+    /duration\.value\(6, 'd'\)/.test(reglas) && /d\.lineas\.size\(\) <= 3000/.test(reglas));
+chk('★ 10B · Ventas: update y delete NO — una fecha cargada no se reescribe ni se borra',
+    /match \/ventas\/\{periodoId\} \{[\s\S]{0,500}?allow update, delete: if false;/.test(reglas) &&
+    !/match \/ventas\/\{periodoId\} \{[\s\S]{0,500}?allow create, update/.test(reglas));
 
 // ═══ 3 · Parser ═════════════════════════════════════════════════════════════
 chk('★ Agrupa por SKU SUMANDO las cantidades — el caso real de las variantes promo (2x1)',
     /g\.cantidad \+= cantidad;/.test(ventas) && !/g\.cantidad = cantidad;/.test(ventas));
 chk('Reporta qué SKU venían en varias filas, en vez de sumarlos en silencio',
     /skusAgrupados/.test(ventas) && /se sumaron/.test(ventas));
-chk('La hoja "Venta" se busca por NOMBRE, no se asume la primera del libro',
-    /_normCabCompras\(n\) === 'venta'/.test(ventas));
+chk('★ 10B · Se importa la hoja "Detalle" del reporte de Parrot (y "Venta" del Formato), por NOMBRE',
+    /function _ventasElegirHoja/.test(ventas) && /buscar\(\['detalle'\]\)/.test(ventas) && /\['venta', 'ventas'\]/.test(ventas));
+chk('★ 10B · Nunca se cae a la primera hoja (en el reporte es "Resumen")',
+    !/\|\| workbook\.SheetNames\[0\]/.test(ventas) && /no tiene una hoja "Detalle"/.test(ventas));
 chk('Reutiliza _numeroExcel/_findColCompras/_normCabCompras (no los reimplementa)',
     /_numeroExcel\(/.test(ventas) && /_findColCompras\(/.test(ventas) &&
     !/function _numeroExcel\(/.test(ventas) && !/function _findColCompras\(/.test(ventas));
@@ -92,10 +99,24 @@ chk('semanaVentasPorDefecto() propone la semana del inventario abierto, con la s
     /function semanaVentasPorDefecto/.test(ventas) &&
     /_inventarioActivo\.fechaRecuento/.test(ventas) &&
     /return semanaId\(new Date\(\)\);/.test(ventas));
-chk('La vista previa deja CAMBIAR la semana antes de confirmar',
-    /_ventasCambiarSemana/.test(ventas) && /id="ventasSemanaInput"/.test(ventas));
-chk('Si la semana destino ya tenía ventas, la vista previa lo avisa antes de reemplazar',
-    /yaExistia/.test(ventas) && /ya tenía/.test(ventas));
+chk('★ 10B · La vista previa pide fecha de inicio y fecha fin',
+    /id="ventasFechaInicio"/.test(ventas) && /id="ventasFechaFin"/.test(ventas) && /_ventasCambiarPeriodo/.test(ventas));
+chk('★ 10B · Un solo día: fin vacío = inicio, y hay botón "Un solo día"',
+    /fin: fin \|\| inicio \|\| ''/.test(ventas) && /function _ventasUnSoloDia/.test(ventas));
+chk('La vista previa dice a qué semana pertenece el periodo',
+    /Pertenece a la <b>' \+ escapeHtml\(etiquetaSemana\(v\.inicio\)\)/.test(ventas));
+chk('★ 10B · Fecha ya cargada: "La fecha … ya se encuentra en el sistema. No se puede cargar."',
+    /ya se encuentra en el sistema\. No se puede cargar\./.test(ventas));
+chk('★ 10B · Rango que cruza de semana y fechas futuras se rechazan',
+    /cruza de semana/.test(ventas) && /No se pueden cargar fechas futuras/.test(ventas));
+chk('★ 10B · Antes de escribir se relee el SERVIDOR (no la caché) para detectar fechas ya cargadas',
+    /leerPeriodosVentasSemana\(previa\.semanaId, \{ servidor: true \}\)/.test(ventas) && /source: 'server'/.test(ventas));
+chk('★ 10B · Si no se pudo comprobar en el servidor, no se habilita "Confirmar"',
+    /v\.puedeConfirmar = v\.ok && v\.verificado/.test(ventas));
+chk('★ 10B · La semana en memoria es la SUMA de sus periodos (no el último importado)',
+    /function _ventasAgregarLineas/.test(ventas) && /_ventasAplicarSemana\(v\.semanaId/.test(ventas) && !/ventas = parsed\.lineas;/.test(ventas));
+chk('Ya no existe "reimportar reemplaza" en la pantalla',
+    !/se reemplazan por completo/.test(ventas) && !/yaExistia/.test(ventas));
 
 // ═══ 5 · Alcance: no calcula consumo teórico ════════════════════════════════
 // FASE 11A añadió a esta pestaña la PANTALLA del consumo teórico, pero el
@@ -119,6 +140,11 @@ chk('ventas viaja por localStorage e IndexedDB (guardado y restaurado)',
     /inventarioApp_ventas/.test(idb) && /_idbGet\('ventas'\)/.test(idb) &&
     /ventas = idbData\.ventas;/.test(idb) &&
     /ventas\s*=\s*safeGet\('inventarioApp_ventas'/.test(firest));
+chk('10B · ventasPeriodos (qué días están cargados) se declara y viaja por localStorage e IndexedDB',
+    /let ventasPeriodos = \[\];/.test(nucleo) &&
+    /inventarioApp_ventasPeriodos/.test(idb) && /_idbGet\('ventasPeriodos'\)/.test(idb) &&
+    /ventasPeriodos = idbData\.ventasPeriodos;/.test(idb) &&
+    /ventasPeriodos\s*=\s*safeGet\('inventarioApp_ventasPeriodos'/.test(firest));
 chk("renderTab() enruta 'ventas' a renderVentasTab()",
     /case 'ventas':\s*content\.innerHTML = renderVentasTab\(\); break;/.test(render));
 chk("La pestaña 'ventas' respeta sales.import para su header",

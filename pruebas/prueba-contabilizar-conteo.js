@@ -189,8 +189,15 @@ chk('★ La consulta va al servidor, no a la caché local',
     /source: 'server'/.test(extraer(flujo, '_inventarioAbiertoEnServidor') || ''));
 chk('Si no se puede consultar, no se borra nada',
     /if \(vigente\.error\) \{[\s\S]{0,700}?return;/.test(reset));
+// FASE 10B: el segundo botón "Nuevo Inventario Físico" (el que llevaba la
+// guarda !_inventarioActivoSinResolver()) se quitó por duplicado. Lo que
+// importa sigue igual: el único "Crear" de la pantalla principal está en el
+// encabezado, DESPUÉS de la salida temprana mientras el inventario se lee.
+const sel = (extraer(ui, 'renderAuditoriaSeleccion') || '').split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n');   // sin comentarios
 chk('Conteo no ofrece crear mientras el inventario no se ha leído',
-    /_inventarioActivoSinResolver\(\)/.test(cab) && /!_inventarioActivoSinResolver\(\)/.test(ui));
+    /if \(!_inventarioActivo && _inventarioActivoSinResolver\(\)\)[\s\S]{0,900}?return/.test(cab) &&
+    cab.indexOf('_inventarioActivoSinResolver()') < cab.indexOf('abrirModalNuevoInventario()') &&
+    sel.length > 0 && !/abrirModalNuevoInventario/.test(sel));
 
 // ═══ Resultado ═════════════════════════════════════════════════════════════
 const ancho = Math.max.apply(null, casos.map(c => c.nombre.length));

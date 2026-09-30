@@ -694,23 +694,47 @@
                  //  Lectura con sales.read, no abierta a cualquier
                  //  autenticado: igual que compras, lleva importes.
                  //
-                 //  ¿Por qué SÍ se permite 'update', si un inicial de arriba
-                 //  es inmutable? Porque un inicial es un hecho contable y
-                 //  una compra es un documento de SAP, pero un reporte de
-                 //  ventas es una FOTO que el POS puede volver a exportar
-                 //  corregida. Bloquear la reimportación obligaría a
-                 //  arrastrar un dato malo toda la semana. Decisión explícita
-                 //  del propietario (2026-09-27). 'delete' sigue cerrado: una
-                 //  semana no se borra, se reemplaza.
+                 //  FASE 10B (2026-09-30) — CAMBIO DE DECISIÓN DEL PROPIETARIO:
+                 //  un documento por PERIODO, id '{fechaInicio}_{fechaFin}'
+                 //  (un solo día: inicio = fin). Una fecha ya cargada NO se
+                 //  vuelve a subir: 'create' sí, 'update' NO, 'delete' NO.
+                 //  (Hasta 10A, reimportar reemplazaba; ya no.)
+                 //
+                 //  Lo que el servidor garantiza:
+                 //    · el id es exactamente inicio_fin, fechas bien formadas,
+                 //      inicio ≤ fin;
+                 //    · semanaId ≤ inicio y el fin a no más de 6 días del
+                 //      lunes: el periodo cabe en UNA semana;
+                 //    · el mismo periodo no se puede escribir dos veces.
+                 //  Lo que NO puede garantizar (depende de otros documentos):
+                 //  que un periodo DISTINTO no se encime con otro ya cargado
+                 //  (ej. el 23 dentro de 21–27). Eso lo comprueba el cliente
+                 //  con una lectura fresca del servidor antes de escribir.
+                 //
+                 //  Los documentos anteriores (id = semanaId, sin fechas) se
+                 //  siguen leyendo; ya no se pueden reescribir.
                  // ══════════════════════════════════════════════════════════
-                 match /ventas/{semanaId} {
+                 function _fechaVentas(s) {
+                   return s is string && s.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+                 }
+                 function _tsFechaVentas(s) {
+                   return timestamp.date(int(s.split('-')[0]), int(s.split('-')[1]), int(s.split('-')[2]));
+                 }
+                 function _periodoVentasValido(periodoId, d) {
+                   return _fechaVentas(d.fechaInicio) && _fechaVentas(d.fechaFin) && _fechaVentas(d.semanaId)
+                       && periodoId == d.fechaInicio + '_' + d.fechaFin
+                       && d.fechaInicio <= d.fechaFin
+                       && d.semanaId <= d.fechaInicio
+                       && _tsFechaVentas(d.fechaFin) - _tsFechaVentas(d.semanaId) <= duration.value(6, 'd')
+                       && d.lineas is list
+                       && d.lineas.size() <= 3000
+                       && d.origen is string;
+                 }
+                 match /ventas/{periodoId} {
                    allow read: if hasPerm('sales.read');
-                   allow create, update: if hasPerm('sales.import')
-                                    && request.resource.data.semanaId == semanaId
-                                    && request.resource.data.lineas is list
-                                    && request.resource.data.lineas.size() <= 3000
-                                    && request.resource.data.origen is string;
-                   allow delete: if false;
+                   allow create: if hasPerm('sales.import')
+                                 && _periodoVentasValido(periodoId, request.resource.data);
+                   allow update, delete: if false;
                  }
 
                  // ══════════════════════════════════════════════════════════

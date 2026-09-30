@@ -115,11 +115,17 @@
         let _recetarioImportResultado = null;
         // FASE 10 — VENTAS del POS (js/93-ventas.js). `ventas` son las líneas
         // de UNA semana (la que indica ventasSemanaId), no un histórico: el
-        // histórico vive en Firestore, un documento por semana
-        // (inventarioApp/{docId}/ventas/{semanaId}). Cada línea:
+        // histórico vive en Firestore. Cada línea:
         // { sku, nombre, tipo, cantidad, ventaNeta }.
+        // FASE 10B — una semana puede tener VARIOS periodos (un día, varios
+        // días, la semana completa), un documento por periodo
+        // (inventarioApp/{docId}/ventas/{fechaInicio_fechaFin}). `ventas` es
+        // la SUMA por SKU de todos los periodos de la semana, y
+        // `ventasPeriodos` dice qué días cubren: { id, inicio, fin, totalSkus,
+        // totalUnidades, legado }.
         let ventas = [];
         let ventasSemanaId = null;
+        let ventasPeriodos = [];
         let ventasImportView = 'lista'; // 'lista' | 'vista_previa' | 'incidencias'
         let _ventasImportPendiente = null;
         let _ventasImportResultado = null;

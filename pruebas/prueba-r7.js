@@ -138,7 +138,7 @@ chk('…y las áreas del inventario',             /inv\.warehousesSnapshot\.map/
 chk('…y el comentario',                        /inv\.comentario/.test(uiInv));
 chk('…y cuántos usuarios están contando',      /_usuariosContando\(\)/.test(uiInv));
 chk('Los usuarios contando se resaltan si los hay',
-    /_contando \? 'var\(--accent\)' : 'var\(--txt-muted\)'/.test(uiInv),
+    /dato\('Usuarios contando', String\(_contando\), _contando \? 'if-dato--resalte' : ''\)/.test(uiInv),
     'es el dato que el admin mira antes de cerrar');
 
 // Retrocompatibilidad: los inventarios anteriores a R7 no traen estos campos.
@@ -184,7 +184,7 @@ chk('Y dice algo distinto a un bartender',
 
 // ═══ 9 · Ya no quedan "3 áreas" escritas a mano ════════════════════════
 chk('El progreso cuenta las áreas reales',
-    /AREAS_CONTEO\.length \+ ' áreas<\/div>/.test(uiInv),
+    /totalCompletas \+ ' \/ ' \+ AREAS_CONTEO\.length \+ ' áreas<\/span>/.test(uiInv),
     'con una cuarta área, "/ 3" mostraría 4 / 3');
 chk('La confirmación lista las áreas reales',
     /AREAS_CONTEO\.map\(function\(a\) \{ return areasAuditoria\[a\]; \}\)\.join/.test(flujo));
@@ -215,7 +215,7 @@ chk('La fecha se valida con la misma regla que "Nuevo Inventario" (domingo o fin
 chk('El encabezado ofrece el botón solo mientras el inventario sigue abierto',
     /!esCerrado && isAdmin\(\) && hasPermission\('inventory\.create'\)\)[\s\S]{0,200}abrirModalRegistrarFechaRecuento/.test(uiInv));
 chk('Sin fechaRecuento, el encabezado avisa en vez de mostrar una línea vacía',
-    /Recuento: no registrado \(inventario creado antes de esta regla\)/.test(uiInv));
+    /dato\('Recuento', '⚠️ No registrado \(inventario creado antes de esta regla\)', 'if-dato--aviso'\)/.test(uiInv));
 
 // ═══ 10 · Caché ═════════════════════════════════════════════════════════
 const vTags = [...new Set([...html.matchAll(/<script\s+src="js\/[^"?]+\.js\?v=([^"]*)"/g)].map(m => m[1]))];

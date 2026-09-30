@@ -1648,20 +1648,24 @@ async function main() {
     });
 
     // ══════════════════════════════════════════════════════════════════════
-    //  FASE 10 — VENTAS DEL POS (inventarioApp/{docId}/ventas/{semanaId})
+    //  FASE 10 / 10B — VENTAS DEL POS, un documento por PERIODO
+    //  (inventarioApp/{docId}/ventas/{fechaInicio}_{fechaFin}). Desde 10B
+    //  una fecha cargada no se vuelve a subir: create sí, update/delete no.
     // ══════════════════════════════════════════════════════════════════════
-    const rutaVentas = (db, semana) => db.doc('inventarioApp/barra-principal/ventas/' + (semana || '2026-09-21'));
-    const ventasValidas = (semana) => ({
+    const idPeriodo = (ini, fin) => ini + '_' + fin;
+    const rutaVentas = (db, id) => db.doc('inventarioApp/barra-principal/ventas/' + (id || idPeriodo('2026-09-21', '2026-09-27')));
+    const ventasValidas = (ini, fin, semana) => ({
         semanaId: semana || '2026-09-21',
+        fechaInicio: ini || '2026-09-21', fechaFin: fin || ini || '2026-09-27',
         lineas: [{ sku: 'PVB1000001', nombre: '1800 ANEJO BOTELLA', tipo: 'Bebidas', cantidad: 3, ventaNeta: 100 }],
-        totalSkus: 1, totalUnidades: 3, origen: 'excel',
+        totalSkus: 1, totalUnidades: 3, origen: 'excel', archivo: 'Ventas_27-09-2026.xlsx',
         importadoPor: 'admin1', importadoEn: Date.now()
     });
 
     await prueba('VEN-1. Sin sales.read NO se pueden leer las ventas (información comercial, como compras)', async () => {
         await sembrarFase2();
         await testEnv.withSecurityRulesDisabled(async (ctx) => {
-            await ctx.firestore().doc('inventarioApp/barra-principal/ventas/2026-09-21').set(ventasValidas());
+            await ctx.firestore().doc('inventarioApp/barra-principal/ventas/' + idPeriodo('2026-09-21', '2026-09-27')).set(ventasValidas());
         });
         await assertFails(rutaVentas(bt1).get());
         await assertFails(rutaVentas(subjefe1).get());
@@ -1675,25 +1679,32 @@ async function main() {
         await assertSucceeds(rutaVentas(admin1).set(ventasValidas()));
     });
 
-    await prueba('VEN-3. ★ Reimportar la misma semana SÍ se permite (update): el POS reexporta reportes corregidos', async () => {
+    await prueba('VEN-3. ★ 10B: un periodo ya cargado NO se vuelve a subir (update denegado, ni por el admin)', async () => {
         await sembrarFase2();
         await assertSucceeds(rutaVentas(admin1).set(ventasValidas()));
-        const corregido = ventasValidas();
-        corregido.lineas = [{ sku: 'PVB1000001', nombre: '1800 ANEJO BOTELLA', tipo: 'Bebidas', cantidad: 9, ventaNeta: 300 }];
-        corregido.totalUnidades = 9;
-        await assertSucceeds(rutaVentas(admin1).set(corregido));
+        const otraVez = ventasValidas();
+        otraVez.lineas = [{ sku: 'PVB1000001', nombre: '1800 ANEJO BOTELLA', tipo: 'Bebidas', cantidad: 9, ventaNeta: 300 }];
+        await assertFails(rutaVentas(admin1).set(otraVez));
+        await assertFails(rutaVentas(admin1).update({ totalUnidades: 9 }));
     });
 
-    await prueba('VEN-4. ★ Una semana de ventas NUNCA se borra (se reemplaza)', async () => {
+    await prueba('VEN-4. ★ Un periodo de ventas NUNCA se borra', async () => {
         await sembrarFase2();
         await assertSucceeds(rutaVentas(admin1).set(ventasValidas()));
         await assertFails(rutaVentas(admin1).delete());
     });
 
-    await prueba('VEN-5. El semanaId del documento debe coincidir con el id, y la lista tiene tope', async () => {
+    await prueba('VEN-5. El id debe ser inicio_fin, fechas bien formadas, inicio ≤ fin, y la lista tiene tope', async () => {
         await sembrarFase2();
-        const cruzado = ventasValidas('2026-09-14');   // id 2026-09-21, campo 2026-09-14
-        await assertFails(rutaVentas(admin1, '2026-09-21').set(cruzado));
+        // id que no coincide con las fechas del documento
+        await assertFails(rutaVentas(admin1, idPeriodo('2026-09-21', '2026-09-27')).set(ventasValidas('2026-09-21', '2026-09-26')));
+        // fin antes que inicio
+        await assertFails(rutaVentas(admin1, idPeriodo('2026-09-25', '2026-09-23')).set(ventasValidas('2026-09-25', '2026-09-23')));
+        // fecha mal formada
+        await assertFails(rutaVentas(admin1, idPeriodo('2026-9-21', '2026-9-21')).set(ventasValidas('2026-9-21', '2026-9-21')));
+        // sin fechas (la forma anterior a 10B) ya no se puede crear
+        const legado = ventasValidas(); delete legado.fechaInicio; delete legado.fechaFin;
+        await assertFails(rutaVentas(admin1, '2026-09-21').set(legado));
         const enorme = ventasValidas();
         enorme.lineas = Array.from({ length: 3001 }, (_, i) => ({ sku: 'S' + i, cantidad: 1 }));
         await assertFails(rutaVentas(admin1).set(enorme));
@@ -1705,10 +1716,10 @@ async function main() {
                 uid: 'bartender1', role: 'BARTENDER',
                 permissionOverrides: { 'sales.read': 'allow' }
             });
-            await db.doc('inventarioApp/barra-principal/ventas/2026-09-21').set(ventasValidas());
+            await db.doc('inventarioApp/barra-principal/ventas/' + idPeriodo('2026-09-21', '2026-09-27')).set(ventasValidas());
         });
         await assertSucceeds(rutaVentas(bt1).get());
-        await assertFails(rutaVentas(bt1).set(ventasValidas()));   // leer no es escribir
+        await assertFails(rutaVentas(bt1, idPeriodo('2026-09-14', '2026-09-14')).set(ventasValidas('2026-09-14', '2026-09-14', '2026-09-14')));   // leer no es escribir
     });
 
     await prueba('VEN-7. Sin autenticación no se puede ni leer ni escribir ventas', async () => {
@@ -1716,6 +1727,34 @@ async function main() {
         const anonimo = testEnv.unauthenticatedContext().firestore();
         await assertFails(rutaVentas(anonimo).get());
         await assertFails(rutaVentas(anonimo).set(ventasValidas()));
+    });
+
+    await prueba('VEN-8. ★ 10B: un solo día (inicio = fin) y varios periodos distintos en la misma semana', async () => {
+        await sembrarFase2();
+        await assertSucceeds(rutaVentas(admin1, idPeriodo('2026-09-23', '2026-09-23')).set(ventasValidas('2026-09-23', '2026-09-23')));
+        await assertSucceeds(rutaVentas(admin1, idPeriodo('2026-09-21', '2026-09-22')).set(ventasValidas('2026-09-21', '2026-09-22')));
+        await assertSucceeds(rutaVentas(admin1, idPeriodo('2026-09-27', '2026-09-27')).set(ventasValidas('2026-09-27', '2026-09-27')));
+        // el mismo día otra vez: rechazado por el servidor
+        await assertFails(rutaVentas(admin1, idPeriodo('2026-09-23', '2026-09-23')).set(ventasValidas('2026-09-23', '2026-09-23')));
+    });
+
+    await prueba('VEN-9. ★ 10B: el servidor no acepta un periodo que se salga de su semana', async () => {
+        await sembrarFase2();
+        // Sábado 26 → martes 29: cruza al lunes 28
+        await assertFails(rutaVentas(admin1, idPeriodo('2026-09-26', '2026-09-29')).set(ventasValidas('2026-09-26', '2026-09-29', '2026-09-21')));
+        // semanaId posterior al inicio
+        await assertFails(rutaVentas(admin1, idPeriodo('2026-09-21', '2026-09-21')).set(ventasValidas('2026-09-21', '2026-09-21', '2026-09-28')));
+        // domingo 27 sí es de la semana del 21 (día 6)
+        await assertSucceeds(rutaVentas(admin1, idPeriodo('2026-09-26', '2026-09-27')).set(ventasValidas('2026-09-26', '2026-09-27', '2026-09-21')));
+    });
+
+    await prueba('VEN-10. Un documento semanal anterior a 10B se sigue leyendo, pero ya no se reescribe', async () => {
+        await sembrarFase2(async (db) => {
+            const legado = ventasValidas(); delete legado.fechaInicio; delete legado.fechaFin;
+            await db.doc('inventarioApp/barra-principal/ventas/2026-09-14').set(Object.assign(legado, { semanaId: '2026-09-14' }));
+        });
+        await assertSucceeds(rutaVentas(admin1, '2026-09-14').get());
+        await assertFails(rutaVentas(admin1, '2026-09-14').update({ totalUnidades: 1 }));
     });
 
     await testEnv.cleanup();

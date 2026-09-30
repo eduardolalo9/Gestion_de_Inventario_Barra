@@ -42,6 +42,7 @@ const PRUEBAS = [
     'prueba-recetario2-navegador.js',   // RECETARIO-2 — importador: parseo, vista previa, merge por PV/nombre
     'prueba-fase10-navegador.js',       // FASE 10 — ventas del POS: parseo, semana, vista previa, permisos
     'prueba-fase11a-navegador.js',      // FASE 11A — costeo por unidad, consumo teórico y enchufe en existencia
+    'prueba-fase10b-ui-navegador.js',   // FASE 10B — Inventario Físico para el pulgar: medidas, separación y contraste
 ];
 
 function esperarServidor(intentos) {

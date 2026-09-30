@@ -33,6 +33,7 @@
             // pestaña muestre algo al abrir la app sin red.
             ventas         = safeGet('inventarioApp_ventas',         []);
             ventasSemanaId = safeGet('inventarioApp_ventasSemanaId', null);
+            ventasPeriodos = safeGet('inventarioApp_ventasPeriodos', []);
 
             // FIX-CONCURRENCIA: restaurar tombstones de borrado (ver _mergeArrayByIdPreferLocal)
             const rawDelProd = safeGet('inventarioApp_deletedProductIds',   []);

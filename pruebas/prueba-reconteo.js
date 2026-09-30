@@ -48,7 +48,7 @@ chk('renderInventarioTab enruta las tres vistas del reconteo',
     /'reconteo'\)\s+return renderReconteo\(\)/.test(rit) && /'reconteo_historial'\) return renderReconteoHistorial\(\)/.test(rit) &&
     /'reconteo_detalle'\)\s+return renderReconteoDetalle\(\)/.test(rit));
 chk('El botón de reconteo solo aparece al admin con el inventario abierto',
-    /if \(isAdmin\(\) && !esCerrado\) \{\s*html \+= '<button type="button" data-rc-accion="iniciar"/.test(ui));
+    /if \(isAdmin\(\) && !esCerrado\) \{\s*acc \+= _ifBtn\('bt--primario', '🔁 Reconteo', 'data-rc-accion="iniciar"'\)/.test(ui));
 ['renderReconteo', 'renderReconteoHistorial', 'renderReconteoDetalle'].forEach(f => {
     chk(f + ' devuelve a la selección si no es admin',
         /if \(!_rcPuede\(\)\) \{ auditoriaView = 'selection'; return renderAuditoriaSeleccion\(\); \}/.test(cuerpo(rc, 'function ' + f + '(')));

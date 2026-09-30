@@ -444,10 +444,10 @@
             html += '<input id="auditRenameInput" class="audit-rename-input" type="text" maxlength="32"'
                   + ' placeholder="Tu nombre..."'
                   + ' onkeydown="if(event.key===\"Enter\"){event.preventDefault();auditSaveName();}">';
-            html += '<button onclick="auditSaveName()"'
-                  + ' style="padding:6px 12px;background:var(--accent);color:#fff;border-radius:var(--r-sm);font-size:.75rem;font-weight:600;cursor:pointer;min-height:auto;">Guardar</button>';
-            html += '<button onclick="toggleAuditRename()"'
-                  + ' style="padding:6px 10px;background:var(--surface);border:1px solid var(--border-mid);border-radius:var(--r-sm);color:var(--txt-secondary);font-size:.75rem;cursor:pointer;min-height:auto;">Cancelar</button>';
+            // FASE 10B — antes: texto blanco sobre azul claro (1.72:1) y
+            // botones de 12 px con min-height:auto. Ahora los del pulgar.
+            html += '<button type="button" class="bt bt--primario" onclick="auditSaveName()">Guardar</button>';
+            html += '<button type="button" class="bt bt--secundario" onclick="toggleAuditRename()">Cancelar</button>';
             html += '</div>';
             html += '</div>'; // #auditRenameInline
 

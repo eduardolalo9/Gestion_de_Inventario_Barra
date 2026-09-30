@@ -121,7 +121,8 @@ const PUERTO = process.env.PUERTO || '8080';
               hayBtn: !!t.querySelector('button[onclick="abrirModalRegistrarFechaRecuento()"]') };
   });
   chk('★ Un inventario abierto sin fechaRecuento lo dice en vez de no mostrar nada',
-      /Recuento: no registrado/.test(legado.txt), legado.txt.slice(0, 300));
+      // FASE 10B: el dato va en su fila, etiqueta arriba (en mayúsculas por CSS) y valor abajo.
+      /Recuento\s*⚠️ No registrado/i.test(legado.txt), legado.txt.slice(0, 300));
   chk('★ …y ofrece registrarla, mientras siga abierto', legado.hayBtn);
 
   const modal = await p.evaluate(() => {
@@ -193,7 +194,7 @@ const PUERTO = process.env.PUERTO || '8080';
              hayBtn: !!t.querySelector('button[onclick="abrirModalRegistrarFechaRecuento()"]') };
   });
   chk('Con fechaRecuento ya registrada, se muestra normal y no se vuelve a ofrecer el botón',
-      /Recuento: 2026-09-20/.test(conFecha.txt) && !conFecha.hayBtn, conFecha.txt.slice(0, 200));
+      /Recuento\s*2026-09-20/i.test(conFecha.txt) && !conFecha.hayBtn, conFecha.txt.slice(0, 200));
 
   chk('Sin errores de JS en toda la prueba', errs.length === 0, errs.join(' | '));
   await nav.close();

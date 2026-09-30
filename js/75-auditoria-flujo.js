@@ -1460,10 +1460,11 @@
             var cont = document.getElementById('nuevoInvAreas');
             if (cont) {
                 cont.innerHTML = areasDefinidas().map(function(a) {
-                    return '<label style="display:flex;align-items:center;gap:10px;min-height:44px;cursor:pointer;">'
-                         + '<input type="checkbox" class="nuevoInvArea" value="' + escapeHtml(a.id) + '" checked '
-                         + 'style="width:20px;height:20px;accent-color:var(--accent);flex-shrink:0;cursor:pointer;">'
-                         + '<span style="font-size:.88rem;">' + escapeHtml(a.icono || '📍') + ' ' + escapeHtml(a.nombre) + '</span>'
+                    // FASE 10B — cada área es una fila de 56 px que se marca
+                    // tocándola completa, no solo la casilla.
+                    return '<label class="ni-area">'
+                         + '<input type="checkbox" class="nuevoInvArea" value="' + escapeHtml(a.id) + '" checked>'
+                         + '<span>' + escapeHtml(a.icono || '📍') + ' ' + escapeHtml(a.nombre) + '</span>'
                          + '</label>';
                 }).join('');
             }
