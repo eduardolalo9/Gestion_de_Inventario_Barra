@@ -158,7 +158,36 @@
                 '¿Cerrar el área ' + nombreArea + ' para TODAS las personas?\n\n' +
                 'Nadie podrá seguir capturando en esta área hasta que se reabra. ' +
                 'Los conteos ya guardados no se modifican.\n\n¿Continuar?',
-                function() {
+                async function() {
+                    // FASE 12 — antes se cambiaba solo en local y viajaba con la
+                    // sincronización general, que mandaba el MAPA COMPLETO de
+                    // estados de este dispositivo (y con él, estados viejos de
+                    // otro inventario). Ahora se escribe SOLO este campo, en una
+                    // transacción que comprueba que el servidor sigue en la
+                    // misma sesión que esta pantalla. Sin conexión no se cierra:
+                    // igual que reabrir, es una orden para todos los teléfonos.
+                    if (!_db || !navigator.onLine) {
+                        showNotification('📴 Sin conexión — cerrar un área para todos necesita internet');
+                        return;
+                    }
+                    const sesion = _auditoriaSessionId;
+                    try {
+                        const ref = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID);
+                        await _db.runTransaction(async function(tx) {
+                            const snap = await tx.get(ref);
+                            const vigente = snap.exists ? (snap.data() || {})._auditoriaSessionId : null;
+                            if (!sesion || String(vigente) !== String(sesion)) {
+                                throw new Error('sesion_distinta');
+                            }
+                            tx.update(ref, { ['auditoriaStatus.' + area]: 'completada', _lastModified: Date.now() });
+                        });
+                    } catch (e) {
+                        showNotification(e && e.message === 'sesion_distinta'
+                            ? '⚠️ Esta pantalla estaba en otro inventario. Se actualizó; revisa y vuelve a intentarlo.'
+                            : '❌ No se pudo cerrar el área — revisa la conexión. No se cambió nada.');
+                        renderTab();
+                        return;
+                    }
                     auditoriaStatus[area] = 'completada';
                     saveToLocalStorage();
                     _registrarEnSyncQueue({
@@ -1018,11 +1047,21 @@
                 const raiz = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID);
                 const principal = await raiz.get({ source: 'server' });
                 const sesion = principal.exists ? (principal.data() || {})._auditoriaSessionId : null;
-                if (!sesion) return { abierto: false };
-                const inv = await raiz.collection('inventories').doc(String(sesion)).get({ source: 'server' });
-                if (!inv.exists) return { abierto: false, sesion: String(sesion) };
-                const d = inv.data() || {};
-                return { abierto: inventarioAbierto(d), sesion: String(sesion), numero: d.numero || null, estado: d.estado || null };
+                const inv = sesion ? await raiz.collection('inventories').doc(String(sesion)).get({ source: 'server' }) : null;
+                const d = (inv && inv.exists) ? (inv.data() || {}) : {};
+                if (inv && inv.exists && inventarioAbierto(d)) {
+                    return { abierto: true, sesion: String(sesion), numero: d.numero || null, estado: d.estado || null };
+                }
+                // FASE 12 — además de la sesión vigente, CUALQUIER inventario
+                // activo bloquea: si alguna vez quedó uno huérfano (versiones
+                // anteriores, sin la regla del servidor), no se crea otro
+                // encima. Consulta de un solo campo: no necesita índice.
+                const activos = await raiz.collection('inventories').where('estado', '==', 'SINCRONIZADO').limit(1).get({ source: 'server' });
+                if (!activos.empty) {
+                    const otro = activos.docs[0];
+                    return { abierto: true, sesion: otro.id, numero: (otro.data() || {}).numero || null, estado: 'SINCRONIZADO' };
+                }
+                return { abierto: false, sesion: sesion ? String(sesion) : null, numero: d.numero || null, estado: d.estado || null };
             } catch (e) {
                 console.warn('[InventarioFisico] No se pudo comprobar el inventario vigente en el servidor:', e);
                 return { error: true };
@@ -1199,6 +1238,11 @@
                                 // lo reciben vía el snapshot entrante, que sí pasa por
                                 // handleAuditSessionChange() y ya lo hace por su cuenta.
                                 _suscribirInventarioActivo(newSessionId);
+                                // FASE 12 — el inventario recién creado se muestra en la
+                                // PRIMERA pantalla de Conteo, venga de donde venga la
+                                // creación (Historial, "Crear el siguiente", Inicio).
+                                if (typeof switchTab === 'function') switchTab('inventario');
+                                else activeTab = 'inventario';
                                 saveToLocalStorage();
                                 renderTab();
 

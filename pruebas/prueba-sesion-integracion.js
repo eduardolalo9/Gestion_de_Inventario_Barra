@@ -236,7 +236,7 @@ async function main() {
     await app.crear();
     await esperar(400);
     const s4 = await leerServidor();
-    chk('S4 · Con el inventario cerrado, se crea el siguiente (#8)',
+    chk('S4 · Con el inventario cerrado, se crea el siguiente (folio #1001, FASE 12)',
         s4.sesion !== 'S1' && s4.inventarios.some(x => /:SINCRONIZADO$/.test(x)) && s4.inventarios.indexOf('S1:CERRADO') !== -1,
         JSON.stringify(s4) + ' ' + JSON.stringify(app.avisos));
     if (typeof app.deps._unsubInventarioActivo === 'function') app.deps._unsubInventarioActivo();

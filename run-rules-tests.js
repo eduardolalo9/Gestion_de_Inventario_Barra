@@ -214,11 +214,55 @@ async function main() {
     //  reapertura de almacén, snapshot)
     // ══════════════════════════════════════════════════════════════════
 
+    // FASE 12: crear exige que el folio sea el del contador y que el
+    // inventario de la sesión vigente no esté activo.
+    const sembrarFolio = async (sesion, ultimo) => {
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            const d = ctx.firestore();
+            await d.doc('inventarioApp/barra-principal').set({ _auditoriaSessionId: sesion }, { merge: true });
+            await d.doc('inventarioApp/barra-principal/contadores/inventarios').set({ ultimoNumero: ultimo });
+        });
+    };
     await prueba('20. Solo admin puede crear un Inventario Físico', async () => {
         await reiniciarConDatosBase();
-        const nuevo = { inventoryId: 'inv-nuevo', numero: 102, estado: 'SINCRONIZADO', fechaCreacion: Date.now(), creadoPorUid: 'x' };
+        await sembrarFolio('inv-cerrado', 1001);
+        const nuevo = { inventoryId: 'inv-nuevo', numero: 1001, estado: 'SINCRONIZADO', fechaCreacion: Date.now(), creadoPorUid: 'x' };
         await assertFails(rutaInventario(bt1, 'inv-nuevo').set(nuevo));
         await assertSucceeds(rutaInventario(admin1, 'inv-nuevo').set(nuevo));
+    });
+
+    await prueba('FOL-1. ★ El folio del inventario debe ser exactamente el del contador (sin repetidos ni inventados)', async () => {
+        await reiniciarConDatosBase();
+        await sembrarFolio('inv-cerrado', 1005);
+        const con = (n) => ({ inventoryId: 'inv-nuevo', numero: n, estado: 'SINCRONIZADO', fechaCreacion: Date.now() });
+        await assertFails(rutaInventario(admin1, 'inv-nuevo').set(con(1004)));   // uno anterior
+        await assertFails(rutaInventario(admin1, 'inv-nuevo').set(con(1006)));   // uno que no se ha emitido
+        await assertFails(rutaInventario(admin1, 'inv-nuevo').set(Object.assign(con(1005), { estado: 'CERRADO' })));  // nace activo
+        await assertFails(rutaInventario(admin1, 'inv-nuevo').set(Object.assign(con(1005), { inventoryId: 'otro' }))); // id coherente
+        await assertSucceeds(rutaInventario(admin1, 'inv-nuevo').set(con(1005)));
+    });
+
+    await prueba('FOL-2. ★ Anti-solapamiento: con el inventario de la sesión vigente ACTIVO no se crea otro, ni siendo admin', async () => {
+        await reiniciarConDatosBase();
+        await sembrarFolio('inv-activo', 1001);
+        await assertFails(rutaInventario(admin1, 'inv-nuevo').set({ inventoryId: 'inv-nuevo', numero: 1001, estado: 'SINCRONIZADO' }));
+    });
+
+    await prueba('FOL-3. ★ La sesión del documento raíz solo cambia creando su inventario en la misma escritura', async () => {
+        await reiniciarConDatosBase();
+        await sembrarFolio('inv-cerrado', 1001);
+        const raiz = admin1.doc('inventarioApp/barra-principal');
+        // Una copia vieja que regresa la sesión a un inventario que ya existe
+        await assertFails(raiz.set({ _auditoriaSessionId: 'inv-activo', _lastModified: Date.now() }, { merge: true }));
+        // Una sesión inventada, sin inventario
+        await assertFails(raiz.set({ _auditoriaSessionId: 'sesion-sin-inventario' }, { merge: true }));
+        // Escribir otros campos sin tocar la sesión sigue funcionando
+        await assertSucceeds(raiz.set({ _lastModified: Date.now(), cart: [] }, { merge: true }));
+        // El camino real: sesión + inventario nuevo en el mismo batch
+        const b = admin1.batch();
+        b.set(raiz, { _auditoriaSessionId: 'inv-1001' }, { merge: true });
+        b.set(admin1.doc('inventarioApp/barra-principal/inventories/inv-1001'), { inventoryId: 'inv-1001', numero: 1001, estado: 'SINCRONIZADO' });
+        await assertSucceeds(b.commit());
     });
 
     await prueba('21. Inventario SINCRONIZADO puede modificarse por admin (según permisos)', async () => {
@@ -289,8 +333,27 @@ async function main() {
 
     await prueba('31. Solo admin puede escribir el contador de numeración (contadores/inventarios)', async () => {
         await reiniciarConDatosBase();
-        await assertFails(bt1.doc('inventarioApp/barra-principal/contadores/inventarios').set({ ultimoNumero: 999 }));
-        await assertSucceeds(admin1.doc('inventarioApp/barra-principal/contadores/inventarios').set({ ultimoNumero: 101 }));
+        const c = (db) => db.doc('inventarioApp/barra-principal/contadores/inventarios');
+        await assertFails(c(bt1).set({ ultimoNumero: 1001 }));
+        // FASE 12: el primer folio es #1001 y solo avanza de uno en uno
+        await assertFails(c(admin1).set({ ultimoNumero: 101 }));
+        await assertSucceeds(c(admin1).set({ ultimoNumero: 1001 }));
+        await assertSucceeds(c(admin1).set({ ultimoNumero: 1002 }, { merge: true }));
+        await assertFails(c(admin1).set({ ultimoNumero: 1001 }, { merge: true }));   // atrás
+        await assertFails(c(admin1).set({ ultimoNumero: 1010 }, { merge: true }));   // salto
+        await assertFails(c(admin1).set({ ultimoNumero: 1003, otro: 1 }, { merge: true }));   // campos extra
+        await assertFails(c(admin1).delete());
+    });
+
+    await prueba('FOL-4. Migración: desde el contador anterior (#1xx) el único salto permitido es a #1001', async () => {
+        await reiniciarConDatosBase();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await ctx.firestore().doc('inventarioApp/barra-principal/contadores/inventarios').set({ ultimoNumero: 108 });
+        });
+        const c = admin1.doc('inventarioApp/barra-principal/contadores/inventarios');
+        await assertFails(c.set({ ultimoNumero: 109 }, { merge: true }));
+        await assertFails(c.set({ ultimoNumero: 1500 }, { merge: true }));
+        await assertSucceeds(c.set({ ultimoNumero: 1001 }, { merge: true }));
     });
 
     await prueba('32. Nadie puede eliminar (delete) un documento de Inventario Físico — ni admin', async () => {

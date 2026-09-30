@@ -1181,7 +1181,19 @@
                 // de reabrir). Ahora solo el admin los propaga.
                 if (isAdmin()) {
                     payload.products        = products;
-                    payload.auditoriaStatus = auditoriaStatus;
+                    // FASE 12 — auditoriaStatus y _auditoriaSessionId YA NO viajan
+                    // en esta sincronización general. Eran la COPIA LOCAL de
+                    // este dispositivo: una laptop que se quedó en el inventario
+                    // anterior regresaba el servidor a ese inventario y marcaba
+                    // "completadas" las áreas del nuevo (reproducido en
+                    // pruebas/prueba-folio-integracion.js, F4). Cada uno tiene
+                    // ya su única escritura, atada a la sesión vigente:
+                    //   · la sesión la anuncia el batch de
+                    //     _adminIniciarSesionFirestore(), junto con su inventario;
+                    //   · el estado de un área lo escriben auditoriaCerrarArea()
+                    //     y reabrirArea(), campo por campo.
+                    // El servidor además rechaza que la sesión cambie sin crear
+                    // su inventario (firestore.rules, _cambioDeSesionValido).
                     // D — la marca de purga viaja con el catálogo. Sin ella,
                     // otro dispositivo con los 424 productos todavía en local
                     // los volvería a subir en su siguiente sincronización.
@@ -1190,11 +1202,6 @@
                     // Sin esto, el admin crea un area y los bartenders no la ven:
                     // contarian en tres areas mientras el panel espera cuatro.
                     if (typeof areasConteoDef !== 'undefined') payload.areasConteo = areasConteoDef;
-                    // FIX-SESSION: incluir _auditoriaSessionId para que otros dispositivos
-                    // detecten cambios de ciclo de auditoría incluso sin pasar por
-                    // _adminIniciarSesionFirestore (p.ej., reconexiones tardías).
-                    // Solo el admin inicia sesiones, así que solo él debe anunciarlas.
-                    payload._auditoriaSessionId = _auditoriaSessionId || null;
                 }
 
                 // MIGRACIÓN MÍNIMA DE CONCURRENCIA: el conteo por producto/área

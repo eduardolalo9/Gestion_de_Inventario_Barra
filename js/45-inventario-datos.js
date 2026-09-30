@@ -599,14 +599,21 @@ const usersList = Object.values(allUsersAuditoria);
         //  NUNCA puede haber dos inventarios con el mismo número — que es el
         //  requisito real del ticket ("no debe generarse #101 #101").
         // ══════════════════════════════════════════════════════════════════════
+        //  FASE 12 (30/09/2026) — FOLIO FORMAL DESDE #1001. Pedido del
+        //  propietario. Los inventarios anteriores conservan su número (un
+        //  inventario cerrado es inmutable); el contador salta UNA vez de lo que
+        //  tuviera (#101…#1xx) a #1001 y desde ahí avanza de uno en uno. El
+        //  servidor lo exige (firestore.rules → contadores/inventarios) y además
+        //  no acepta un inventario cuyo folio no sea el del contador.
         async function _obtenerSiguienteNumeroInventario() {
+            const FOLIO_INICIAL_INVENTARIO = 1001;
             const contadorRef = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
                                     .collection('contadores').doc('inventarios');
             return _db.runTransaction(async function(tx) {
                 const snap = await tx.get(contadorRef);
-                const anterior = (snap.exists && typeof snap.data().ultimoNumero === 'number')
-                    ? snap.data().ultimoNumero : 100; // primer inventario real = #101
-                const nuevo = anterior + 1;
+                const guardado = (snap.exists && typeof snap.data().ultimoNumero === 'number')
+                    ? snap.data().ultimoNumero : 0;
+                const nuevo = Math.max(guardado, FOLIO_INICIAL_INVENTARIO - 1) + 1;
                 tx.set(contadorRef, { ultimoNumero: nuevo }, { merge: true });
                 return nuevo;
             });
