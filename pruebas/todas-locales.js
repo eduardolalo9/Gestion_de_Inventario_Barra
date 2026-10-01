@@ -57,6 +57,7 @@ const PRUEBAS = [
     'prueba-fase12.js',              // FASE 12 — folio #1001, anti-solapamiento y consistencia entre dispositivos
     'prueba-fisico-vs-sistema.js',   // FASE 11B (parte 1) — comparación físico vs. sistema
     'prueba-hotfix-4.22-movimientos.js', // HOTFIX 4.22 — recorte de movimientos y aviso de cuota
+    'prueba-fase11b-parte2.js',      // FASE 11B (parte 2) — pedido sugerido y niveles de alerta
 ];
 
 let fallaron = [];

@@ -1825,15 +1825,43 @@
             return _buscarCatalogo().items;
         }
 
-        function addToCart(productId) {
+        // FASE 11B (parte 2) — `cantidad` es opcional y SOLO lo pasa
+        // agregarPedidoSugerido(): el botón normal 🛒 de toda la app sigue
+        // incrementando de uno en uno, sin cambiar nada de su comportamiento
+        // de siempre. Cuando sí viene una cantidad (el pedido sugerido), se
+        // FIJA ese valor en vez de sumarlo — así tocar "Agregar sugerido" dos
+        // veces no duplica la sugerencia, es idempotente.
+        function addToCart(productId, cantidad) {
             const product = products.find(p => p.id === productId);
             if (!product || !product.id) return;
+            const esSugerido = typeof cantidad === 'number' && cantidad > 0;
             const existingItem = cart.find(item => item.id === productId);
-            if (existingItem) existingItem.quantity++;
-            else cart.push({ id: product.id, name: product.name, unit: product.unit || '', group: product.group || 'General', quantity: 1 });
+            if (existingItem) {
+                if (esSugerido) existingItem.quantity = cantidad;
+                else existingItem.quantity++;
+            } else {
+                cart.push({ id: product.id, name: product.name, unit: product.unit || '', group: product.group || 'General', quantity: esSugerido ? cantidad : 1 });
+            }
             saveToLocalStorage();
-            showNotification(product.name + ' agregado al carrito');
+            showNotification(product.name + (esSugerido ? ' agregado al carrito (sugerido: ' + cantidad + ')' : ' agregado al carrito'));
             updateHeaderActions();
+        }
+
+        // FASE 11B (parte 2) — "Cuando seleccione, agregar carrito, se agregue
+        // la cantidad sugerida en generar pedido" (Eduardo, 1-oct-2026).
+        // Recalcula la cantidad en el momento del clic (no la que se pintó al
+        // render original) para no agregar un número desactualizado si el
+        // conteo cambió mientras la tarjeta estaba en pantalla.
+        function agregarPedidoSugerido(productId) {
+            const product = products.find(p => p.id === productId);
+            if (!product) return;
+            const cantidad = (typeof pedidoSugeridoProducto === 'function') ? pedidoSugeridoProducto(product) : null;
+            if (typeof cantidad !== 'number' || cantidad <= 0) {
+                showNotification('Ya no hay pedido sugerido para ' + (product.name || productId));
+                if (typeof renderTab === 'function') renderTab();
+                return;
+            }
+            addToCart(productId, cantidad);
         }
 
         function openOrderModal() {

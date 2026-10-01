@@ -523,10 +523,24 @@
                     // FIX: sba (stockByArea) eliminada — ya no se usa en los chips.
                     // hasData ahora refleja si hay datos de auditoría, que es lo que
                     // muestran los chips (antes usaba getTotalStock/stockByArea, inconsistente).
-                    const total   = getTotalStock(product);   // sigue usándose en la línea meta
+                    //
+                    // FASE 11B (parte 2) — la línea "Total:" también dejó de usar
+                    // getTotalStock() (el caché stockByArea, que se queda rancio:
+                    // ver claude/analisis-stock-teorico-2026-09-18.md §6-9 y
+                    // claude/estado-y-premium-1-2026-09-22.md §4). Ahora usa
+                    // existenciaMostrada(), la MISMA cifra que ya decide "Bajo
+                    // mínimo", "Pedido sugerido" y los niveles de alerta — para
+                    // que la tarjeta nunca se contradiga a sí misma. Mientras no
+                    // se cierre/contabilice el inventario en curso, esa cifra
+                    // sigue siendo el respaldo operativo (idéntica a como se veía
+                    // antes); el día que se contabilice, las cuatro cifras
+                    // avanzan juntas sin tocar una sola línea de este archivo.
+                    const total   = existenciaMostrada(product);
                     const adCheck = _getAuditConteoParaProducto(product.id);
                     const hasData = adCheck._hayDatos || total > 0;
                     const delay   = Math.min(idx * 30, 400);
+                    const nivel   = (typeof nivelAlertaProducto === 'function') ? nivelAlertaProducto(product) : null;
+                    const pedido  = (typeof pedidoSugeridoProducto === 'function') ? pedidoSugeridoProducto(product) : null;
 
                     html += '<div class="prd-card' + (hasData ? ' has-data' : '') + '" data-sbx-item style="animation-delay:' + delay + 'ms">';
                     // Top row: nombre + botones
@@ -546,11 +560,32 @@
                     html += '</div></div>';
                     // Group badge
                     html += '<div class="prd-card__group-badge">' + escapeHtml(product.group || 'General') + '</div>';
-                    if (typeof _bajoMinimo === 'function' && _bajoMinimo(product)) {
+                    // FASE 11B (parte 2) — un solo badge, el nivel MÁS severo que
+                    // aplique (nivelAlertaProducto ya resuelve la jerarquía:
+                    // limitado ⊂ advertencia ⊂ bajo). _bajoMinimo() sigue siendo
+                    // el criterio de los chips/contadores — esto solo decide qué
+                    // etiqueta mostrar dentro de ese mismo conjunto.
+                    if (nivel === 'limitado') {
+                        html += '<span class="pm-estado pm-estado--limitado" style="margin-left:6px;">🔴 Limitado</span>';
+                    } else if (nivel === 'advertencia') {
+                        html += '<span class="pm-estado pm-estado--advertencia" style="margin-left:6px;">⚠️ Advertencia producto bajo</span>';
+                    } else if (nivel === 'bajo') {
                         html += '<span class="pm-estado pm-estado--critico" style="margin-left:6px;">⛔ Bajo mínimo (' + product.stockMinimo + ')</span>';
                     }
                     // Meta: ID · Unit · Total
                     html += '<div class="prd-card__meta">' + resaltarBusqueda(product.id, searchTerm) + ' · ' + escapeHtml(product.unit || '') + ' · Total: ' + total.toFixed(2) + '</div>';
+                    // FASE 11B (parte 2) — pedido sugerido, solo cuando hay algo
+                    // honesto que mostrar: con cantidad (>0), o explícitamente
+                    // sin poder calcularla (falta `conversion`) para un producto
+                    // que sí está por debajo del mínimo. Nunca un número inventado.
+                    if (typeof pedido === 'number' && pedido > 0) {
+                        html += '<div class="prd-card__pedido">'
+                              + '<span>📦 Pedido sugerido: <b>' + pedido + '</b></span>'
+                              + '<button type="button" class="prd-card__pedido-btn" onclick="agregarPedidoSugerido(\'' + escapeHtml(product.id) + '\')" title="Agregar la cantidad sugerida al carrito">🛒 Agregar sugerido</button>'
+                              + '</div>';
+                    } else if (pedido === null && nivel) {
+                        html += '<div class="prd-card__pedido prd-card__pedido--sin-datos">📦 Sin dato de conversión para sugerir cantidad</div>';
+                    }
                     // Area chips — total contado de auditoría por área
                     var ad           = adCheck;   // reutilizar el resultado ya calculado arriba
                     var CHIP_LABELS  = areas;   // R6: las etiquetas salen de la configuracion

@@ -32,6 +32,8 @@
     "test:fvsnav": "node pruebas/prueba-fisico-vs-sistema-navegador.js",
     "test:h422": "node pruebas/prueba-hotfix-4.22-movimientos.js",
     "test:h422nav": "node pruebas/prueba-hotfix-4.22-navegador.js",
+    "test:f11b2": "node pruebas/prueba-fase11b-parte2.js",
+    "test:f11b2nav": "node pruebas/prueba-fase11b-parte2-navegador.js",
     "test:folio": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-folio-integracion.js && node pruebas/prueba-arranque-integracion.js && node pruebas/prueba-ciclo-completo-integracion.js && node pruebas/prueba-reinicio-integracion.js\"",
     "test:arranque": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-arranque-integracion.js && node pruebas/prueba-ciclo-completo-integracion.js && node pruebas/prueba-reinicio-integracion.js\"",
     "test:ciclo": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-ciclo-completo-integracion.js && node pruebas/prueba-reinicio-integracion.js\"",

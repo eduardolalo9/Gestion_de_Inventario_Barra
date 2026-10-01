@@ -1918,6 +1918,30 @@ html[data-theme="light"] .prd-card__group-badge {
     letter-spacing: 0.07em; text-transform: uppercase;
     color: var(--txt-muted); display: block;
 }
+/* FASE 11B (parte 2) — niveles de alerta nuevos. 'advertencia' reutiliza el
+   ámbar ya usado en las gráficas del panel (--amber); 'limitado' reutiliza el
+   par rojo/on-rojo de Material 3 que ya definen ambos temas (--red /
+   --red-dark), igual que .pm-estado--critico usa --red-dim/--red-text, para
+   que el badge más grave de los tres sea también el más opaco/sólido. */
+.pm-estado--advertencia { background: var(--amber-dim, rgba(246,195,82,.18)); color: var(--amber); }
+.pm-estado--limitado    { background: var(--red); color: var(--red-dark); }
+
+/* FASE 11B (parte 2) — pedido sugerido dentro de la tarjeta de producto. */
+.prd-card__pedido {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 8px; flex-wrap: wrap;
+    margin: 2px 0 8px; padding: 6px 10px;
+    border-radius: var(--r-md); background: var(--accent-dim);
+    font-size: 0.78rem; color: var(--txt-primary);
+}
+.prd-card__pedido b { color: var(--accent); font-family: 'IBM Plex Mono', monospace; }
+.prd-card__pedido-btn {
+    font-size: 0.7rem; font-weight: 600; white-space: nowrap;
+    padding: 4px 10px; border: none; border-radius: 999px;
+    background: var(--accent); color: var(--bg); cursor: pointer;
+}
+.prd-card__pedido--sin-datos { background: transparent; padding-left: 0; color: var(--txt-muted); font-style: italic; }
+
 .prd-area-chip__val {
     font-family: 'IBM Plex Mono', monospace;
     font-size: 0.92rem; font-weight: 700;

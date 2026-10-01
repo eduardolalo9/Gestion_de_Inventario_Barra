@@ -45,6 +45,7 @@ const PRUEBAS = [
     'prueba-fase10b-ui-navegador.js',   // FASE 10B — Inventario Físico para el pulgar: medidas, separación y contraste
     'prueba-fisico-vs-sistema-navegador.js', // FASE 11B — botón por permiso, tabla, búsqueda y chip de filtro
     'prueba-hotfix-4.22-navegador.js',  // HOTFIX 4.22 — recorte de movimientos y aviso de cuota real
+    'prueba-fase11b-parte2-navegador.js', // FASE 11B (parte 2) — pedido sugerido y niveles de alerta
 ];
 
 function esperarServidor(intentos) {
