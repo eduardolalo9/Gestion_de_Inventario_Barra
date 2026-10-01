@@ -136,7 +136,11 @@
                 html += dato('Recuento',
                     escapeHtml(inv.fechaRecuento)
                     + (_cl && typeof etiquetaSemana === 'function' ? ' · ' + escapeHtml(etiquetaSemana(inv.fechaRecuento)) : '')
-                    + (_cl && _cl.cierraSemana ? ' · <span style="color:var(--green,#4ade80);font-weight:700;">cierra semana</span>' : ''));
+                    + (_cl && _cl.cierraSemana ? ' · <span style="color:var(--green,#4ade80);font-weight:700;">cierra semana</span>' : '')
+                    // FASE 13 — el corte de fin de mes es una condición aparte
+                    // (puede darse sola o junto con "cierra semana"), así que
+                    // lleva su propio indicador en vez de pisar al anterior.
+                    + (_cl && _cl.esCorteMensual ? ' · <span style="color:#7c3aed;font-weight:700;">corte de mes</span>' : ''));
             } else {
                 // H-40 (hotfix 4.9): inventarios anteriores a R7/FASE 3 no tienen
                 // fechaRecuento y, tal cual, nunca se podrán contabilizar.
@@ -253,12 +257,22 @@
                     ? '<button type="button" class="bt ' + (principal ? 'bt--primario' : 'bt--secundario') + '" onclick="abrirModalNuevoInventario()">➕ Crear el siguiente inventario</button>'
                     : '';
             };
+            // FASE 13 — un domingo-fin-de-mes genera dos destinos a la vez;
+            // esto arma la frase ("stock inicial de la semana X" / "corte
+            // contable del mes X" / las dos) una sola vez para los tres
+            // estados (hecho, pendiente, bloqueado) de abajo.
+            var destinos = function(semanaId, mesId) {
+                var partes = [];
+                if (semanaId) partes.push('el stock inicial de la ' + escapeHtml(semana(semanaId)));
+                if (mesId)    partes.push('el corte contable del mes ' + escapeHtml(mesId));
+                return partes.length ? partes.join(' y ') : 'el stock inicial de la ' + escapeHtml(semana(null));
+            };
             var h = '';
 
             if (ev.hecho) {
                 h += '<div class="pm-paso pm-paso--hecho" role="status">'
                    + '<div class="pm-paso__titulo">📘 Contabilizado</div>'
-                   + '<div class="pm-paso__txt">Su resultado ya es el stock inicial de la ' + escapeHtml(semana(ev.semanaDestino))
+                   + '<div class="pm-paso__txt">Su resultado ya es ' + destinos(ev.semanaDestino, ev.mesDestino)
                    + (inv.contabilizadoEn ? ' · ' + escapeHtml(new Date(inv.contabilizadoEn).toLocaleDateString('es-MX')) : '')
                    + '. Queda de solo lectura.</div>';
                 if (puedeCrear) h += '<div class="pm-paso__acc">' + btnCrear(true) + '</div>';
@@ -271,13 +285,16 @@
                    + '<div class="pm-paso__titulo">📘 Siguiente paso: contabilizar</div>'
                    + '<div class="pm-paso__txt">'
                    + (puedeContab
-                        ? 'El resultado físico de este inventario pasará a ser el stock inicial de la '
-                          + escapeHtml(semana(ev.semanaDestino)) + '. <b>Es irreversible</b>: el inicial no se corrige ni se deshace.'
-                        : 'Pendiente de que administración lo contabilice como stock inicial de la '
-                          + escapeHtml(semana(ev.semanaDestino)) + '.')
+                        ? 'El resultado físico de este inventario pasará a ser ' + destinos(ev.semanaDestino, ev.mesId)
+                          + '. <b>Es irreversible</b>: no se corrige ni se deshace.'
+                        : 'Pendiente de que administración lo contabilice como ' + destinos(ev.semanaDestino, ev.mesId) + '.')
                    + '</div>';
                 var acc = '';
-                if (puedeContab) acc += '<button type="button" class="bt bt--primario" data-inv-accion="contabilizar">📘 Contabilizar</button>';
+                if (puedeContab) {
+                    var etiquetaBtn = (ev.haceSemanal && ev.haceMensual) ? '📘 Contabilizar (semana + mes)'
+                                     : (ev.haceMensual ? '📅 Contabilizar cierre de mes' : '📘 Contabilizar');
+                    acc += '<button type="button" class="bt bt--primario" data-inv-accion="contabilizar">' + etiquetaBtn + '</button>';
+                }
                 acc += btnCrear(false);
                 if (acc) h += '<div class="pm-paso__acc">' + acc + '</div>';
                 h += '</div>';
@@ -360,6 +377,14 @@
                     if (_contab && inv.semanaDestino) {
                         html += '<p style="font-size:0.7rem;color:#2563eb;font-weight:600;">📘 Inicial de la semana '
                              +  escapeHtml(inv.semanaDestino) + '</p>';
+                    }
+                    // FASE 13 — el corte mensual es un segundo destino,
+                    // independiente del semanal: se muestra aparte para que
+                    // un domingo-fin-de-mes no esconda que también generó un
+                    // corte contable.
+                    if (_contab && inv.mesDestino) {
+                        html += '<p style="font-size:0.7rem;color:#7c3aed;font-weight:600;">📅 Corte mensual '
+                             +  escapeHtml(inv.mesDestino) + '</p>';
                     }
                     html += '</div>';
                 });
@@ -540,11 +565,18 @@
             // adivinar, y aquí las tres razones posibles son muy distintas
             // entre sí.
             if (meta.estado === 'CONTABILIZADO') {
+                // FASE 13 — un domingo-fin-de-mes deja los dos destinos
+                // escritos en la cabecera (semanaDestino y mesDestino); se
+                // muestran los que de verdad existan, en vez de asumir que
+                // siempre hay una semana.
+                var _destPartes = [];
+                if (meta.semanaDestino) _destPartes.push('el stock inicial de la semana ' + escapeHtml(meta.semanaDestino));
+                if (meta.mesDestino)    _destPartes.push('el corte contable del mes ' + escapeHtml(meta.mesDestino));
                 html += '<div style="padding:9px 12px;border-radius:var(--r-md);background:#eff6ff;'
                      +  'border-left:3px solid #2563eb;margin-bottom:10px;">'
                      +  '<p style="font-size:0.75rem;font-weight:700;color:#1d4ed8;margin:0;">📘 Contabilizado</p>'
                      +  '<p style="font-size:0.7rem;color:var(--txt-muted);margin:2px 0 0;">'
-                     +  'Su resultado es el stock inicial de la semana ' + escapeHtml(meta.semanaDestino || '—')
+                     +  'Su resultado es ' + (_destPartes.length ? _destPartes.join(' y ') : '—')
                      +  (meta.contabilizadoEn ? ' · ' + new Date(meta.contabilizadoEn).toLocaleDateString('es-MX') : '')
                      +  '</p></div>';
             } else if (hasPermission('inventory.post')) {

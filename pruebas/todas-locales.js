@@ -58,6 +58,7 @@ const PRUEBAS = [
     'prueba-fisico-vs-sistema.js',   // FASE 11B (parte 1) — comparación físico vs. sistema
     'prueba-hotfix-4.22-movimientos.js', // HOTFIX 4.22 — recorte de movimientos y aviso de cuota
     'prueba-fase11b-parte2.js',      // FASE 11B (parte 2) — pedido sugerido y niveles de alerta
+    'prueba-fase13-contabilizar-fin-de-mes.js', // FASE 13 — contabilizar el corte de fin de mes
 ];
 
 let fallaron = [];

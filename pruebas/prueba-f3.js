@@ -104,9 +104,15 @@ if (contab) {
         /err\.code === 'permission-denied'/.test(contab) &&
         /_verificarInicialExistente\(inicial\.semanaId, inventoryId\)/.test(contab),
         'un rechazo puede significar "ya estaba hecho", no siempre un fallo');
+    // FASE 13 — contabilizarInventario() ahora puede escribir el inicial
+    // semanal y/o el corte mensual en el mismo clic, así que la
+    // reconciliación tras un permission-denied se repite por destino
+    // (postSemana/postMes en vez de un único post) sin perder el patrón que
+    // esta prueba protege: "ya lo hice yo" (mismoOrigen) vs "lo hizo otro
+    // inventario" (!mismoOrigen), para cada destino.
     chk('★ Distingue "ya lo hice yo" de "lo hizo otro inventario"',
-        /post\.existe && post\.mismoOrigen/.test(contab) &&
-        /post\.existe && !post\.mismoOrigen/.test(contab));
+        /post(Semana|Mes)\.existe && post\1\.mismoOrigen/.test(contab) &&
+        /post(Semana|Mes)\.existe && !post\1\.mismoOrigen/.test(contab));
     chk('La confirmación avisa de que el inicial es irreversible',
         /INMUTABLE/.test(contab),
         'decisión N-2: no se puede corregir ni deshacer');
@@ -189,8 +195,11 @@ chk('★ CONTABILIZADO solo se alcanza desde CERRADO',
 chk('★ Un inventario CONTABILIZADO queda tan sellado como uno CERRADO',
     /resource\.data\.estado != 'CERRADO' && resource\.data\.estado != 'CONTABILIZADO'/.test(reglas),
     'la regla anterior lo habría dejado abierto: CONTABILIZADO no es CERRADO');
-chk('La transición solo admite cuatro campos',
-    /hasOnly\(\['estado','contabilizadoEn','contabilizadoPor','semanaDestino'\]\)/.test(reglas));
+// FASE 13 amplió la lista blanca a cinco campos: 'mesDestino' se suma para
+// que un corte de fin de mes (puro o combinado con el cierre semanal) pueda
+// escribirse en la misma transición, sin abrir la puerta a ningún otro campo.
+chk('La transición admite los campos exactos, incluido mesDestino (FASE 13)',
+    /hasOnly\(\['estado','contabilizadoEn','contabilizadoPor','semanaDestino','mesDestino'\]\)/.test(reglas));
 chk('★ El snapshot tampoco se amplía tras contabilizar',
     /estado != 'CERRADO' &&[\s\S]{0,300}?estado != 'CONTABILIZADO';/.test(reglas),
     'el agujero H-2 se reabría justo cuando el inventario pasa a ser la base del inicial');
