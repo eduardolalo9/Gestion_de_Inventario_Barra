@@ -675,6 +675,60 @@ function _idbPruneSyncedQueue() {
             return total;
         }
 
+        // HOTFIX 4.22 — qué claves son las que de verdad pesan. El aviso de
+        // cuota solía decir "exporta y limpia historiales" sin decir CUÁL:
+        // apuntaba al botón de Historial de Inventarios, que HOTFIX 4.20 ya
+        // había dejado en cero, mientras la clave real (compras/movimientos,
+        // ver _movimientosRecortar más abajo) seguía creciendo sin que nadie
+        // lo supiera. Ahora el aviso nombra la clave, con su peso real.
+        function _topStorageKeys(n) {
+            var items = [];
+            try {
+                for (var i = 0; i < localStorage.length; i++) {
+                    var key = localStorage.key(i);
+                    if (key.indexOf('inventarioApp_') !== 0) continue; // solo lo propio de esta app
+                    var val = localStorage.getItem(key) || '';
+                    items.push({ nombre: key.slice('inventarioApp_'.length), bytes: (key.length + val.length) * 2 });
+                }
+            } catch (_) {}
+            items.sort(function(a, b) { return b.bytes - a.bytes; });
+            return items.slice(0, n);
+        }
+
+        // HOTFIX 4.22 — movimientos es una caché DERIVADA, no una fuente de
+        // verdad: _asientosDesdeCompra() (js/88-compras.js) la reconstruye por
+        // completo desde `compras` en cualquier momento, y
+        // existenciaEntradasSemana() (js/47-existencia.js) solo lee la semana
+        // en curso. Una entrada de una semana ya cerrada no la vuelve a usar
+        // nadie — es peso muerto que, sin este recorte, creció sin límite
+        // desde FASE 4 (a diferencia de `inventories`/`orders`, que sí tienen
+        // su botón de "Eliminar historial"). Esto —no el historial de
+        // inventarios, que HOTFIX 4.20 ya dejó en cero— es lo que de verdad
+        // llenaba el ~5 MB de localStorage.
+        //
+        // Se conservan la semana en curso y la anterior (margen para relojes
+        // de dispositivos ligeramente desincronizados). `compras`, la fuente
+        // de verdad real, nunca se toca aquí — de ahí se puede reconstruir
+        // `movimientos` completo si algún día hiciera falta.
+        function _movimientosRecortar() {
+            if (typeof movimientos === 'undefined' || !Array.isArray(movimientos) || !movimientos.length) return;
+            if (typeof semanaId !== 'function') return; // defensivo: sin esta función no hay corte seguro
+            var hoy = semanaId(new Date());
+            if (!hoy) return;
+            var corte = (typeof semanaAnterior === 'function') ? semanaAnterior(hoy) : hoy;
+            if (!corte) corte = hoy;
+            var antes = movimientos.length;
+            movimientos = movimientos.filter(function(m) {
+                // Defensivo: una entrada sin semanaId reconocible nunca se descarta
+                // (mejor conservar de más que perder algo que no sabemos fechar).
+                return !m || !m.semanaId || m.semanaId >= corte;
+            });
+            if (movimientos.length !== antes) {
+                console.info('[LS] movimientos recortado: ' + antes + ' → ' + movimientos.length +
+                             ' (se conservan semana en curso y anterior; `compras` queda intacto).');
+            }
+        }
+
         // Guard de reentrada para _applyCloudData — previene que dos snapshots simultáneos
         // la ejecuten en paralelo y dejen el estado inconsistente (FIX 7).
         // BUG-H9 FIX: el guard se resetea en finally para no quedar bloqueado ante excepciones.
@@ -688,6 +742,12 @@ function _idbPruneSyncedQueue() {
          *   cloud → _applyCloudData → saveToLocalStorage → syncToCloud → cloud… (FIX 8)
          */
         function saveToLocalStorage(opts) {
+            // HOTFIX 4.22 — se recorta ANTES de guardar, para que tanto IDB
+            // como localStorage reciban ya la versión liviana (ver
+            // _movimientosRecortar más arriba: es una caché derivada, segura
+            // de recortar, nunca la fuente de verdad).
+            _movimientosRecortar();
+
             // ══════════════════════════════════════════════════════════════════
             // CORRECCIÓN 1: IDB como almacenamiento PRINCIPAL.
             // _idbSaveAll() se dispara PRIMERO (asíncrono, no bloquea).
@@ -765,11 +825,23 @@ function _idbPruneSyncedQueue() {
             entries.push(['inventarioApp_lastModified', String(nowMs)]);
 
             // Advertir si nos acercamos al límite (solo una vez por sesión)
+            //
+            // HOTFIX 4.22 — antes decía "Exporta y limpia historiales" sin
+            // decir cuál: mandaba al botón de Historial de Inventarios aunque
+            // la clave pesada fuera otra (ver _movimientosRecortar). Ahora
+            // nombra la(s) clave(s) real(es) y su peso, y aclara que no hay
+            // riesgo de pérdida porque esto es solo el respaldo local
+            // secundario — lo que de verdad importa ya está en IDB y la nube.
             if (!_lsQuotaWarned) {
                 const used = estimateStorageUsed();
                 if (used > LS_WARN_BYTES) {
                     _lsQuotaWarned = true;
-                    showNotification('⚠️ Almacenamiento al ' + Math.round(used / (5*1024*1024) * 100) + '%. Exporta y limpia historiales.');
+                    const top = _topStorageKeys(2)
+                        .map(function(x) { return x.nombre + ': ' + Math.round(x.bytes / 1024) + ' KB'; })
+                        .join(', ');
+                    showNotification('⚠️ Almacenamiento local al ' + Math.round(used / (5*1024*1024) * 100) + '%'
+                        + (top ? ' (' + top + ')' : '') + '. Tus datos están a salvo (nube + respaldo interno);'
+                        + ' avisa para liberar espacio pronto.');
                 }
             }
 
