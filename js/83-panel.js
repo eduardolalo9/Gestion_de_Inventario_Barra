@@ -176,10 +176,11 @@
             return h;
         }
 
-        // ── Comparación de las dos cifras (semana de observación, FASE 8) ────
-        // Mientras EXISTENCIA_FUENTE_OFICIAL_ACTIVA siga en false, esta tarjeta
-        // es el punto de la app donde se ve si las dos formas de contar lo
-        // mismo coinciden. No decide nada: informa para poder decidir.
+        // ── Comparación de las dos cifras (FASE 8) ───────────────────────────
+        // Con la fuente oficial ya encendida (1-oct-2026), esta tarjeta sigue
+        // siendo el punto donde se ve si operativa y oficial coinciden —
+        // ahora para confirmar que la cifra que YA decide es razonable, no
+        // para decidir si encenderla.
         function _panelComparacion() {
             _panelCargarInicial();
             var est = _panelInicialEstado();
@@ -202,8 +203,10 @@
 
             var c = existenciaComparacion();
             h += '<div class="pm-card__sub">Operativa (conteo continuo) contra oficial (inicial + compras'
-               + (Object.keys(existenciaVentasSemana()).length ? ' − ventas' : ', aún sin ventas') + '). '
-               + 'Manda la operativa hasta que confirmes el cambio.</div>';
+               + (Object.keys(existenciaVentasSemana()).length ? ' − consumo teórico' : ', aún sin ventas') + '). '
+               + (EXISTENCIA_FUENTE_OFICIAL_ACTIVA
+                  ? 'La oficial ya es la que decide "bajo mínimo" y el catálogo.'
+                  : 'Manda la operativa hasta que confirmes el cambio.') + '</div>';
             h += '<div class="pm-card__fila"><span>Coinciden</span><b>' + c.coinciden + ' de ' + c.comparados + '</b></div>';
             h += '<div class="pm-card__fila"><span>Difieren</span><b'
                + (c.difieren ? ' class="pm-dif"' : '') + '>' + c.difieren + '</b></div>';
@@ -337,11 +340,13 @@
                 var dif = Math.round((ofic.valor - st) * 1000) / 1000;
                 h += '<div class="pm-ficha__sec">Las dos cifras</div>';
                 h += '<div class="pm-card__fila"><span>Operativa <small>(conteo por área)</small></span><b>' + _panelNum(st) + '</b></div>';
-                h += '<div class="pm-card__fila"><span>Oficial <small>(inicial + entradas, sin ventas)</small></span><b>' + _panelNum(ofic.valor) + '</b></div>';
+                h += '<div class="pm-card__fila"><span>Oficial <small>(inicial + entradas − consumo teórico)</small></span><b>' + _panelNum(ofic.valor) + '</b></div>';
                 h += '<div class="pm-card__fila"><span>Diferencia</span><b' + (dif ? ' class="pm-dif"' : '') + '>'
                    + (dif > 0 ? '+' : '') + _panelNum(dif) + '</b></div>';
                 if (!EXISTENCIA_FUENTE_OFICIAL_ACTIVA) {
                     h += '<div class="pm-card__sub">Por ahora manda la operativa. La oficial se muestra para comprobarla antes de cambiar la fuente.</div>';
+                } else if (ofic.origen === 'oficial') {
+                    h += '<div class="pm-card__sub">La oficial ya es la que decide "bajo mínimo" y el catálogo para este producto.</div>';
                 }
             } else {
                 h += '<div class="pm-card__sub">Sin inicial contabilizado para este producto esta semana: no hay arrastre con el que comparar.</div>';

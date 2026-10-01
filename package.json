@@ -28,6 +28,8 @@
     "test:ct": "node pruebas/prueba-contabilizar-conteo.js",
     "test:ctnav": "node pruebas/prueba-contabilizar-navegador.js",
     "test:f12": "node pruebas/prueba-fase12.js",
+    "test:fvs": "node pruebas/prueba-fisico-vs-sistema.js",
+    "test:fvsnav": "node pruebas/prueba-fisico-vs-sistema-navegador.js",
     "test:folio": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-folio-integracion.js && node pruebas/prueba-arranque-integracion.js && node pruebas/prueba-ciclo-completo-integracion.js && node pruebas/prueba-reinicio-integracion.js\"",
     "test:arranque": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-arranque-integracion.js && node pruebas/prueba-ciclo-completo-integracion.js && node pruebas/prueba-reinicio-integracion.js\"",
     "test:ciclo": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-ciclo-completo-integracion.js && node pruebas/prueba-reinicio-integracion.js\"",

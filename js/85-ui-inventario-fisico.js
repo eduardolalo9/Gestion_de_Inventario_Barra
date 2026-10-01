@@ -14,6 +14,8 @@
             if (auditoriaView === 'reconteo')           return renderReconteo();
             if (auditoriaView === 'reconteo_historial') return renderReconteoHistorial();
             if (auditoriaView === 'reconteo_detalle')   return renderReconteoDetalle();
+            // FASE 11B — FÍSICO VS SISTEMA (js/49-fisico-vs-sistema.js)
+            if (auditoriaView === 'fisico_vs_sistema')  return renderFisicoVsSistema();
             // ── PANTALLA DE SELECCIÓN DE ÁREAS (default) ───────────────────────
             return renderAuditoriaSeleccion();
         }
@@ -182,6 +184,14 @@
             }
             if (hasPermission('inventory.history')) {
                 acc += _ifBtn('bt--secundario', '📜 Historial', _IF_ABRIR_HISTORIAL);
+            }
+            // FASE 11B — rompe el conteo ciego (muestra el consolidado de
+            // todos los que están contando), así que usa el mismo permiso
+            // que ya protege "ver todos los conteos". Solo mientras el
+            // inventario sigue SINCRONIZADO: cerrado, es cosa del Historial.
+            if (hasPermission('inventory.viewAll') && !esCerrado) {
+                acc += _ifBtn('bt--secundario', '📊 Físico vs Sistema',
+                    'onclick="auditoriaView=\'fisico_vs_sistema\'; renderTab();"');
             }
             if (acc) html += '<div class="bt-pila">' + acc + '</div>';
 
@@ -357,6 +367,124 @@
                     html += '<button type="button" class="bt bt--secundario" onclick="historialVerMas()">Ver inventarios más antiguos</button>';
                 }
             }
+            html += '</div></div>';
+            return html;
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        //  FASE 11B — FÍSICO VS SISTEMA
+        //  La lógica vive en js/49-fisico-vs-sistema.js (capa pura); aquí
+        //  solo se pinta y se conecta a la barra de búsqueda unificada
+        //  (06-busqueda-ui.js), igual que Historial y Reconteos.
+        // ══════════════════════════════════════════════════════════════════
+
+        function _fvsNum(n) {
+            return (typeof n === 'number')
+                ? n.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                : '—';
+        }
+        function _fvsMoneda(n) {
+            if (typeof n !== 'number') return '—';
+            // El signo va ANTES del símbolo ($-250.00 se lee como un precio
+            // raro; -$250.00 se lee como lo que es: un faltante en dinero).
+            var neg = n < 0;
+            return (neg ? '-' : '') + '$' + Math.abs(n).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+        function _chipsFvs() {
+            return [{ id: 'solo_dif', etiqueta: 'Solo con diferencias' }];
+        }
+
+        /** Aplica el chip "solo con diferencias" sobre las filas ya calculadas. */
+        function _buscarFvs(datos) {
+            var soloDif = BusquedaUI.filtroActivo('fvs', 'solo_dif');
+            var tol = (typeof EXISTENCIA_TOLERANCIA === 'number') ? EXISTENCIA_TOLERANCIA : 0.001;
+            return _motorFvs.buscar(datos.filas, _fvsSearchTerm, {
+                filtro: soloDif
+                    ? function(f) { return f.estado === 'contado' && Math.abs(f.diferencia) > tol; }
+                    : null
+            });
+        }
+
+        function _renderFvsResultados() {
+            var datos = fisicoVsSistemaCalcular();
+            if (!datos) {
+                return {
+                    html: '<p class="pm-nota" style="margin:0;font-size:.85rem;">No hay un Inventario Físico abierto (SINCRONIZADO) para comparar.</p>',
+                    coincidencias: 0, total: 0
+                };
+            }
+            var tol = (typeof EXISTENCIA_TOLERANCIA === 'number') ? EXISTENCIA_TOLERANCIA : 0.001;
+            var r = _buscarFvs(datos);
+            var filas = r.items;
+            var lim = BusquedaUI.limite('fvs');
+            var html = '';
+
+            html += '<dl class="if-datos" style="margin-bottom:10px;">';
+            html += '<div class="if-dato"><dt>Comparación</dt><dd>' + datos.contados + ' contados · '
+                 +  datos.pendientes + ' pendientes de ' + datos.totalProductos + '</dd></div>';
+            var netoColor = datos.totalNeto < 0 ? '#ef4444' : (datos.totalNeto > 0 ? '#16a34a' : 'var(--txt-primary)');
+            html += '<div class="if-dato"><dt>Neto en dinero</dt><dd style="color:' + netoColor + ';font-weight:700;">'
+                 +  _fvsMoneda(datos.totalNeto) + '</dd></div>';
+            html += '</dl>';
+
+            if (datos.sinInicial > 0) {
+                html += '<div class="pm-paso pm-paso--aviso" role="status" style="margin-bottom:10px;">'
+                     +  '<div class="pm-paso__txt">ℹ️ ' + datos.sinInicial + ' producto(s) todavía comparan contra el '
+                     +  'stock operativo: no hay inicial contabilizado para ellos esta semana. Al cerrar y contabilizar '
+                     +  'este inventario, "Sistema" pasa a ser inicial + compras − consumo teórico para ellos.</div></div>';
+            }
+
+            if (filas.length === 0) {
+                return { html: html + BusquedaUI.vacio('fvs', 'productos'), coincidencias: 0, total: r.total };
+            }
+
+            html += BusquedaUI.resumen('fvs', r.coincidencias, r.total, 'producto', 'productos');
+            html += '<div style="margin-top:8px;">';
+            filas.slice(0, lim).forEach(function(f) {
+                html += '<div data-sbx-item style="padding:10px 12px;border:1px solid var(--border-soft);border-radius:var(--r-md);margin-bottom:8px;">';
+                html += '<div style="font-weight:700;font-size:.82rem;">' + resaltarBusqueda(f.nombre, _fvsSearchTerm) + '</div>';
+                if (f.estado === 'pendiente') {
+                    html += '<div style="font-size:.74rem;color:var(--txt-muted);margin-top:2px;">⏳ Sin contar todavía · '
+                         +  'Sistema: ' + _fvsNum(f.sistema) + '</div>';
+                } else {
+                    var color = f.diferencia < -tol ? '#ef4444' : (f.diferencia > tol ? '#16a34a' : 'var(--txt-muted)');
+                    var etiqueta = f.diferencia < -tol ? 'Faltante' : (f.diferencia > tol ? 'Sobrante' : 'Coincide');
+                    html += '<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:.76rem;color:var(--txt-muted);margin-top:2px;">'
+                         +  '<span>Físico: <b style="color:var(--txt-primary);">' + _fvsNum(f.fisico) + '</b></span>'
+                         +  '<span>Sistema: <b style="color:var(--txt-primary);">' + _fvsNum(f.sistema) + '</b></span>'
+                         +  '<span style="color:' + color + ';font-weight:700;">' + etiqueta + ': '
+                         +  (f.diferencia > 0 ? '+' : '') + _fvsNum(f.diferencia) + '</span>'
+                         +  '<span style="color:' + color + ';">' + _fvsMoneda(f.neto) + '</span>'
+                         +  '</div>';
+                }
+                html += '</div>';
+            });
+            html += '</div>';
+            html += BusquedaUI.centinela('fvs', filas.length - lim);
+            return { html: html, coincidencias: r.coincidencias, total: r.total };
+        }
+
+        function renderFisicoVsSistema() {
+            if (!hasPermission('inventory.viewAll')) {
+                return '<div class="audit-screen"><div class="if-card"><p class="pm-nota" style="margin:0;">'
+                     +  'No tienes permiso para ver esta comparación.</p></div></div>';
+            }
+            var html = '<div class="audit-screen"><div class="if-card">';
+            html += '<div class="flex items-center justify-between mb-3">';
+            html += '<p class="audit-header-title">📊 Físico vs Sistema</p>';
+            html += '<button onclick="auditoriaView=\'selection\'; _fvsSearchTerm=\'\'; renderTab();" '
+                 +  'style="padding:5px 10px;border-radius:var(--r-md);background:var(--bg-soft);font-size:0.7rem;font-weight:600;cursor:pointer;">'
+                 +  '← Volver</button>';
+            html += '</div>';
+            html += '<p class="pm-nota" style="margin:0 0 10px;">Suma lo contado en todas las áreas del inventario '
+                 +  'abierto y lo compara, producto por producto, contra lo que el sistema cree que hay.</p>';
+            html += BusquedaUI.barra('fvs', {
+                placeholder: 'Buscar producto o código…',
+                etiqueta: 'Buscar en Físico vs Sistema',
+                sticky: true
+            });
+            html += BusquedaUI.chips('fvs', _chipsFvs());
+            html += BusquedaUI.region('fvs', _renderFvsResultados().html);
             html += '</div></div>';
             return html;
         }

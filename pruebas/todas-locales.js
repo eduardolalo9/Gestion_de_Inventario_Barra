@@ -55,6 +55,7 @@ const PRUEBAS = [
     'prueba-fase10.js',              // FASE 10 — ventas del POS: permisos, reglas, parser
     'prueba-fase11a.js',             // FASE 11A — costeo por unidad y consumo teórico
     'prueba-fase12.js',              // FASE 12 — folio #1001, anti-solapamiento y consistencia entre dispositivos
+    'prueba-fisico-vs-sistema.js',   // FASE 11B (parte 1) — comparación físico vs. sistema
 ];
 
 let fallaron = [];

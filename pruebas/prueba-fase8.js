@@ -126,14 +126,18 @@ if (api) {
         api.oficial(P_A).valor === 0.3, String(api.oficial(P_A).valor));
 
     // ── El interruptor ──────────────────────────────────────────────────────
+    // FASE 11B: el reposo real de la app ya es "encendida" (ver 47-existencia.js),
+    // pero el interruptor en sí se sigue probando en los dos sentidos: apagarlo
+    // debe regresar a la operativa tan bien como encenderlo cambia a la oficial.
     ctx.movimientos = [];
     api.setInicial({ semana: SEM, estado: 'ok', saldos: { A: 12 }, origen: null });
-    chk('★ Con la bandera apagada, la app sigue usando la cifra operativa',
+    api.setBandera(false);
+    chk('★ Con la bandera apagada, la app usa la cifra operativa',
         api.bandera() === false && api.mostrada(P_A) === 5, String(api.mostrada(P_A)));
     api.setBandera(true);
     chk('★ Encender la bandera cambia la fuente de toda la app',
         api.mostrada(P_A) === 16 - 4, String(api.mostrada(P_A)));   // 12 + 0 compras
-    api.setBandera(false);
+    // Se deja encendida: es el estado real de la app desde el 1-oct-2026.
 
     // ── Comparación de la semana de observación ─────────────────────────────
     ctx.products = [P_A, P_B, P_N];
@@ -242,8 +246,11 @@ chk('El conflicto entre bartenders viaja al reporte',
     /hayConflicto/.test(repo));
 
 // ═══ 4 · Cableado ══════════════════════════════════════════════════════════
-chk('★ La fuente oficial nace apagada (semana de observación)',
-    /var EXISTENCIA_FUENTE_OFICIAL_ACTIVA = false;/.test(existenciaSrc));
+// FASE 11B (1-oct-2026): Eduardo encendió la fuente oficial. Ver la nota de
+// cabecera de 47-existencia.js — hasta que exista un inicial contabilizado,
+// esto no mueve ningún número (existenciaOficial cae a operativo para todos).
+chk('★ La fuente oficial está encendida (decisión de Eduardo, FASE 11B)',
+    /var EXISTENCIA_FUENTE_OFICIAL_ACTIVA = true;/.test(existenciaSrc));
 chk('index.html carga 47-existencia.js antes de 50-roles-permisos.js',
     html.indexOf('js/47-existencia.js') > 0 &&
     html.indexOf('js/47-existencia.js') < html.indexOf('js/50-roles-permisos.js') &&

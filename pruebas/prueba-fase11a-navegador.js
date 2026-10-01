@@ -114,16 +114,22 @@ const PUERTO = process.env.PUERTO || '8080';
   chk('★ Ventas de OTRA semana no se restan a la existencia de esta (devuelve {})',
       Object.keys(otraSemana).length === 0, JSON.stringify(otraSemana));
 
-  // ── La app todavía no decide con esa cifra ──────────────────────────────
+  // ── Sin inicial contabilizado, la cifra oficial cae en la operativa ─────
+  // Decisión de Eduardo (FASE 11B, 1-oct-2026): EXISTENCIA_FUENTE_OFICIAL_ACTIVA
+  // ya quedó encendida por defecto. Esto NO cambia el resultado de esta
+  // comprobación: sigue sin existir un inventariosIniciales/{semana} para este
+  // producto, así que existenciaOficial() cae al mismo respaldo operativo de
+  // siempre (origen 'operativo_no_reconciliado'). Lo que prueba este bloque es
+  // justo esa red de seguridad, con la bandera en su valor real de hoy.
   const oficialApagada = await p.evaluate(() => {
     ventasSemanaId = semanaId(new Date()); consumoTeoricoInvalidar();
     const prod = products.find(x => x.id === '1180001');
     prod.stockByArea = { almacen: 10 };
-    return { mostrada: existenciaMostrada(prod), operativa: existenciaOperativa(prod) };
+    return { mostrada: existenciaMostrada(prod), operativa: existenciaOperativa(prod), bandera: EXISTENCIA_FUENTE_OFICIAL_ACTIVA };
   });
-  chk('★ Con la fuente oficial apagada, la app sigue mostrando la cifra operativa de siempre',
-      oficialApagada.mostrada === oficialApagada.operativa,
-      oficialApagada.mostrada + ' vs ' + oficialApagada.operativa);
+  chk('★ Sin inicial contabilizado, la app sigue mostrando la cifra operativa de siempre (aunque la fuente oficial ya esté encendida)',
+      oficialApagada.mostrada === oficialApagada.operativa && oficialApagada.bandera === true,
+      oficialApagada.mostrada + ' vs ' + oficialApagada.operativa + ' · bandera=' + oficialApagada.bandera);
 
   // ── Pantalla de verificación ────────────────────────────────────────────
   await p.evaluate(() => { activeTab = 'ventas'; ventasImportView = 'lista'; renderTab(); });
@@ -133,8 +139,20 @@ const PUERTO = process.env.PUERTO || '8080';
       /Consumo teórico/.test(pantalla) && /1800 ANIEJO/.test(pantalla), pantalla.slice(0, 300));
   chk('…avisa de los productos vendidos sin receta', /sin receta/.test(pantalla), '');
   chk('…avisa del insumo que no está en el catálogo', /no están en el catálogo/.test(pantalla), '');
-  chk('…y dice claramente que la app todavía no decide con esa cifra',
-      /todavía NO decide con esta cifra/.test(pantalla), '');
+  chk('★ Con la fuente oficial encendida (valor real de hoy), avisa que ya decide en cuanto haya inicial',
+      /fuente oficial ya está encendida/.test(pantalla), pantalla.slice(0, 400));
+
+  // ── Y con la bandera apagada, sigue mostrando el aviso original ─────────
+  // (cubre la otra mitad del texto condicional de js/93-ventas.js sin
+  // depender de cuál sea el default de hoy)
+  await p.evaluate(() => { EXISTENCIA_FUENTE_OFICIAL_ACTIVA = false; renderTab(); });
+  await p.waitForTimeout(150);
+  const pantallaApagada = await p.evaluate(() => document.getElementById('tabContent').innerText);
+  chk('…y con la bandera apagada, dice claramente que la app todavía no decide con esa cifra',
+      /todavía NO decide con esta cifra/.test(pantallaApagada), pantallaApagada.slice(0, 400));
+  // La restauramos a su valor real de hoy: el resto de la prueba, y la app de
+  // verdad, corren con la fuente oficial encendida.
+  await p.evaluate(() => { EXISTENCIA_FUENTE_OFICIAL_ACTIVA = true; });
 
   chk('Sin errores de JS en toda la prueba', errs.length === 0, errs.join(' | '));
   await nav.close();

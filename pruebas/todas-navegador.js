@@ -43,6 +43,7 @@ const PRUEBAS = [
     'prueba-fase10-navegador.js',       // FASE 10 — ventas del POS: parseo, semana, vista previa, permisos
     'prueba-fase11a-navegador.js',      // FASE 11A — costeo por unidad, consumo teórico y enchufe en existencia
     'prueba-fase10b-ui-navegador.js',   // FASE 10B — Inventario Físico para el pulgar: medidas, separación y contraste
+    'prueba-fisico-vs-sistema-navegador.js', // FASE 11B — botón por permiso, tabla, búsqueda y chip de filtro
 ];
 
 function esperarServidor(intentos) {

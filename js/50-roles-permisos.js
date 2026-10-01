@@ -957,6 +957,9 @@
         let _historiaSearchTerm = '';
         let _pedSearchTimer     = null;
         let _histSearchTimer    = null;
+        // FASE 11B — búsqueda dentro de "Físico vs Sistema". Mismo patrón:
+        // transitoria, se reinicia en cada carga de la app.
+        let _fvsSearchTerm     = '';
 
         // ETAPA 14.1: isAdmin() conserva firma y contrato ("¿privilegios
         // administrativos totales?") — ya NO compara currentUserRole
