@@ -47,6 +47,7 @@ const PRUEBAS = [
     'prueba-hotfix-4.22-navegador.js',  // HOTFIX 4.22 — recorte de movimientos y aviso de cuota real
     'prueba-fase11b-parte2-navegador.js', // FASE 11B (parte 2) — pedido sugerido y niveles de alerta
     'prueba-fase13-navegador.js',       // FASE 13 — contabilizar el corte de fin de mes
+    'prueba-redis-r1-navegador.js',     // REDISEÑO R1 — la app se pinta correcta sin Tailwind ni FontAwesome
 ];
 
 function esperarServidor(intentos) {

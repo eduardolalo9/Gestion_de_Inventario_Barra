@@ -7,43 +7,94 @@
 
 :root {
     /* ══════════════════════════════════════════════════════
-       MATERIAL YOU 3 — Dark Surface Scheme
-       Dynamic Color baseline: #4B8BF5 → tonos neutros derivados
+       BI DESIGN SYSTEM — "CARBÓN & LATÓN"  (REDISEÑO R1, v5.0)
+       ────────────────────────────────────────────────────
+       Un instrumento de medición, no un panel de administración.
+       Tres reglas que gobiernan todo lo que se dibuje encima:
+         1. El latón se gana: solo lo que se toca o exige una
+            decisión va en --brass. Si todo brilla, nada guía.
+         2. Las cifras van en IBM Plex Mono y alineadas a la
+            derecha: una columna de cantidades se escanea como una
+            hoja de inventario, sin leer palabra por palabra.
+         3. El color nunca va solo: cada estado lleva color Y
+            palabra. En una barra con poca luz —y para quien no
+            distingue tonos— el texto es lo que manda.
+
+       Se conserva la estructura de roles de Material You 3 que ya
+       tenía el archivo (superficies por elevación, on-colors,
+       sombras, motion, shape scale): lo que cambia son los VALORES.
+       Por eso un solo archivo re-tematiza toda la aplicación sin
+       tocar ni una línea de lógica.
+
+       Los nombres viejos (--accent, --green, --red, --amber, --sky)
+       se mantienen como la misma variable de siempre porque los usan
+       miles de reglas y de estilos en línea; los nombres nuevos
+       (--brass, --ok, --warn, --info, --danger, --book) son alias
+       semánticos para el código nuevo. Renombrar en masa habría sido
+       un cambio de riesgo alto sin beneficio visible.
        ══════════════════════════════════════════════════════ */
 
-    /* ── Superficies (M3 elevation tiers, tinted) ── */
-    --bg:             #0f0f13;          /* Surface nivel-0 */
-    --surface:        #17171f;          /* Surface Container Low */
-    --card:           #1d1d27;          /* Surface Container */
-    --card-high:      #25252f;          /* Surface Container High */
-    --border:         rgba(202,196,208,0.07);
-    --border-mid:     rgba(202,196,208,0.13);
-    --border-strong:  rgba(202,196,208,0.24);
+    /* ── Superficies (carbón azulado, nunca negro plano) ── */
+    --bg:             #0E1013;          /* Fondo de la app */
+    --surface:        #15181D;          /* Tarjeta normal */
+    --card:           #1C2027;          /* Tarjeta destacada / activa */
+    --card-high:      #242932;          /* Control elevado */
+    --border:         rgba(180,176,170,0.08);
+    --border-mid:     rgba(180,176,170,0.14);
+    --border-strong:  rgba(180,176,170,0.26);
+    /* Velo de modal: casi negro con tinte frío, no negro puro al 60 % */
+    --scrim:          rgba(5,6,8,0.72);
 
-    /* ── Primary role (M3 baseline blue) ── */
-    --accent:         #a8c7fa;          /* Primary tone-80 */
-    --accent-hover:   #c0d8ff;          /* Primary tone-90 */
-    --accent-on:      #003063;          /* On-Primary */
-    --accent-container: rgba(168,199,250,0.15); /* Primary Container overlay */
-    --accent-dim:     rgba(168,199,250,0.10);
-    --accent-dim2:    rgba(168,199,250,0.18);
+    /* ── Identidad: latón cálido (NO oro saturado) ── */
+    --accent:         #E8B55C;          /* = --brass */
+    --accent-hover:   #F2C778;
+    --accent-on:      #2A1D05;          /* Texto sobre latón */
+    --accent-container: rgba(232,181,92,0.16);
+    --accent-dim:     rgba(232,181,92,0.10);
+    --accent-dim2:    rgba(232,181,92,0.18);
+    --brass:          var(--accent);
+    --brass-hover:    var(--accent-hover);
+    --brass-on:       var(--accent-on);
+    --brass-dim:      var(--accent-dim);
 
-    /* ── Semánticos M3 ── */
-    --green:          #6dd58c;
-    --green-dim:      rgba(109,213,140,0.11);
-    --green-dark:     #0d2e1a;
-    --green-text:     #6dd58c;
-    --red:            #ffb4ab;
-    --red-dim:        rgba(255,180,171,0.11);
-    --red-dark:       #690005;
-    --red-text:       #ffb4ab;
-    --amber:          #f6c352;
-    --sky:            #82d4e6;
+    /* ── Semánticos ──
+       Ajustados para pasar 4.5:1 sobre las superficies de arriba Y
+       para diferenciarse entre sí también en LUMINOSIDAD, no solo en
+       tono: así un estado sigue siendo legible para quien no
+       distingue verde de rojo. */
+    --green:          #5FD68A;
+    --green-dim:      rgba(95,214,138,0.13);
+    --green-dark:     #0B2E18;
+    --green-text:     #5FD68A;
+    --red:            #FF8A80;
+    --red-dim:        rgba(255,138,128,0.13);
+    --red-dark:       #5C0A06;
+    --red-text:       #FF8A80;
+    --amber:          #F0B429;
+    --amber-dim:      rgba(240,180,41,0.14);
+    --sky:            #6FB2E8;
+    --sky-dim:        rgba(111,178,232,0.13);
+    /* Lila: contabilizado y corte mensual (FASE 13). Es un estado
+       contable, distinto de "completado" (verde) y de "en proceso"
+       (azul), y merecía su propio color en vez de reusar uno. */
+    --book:           #C9A0E8;
+    --book-dim:       rgba(201,160,232,0.14);
+    --book-on:        #2B1640;
 
-    /* ── Texto (M3 on-surface roles) ── */
-    --txt-primary:    #e6e1e5;          /* On-Surface */
-    --txt-secondary:  #cac4d0;          /* On-Surface Variant */
-    --txt-muted:      #938f99;          /* Outline */
+    /* Alias semánticos para el código nuevo */
+    --ok:             var(--green);
+    --ok-dim:         var(--green-dim);
+    --warn:           var(--amber);
+    --warn-dim:       var(--amber-dim);
+    --info:           var(--sky);
+    --info-dim:       var(--sky-dim);
+    --danger:         var(--red);
+    --danger-dim:     var(--red-dim);
+
+    /* ── Texto ── */
+    --txt-primary:    #E8E6E3;
+    --txt-secondary:  #B4B0AA;
+    --txt-muted:      #8A867F;
 
     /* ── Sombras M3 (elevation + tonal tint) ── */
     --shadow-xs:      0 1px 2px rgba(0,0,0,0.45);
@@ -78,35 +129,47 @@
 
 /* ── TEMA CLARO M3 (Light Surface Scheme) ────────────────── */
 html[data-theme="light"] {
-    --bg:             #fffbfe;          /* M3 Light Surface */
-    --surface:        #f7f2fa;          /* Surface Container Low */
-    --card:           #ffffff;          /* Surface Container */
-    --card-high:      #ede8f4;          /* Surface Container High */
-    --border:         rgba(73,69,79,0.10);
-    --border-mid:     rgba(73,69,79,0.18);
-    --border-strong:  rgba(73,69,79,0.32);
+    /* ── Tema claro de "Carbón & Latón" ──
+       El latón claro NO es el mismo amarillo: sobre fondo claro un
+       #E8B55C no alcanza 4.5:1 contra texto oscuro ni sirve de fondo
+       para texto blanco. Se baja a un bronce (#8A5A14) que sí pasa
+       como color de texto y de fondo con blanco encima, y conserva
+       la misma familia cálida para que la identidad se reconozca. */
+    --bg:             #FBF9F6;
+    --surface:        #F4F1EC;
+    --card:           #FFFFFF;
+    --card-high:      #EBE7E0;
+    --border:         rgba(60,56,50,0.10);
+    --border-mid:     rgba(60,56,50,0.18);
+    --border-strong:  rgba(60,56,50,0.32);
+    --scrim:          rgba(30,27,22,0.46);
 
-    --accent:         #1a5bba;          /* Primary tone-40 */
-    --accent-hover:   #003d9e;
-    --accent-on:      #ffffff;
-    --accent-container: rgba(26,91,186,0.09);
-    --accent-dim:     rgba(26,91,186,0.07);
-    --accent-dim2:    rgba(26,91,186,0.14);
+    --accent:         #8A5A14;          /* Bronce: el latón en claro */
+    --accent-hover:   #6E460C;
+    --accent-on:      #FFFFFF;
+    --accent-container: rgba(138,90,20,0.10);
+    --accent-dim:     rgba(138,90,20,0.07);
+    --accent-dim2:    rgba(138,90,20,0.15);
 
-    --green:          #1a6b3c;
-    --green-dim:      rgba(26,107,60,0.09);
-    --green-dark:     #d3f5e1;
-    --green-text:     #1a6b3c;
-    --red:            #ba1a1a;
-    --red-dim:        rgba(186,26,26,0.09);
-    --red-dark:       #ffdad6;
-    --red-text:       #ba1a1a;
-    --amber:          #945c00;
-    --sky:            #006780;
+    --green:          #16693A;
+    --green-dim:      rgba(22,105,58,0.09);
+    --green-dark:     #D2F3E0;
+    --green-text:     #16693A;
+    --red:            #B01A14;
+    --red-dim:        rgba(176,26,20,0.09);
+    --red-dark:       #FFDAD6;
+    --red-text:       #B01A14;
+    --amber:          #8A5A00;
+    --amber-dim:      rgba(138,90,0,0.10);
+    --sky:            #0A5E80;
+    --sky-dim:        rgba(10,94,128,0.09);
+    --book:           #6B3FA0;
+    --book-dim:       rgba(107,63,160,0.10);
+    --book-on:        #FFFFFF;
 
-    --txt-primary:    #1c1b1f;          /* On-Surface */
-    --txt-secondary:  #49454f;          /* On-Surface Variant */
-    --txt-muted:      #79747e;          /* Outline */
+    --txt-primary:    #1C1A17;
+    --txt-secondary:  #4A463F;
+    --txt-muted:      #76716A;
 
     --shadow-xs:      0 1px 2px rgba(0,0,0,0.08);
     --shadow-card:    0 1px 3px rgba(0,0,0,0.10), 0 1px 2px rgba(0,0,0,0.06);
@@ -3113,3 +3176,271 @@ html[data-theme="light"] .vt-dia--ok { color: #fff; }
 .if-pantalla .audit-rename-btn { flex-basis: 100%; min-height: 48px; font-size: .95rem; font-weight: 700; border-radius: 14px; border: 2px solid var(--accent); background: var(--card); color: var(--txt-primary); }
 .if-pantalla .audit-rename-row { flex-direction: column; align-items: stretch; gap: 10px; }
 .if-pantalla .audit-rename-input { min-height: 52px; font-size: 1rem; }
+
+/* =================================================================
+   BI UI KIT — las clases del rediseño (R1, v5.0)
+   =================================================================
+   Pareja de js/03-ui-kit.js: una definición por componente, en vez de
+   las 22 familias (if-*, pm-*, prd-*, inv-*, rc-*, audit-*…) que
+   habían ido creciendo una por fase.
+
+   Todo lo de aquí se construye sobre los tokens de :root, así que
+   funciona en oscuro y en claro sin un solo override con !important
+   —que es como estaba parcheado el tema claro hasta ahora.
+   ================================================================= */
+
+/* Texto solo para lectores de pantalla (etiquetas de campos cuya
+   etiqueta visible es el contexto, como el valor de un stepper). */
+.bi-sr {
+    position: absolute; width: 1px; height: 1px;
+    padding: 0; margin: -1px; overflow: hidden;
+    clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
+/* ── Cifras ─────────────────────────────────────────────────────── */
+.bi-cifra {
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--txt-primary);
+}
+.bi-cifra--sin-dato { color: var(--txt-muted); font-weight: 600; }
+.bi-cifra--brass  { color: var(--brass); }
+.bi-cifra--ok     { color: var(--ok); }
+.bi-cifra--warn   { color: var(--warn); }
+.bi-cifra--info   { color: var(--info); }
+.bi-cifra--danger { color: var(--danger); }
+.bi-cifra--book   { color: var(--book); }
+.bi-cifra__sufijo {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.72em; font-weight: 600;
+    color: var(--txt-muted); margin-left: 3px;
+}
+
+/* ── Badge de estado ────────────────────────────────────────────── */
+.bi-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 5px 9px;
+    border-radius: var(--r-full);
+    font-size: 0.625rem; font-weight: 700;
+    letter-spacing: 0.07em; text-transform: uppercase;
+    white-space: nowrap;
+}
+.bi-badge__punto {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: currentColor;
+    animation: statusPulse 2.4s ease-in-out infinite;
+}
+.bi-badge--ok      { background: var(--ok-dim);     color: var(--ok); }
+.bi-badge--warn    { background: var(--warn-dim);   color: var(--warn); }
+.bi-badge--info    { background: var(--info-dim);   color: var(--info); }
+.bi-badge--danger  { background: var(--danger-dim); color: var(--danger); }
+.bi-badge--book    { background: var(--book-dim);   color: var(--book); }
+.bi-badge--brass   { background: var(--brass-dim);  color: var(--brass); }
+.bi-badge--neutral { background: var(--border); color: var(--txt-secondary); }
+
+/* ── Monograma de producto (reemplaza cualquier imagen) ─────────── */
+.bi-mono {
+    flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px;
+    border-radius: var(--r-md);
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: 0.72rem; font-weight: 700; letter-spacing: -0.02em;
+}
+.bi-mono--laton  { background: var(--brass-dim);  color: var(--brass); }
+.bi-mono--neutro { background: var(--border);     color: var(--txt-secondary); }
+.bi-mono--info   { background: var(--info-dim);   color: var(--info); }
+.bi-mono--ok     { background: var(--ok-dim);     color: var(--ok); }
+.bi-mono--book   { background: var(--book-dim);   color: var(--book); }
+
+/* ── Medidor segmentado ─────────────────────────────────────────── */
+.bi-meter { display: flex; gap: 2px; }
+.bi-meter__seg {
+    flex-grow: 1; height: 7px;
+    border-radius: 2px;
+    background: var(--brass-dim);
+    transition: background-color 0.22s var(--ease-out);
+}
+.bi-meter__seg.is-on { background: var(--brass); }
+.bi-meter--ok   .bi-meter__seg.is-on { background: var(--ok); }
+.bi-meter--info .bi-meter__seg.is-on { background: var(--info); }
+
+/* ── Tarjeta ────────────────────────────────────────────────────── */
+.bi-card {
+    background: var(--surface);
+    border: 1px solid var(--border-mid);
+    border-radius: var(--r-lg);
+    padding: 14px;
+}
+/* Una sola tarjeta con acento por pantalla: la activa. */
+.bi-card--acento {
+    background: var(--card);
+    border-color: var(--accent-dim2);
+}
+.bi-card--book { border-color: var(--book-dim); }
+.bi-card__cab {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 10px;
+}
+.bi-card__ident { display: flex; flex-direction: column; min-width: 0; }
+.bi-card__etq {
+    font-size: 0.65rem; font-weight: 600;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--txt-muted);
+}
+.bi-card__titulo {
+    font-size: 1.05rem; font-weight: 700;
+    letter-spacing: -0.015em; margin-top: 3px;
+    color: var(--txt-primary);
+}
+.bi-card__cuerpo { margin-top: 13px; }
+.bi-card__pie {
+    margin-top: 13px; padding-top: 12px;
+    border-top: 1px solid var(--border);
+}
+
+/* ── Fila de producto ───────────────────────────────────────────── */
+.bi-row {
+    display: flex; align-items: center; gap: 10px;
+    width: 100%;
+    padding: 11px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border-mid);
+    border-radius: var(--r-md);
+    text-align: left;
+    color: var(--txt-primary);
+}
+.bi-row--accionable { cursor: pointer; min-height: 56px; }
+.bi-row--accionable:hover { background: var(--card); border-color: var(--border-strong); }
+.bi-row--accionable:active { transform: scale(0.995); }
+.bi-row.is-activa { background: var(--card); border-color: var(--accent-dim2); }
+.bi-row__texto { display: flex; flex-direction: column; min-width: 0; flex-grow: 1; }
+.bi-row__nombre {
+    font-size: 0.84rem; font-weight: 600; line-height: 1.25;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.bi-row__meta {
+    font-size: 0.69rem; color: var(--txt-muted); margin-top: 2px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.bi-row__der {
+    flex-shrink: 0; display: flex; flex-direction: column;
+    align-items: flex-end; gap: 2px;
+}
+.bi-row__der .bi-cifra { font-size: 1.06rem; }
+
+/* ── KPI ────────────────────────────────────────────────────────── */
+.bi-kpi { display: flex; flex-direction: column; }
+.bi-kpi__val {
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 2.25rem; font-weight: 700;
+    line-height: 1; letter-spacing: -0.02em;
+    color: var(--txt-primary);
+}
+.bi-kpi--brass  .bi-kpi__val { color: var(--brass); }
+.bi-kpi--danger .bi-kpi__val { color: var(--danger); }
+.bi-kpi--warn   .bi-kpi__val { color: var(--warn); }
+.bi-kpi__de { font-size: 0.46em; font-weight: 600; color: var(--txt-muted); }
+.bi-kpi__etq {
+    font-size: 0.65rem; font-weight: 600;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--txt-muted); margin-top: 5px;
+}
+
+/* ── Botones ────────────────────────────────────────────────────── */
+.bi-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    min-height: 44px;              /* regla 4: 44 px para el pulgar */
+    padding: 0 16px;
+    border: 1px solid transparent;
+    border-radius: var(--r-md);
+    font-size: 0.84rem; font-weight: 700;
+    cursor: pointer;
+    transition: filter 0.16s var(--ease-out), background-color 0.16s var(--ease-out);
+}
+.bi-btn--completo { width: 100%; }
+.bi-btn--primario   { background: var(--brass); color: var(--brass-on); }
+.bi-btn--primario:hover { filter: brightness(1.06); }
+.bi-btn--secundario { background: var(--accent-dim); color: var(--brass); border-color: var(--accent-dim2); }
+.bi-btn--fantasma   { background: transparent; color: var(--txt-secondary); border-color: var(--border-mid); }
+.bi-btn--peligro    { background: transparent; color: var(--danger); border-color: var(--danger-dim); }
+.bi-btn--peligro:hover { background: var(--danger-dim); }
+.bi-btn--book       { background: var(--book); color: var(--book-on); }
+.bi-btn[disabled] { opacity: 0.45; cursor: not-allowed; }
+
+/* ── Campo de formulario ───────────────────────────────────────── */
+.bi-field { display: flex; flex-direction: column; }
+.bi-field__etq {
+    font-size: 0.65rem; font-weight: 700;
+    letter-spacing: 0.07em; text-transform: uppercase;
+    color: var(--txt-muted); margin-bottom: 6px;
+}
+.bi-field__caja { position: relative; display: flex; align-items: center; }
+/* DEUDA CONOCIDA, acotada a propósito.
+   La regla global `input, select, textarea` (más arriba en este archivo)
+   fija `background-color: var(--surface) !important`. Ese !important se
+   puso para ganarle a las clases de Tailwind que venían del CDN
+   (`<input class="… bg-white">`); ahora que Tailwind es local y bg-white
+   resuelve a un token, ya no hace falta, pero quitarlo toca más de cien
+   formularios y eso es una fase propia (R8), no un efecto colateral de
+   R1. Hasta entonces el campo del kit gana con un !important acotado a
+   su propia clase: tiene que quedar HUNDIDO respecto a la tarjeta que lo
+   contiene, que es lo que lo distingue de un input blanco de formulario
+   web. Lo detectó la prueba de navegador midiendo el color calculado. */
+.bi-field .bi-field__input {
+    width: 100%;
+    min-height: 44px;
+    padding: 0 12px;
+    background-color: var(--bg) !important;   /* hundido, no blanco */
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-sm);
+    color: var(--txt-primary);
+    font-size: 0.92rem; font-weight: 500;
+    outline: none;
+}
+.bi-field .bi-field__input:focus { border-color: var(--brass); box-shadow: 0 0 0 3px var(--accent-dim); }
+.bi-field .bi-field__input::placeholder { color: var(--txt-muted); }
+.bi-field__sufijo {
+    position: absolute; right: 12px;
+    font-size: 0.72rem; font-weight: 600; color: var(--txt-muted);
+    pointer-events: none;
+}
+.bi-field__ayuda { font-size: 0.68rem; color: var(--txt-muted); margin: 6px 0 0; }
+
+/* ── Stepper de cantidad ───────────────────────────────────────── */
+.bi-stepper { display: flex; align-items: center; gap: 6px; }
+.bi-stepper__btn {
+    width: 44px; height: 44px; flex-shrink: 0;
+    border-radius: var(--r-md);
+    font-size: 1.25rem; font-weight: 600;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+}
+.bi-stepper__btn--menos { background: var(--card-high); color: var(--txt-primary); border: 1px solid var(--border-strong); }
+.bi-stepper__btn--mas   { background: var(--accent-dim); color: var(--brass); border: 1px solid var(--accent-dim2); }
+.bi-stepper__val {
+    width: 72px; height: 44px;
+    background: var(--bg);
+    border: 1px solid var(--accent-dim2);
+    border-radius: var(--r-md);
+    color: var(--brass);
+    font-size: 1.06rem; font-weight: 700;
+    text-align: center;
+    outline: none;
+}
+.bi-stepper__val:focus { border-color: var(--brass); }
+
+/* ── Encabezado de sección ─────────────────────────────────────── */
+.bi-seccion {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; margin: 2px 0 9px;
+}
+.bi-seccion__titulo {
+    font-size: 0.69rem; font-weight: 700;
+    letter-spacing: 0.09em; text-transform: uppercase;
+    color: var(--txt-muted);
+}
+.bi-seccion__der { font-size: 0.72rem; font-weight: 600; color: var(--brass); }

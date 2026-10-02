@@ -151,16 +151,36 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <!-- FIX #11: Tailwind CDN (Play CDN, ~358 KB sin purgar) es solo apto para desarrollo.
-         Para producción, usa el CLI de Tailwind para generar un CSS purgeado (~5-15 KB).
-         Ver: https://tailwindcss.com/docs/installation — mientras tanto el CDN funciona. -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- ══════════════════════════════════════════════════════════
+         REDISEÑO R1 (v5.0) — TAILWIND Y FONT AWESOME YA NO VIENEN DE UN CDN
+         ──────────────────────────────────────────────────────────
+         Las utilidades que la app usa de verdad (inventariadas una por
+         una del código) y los 23 iconos que aparecen en pantalla viven
+         ahora en css/utilidades.css: local, versionado y precargado por
+         el Service Worker como el resto.
+
+         Tres razones, en orden de importancia:
+          1. Esto es una PWA offline-first que se usa en una barra. Los
+             estilos de TODOS los modales y formularios dependían de un
+             dominio externo: sin red, se veían sin estilo.
+          2. El Play CDN de Tailwind es el compilador JIT completo
+             corriendo en el navegador, y Font Awesome descargaba ~1 MB
+             para usar 23 iconos. En un teléfono modesto dentro de una
+             barra, eso es batería y datos móviles.
+          3. Las clases de paleta clara de Tailwind (bg-white,
+             text-gray-900…) pintaban los formularios de blanco sobre
+             una app oscura. Ahora esas mismas clases apuntan a los
+             tokens del tema, así que el HTML existente se ve correcto
+             sin tocarlo.
+
+         SheetJS (abajo) sí sigue viniendo de un CDN a propósito: solo
+         se necesita al exportar o importar Excel, que es una acción
+         deliberada del usuario y se hace con conexión.
+         ══════════════════════════════════════════════════════════ -->
     <!-- FIX #10: defer en SheetJS — solo se necesita al exportar/importar (acción del usuario),
          nunca durante el arranque. Firebase SDK no puede diferirse porque initFirebase()
          está en un bloque inline inmediato que depende de window.firebase. -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-    <!-- FontAwesome 6 — iconos corporativos en la UI de auditoría -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
 
     <!-- ══════════════════════════════════════════════════════════
          FIREBASE SDK  —  compat v10 (módulos globales window.firebase)
@@ -627,7 +647,11 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
             }
         })();
     </script>
-    <link rel="stylesheet" href="css/estilos.css?v=4.24">
+    <!-- Utilidades locales (sustituyen a Tailwind CDN) + iconos locales
+         (sustituyen a Font Awesome CDN). Va ANTES de estilos.css para que
+         las reglas propias de la app sigan teniendo la última palabra. -->
+    <link rel="stylesheet" href="css/utilidades.css?v=5.0">
+    <link rel="stylesheet" href="css/estilos.css?v=5.0">
 </head>
 <body class="min-h-screen">
 
@@ -1283,40 +1307,41 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
         </div>
     </div>
 
-        <script src="js/00-nucleo.js?v=4.24"></script>
-    <script src="js/05-busqueda-motor.js?v=4.24"></script>
-    <script src="js/06-busqueda-ui.js?v=4.24"></script>
-    <script src="js/10-multiusuario.js?v=4.24"></script>
-    <script src="js/15-ciclo-semanal.js?v=4.24"></script>
-    <script src="js/18-areas-config.js?v=4.24"></script>
-    <script src="js/20-persistencia.js?v=4.24"></script>
-    <script src="js/30-indexeddb.js?v=4.24"></script>
-    <script src="js/40-firestore.js?v=4.24"></script>
-    <script src="js/45-inventario-datos.js?v=4.24"></script>
-    <script src="js/47-existencia.js?v=4.24"></script>
-    <script src="js/48-consumo-teorico.js?v=4.24"></script>
-    <script src="js/49-fisico-vs-sistema.js?v=4.24"></script>
-    <script src="js/50-roles-permisos.js?v=4.24"></script>
-    <script src="js/60-arranque.js?v=4.24"></script>
-    <script src="js/70-conversion-render.js?v=4.24"></script>
-    <script src="js/75-auditoria-flujo.js?v=4.24"></script>
-    <script src="js/80-buscador.js?v=4.24"></script>
-    <script src="js/83-panel.js?v=4.24"></script>
-    <script src="js/85-ui-inventario-fisico.js?v=4.24"></script>
-    <script src="js/87-reconteo.js?v=4.24"></script>
-    <script src="js/88-compras.js?v=4.24"></script>
-    <script src="js/90-ciclo-admin.js?v=4.24"></script>
-    <script src="js/91-recetario.js?v=4.24"></script>
-    <script src="js/92-recetario-importar.js?v=4.24"></script>
-    <script src="js/93-ventas.js?v=4.24"></script>
-    <script src="js/95-exportacion.js?v=4.24"></script>
-    <script src="js/99-window-arranque.js?v=4.24"></script>
+        <script src="js/00-nucleo.js?v=5.0"></script>
+    <script src="js/03-ui-kit.js?v=5.0"></script><!-- BI UI KIT (rediseño R1) -->
+    <script src="js/05-busqueda-motor.js?v=5.0"></script>
+    <script src="js/06-busqueda-ui.js?v=5.0"></script>
+    <script src="js/10-multiusuario.js?v=5.0"></script>
+    <script src="js/15-ciclo-semanal.js?v=5.0"></script>
+    <script src="js/18-areas-config.js?v=5.0"></script>
+    <script src="js/20-persistencia.js?v=5.0"></script>
+    <script src="js/30-indexeddb.js?v=5.0"></script>
+    <script src="js/40-firestore.js?v=5.0"></script>
+    <script src="js/45-inventario-datos.js?v=5.0"></script>
+    <script src="js/47-existencia.js?v=5.0"></script>
+    <script src="js/48-consumo-teorico.js?v=5.0"></script>
+    <script src="js/49-fisico-vs-sistema.js?v=5.0"></script>
+    <script src="js/50-roles-permisos.js?v=5.0"></script>
+    <script src="js/60-arranque.js?v=5.0"></script>
+    <script src="js/70-conversion-render.js?v=5.0"></script>
+    <script src="js/75-auditoria-flujo.js?v=5.0"></script>
+    <script src="js/80-buscador.js?v=5.0"></script>
+    <script src="js/83-panel.js?v=5.0"></script>
+    <script src="js/85-ui-inventario-fisico.js?v=5.0"></script>
+    <script src="js/87-reconteo.js?v=5.0"></script>
+    <script src="js/88-compras.js?v=5.0"></script>
+    <script src="js/90-ciclo-admin.js?v=5.0"></script>
+    <script src="js/91-recetario.js?v=5.0"></script>
+    <script src="js/92-recetario-importar.js?v=5.0"></script>
+    <script src="js/93-ventas.js?v=5.0"></script>
+    <script src="js/95-exportacion.js?v=5.0"></script>
+    <script src="js/99-window-arranque.js?v=5.0"></script>
 
     </div><!-- /#appWrapper -->
 
     <!-- ══════════════════════════════════════════════════════
          AUTH — Lógica de autenticación Firebase
          ══════════════════════════════════════════════════════ -->
-        <script src="js/auth.js?v=4.24"></script>
+        <script src="js/auth.js?v=5.0"></script>
 </body>
 </html>
