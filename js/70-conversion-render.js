@@ -195,32 +195,46 @@
             if (!anyModal) sbClose();
         });
 
+        // ══════════════════════════════════════════════════════════════════
+        //  REDISEÑO R2 — UNA SOLA NAVEGACIÓN
+        //  ────────────────────────────────────────────────────────────────
+        //  Había TRES juegos de botones de navegación en el HTML:
+        //    · la barra inferior (#bottomTabBar) — la que se usa;
+        //    · el panel lateral (.sb-item) — 11 módulos, se abre con "Más";
+        //    · una barra horizontal de pestañas (.tab-btn) que llevaba
+        //      `display:none !important` desde hacía varias versiones, con el
+        //      comentario "Tabs ocultos (necesarios para switchTab)".
+        //
+        //  Ese tercer juego era código muerto que seguía vivo solo porque
+        //  esta función lo tocaba: pintaba y quitaba un indicador dentro de
+        //  botones invisibles en cada cambio de pestaña. Se retiró del HTML y
+        //  de aquí. A cambio, switchTab() dice ahora en una sola lectura cuál
+        //  es la jerarquía real: la barra inferior es la navegación primaria y
+        //  el panel lateral es la hoja "Más", no una navegación paralela.
+        //
+        //  Los destinos NO cambian (Inicio · Conteo · Pedidos · Compras · Más):
+        //  el equipo ya los tiene aprendidos y esta fase no es el momento de
+        //  moverlos.
+        // ══════════════════════════════════════════════════════════════════
         function switchTab(tab) {
             activeTab = tab;
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-                const indicator = btn.querySelector('.tab-indicator');
-                if (btn.dataset.tab === tab) {
-                    btn.classList.remove('text-gray-600');
-                    btn.classList.add('text-gray-900');
-                    if (!indicator) {
-                        const div = document.createElement('div');
-                        div.className = 'tab-indicator absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 to-orange-500 rounded-t-full animate-slideIn';
-                        btn.appendChild(div);
-                    }
-                } else {
-                    btn.classList.remove('text-gray-900');
-                    btn.classList.add('text-gray-600');
-                    if (indicator) indicator.remove();
-                }
-            });
-            document.querySelectorAll('.sb-item').forEach(btn => {
-                if (btn.dataset.sbTab === tab) btn.classList.add('sb-active');
-                else btn.classList.remove('sb-active');
-            });
-            // Sincronizar bottom tab bar
+            // Navegación primaria: la barra inferior.
             document.querySelectorAll('#bottomTabBar .btab-item').forEach(btn => {
-                if (btn.dataset.btab === tab) btn.classList.add('btab-active');
-                else btn.classList.remove('btab-active');
+                const activo = btn.dataset.btab === tab;
+                btn.classList.toggle('btab-active', activo);
+                // `aria-current` es lo que un lector de pantalla anuncia como
+                // "página actual"; la clase sola solo cambia el color, y el
+                // color por sí solo no informa.
+                if (activo) btn.setAttribute('aria-current', 'page');
+                else        btn.removeAttribute('aria-current');
+            });
+            // Hoja "Más": refleja el destino activo para que al abrirla se vea
+            // dónde está uno, aunque el módulo no esté en la barra inferior.
+            document.querySelectorAll('.sb-item').forEach(btn => {
+                const activo = btn.dataset.sbTab === tab;
+                btn.classList.toggle('sb-active', activo);
+                if (activo) btn.setAttribute('aria-current', 'page');
+                else        btn.removeAttribute('aria-current');
             });
             saveToLocalStorage();
             renderTab();
@@ -409,7 +423,7 @@
                 headerActions.innerHTML = '<button onclick="exportarAuditoriaExcel()" style="display:flex;align-items:center;gap:6px;padding:7px 13px;border-radius:var(--r-md);background:#065f46;border:1px solid rgba(34,197,94,.28);color:#86efac;font-size:.75rem;font-weight:600;cursor:pointer;"><svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>Excel</button>';
             } else if (activeTab === 'productos') {
                 if (isAdmin()) {
-                    headerActions.innerHTML = '<div class="flex gap-2 sm:gap-3 flex-wrap"><button onclick="openProductModal()" class="bg-gradient-to-r from-purple-500 to-orange-500 text-white px-3 sm:px-6 py-2 sm:py-3 rounded-full flex items-center gap-1 sm:gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs sm:text-base whitespace-nowrap"><svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg><span class="hidden sm:inline">Agregar</span><span class="sm:hidden">+</span></button><button onclick="document.getElementById(\'fileInput\').click()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:#1a4731;border:1px solid rgba(34,197,94,0.28);color:#86efac;"><i class="fa-solid fa-file-arrow-up"></i><span class="hidden sm:inline">Importar Excel</span><span class="sm:hidden">Importar</span></button><button onclick="publicarCatalogoFirestore()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:#1a3a5f;border:1px solid rgba(59,130,246,0.28);color:#93c5fd;"><i class="fa-solid fa-cloud-arrow-up"></i><span class="hidden sm:inline">Publicar catálogo</span><span class="sm:hidden">Publicar</span></button><button onclick="deleteAllProducts()" class="bg-gradient-to-r from-red-500 to-orange-600 text-white px-3 sm:px-6 py-2 sm:py-3 rounded-full flex items-center gap-1 sm:gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs sm:text-base whitespace-nowrap" title="Eliminar todos"><svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg><span class="hidden sm:inline">Eliminar Todos</span><span class="sm:hidden">Del</span></button></div>';
+                    headerActions.innerHTML = '<div class="flex gap-2 sm:gap-3 flex-wrap"><button onclick="openProductModal()" class="bg-gradient-to-r from-purple-500 to-orange-500 text-white px-3 sm:px-6 py-2 sm:py-3 rounded-full flex items-center gap-1 sm:gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs sm:text-base whitespace-nowrap"><svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg><span class="hidden sm:inline">Agregar</span><span class="sm:hidden">+</span></button><button onclick="document.getElementById(\'fileInput\').click()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:#1a4731;border:1px solid rgba(34,197,94,0.28);color:#86efac;"><i class="fa-solid fa-file-arrow-up"></i><span class="hidden sm:inline">Importar Excel</span><span class="sm:hidden">Importar</span></button><button onclick="publicarCatalogoFirestore()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:#1a3a5f;border:1px solid var(--accent-dim2);color:#93c5fd;"><i class="fa-solid fa-cloud-arrow-up"></i><span class="hidden sm:inline">Publicar catálogo</span><span class="sm:hidden">Publicar</span></button><button onclick="deleteAllProducts()" class="bg-gradient-to-r from-red-500 to-orange-600 text-white px-3 sm:px-6 py-2 sm:py-3 rounded-full flex items-center gap-1 sm:gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs sm:text-base whitespace-nowrap" title="Eliminar todos"><svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg><span class="hidden sm:inline">Eliminar Todos</span><span class="sm:hidden">Del</span></button></div>';
                 } else {
                     headerActions.innerHTML = '<span style="font-size:.72rem;color:rgba(255,255,255,.55);padding:6px 10px;background:rgba(255,255,255,.08);border-radius:6px;">📋 Solo lectura</span>';
                 }
@@ -424,7 +438,7 @@
                         '<span class="hidden sm:inline">Nueva receta</span><span class="sm:hidden">+</span></button>' +
                         '<button onclick="recetarioImportarExcel()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:#1a4731;border:1px solid rgba(34,197,94,0.28);color:#86efac;">' +
                         '<i class="fa-solid fa-file-arrow-up"></i><span class="hidden sm:inline">Importar Excel</span><span class="sm:hidden">Importar</span></button>' +
-                        '<button onclick="publicarRecetarioFirestore()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:#1a3a5f;border:1px solid rgba(59,130,246,0.28);color:#93c5fd;">' +
+                        '<button onclick="publicarRecetarioFirestore()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:#1a3a5f;border:1px solid var(--accent-dim2);color:#93c5fd;">' +
                         '<i class="fa-solid fa-cloud-arrow-up"></i><span class="hidden sm:inline">Publicar recetario</span><span class="sm:hidden">Publicar</span></button>' +
                         '</div>';
                 } else {

@@ -327,7 +327,7 @@
             var actualizadasPorNombre = parsed.recetas.filter(function(r) { return !r.esNueva && r.coincidenciaPorNombre; });
             if (actualizadasPorNombre.length) {
                 html += '<div style="padding:10px 12px;margin-bottom:14px;border-radius:10px;'
-                      + 'background:rgba(59,130,246,.10);border:1px solid rgba(59,130,246,.28);color:#60a5fa;font-size:.82rem">'
+                      + 'background:var(--accent-dim);border:1px solid var(--accent-dim2);color:var(--accent);font-size:.82rem">'
                       + 'ℹ️ ' + actualizadasPorNombre.length + ' receta(s) se emparejaron por NOMBRE (no tenían PV — se crearon a mano antes): '
                       + escapeHtml(actualizadasPorNombre.slice(0, 5).map(function(r) { return r.nombre; }).join(', '))
                       + (actualizadasPorNombre.length > 5 ? '…' : '') + '</div>';

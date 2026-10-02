@@ -2088,37 +2088,41 @@
 
         // ── Glosario y tarjeta de estado ──────────────────────────────────────
 
+        //  REDISEÑO R2 — este diccionario llevaba sus propios colores fijos
+        //  (#60a5fa, #4ade80, #818cf8) y dibujaba su propia píldora, en
+        //  paralelo a los badges del resto de la app: era uno de los sitios
+        //  donde el MISMO estado se veía distinto según la pantalla.
+        //  Ahora el color y la palabra los decide UI.ESTADOS (js/03-ui-kit.js)
+        //  y aquí solo queda lo que es propio de este glosario: la explicación
+        //  de qué significa cada estado, que no vive en ningún otro lado.
         const ESTADOS_INVENTARIO = {
             SINCRONIZADO: {
-                etiqueta: 'Sincronizado',
-                color:    '#60a5fa',
-                fondo:    'rgba(96,165,250,.12)',
-                texto:    'Conteo en curso. El stock todavía no se ha afectado.'
+                estadoKit: 'sincronizado',
+                texto: 'Conteo en curso. El stock todavía no se ha afectado.'
             },
             CERRADO: {
-                etiqueta: 'Cerrado',
-                color:    '#4ade80',
-                fondo:    'rgba(74,222,128,.12)',
-                texto:    'Cerrado e inmutable. Queda como histórico y nadie puede modificarlo, ni el administrador.'
+                estadoKit: 'cerrado',
+                texto: 'Cerrado e inmutable. Queda como histórico y nadie puede modificarlo, ni el administrador.'
             },
             // FASE 3 — el estado nuevo TAMBIÉN va aquí. Sin esta entrada el
             // historial mostraba "CONTABILIZADO" y el glosario seguía
             // explicando solo dos estados: la pantalla decía una cosa y la
             // ayuda otra. Lo detectó la comprobación de alcance de R7.
             CONTABILIZADO: {
-                etiqueta: 'Contabilizado',
-                color:    '#818cf8',
-                fondo:    'rgba(129,140,248,.12)',
-                texto:    'Su resultado ya es el stock inicial de la semana siguiente. Además de inmutable, no se puede volver a contabilizar.'
+                estadoKit: 'contabilizado',
+                texto: 'Su resultado ya es el stock inicial de la semana siguiente. Además de inmutable, no se puede volver a contabilizar.'
             }
         };
 
         function _pillEstadoInventario(estado) {
-            var e = ESTADOS_INVENTARIO[estado] || { etiqueta: estado || '—', color: '#9aa2b4', fondo: 'rgba(154,162,180,.12)' };
-            return '<span style="display:inline-block;padding:3px 10px;border-radius:999px;'
-                 + 'background:' + e.fondo + ';color:' + e.color + ';font-size:.68rem;font-weight:700;'
-                 + 'text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;">'
-                 + escapeHtml(e.etiqueta) + '</span>';
+            var e = ESTADOS_INVENTARIO[estado];
+            if (typeof UI !== 'undefined' && UI.badge) {
+                // Un estado que no esté en el glosario se muestra tal cual
+                // llegó, en gris: no se le inventa un color.
+                return e ? UI.badge(e.estadoKit)
+                         : UI.badge({ texto: estado || '—', tono: 'neutral', vivo: false });
+            }
+            return '<span class="bi-badge bi-badge--neutral">' + escapeHtml(estado || '—') + '</span>';
         }
 
         /** Cuántas personas tienen algo contado en este inventario ahora mismo. */

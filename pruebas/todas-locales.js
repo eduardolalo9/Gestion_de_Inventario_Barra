@@ -60,6 +60,7 @@ const PRUEBAS = [
     'prueba-fase11b-parte2.js',      // FASE 11B (parte 2) — pedido sugerido y niveles de alerta
     'prueba-fase13-contabilizar-fin-de-mes.js', // FASE 13 — contabilizar el corte de fin de mes
     'prueba-redis-r1.js',            // REDISEÑO R1 — tokens, kit y retiro de los CDN
+    'prueba-redis-r2.js',            // REDISEÑO R2 — una sola navegación y limpieza de la paleta anterior
 ];
 
 let fallaron = [];

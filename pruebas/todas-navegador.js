@@ -48,6 +48,7 @@ const PRUEBAS = [
     'prueba-fase11b-parte2-navegador.js', // FASE 11B (parte 2) — pedido sugerido y niveles de alerta
     'prueba-fase13-navegador.js',       // FASE 13 — contabilizar el corte de fin de mes
     'prueba-redis-r1-navegador.js',     // REDISEÑO R1 — la app se pinta correcta sin Tailwind ni FontAwesome
+    'prueba-redis-r2-navegador.js',     // REDISEÑO R2 — una sola navegación en pantalla, activo en latón
 ];
 
 function esperarServidor(intentos) {

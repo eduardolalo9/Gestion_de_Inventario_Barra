@@ -134,13 +134,17 @@ chk('js/03-ui-kit.js se carga después del núcleo (necesita escapeHtml)',
 chk('★ El Service Worker precarga los dos archivos nuevos',
     /utilidades\.css/.test(sw) && /03-ui-kit\.js/.test(sw),
     'sin esto, offline-first se quedaría sin los estilos que acabamos de internalizar');
-chk('La versión subió a 5.0 en index.html y en sw.js',
-    /APP_VERSION = '5\.0'/.test(sw) && /v=5\.0/.test(html) && !/v=4\.2/.test(html));
+// Se comprueba COHERENCIA y que el rediseño ya empezó (≥ 5.0), no un número
+// exacto: cada fase del rediseño sube la versión (R1 → 5.0, R2 → 5.1…) y una
+// aserción con el número clavado haría fallar esta prueba en cada fase
+// siguiente sin que nada esté roto.
+const versionSw = (/APP_VERSION = '([^']+)'/.exec(sw) || [])[1];
+const versionesHtml = [...new Set([...html.matchAll(/(?:src|href)="(?:js|css)\/[^"?]+\.(?:js|css)\?v=([^"]*)"/g)].map(m => m[1]))];
+chk('La versión es la del rediseño (≥ 5.0) y coincide en index.html y sw.js',
+    versionesHtml.length === 1 && versionesHtml[0] === versionSw && parseFloat(versionSw) >= 5.0,
+    'sw.js: ' + versionSw + ' · index.html: ' + versionesHtml.join(', '));
 chk('Una sola versión en todas las etiquetas de index.html',
-    (() => {
-        const v = [...new Set([...html.matchAll(/(?:src|href)="(?:js|css)\/[^"?]+\.(?:js|css)\?v=([^"]*)"/g)].map(m => m[1]))];
-        return v.length === 1 && v[0] === '5.0';
-    })());
+    versionesHtml.length === 1, versionesHtml.join(', '));
 
 // ═══ 3 · El arreglo del modo oscuro: color por token, no fijo ══════════════
 function reglaDe(hoja, selector) {

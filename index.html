@@ -650,8 +650,8 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
     <!-- Utilidades locales (sustituyen a Tailwind CDN) + iconos locales
          (sustituyen a Font Awesome CDN). Va ANTES de estilos.css para que
          las reglas propias de la app sigan teniendo la última palabra. -->
-    <link rel="stylesheet" href="css/utilidades.css?v=5.0">
-    <link rel="stylesheet" href="css/estilos.css?v=5.0">
+    <link rel="stylesheet" href="css/utilidades.css?v=5.1">
+    <link rel="stylesheet" href="css/estilos.css?v=5.1">
 </head>
 <body class="min-h-screen">
 
@@ -875,18 +875,13 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
         </div>
     </div>
 
-    <!-- Tabs ocultos (necesarios para switchTab) -->
-    <div class="bg-white shadow-sm sticky" style="display:none!important" aria-hidden="true">
-        <div class="max-w-7xl mx-auto px-2 sm:px-4 md:px-6 flex-shrink-0">
-            <div class="flex gap-1 sm:gap-2 md:gap-8 overflow-x-auto" id="tabs">
-                <button type="button" onclick="switchTab('inicio')"    data-tab="inicio"     class="tab-btn relative whitespace-nowrap text-gray-900">Inicio<div class="tab-indicator absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 to-orange-500 rounded-t-full animate-slideIn"></div></button>
-                <button type="button" onclick="switchTab('productos')" data-tab="productos"  class="tab-btn relative whitespace-nowrap text-gray-600">Productos</button>
-                <button type="button" onclick="switchTab('pedidos')"   data-tab="pedidos"    class="tab-btn relative whitespace-nowrap text-gray-600">Pedidos</button>
-                <button type="button" onclick="switchTab('inventario')"data-tab="inventario" class="tab-btn relative whitespace-nowrap text-gray-600">Inventario</button>
-                <button type="button" onclick="switchTab('historia')"  data-tab="historia"   class="tab-btn relative whitespace-nowrap text-gray-600">Historia</button>
-            </div>
-        </div>
-    </div>
+    <!-- REDISEÑO R2 — aquí vivía una barra horizontal de pestañas con
+         display:none !important desde varias versiones ("Tabs ocultos
+         (necesarios para switchTab)"). Era código muerto que seguía en pie
+         solo porque switchTab() pintaba un indicador dentro de botones
+         invisibles en cada cambio de pestaña. Se retiró junto con ese
+         bucle: la navegación primaria es #bottomTabBar y el panel lateral
+         es la hoja "Más". -->
 
     <!-- FIX #8: elemento <main> semántico — permite a lectores de pantalla saltar al contenido principal -->
     <main id="mainContent" aria-label="Contenido principal">
@@ -1307,41 +1302,41 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
         </div>
     </div>
 
-        <script src="js/00-nucleo.js?v=5.0"></script>
-    <script src="js/03-ui-kit.js?v=5.0"></script><!-- BI UI KIT (rediseño R1) -->
-    <script src="js/05-busqueda-motor.js?v=5.0"></script>
-    <script src="js/06-busqueda-ui.js?v=5.0"></script>
-    <script src="js/10-multiusuario.js?v=5.0"></script>
-    <script src="js/15-ciclo-semanal.js?v=5.0"></script>
-    <script src="js/18-areas-config.js?v=5.0"></script>
-    <script src="js/20-persistencia.js?v=5.0"></script>
-    <script src="js/30-indexeddb.js?v=5.0"></script>
-    <script src="js/40-firestore.js?v=5.0"></script>
-    <script src="js/45-inventario-datos.js?v=5.0"></script>
-    <script src="js/47-existencia.js?v=5.0"></script>
-    <script src="js/48-consumo-teorico.js?v=5.0"></script>
-    <script src="js/49-fisico-vs-sistema.js?v=5.0"></script>
-    <script src="js/50-roles-permisos.js?v=5.0"></script>
-    <script src="js/60-arranque.js?v=5.0"></script>
-    <script src="js/70-conversion-render.js?v=5.0"></script>
-    <script src="js/75-auditoria-flujo.js?v=5.0"></script>
-    <script src="js/80-buscador.js?v=5.0"></script>
-    <script src="js/83-panel.js?v=5.0"></script>
-    <script src="js/85-ui-inventario-fisico.js?v=5.0"></script>
-    <script src="js/87-reconteo.js?v=5.0"></script>
-    <script src="js/88-compras.js?v=5.0"></script>
-    <script src="js/90-ciclo-admin.js?v=5.0"></script>
-    <script src="js/91-recetario.js?v=5.0"></script>
-    <script src="js/92-recetario-importar.js?v=5.0"></script>
-    <script src="js/93-ventas.js?v=5.0"></script>
-    <script src="js/95-exportacion.js?v=5.0"></script>
-    <script src="js/99-window-arranque.js?v=5.0"></script>
+        <script src="js/00-nucleo.js?v=5.1"></script>
+    <script src="js/03-ui-kit.js?v=5.1"></script><!-- BI UI KIT (rediseño R1) -->
+    <script src="js/05-busqueda-motor.js?v=5.1"></script>
+    <script src="js/06-busqueda-ui.js?v=5.1"></script>
+    <script src="js/10-multiusuario.js?v=5.1"></script>
+    <script src="js/15-ciclo-semanal.js?v=5.1"></script>
+    <script src="js/18-areas-config.js?v=5.1"></script>
+    <script src="js/20-persistencia.js?v=5.1"></script>
+    <script src="js/30-indexeddb.js?v=5.1"></script>
+    <script src="js/40-firestore.js?v=5.1"></script>
+    <script src="js/45-inventario-datos.js?v=5.1"></script>
+    <script src="js/47-existencia.js?v=5.1"></script>
+    <script src="js/48-consumo-teorico.js?v=5.1"></script>
+    <script src="js/49-fisico-vs-sistema.js?v=5.1"></script>
+    <script src="js/50-roles-permisos.js?v=5.1"></script>
+    <script src="js/60-arranque.js?v=5.1"></script>
+    <script src="js/70-conversion-render.js?v=5.1"></script>
+    <script src="js/75-auditoria-flujo.js?v=5.1"></script>
+    <script src="js/80-buscador.js?v=5.1"></script>
+    <script src="js/83-panel.js?v=5.1"></script>
+    <script src="js/85-ui-inventario-fisico.js?v=5.1"></script>
+    <script src="js/87-reconteo.js?v=5.1"></script>
+    <script src="js/88-compras.js?v=5.1"></script>
+    <script src="js/90-ciclo-admin.js?v=5.1"></script>
+    <script src="js/91-recetario.js?v=5.1"></script>
+    <script src="js/92-recetario-importar.js?v=5.1"></script>
+    <script src="js/93-ventas.js?v=5.1"></script>
+    <script src="js/95-exportacion.js?v=5.1"></script>
+    <script src="js/99-window-arranque.js?v=5.1"></script>
 
     </div><!-- /#appWrapper -->
 
     <!-- ══════════════════════════════════════════════════════
          AUTH — Lógica de autenticación Firebase
          ══════════════════════════════════════════════════════ -->
-        <script src="js/auth.js?v=5.0"></script>
+        <script src="js/auth.js?v=5.1"></script>
 </body>
 </html>

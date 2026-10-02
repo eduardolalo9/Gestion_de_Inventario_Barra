@@ -140,7 +140,7 @@
                     // FASE 13 — el corte de fin de mes es una condición aparte
                     // (puede darse sola o junto con "cierra semana"), así que
                     // lleva su propio indicador en vez de pisar al anterior.
-                    + (_cl && _cl.esCorteMensual ? ' · <span style="color:#7c3aed;font-weight:700;">corte de mes</span>' : ''));
+                    + (_cl && _cl.esCorteMensual ? ' · <span style="color:var(--book);font-weight:700;">corte de mes</span>' : ''));
             } else {
                 // H-40 (hotfix 4.9): inventarios anteriores a R7/FASE 3 no tienen
                 // fechaRecuento y, tal cual, nunca se podrán contabilizar.
@@ -370,12 +370,12 @@
                     // semana siguiente, y eso se ve de un vistazo.
                     var _contab = (inv.estado === 'CONTABILIZADO');
                     html += '<span style="font-size:0.68rem;font-weight:700;color:'
-                         +  (_contab ? '#2563eb' : '#16a34a') + ';">'
+                         +  (_contab ? 'var(--accent)' : '#16a34a') + ';">'
                          +  (_contab ? 'CONTABILIZADO' : (inv.cierreTipo === 'abandonado' ? 'CERRADO · ABANDONADO' : 'CERRADO')) + '</span>';
                     html += '</div>';
                     html += '<p style="font-size:0.72rem;color:var(--txt-muted);">Fecha: ' + new Date(inv.fechaCreacion).toLocaleDateString('es-MX') + ' &nbsp;·&nbsp; Artículos: ' + (inv.totalProductos || '—') + '</p>';
                     if (_contab && inv.semanaDestino) {
-                        html += '<p style="font-size:0.7rem;color:#2563eb;font-weight:600;">📘 Inicial de la semana '
+                        html += '<p style="font-size:0.7rem;color:var(--accent);font-weight:600;">📘 Inicial de la semana '
                              +  escapeHtml(inv.semanaDestino) + '</p>';
                     }
                     // FASE 13 — el corte mensual es un segundo destino,
@@ -383,7 +383,7 @@
                     // un domingo-fin-de-mes no esconda que también generó un
                     // corte contable.
                     if (_contab && inv.mesDestino) {
-                        html += '<p style="font-size:0.7rem;color:#7c3aed;font-weight:600;">📅 Corte mensual '
+                        html += '<p style="font-size:0.7rem;color:var(--book);font-weight:600;">📅 Corte mensual '
                              +  escapeHtml(inv.mesDestino) + '</p>';
                     }
                     html += '</div>';
@@ -572,9 +572,9 @@
                 var _destPartes = [];
                 if (meta.semanaDestino) _destPartes.push('el stock inicial de la semana ' + escapeHtml(meta.semanaDestino));
                 if (meta.mesDestino)    _destPartes.push('el corte contable del mes ' + escapeHtml(meta.mesDestino));
-                html += '<div style="padding:9px 12px;border-radius:var(--r-md);background:#eff6ff;'
-                     +  'border-left:3px solid #2563eb;margin-bottom:10px;">'
-                     +  '<p style="font-size:0.75rem;font-weight:700;color:#1d4ed8;margin:0;">📘 Contabilizado</p>'
+                html += '<div style="padding:9px 12px;border-radius:var(--r-md);background:var(--accent-dim);'
+                     +  'border-left:3px solid var(--accent);margin-bottom:10px;">'
+                     +  '<p style="font-size:0.75rem;font-weight:700;color:var(--accent);margin:0;">📘 Contabilizado</p>'
                      +  '<p style="font-size:0.7rem;color:var(--txt-muted);margin:2px 0 0;">'
                      +  'Su resultado es ' + (_destPartes.length ? _destPartes.join(' y ') : '—')
                      +  (meta.contabilizadoEn ? ' · ' + new Date(meta.contabilizadoEn).toLocaleDateString('es-MX') : '')
@@ -591,7 +591,7 @@
                          +  '📘 No se puede contabilizar. ' + escapeHtml(_motivo) + '</p></div>';
                 } else {
                     html += '<button onclick="contabilizarInventario(\'' + _detalleInventarioCerradoId + '\', ' + meta.numero + ')" '
-                         +  'style="padding:7px 14px;border-radius:var(--r-md);background:#2563eb;color:#fff;'
+                         +  'style="padding:7px 14px;border-radius:var(--r-md);background:var(--accent);color:#fff;'
                          +  'font-size:0.75rem;font-weight:700;cursor:pointer;margin-bottom:10px;margin-left:6px;">'
                          +  '📘 Contabilizar</button>';
                 }
