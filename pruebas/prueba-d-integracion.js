@@ -361,6 +361,8 @@ async function main() {
             await ctx.firestore()
                 .doc('inventarioApp/' + DOC_ID + '/inventories/inv-activo')
                 .set({ inventoryId: 'inv-activo', estado: 'SINCRONIZADO', numero: 101 });
+            // HOTFIX 4.19 — como en producción, el documento raíz anuncia la sesión vigente.
+            await ctx.firestore().doc('inventarioApp/' + DOC_ID).set({ _auditoriaSessionId: 'inv-activo' }, { merge: true });
         });
 
         let ok = true;

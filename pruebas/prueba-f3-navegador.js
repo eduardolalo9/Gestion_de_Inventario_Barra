@@ -87,6 +87,49 @@ const C = []; const chk = (n, ok, d) => { C.push({ n, ok, d }); };
   chk('Ya contabilizado: informa, y no ofrece repetirlo',
       /[Cc]ontabilizado/.test(yaContab) && !/contabilizarInventario\(/.test(yaContab), '');
 
+  // ── HOTFIX 4.19: el Historial no se queda en "Cargando" y ofrece más ────
+  const recarga = await p.evaluate(async () => {
+    auditoriaView = 'historial';
+    _historialInventarios = null;          // lo que deja contabilizar / cerrar
+    const antes = renderHistorialInventarios();
+    for (let i = 0; i < 40 && _historialInventarios === null; i++) await new Promise(r => setTimeout(r, 100));
+    return { antes: /Cargando historial/.test(antes), despues: Array.isArray(_historialInventarios) };
+  });
+  chk('4.19 · Al volver al Historial invalidado, se vuelve a cargar solo',
+      recarga.antes && recarga.despues, JSON.stringify(recarga));
+  const verMas = await p.evaluate(() => {
+    _historialInventarios = [{ inventoryId: 'inv-b', numero: 42, estado: 'CONTABILIZADO', semanaDestino: '2026-09-14',
+                               fechaCreacion: Date.now(), totalProductos: 1 }];
+    _historialHayMas = true;
+    const conMas = renderHistorialInventarios();
+    _historialHayMas = false;
+    const sinMas = renderHistorialInventarios();
+    return { conMas: /historialVerMas\(\)/.test(conMas), sinMas: /historialVerMas\(\)/.test(sinMas) };
+  });
+  chk('4.19 · "Ver inventarios más antiguos" aparece solo si hay más',
+      verMas.conMas && !verMas.sinMas, JSON.stringify(verMas));
+
+  // ── HOTFIX 4.20: inventario huérfano (el #102 de agosto) ──────────────
+  const huer = await p.evaluate(() => {
+    window.isAdmin = () => true; window.hasPermission = () => true;
+    _auditoriaSessionId = '1790000000000';
+    _inventarioActivoId = '1788000000000';
+    _inventarioActivo = { inventoryId: '1788000000000', numero: 102, estado: 'SINCRONIZADO', fechaCreacion: Date.now(),
+                          fechaRecuento: '2026-09-30', creadoPorNombre: 'admin' };
+    const cab = _renderInventarioFisicoHeader();
+    const zona = _renderZonaCerrarInventario();
+    _historialInventarios = [{ inventoryId: 'x', numero: 102, estado: 'CERRADO', cierreTipo: 'abandonado', fechaCreacion: Date.now() }];
+    auditoriaView = 'historial';
+    const hist = renderHistorialInventarios();
+    _inventarioActivo = null; _inventarioActivoId = null;
+    return { aviso: /Inventario abandonado/.test(cab), reconteo: /data-rc-accion="iniciar"/.test(cab),
+             boton: /cerrarInventarioHuerfano\(_inventarioActivoId\)/.test(zona) && /abandonado #102/.test(zona),
+             normal: /cerrarInventarioFisico\(\)/.test(zona), hist: /CERRADO · ABANDONADO/.test(hist) };
+  });
+  chk('4.20 · Un huérfano se anuncia como abandonado, con su propio botón para cerrarlo',
+      huer.aviso && huer.boton && !huer.normal && !huer.reconteo, JSON.stringify(huer));
+  chk('4.20 · En el Historial se ve como CERRADO · ABANDONADO', huer.hist, JSON.stringify(huer));
+
   chk('Ningún error de JS en toda la prueba', errs.length === 0, errs.join(' | '));
 
   await nav.close();

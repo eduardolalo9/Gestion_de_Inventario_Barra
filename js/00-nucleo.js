@@ -93,6 +93,42 @@
         // Resultado YA guardado (o con errores) de confirmarImportacionCompras(),
         // para la pantalla de incidencias (D-4).
         let _comprasImportResultado = null;
+        // RECETARIO-1 — bill of materials plano (sin sub-recetas, ver diseño
+        // 2026-09-26 y verificación contra Excel 2026-09-27). Mismo patrón que
+        // `products`: el admin edita este arreglo localmente y lo PUBLICA a
+        // `recetario/recetas` (documento único) — ver js/50-roles-permisos.js.
+        // Cada elemento: { id, nombre, pv, categoria, activa, ingredientes:[{productoId,
+        // cantidad, uom, descripcionExcel?}], metodo, cristaleria, hielo, decoracion,
+        // _v, creadoPor, creadoEn, actualizadoPor, actualizadoEn }. `pv` es el código
+        // único (ej. PVB1000001) — solo lo llena la importación (js/92-recetario-importar.js),
+        // nunca el editor manual (ver corrección de nomenclatura, RECETARIO-2).
+        let recetas = [];
+        // Estado de la pantalla de Recetario (js/91-recetario.js).
+        // 'lista' | 'ficha'. La búsqueda de texto vive en _recetarioSearchTerm.
+        let recetarioView = 'lista';
+        let recetarioFichaId = null;
+        let _recetarioSearchTerm = '';
+        // Estado de la importación de recetas desde Excel (RECETARIO-2,
+        // js/92-recetario-importar.js) — mismo patrón que comprasImportView.
+        let recetarioImportView = 'lista'; // 'lista' | 'vista_previa' | 'incidencias'
+        let _recetarioImportPendiente = null;
+        let _recetarioImportResultado = null;
+        // FASE 10 — VENTAS del POS (js/93-ventas.js). `ventas` son las líneas
+        // de UNA semana (la que indica ventasSemanaId), no un histórico: el
+        // histórico vive en Firestore. Cada línea:
+        // { sku, nombre, tipo, cantidad, ventaNeta }.
+        // FASE 10B — una semana puede tener VARIOS periodos (un día, varios
+        // días, la semana completa), un documento por periodo
+        // (inventarioApp/{docId}/ventas/{fechaInicio_fechaFin}). `ventas` es
+        // la SUMA por SKU de todos los periodos de la semana, y
+        // `ventasPeriodos` dice qué días cubren: { id, inicio, fin, totalSkus,
+        // totalUnidades, legado }.
+        let ventas = [];
+        let ventasSemanaId = null;
+        let ventasPeriodos = [];
+        let ventasImportView = 'lista'; // 'lista' | 'vista_previa' | 'incidencias'
+        let _ventasImportPendiente = null;
+        let _ventasImportResultado = null;
         let activeTab = 'inicio';
         let editingProductId = null;
         let searchTerm = '';

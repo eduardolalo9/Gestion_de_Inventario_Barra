@@ -6,7 +6,13 @@ const CASOS = [];
 function chk(n, ok, det) { CASOS.push({n, ok, det}); }
 
 (async () => {
-  const nav = await chromium.launch({ headless: true });
+  // FASE 8C: usa el mismo helper portable que el resto de las pruebas de
+  // navegador (ver pruebas/_lanzar-navegador.js) — este archivo seguía con
+  // chromium.launch({ headless: true }) a secas, que en esta caja intenta
+  // bajar/usar chrome-headless-shell (no instalado aquí) en vez de
+  // /opt/pw-browsers/chromium. Sin relación con el retiro de conteoAreas;
+  // se corrige de paso porque impedía correr la suite completa en verde.
+  const nav = await chromium.launch(require('./_lanzar-navegador')({ headless: true }));
   const ctx = await nav.newContext({ ...devices['Pixel 5'], viewport:{width:390,height:844} });
   const p = await ctx.newPage();
   const errs = []; p.on('pageerror', e => errs.push(String(e).slice(0,160)));
@@ -81,11 +87,12 @@ function chk(n, ok, det) { CASOS.push({n, ok, det}); }
     const orig = _db; _db = { collection(){ llamo = true; throw new Error('no deberia llegar aqui'); } };
     await loadFromCloud();
     await loadConteoPorUsuarioFromFirestore();
-    await loadConflictosDesdeFirestore();
+    // FASE 8C: loadConflictosDesdeFirestore() se retiró junto con conteoAreas
+    // (ver js/40-firestore.js) — ya no es una de las cargas de arranque.
     _db = orig;
     return { llamo };
   });
-  chk('Las 3 cargas de arranque no consultan Firestore sin sesión', c5.llamo === false, JSON.stringify(c5));
+  chk('Las 2 cargas de arranque no consultan Firestore sin sesión', c5.llamo === false, JSON.stringify(c5));
 
   await nav.close();
 

@@ -21,6 +21,16 @@ const C=[]; const chk=(n,ok,d)=>C.push({n,ok,d});
   chk('La página carga sin errores de JavaScript', errs.length===0, errs.join(' | '));
   chk('XLSX disponible', await p.evaluate(()=>typeof XLSX!=='undefined'), '');
 
+  // El catálogo real (catalogo.xlsx) no está en el repositorio: contiene los
+  // datos del bar. Sin él esta prueba no tiene qué importar; se OMITE con
+  // aviso claro en vez de fallar con "total=0". Para correrla, copia tu
+  // catálogo exportado a la raíz del repo como catalogo.xlsx.
+  const hayCatalogo = await p.evaluate(async()=>{ try { return (await fetch('catalogo.xlsx',{method:'HEAD'})).ok; } catch(_) { return false; } });
+  if (!hayCatalogo) {
+    console.log('\n  ⏭️  P0 omitida: falta catalogo.xlsx en la raíz del repo (no se versiona: son datos del bar).\n');
+    await nav.close(); process.exit(0);
+  }
+
   // ── Importar el catálogo REAL por el camino real de la app ──
   const imp = await p.evaluate(async()=>{
     products = [];

@@ -34,6 +34,15 @@ const PRUEBAS = [
     'prueba-fase6-navegador.js', // FASE 6 — buscadores en la app real
     'prueba-hotfix-decimales.js', // HOTFIX — separador decimal (coma/punto) en conteo físico
     'prueba-reconteo-navegador.js', // RECONTEO — ventana de reconteo en la app real
+    'prueba-panel-navegador.js',    // PREMIUM — panel, ficha de producto y Conteo sin inventario
+    'prueba-fase8-navegador.js',    // FASE 8 — las dos existencias y el interruptor de fuente
+    'prueba-contabilizar-navegador.js', // Contabilizar en Conteo y estado CONTABILIZADO
+    'prueba-h40-navegador.js',          // H-40 (hotfix 4.9) — fecha de recuento domingo/fin de mes
+    'prueba-recetario1-navegador.js',   // RECETARIO-1 — pestaña, editor, costeo y permisos
+    'prueba-recetario2-navegador.js',   // RECETARIO-2 — importador: parseo, vista previa, merge por PV/nombre
+    'prueba-fase10-navegador.js',       // FASE 10 — ventas del POS: parseo, semana, vista previa, permisos
+    'prueba-fase11a-navegador.js',      // FASE 11A — costeo por unidad, consumo teórico y enchufe en existencia
+    'prueba-fase10b-ui-navegador.js',   // FASE 10B — Inventario Físico para el pulgar: medidas, separación y contraste
 ];
 
 function esperarServidor(intentos) {

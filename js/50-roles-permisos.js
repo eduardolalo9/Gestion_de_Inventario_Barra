@@ -28,17 +28,24 @@
                             console.warn('[AuditHuerfano] Reintento fallido:', e)
                         );
                     }
-                    // FIX 3: Reintentar syncs de área que fallaron en auditoriaFinalizarConteo
-                    if (window._pendingAreaSyncs && window._pendingAreaSyncs.size > 0) {
-                        console.info('[Atomico] Reintentando ' + window._pendingAreaSyncs.size + ' área(s) pendiente(s)…');
-                        window._pendingAreaSyncs.forEach(function(area) {
-                            syncConteoAtomicoPorArea(area)
-                                .then(function() { window._pendingAreaSyncs.delete(area); })
-                                .catch(function(e) { console.warn('[Atomico] Reintento fallido para ' + area + ':', e); });
-                            syncConteoPorUsuarioToFirestore(area)
-                                .catch(function(e) { console.warn('[MultiUser] Reintento fallido para ' + area + ':', e); });
-                        });
-                    }
+                    // FASE 8C (26/09/2026): aquí vivía el reintento de
+                    // _pendingAreaSyncs para syncConteoAtomicoPorArea (colección
+                    // heredada conteoAreas, retirada — ver js/40-firestore.js).
+                    // _pendingAreaSyncs solo lo poblaba esa función: al
+                    // retirarla, el Set nunca vuelve a tener elementos y este
+                    // bloque quedaba muerto. Se quita entero.
+                    //
+                    // Nota honesta (no es objetivo de esta fase, queda anotado
+                    // para no perderlo): syncConteoPorUsuarioToFirestore()
+                    // —conteoMultiUsuario, sigue activo— no tiene hoy un
+                    // reintento inmediato propio al reconectar; si falla, su
+                    // único respaldo es el sync periódico general (3 min) vía
+                    // _cloudSyncPending, que hoy tampoco activa en su catch().
+                    // Antes de este retiro, ese reintento inmediato solo
+                    // ocurría de rebote cuando el área TAMBIÉN fallaba en
+                    // syncConteoAtomicoPorArea — nunca en un fallo aislado de
+                    // syncConteoPorUsuarioToFirestore. No es una regresión
+                    // nueva, pero conviene decirlo con nombre y apellido.
                     loadFromCloud().then(function() {
                         // D — los conteos que se hicieron sin señal se suben
                         // aquí. Va después de loadFromCloud a propósito: así
@@ -118,7 +125,18 @@
             //                      auditoriaConteoPorUsuario, es decir el
             //                      conteo individual de OTRAS personas.
             'inventory.post',
-            'data.exportFull'
+            'data.exportFull',
+            // RECETARIO-1 (2026-09-27) — recipe.read separado de recipe.edit
+            // siguiendo exactamente el patron catalog.read/catalog.edit: la
+            // decision del propietario fue "admin edita, todos consultan", y
+            // este catalogo es CERRADO, asi que la capacidad de consulta
+            // necesita su propio permiso explicito en vez de quedar implicita.
+            'recipe.read', 'recipe.edit',
+            // FASE 10 (2026-09-27) — VENTAS del POS. Mismo criterio que
+            // compras: es informacion comercial, asi que NO entra en los roles
+            // por defecto de subjefe ni bartender; se delega por override
+            // desde la pantalla de permisos cuando haga falta.
+            'sales.read', 'sales.import'
         ];
         const PERMISOS_CATALOGO_SET = new Set(PERMISOS_CATALOGO);
 
@@ -199,12 +217,18 @@
             'branches.read':         { nombre: 'Ver sucursales',               descripcion: 'Reservado: el sistema todavia no maneja varias sucursales.',                   grupo: 'Sucursales',          delegable: false, sensible: false, efectivo: false },
             'branches.create':       { nombre: 'Crear sucursales',             descripcion: 'Reservado: el sistema todavia no maneja varias sucursales.',                   grupo: 'Sucursales',          delegable: false, sensible: true,  efectivo: false },
             'branches.update':       { nombre: 'Editar sucursales',            descripcion: 'Reservado: el sistema todavia no maneja varias sucursales.',                   grupo: 'Sucursales',          delegable: false, sensible: true,  efectivo: false },
-            'branches.disable':      { nombre: 'Eliminar sucursales',          descripcion: 'Reservado: el sistema todavia no maneja varias sucursales.',                   grupo: 'Sucursales',          delegable: false, sensible: true,  efectivo: false }
+            'branches.disable':      { nombre: 'Eliminar sucursales',          descripcion: 'Reservado: el sistema todavia no maneja varias sucursales.',                   grupo: 'Sucursales',          delegable: false, sensible: true,  efectivo: false },
+
+            // ── Recetario (RECETARIO-1, 2026-09-27) ─────────────────────────
+            'recipe.read':           { nombre: 'Ver recetario',                descripcion: 'Consultar recetas, ingredientes y costo por porcion.',                        grupo: 'Recetario',           delegable: true,  sensible: false, efectivo: true  },
+            'recipe.edit':           { nombre: 'Editar recetario',             descripcion: 'Crear, modificar y publicar recetas a todos los dispositivos.',                grupo: 'Recetario',           delegable: true,  sensible: true,  efectivo: true  },
+            'sales.read':            { nombre: 'Ver ventas',                   descripcion: 'Consultar las ventas del POS cargadas por semana.',                            grupo: 'Ventas',              delegable: true,  sensible: true,  efectivo: true  },
+            'sales.import':          { nombre: 'Importar ventas',              descripcion: 'Cargar el reporte de ventas del POS de una semana desde Excel.',                grupo: 'Ventas',              delegable: true,  sensible: true,  efectivo: true  }
         };
 
         // Orden de los grupos en la pantalla de administracion.
         const PERMISOS_GRUPOS_ORDEN = [
-            'Inventario fisico', 'Catalogo', 'Areas de conteo', 'Compras',
+            'Inventario fisico', 'Catalogo', 'Recetario', 'Areas de conteo', 'Compras', 'Ventas',
             'Reportes y datos', 'Configuracion', 'Usuarios y permisos', 'Sucursales'
         ];
 
@@ -250,7 +274,11 @@
                 permissions: [
                     'inventory.count', 'inventory.viewOwn', 'inventory.closeOwn',
                     'inventory.history', 'catalog.read', 'warehouses.read',
-                    'inventory.closeOther', 'inventory.export'
+                    'inventory.closeOther', 'inventory.export',
+                    // RECETARIO-1 — "todos consultan" (decision del propietario,
+                    // 2026-09-26): recipe.read va en los roles por defecto igual
+                    // que catalog.read, no como una excepcion sin permiso.
+                    'recipe.read'
                 ],
                 esSistema: true
             },
@@ -258,7 +286,8 @@
                 nombre: 'Bartender',
                 permissions: [
                     'inventory.count', 'inventory.viewOwn', 'inventory.closeOwn',
-                    'inventory.history', 'catalog.read', 'warehouses.read'
+                    'inventory.history', 'catalog.read', 'warehouses.read',
+                    'recipe.read'
                 ],
                 esSistema: true
             }
@@ -728,9 +757,13 @@
                 // catálogo, no necesita escucharlo) — se apaga igualmente el
                 // listener de catálogo de usuario para no dejarlo huérfano.
                 if (typeof _unsubCatalogo === 'function') { _unsubCatalogo(); _unsubCatalogo = null; }
+                // RECETARIO-1 — a diferencia del catálogo, subscribeRecetarioAdmin()
+                // SÍ es un listener real (ver comentario en su definición).
+                if (typeof _unsubRecetario === 'function') { _unsubRecetario(); _unsubRecetario = null; }
 
                 subscribeAjustesPendientes();
                 subscribeCatalogoAdmin();
+                subscribeRecetarioAdmin();
                 subscribeAllUsersAuditoria(); // Admin ve todos los conteos en tiempo real
 
                 console.info('[Permisos] Listeners reconciliados → modo ADMIN' + (modoAnterior ? ' (antes: ' + modoAnterior + ')' : ' (arranque)'));
@@ -742,6 +775,7 @@
                 if (typeof _unsubAllUsers === 'function') { _unsubAllUsers(); _unsubAllUsers = null; }
                 if (typeof _unsubAjustes  === 'function') { _unsubAjustes();  _unsubAjustes  = null; }
                 if (typeof _unsubCatalogo === 'function') { _unsubCatalogo(); _unsubCatalogo = null; }
+                if (typeof _unsubRecetario === 'function') { _unsubRecetario(); _unsubRecetario = null; }
 
                 // REQUISITO P1.2 (pasos 6-7-9 del ticket): sin esto, los
                 // conteos de TODOS los usuarios y los ajustes administrativos
@@ -755,6 +789,7 @@
                 _purgarConteosAjenosLocales();
 
                 subscribeCatalogoUsuario();
+                subscribeRecetarioUsuario();
                 subscribeNotificacionesUsuario();
                 subscribeMyAuditoria(); // Usuario escucha sus propios desbloqueos
 
@@ -808,6 +843,7 @@
         let _unsubCatalogo  = null;
         let _unsubNotifs    = null;
         let _unsubMainDoc   = null;  // FIX SYNC-3: listener del documento principal de inventario
+        let _unsubRecetario = null;  // RECETARIO-1 — mismo patron que _unsubCatalogo
 
         // ══════════════════════════════════════════════════════════════════════
         //  FIX SYNC-3: LISTENER EN TIEMPO REAL DEL DOCUMENTO PRINCIPAL
@@ -849,6 +885,15 @@
                     if (snapshot.metadata.hasPendingWrites) return;
 
                     const data = snapshot.data();
+
+                    // HOTFIX 4.18: la sesión vigente (y su Inventario Físico) se
+                    // reconcilia ANTES de las capas siguientes. Capa 2 descarta lo
+                    // escrito por el mismo uid (la laptop de la misma cuenta no se
+                    // enteraba de lo creado en el teléfono) y la comparación de
+                    // _lastModified descarta todo si lo local es igual o más nuevo
+                    // (el inventario no reaparecía al reabrir la app). Idempotente:
+                    // si la sesión es la misma solo asegura la suscripción.
+                    _reconciliarSesionDesdeDocPrincipal(data, 'mainDoc');
 
                     // Capa 2: ignorar si fue este mismo usuario/dispositivo quien escribió
                     const writerUid = data._lastWrittenBy;
@@ -1269,6 +1314,104 @@
                 }, function(err) { console.warn('[Catalogo][Admin] Error en listener:', err); });
         }
 
+        // ── MÓDULO: RECETARIO (RECETARIO-1, 2026-09-27) ────────────────────
+        // Mismo patron de documento unico "publicar/suscribir" que el
+        // catalogo (ver arriba) — probado ya en produccion con 424 productos,
+        // sin Cloud Functions ni lecturas por documento. Unica diferencia de
+        // fondo: la LECTURA no exige catalog.publish/catalog.edit para
+        // suscribirse, solo recipe.read (decision del propietario: "admin
+        // edita, todos consultan" — ver claude/recetario-diseno-tecnico-2026-09-26.md).
+        async function publicarRecetarioFirestore() {
+            if (!_db || !hasPermission('recipe.edit')) return;
+            try {
+                await _db.collection('recetario').doc('recetas').set({
+                    recetas:      recetas,
+                    publicadoPor: currentUserUid,
+                    publicadoEn:  Date.now(),
+                    version:      Date.now()
+                });
+                await crearNotificacion('recetario', 'Admin publicó el recetario actualizado (' + recetas.length + ' recetas)', null, true);
+                showNotification('✅ Recetario publicado a todos los usuarios');
+            } catch (e) {
+                console.error('[Recetario] Error publicando:', e);
+                showNotification('❌ Error al publicar recetario');
+            }
+        }
+        window.publicarRecetarioFirestore = publicarRecetarioFirestore;
+
+        /**
+         * _vaciarRecetarioPublicado()
+         * Mismo mecanismo que _vaciarCatalogoPublicado(): un documento vacio
+         * con version mas nueva, nunca un delete (ver el comentario de esa
+         * funcion para el porque — onSnapshot necesita snap.exists===true).
+         */
+        async function _vaciarRecetarioPublicado() {
+            if (!_db || !hasPermission('recipe.edit')) return false;
+            const version = Date.now();
+            await _db.collection('recetario').doc('recetas').set({
+                recetas:      [],
+                publicadoPor: currentUserUid,
+                publicadoEn:  version,
+                version:      version,
+                vaciado:      true
+            });
+            try {
+                localStorage.setItem('inventarioApp_recetarioVersion', String(version));
+            } catch(_) {}
+            console.info('[Recetario] Recetario publicado vaciado (v' + version + ').');
+            return true;
+        }
+        window._vaciarRecetarioPublicado = _vaciarRecetarioPublicado;
+
+        function _aplicarSnapshotRecetario(snap, origenLog) {
+            if (!snap.exists) return;
+            const data = snap.data();
+            if (!Array.isArray(data.recetas)) return;
+            const serverVersion = data.version || 0;
+            const localVersion  = parseInt(localStorage.getItem('inventarioApp_recetarioVersion') || '0', 10);
+            if (serverVersion <= localVersion) return; // ya lo tenemos (incluye "yo mismo lo publiqué")
+
+            if (data.recetas.length === 0 && data.vaciado) {
+                recetas = [];
+                localStorage.setItem('inventarioApp_recetarioVersion', String(serverVersion));
+                saveToLocalStorage();
+                if (typeof activeTab !== 'undefined' && activeTab === 'recetario') renderTab();
+                showNotification('🗑️ El administrador vació el recetario');
+                return;
+            }
+            if (data.recetas.length === 0) return;
+            recetas = _mergeArrayByIdPreferCloud(recetas, data.recetas);
+            // Hotfix 4.14 — el documento publicado puede traer recetas del
+            // esquema anterior (nombre dentro de `pv`). Se curan al recibirlas,
+            // así cada dispositivo se arregla solo sin esperar a que el
+            // administrador vuelva a publicar. Ver js/91-recetario.js.
+            if (typeof _migrarRecetasNomenclatura === 'function') _migrarRecetasNomenclatura(recetas);
+            localStorage.setItem('inventarioApp_recetarioVersion', String(serverVersion));
+            saveToLocalStorage();
+            if (typeof activeTab !== 'undefined' && activeTab === 'recetario') renderTab();
+            showNotification('📖 Recetario actualizado');
+            console.info('[Recetario]' + (origenLog ? '[' + origenLog + ']' : ''), 'Recetario recibido:', recetas.length, 'recetas');
+        }
+
+        function subscribeRecetarioUsuario() {
+            if (!_db || _unsubRecetario) return;
+            _unsubRecetario = _db.collection('recetario').doc('recetas')
+                .onSnapshot(function(snap) { _aplicarSnapshotRecetario(snap); },
+                            function(err) { console.warn('[Recetario] Error en listener:', err); });
+        }
+        window.subscribeRecetarioUsuario = subscribeRecetarioUsuario;
+
+        // El admin tambien escucha (no es un no-op como en catalogo): un
+        // segundo dispositivo admin necesita ver en tiempo real lo que OTRO
+        // admin publica, igual que subscribeCatalogoAdmin().
+        function subscribeRecetarioAdmin() {
+            if (!_db || _unsubRecetario) return;
+            _unsubRecetario = _db.collection('recetario').doc('recetas')
+                .onSnapshot(function(snap) { _aplicarSnapshotRecetario(snap, 'Admin'); },
+                            function(err) { console.warn('[Recetario][Admin] Error en listener:', err); });
+        }
+        window.subscribeRecetarioAdmin = subscribeRecetarioAdmin;
+
         // ── MÓDULO: NOTIFICACIONES ─────────────────────────────────────────
         async function crearNotificacion(tipo, texto, destinatarioUid, broadcast) {
             if (!_db) return;
@@ -1406,76 +1549,70 @@
             if (!hasPermission('reports.export')) return;
             showNotification('⏳ Generando reporte global…');
             try {
-                // Leer conteos de todos los dispositivos desde conteoAreas
                 const AREAS = AREAS_CONTEO;
 
-                // FIX #2 — Fase 1: recopilar conteos individuales por dispositivo
-                // sin sumarlos directamente. Cada entrada = { enteras, abiertas } de un dispositivo.
-                // { prodId: { area: [ { enteras, abiertas }, ... ] } }
-                const conteoPorDispositivo = {};
+                // ── FASE 8 · EL REPORTE Y LA PANTALLA CUENTAN LO MISMO ────────
+                //
+                //  Antes esta función releía conteoAreas/{area}/dispositivos y
+                //  PROMEDIABA las cuentas de cada aparato. La pantalla de
+                //  auditoría, en cambio, usa auditoriaConteo, que aplica otra
+                //  regla: si el admin contó ese producto en esa área, su conteo
+                //  MANDA (ya vio el del bartender y corrigió encima); solo si
+                //  ningún admin contó se resuelve entre usuarios por el más
+                //  reciente (_recalcAdminAggregatedConteo, 45-inventario-datos).
+                //
+                //  Con dos reglas distintas sobre los mismos datos, el Excel
+                //  descargable podía dar una cifra y la pantalla otra, para el
+                //  mismo producto y en el mismo instante. El reporte, que es lo
+                //  que se archiva y con lo que se discute, era el que mentía.
+                //
+                //  Además aquella colección se borraba entera al abrir cada
+                //  nueva auditoría, así que el reporte dependía de datos que
+                //  otro proceso vaciaba.
+                //
+                //  Ahora se lee auditoriaConteo, que ya está en memoria: misma
+                //  regla que la pantalla, cero lecturas nuevas a Firestore y el
+                //  dato de conflicto viaja al reporte en vez de perderse.
+                //
+                //  FASE 8C (26/09/2026): conteoAreas se retiró por completo
+                //  (ver js/40-firestore.js). La función que la borraba en cada
+                //  reinicio de auditoría se renombró a
+                //  resetConteoMultiUsuarioEnFirestore() — ya solo limpia
+                //  conteoMultiUsuario, que sigue activo.
+                const fuente = (typeof auditoriaConteo !== 'undefined' && auditoriaConteo) ? auditoriaConteo : {};
+                const conteoGlobal = {}; // { prodId: { area: { enteras, abiertas, numConteos, hayConflicto } } }
+                let conDatos = 0;
 
-                for (const area of AREAS) {
-                    const snapDisp = await _db
-                        .collection('inventarioApp').doc(FIRESTORE_DOC_ID)
-                        .collection('conteoAreas').doc(area)
-                        .collection('dispositivos').get();
-
-                    snapDisp.docs.forEach(function(doc) {
-                        const data = doc.data();
-                        Object.keys(data).forEach(function(key) {
-                            if (key.startsWith('_')) return;
-                            const entry = data[key];
-                            if (!entry || typeof entry !== 'object') return;
-                            if (!conteoPorDispositivo[key]) conteoPorDispositivo[key] = {};
-                            if (!conteoPorDispositivo[key][area]) conteoPorDispositivo[key][area] = [];
-                            conteoPorDispositivo[key][area].push({
-                                enteras:  typeof entry.enteras === 'number' ? entry.enteras : 0,
-                                abiertas: Array.isArray(entry.abiertas)     ? entry.abiertas : []
-                            });
-                        });
-                    });
-                }
-
-                // FIX #2 — Fase 2: calcular PROMEDIO de enteras y colección de abiertas.
-                // El conteo es "ciego": varios bartenders cuentan el mismo producto de forma
-                // independiente. El consenso se obtiene promediando las enteras.
-                // Las abiertas son botellas físicas reales (distintas por bartender), por lo
-                // que se conservan todas y se promedian individualmente.
-                const conteoGlobal = {}; // { prodId: { area: { enteras, abiertas, numConteos } } }
-
-                Object.keys(conteoPorDispositivo).forEach(function(prodId) {
+                Object.keys(fuente).forEach(function(prodId) {
                     conteoGlobal[prodId] = {};
                     AREAS.forEach(function(area) {
-                        const listaConteos = conteoPorDispositivo[prodId][area] || [];
-                        if (listaConteos.length === 0) {
-                            conteoGlobal[prodId][area] = { enteras: 0, abiertas: [], numConteos: 0 };
+                        const d = fuente[prodId] && fuente[prodId][area];
+                        if (!d) {
+                            conteoGlobal[prodId][area] = { enteras: 0, abiertas: [], numConteos: 0, hayConflicto: false };
                             return;
                         }
-                        // Promedio de botellas enteras (redondeado al entero más cercano)
-                        const sumaEnteras = listaConteos.reduce(function(s, c) { return s + c.enteras; }, 0);
-                        const promedioEnteras = Math.round(sumaEnteras / listaConteos.length);
-
-                        // Abiertas: promediar por posición (botella abierta 1, 2, …)
-                        // Si un bartender reporta 2 abiertas y otro 1, se promedian las posiciones comunes
-                        const maxAbiertas = listaConteos.reduce(function(m, c) { return Math.max(m, c.abiertas.length); }, 0);
-                        const promedioAbiertas = [];
-                        for (let i = 0; i < maxAbiertas; i++) {
-                            const vals = listaConteos
-                                .map(function(c) { return c.abiertas[i]; })
-                                .filter(function(v) { return typeof v === 'number' && v > 0; });
-                            if (vals.length > 0) {
-                                const avg = vals.reduce(function(s, v) { return s + v; }, 0) / vals.length;
-                                promedioAbiertas.push(Math.round(avg * 100) / 100);
-                            }
-                        }
-
+                        const abiertas = Array.isArray(d.abiertas)
+                            ? d.abiertas.filter(function(v) { return typeof v === 'number' && v > 0; })
+                            : [];
+                        const enteras = typeof d.enteras === 'number' ? d.enteras : 0;
+                        if (enteras > 0 || abiertas.length > 0) conDatos++;
                         conteoGlobal[prodId][area] = {
-                            enteras:    promedioEnteras,
-                            abiertas:   promedioAbiertas,
-                            numConteos: listaConteos.length
+                            enteras:      enteras,
+                            abiertas:     abiertas,
+                            numConteos:   typeof d._usuarios === 'number' ? d._usuarios : 0,
+                            hayConflicto: d._hayConflicto === true
                         };
                     });
                 });
+
+                // Un reporte con todo en cero no es un reporte: es una foto de
+                // que nadie ha contado todavía, o de que este dispositivo no ha
+                // recibido los conteos. Publicarlo en silencio haría que alguien
+                // lo descargue y lo tome por bueno.
+                if (conDatos === 0) {
+                    showNotification('⚠️ No hay conteos para reportar todavía');
+                    return;
+                }
 
                 const productosReporte = products.map(function(p) {
                     const porArea = {};

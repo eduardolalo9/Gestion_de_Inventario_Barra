@@ -222,14 +222,17 @@ chk('El vaciado avisa si no se pudo propagar',
         /function _mergeArrayByIdPreferLocal\(localArr, cloudArr, deletedIds\) \{[\s\S]*?\n        \}/);
     const cuerpoPurga = persistencia.match(
         /function _purgaDeCatalogoVigente\(datosNube\) \{[\s\S]*?\n        \}/);
-    if (!cuerpoMerge || !cuerpoPurga) {
+    // FASE 8: la fusión ya consulta _comparaVersion, así que viaja con ella.
+    const cuerpoVer = persistencia.match(
+        /function _comparaVersion\(a, b\) \{[\s\S]*?\n        \}/);
+    if (!cuerpoMerge || !cuerpoPurga || !cuerpoVer) {
         chk('Las funciones de catálogo se pudieron aislar', false);
         return;
     }
     chk('Las funciones de catálogo se pudieron aislar', true);
 
     const ctx = { _catalogoPurgadoEn: 0 };
-    const api = new Function('ctx', 'with (ctx) { ' + cuerpoMerge[0] + '\n' + cuerpoPurga[0] +
+    const api = new Function('ctx', 'with (ctx) { ' + cuerpoVer[0] + '\n' + cuerpoMerge[0] + '\n' + cuerpoPurga[0] +
         '\n return { merge: _mergeArrayByIdPreferLocal, purga: _purgaDeCatalogoVigente }; }')(ctx);
 
     // El catálogo real del bar: 424 productos.
@@ -293,8 +296,11 @@ chk('El lector sigue indexando por userId (no se duplican personas)',
 chk('El documento por dispositivo exige que el uid coincida',
     /allow create, update: if request\.auth != null\s*\n\s*&& _cuentaActiva\(\)\s*\n\s*&& request\.resource\.data\._userUid == request\.auth\.uid;/.test(reglas));
 
-chk('Ese uid ya viajaba en el payload',
-    /_userUid:\s*currentUserUid \|\| 'anonymous',/.test(firestore));
+// FASE 8C (26/09/2026): "Ese uid ya viajaba en el payload" comprobaba el
+// payload de syncConteoAtomicoPorArea() (colección conteoAreas), retirada
+// por completo — ver prueba-8c.js. La regla de arriba (documento por
+// dispositivo, _userUid == request.auth.uid) se deja tal cual en
+// firestore.rules a propósito: no se tocan reglas en este retiro.
 
 chk('La bitácora de conflictos ya no se puede borrar',
     /match \/conflictos\/\{conflictoId\} \{[\s\S]{0,400}?allow delete: if isAdminUser\(\);/.test(reglas));

@@ -209,6 +209,17 @@
                  // FASE 2A — catalog.publish en vez de "eres admin".
                  allow write: if hasPerm('catalog.publish');
                }
+               // RECETARIO-1 (27/09/2026) — mismo patron que /catalogo: un
+               // documento unico (recetario/recetas) que el admin publica y
+               // todos los autenticados leen. Decision del propietario:
+               // "admin edita, todos consultan" — por eso la lectura NO exige
+               // recipe.read (igual que /catalogo no exige catalog.read para
+               // leer), solo estar autenticado. La escritura si exige
+               // recipe.edit explicito.
+               match /recetario/{docId} {
+                 allow read:  if request.auth != null;
+                 allow write: if hasPerm('recipe.edit');
+               }
                match /inventarioApp/{docId} {
                  // FASE 0 — VULNERABILIDAD S-1 (CRÍTICA)
                  // Antes: 'allow read, write: if request.auth != null'. Este
@@ -264,7 +275,27 @@
                                   || (request.auth != null
                                       && request.resource.data.keys()
                                            .hasOnly(_camposSyncNoAdmin()));
-                 allow update: if isAdminUser()
+                 // FASE 12 (2026-09-30) — LA SESIÓN SOLO CAMBIA CREANDO SU
+                 // INVENTARIO. Defecto reproducido (prueba-folio-integracion.js,
+                 // F4): la sincronización general del admin reenviaba su
+                 // _auditoriaSessionId y su auditoriaStatus LOCALES. Una laptop
+                 // que se quedó abierta en el inventario anterior regresaba el
+                 // servidor a ese inventario y marcaba "completadas" las áreas
+                 // del nuevo; desde ahí, cualquier dispositivo que abriera la
+                 // app veía otro inventario. Ahora cambiar la sesión exige que
+                 // su inventario NO existiera antes y quede creado, activo, en
+                 // la MISMA escritura (el batch de _adminIniciarSesionFirestore).
+                 // Una copia vieja apunta a un inventario que ya existe → se
+                 // rechaza.
+                 function _cambioDeSesionValido() {
+                   let nueva = request.resource.data.get('_auditoriaSessionId', null);
+                   let vieja = resource.data.get('_auditoriaSessionId', null);
+                   return nueva == vieja
+                       || ( nueva is string
+                            && !exists(/databases/$(database)/documents/inventarioApp/$(docId)/inventories/$(nueva))
+                            && getAfter(/databases/$(database)/documents/inventarioApp/$(docId)/inventories/$(nueva)).data.estado == 'SINCRONIZADO' );
+                 }
+                 allow update: if (isAdminUser() && _cambioDeSesionValido())
                                   || (request.auth != null
                                       && request.resource.data.diff(resource.data).affectedKeys()
                                            .hasOnly(_camposSyncNoAdmin()));
@@ -518,8 +549,20 @@
                    // siguiera vivo, porque 'status' solo se respetaba en el
                    // cliente. Los usuarios sin el campo siguen siendo activos
                    // por defecto, así que nadie queda bloqueado al desplegar.
+                   // HOTFIX 4.19 — el documento PROPIO solo se escribe para el
+                   // inventario vigente. Un teléfono sin señal (o con una versión
+                   // vieja en caché) que sube tarde su conteo del inventario
+                   // anterior regresaba el documento a esa sesión: el conteo de
+                   // esa persona en el inventario nuevo dejaba de verse y no
+                   // entraba al cierre. getAfter y no get: en el batch que crea
+                   // un inventario, la sesión del documento raíz cambia en la
+                   // MISMA escritura que el documento del admin. Lo rechazado
+                   // no se pierde: el cliente lo marca pendiente y, al pasar a
+                   // la sesión nueva, lo archiva en conteosAuditoriaHuerfanos (5B).
                    allow create, update: if request.auth != null && _cuentaActiva() && (
-                     request.auth.uid == uid
+                     (request.auth.uid == uid
+                      && request.resource.data.sessionId
+                         == getAfter(/databases/$(database)/documents/inventarioApp/$(docId)).data._auditoriaSessionId)
                      || (
                        isAdminUser() &&
                        get(/databases/$(database)/documents/inventarioApp/$(docId)/inventories/$(request.resource.data.sessionId)).data.estado != 'CERRADO'
@@ -562,9 +605,35 @@
                  // esto no es un botón oculto, es la propia Rule la que lo
                  // impide. 'delete' nunca se permite (el historial es
                  // permanente por diseño de negocio).
+                 // FASE 12 (2026-09-30) — FOLIO Y ANTI-SOLAPAMIENTO EN EL
+                 // SERVIDOR. Antes solo lo comprobaba la app: una escritura que
+                 // se saltara la pantalla, o dos admins a la vez, podían dejar
+                 // DOS inventarios activos (reproducido en
+                 // pruebas/prueba-folio-integracion.js, F3). Ahora el servidor
+                 // exige, al crear:
+                 //   · id y folio coherentes: numero == el del contador (que
+                 //     solo avanza +1), así que no hay folios repetidos ni
+                 //     inventados;
+                 //   · nace activo (SINCRONIZADO);
+                 //   · el inventario de la sesión vigente NO está activo.
+                 // `get()` dentro de un batch lee el estado ANTERIOR al batch:
+                 // es justo "¿qué había antes de crear este?".
+                 function _sesionVigenteSinInventarioActivo() {
+                   let raiz = /databases/$(database)/documents/inventarioApp/$(docId);
+                   let prev = exists(raiz) ? get(raiz).data.get('_auditoriaSessionId', null) : null;
+                   return prev == null
+                       || !exists(/databases/$(database)/documents/inventarioApp/$(docId)/inventories/$(prev))
+                       || get(/databases/$(database)/documents/inventarioApp/$(docId)/inventories/$(prev)).data.estado != 'SINCRONIZADO';
+                 }
                  match /inventories/{inventoryId} {
                    allow read:   if request.auth != null;
-                   allow create: if isAdminUser();
+                   allow create: if isAdminUser()
+                                 && request.resource.data.inventoryId == inventoryId
+                                 && request.resource.data.estado == 'SINCRONIZADO'
+                                 && request.resource.data.numero is int
+                                 && exists(/databases/$(database)/documents/inventarioApp/$(docId)/contadores/inventarios)
+                                 && request.resource.data.numero == get(/databases/$(database)/documents/inventarioApp/$(docId)/contadores/inventarios).data.ultimoNumero
+                                 && _sesionVigenteSinInventarioActivo();
                    // ══════════════════════════════════════════════════════════
                    //  FASE 3 — CERRADO → CONTABILIZADO
                    //  ────────────────────────────────────────────────────────
@@ -673,6 +742,60 @@
                  }
 
                  // ══════════════════════════════════════════════════════════
+                 //  FASE 10 — VENTAS DEL POS, un documento por semana, aquí
+                 //  junto a inventariosIniciales porque es dato del ciclo
+                 //  semanal (js/93-ventas.js escribe en
+                 //  inventarioApp/{docId}/ventas/{semanaId}). Ojo: compras y
+                 //  movimientos NO viven aquí, están en la raíz — el nombre
+                 //  del bloque no basta para saberlo, hay que mirar el código.
+                 //
+                 //  Lectura con sales.read, no abierta a cualquier
+                 //  autenticado: igual que compras, lleva importes.
+                 //
+                 //  FASE 10B (2026-09-30) — CAMBIO DE DECISIÓN DEL PROPIETARIO:
+                 //  un documento por PERIODO, id '{fechaInicio}_{fechaFin}'
+                 //  (un solo día: inicio = fin). Una fecha ya cargada NO se
+                 //  vuelve a subir: 'create' sí, 'update' NO, 'delete' NO.
+                 //  (Hasta 10A, reimportar reemplazaba; ya no.)
+                 //
+                 //  Lo que el servidor garantiza:
+                 //    · el id es exactamente inicio_fin, fechas bien formadas,
+                 //      inicio ≤ fin;
+                 //    · semanaId ≤ inicio y el fin a no más de 6 días del
+                 //      lunes: el periodo cabe en UNA semana;
+                 //    · el mismo periodo no se puede escribir dos veces.
+                 //  Lo que NO puede garantizar (depende de otros documentos):
+                 //  que un periodo DISTINTO no se encime con otro ya cargado
+                 //  (ej. el 23 dentro de 21–27). Eso lo comprueba el cliente
+                 //  con una lectura fresca del servidor antes de escribir.
+                 //
+                 //  Los documentos anteriores (id = semanaId, sin fechas) se
+                 //  siguen leyendo; ya no se pueden reescribir.
+                 // ══════════════════════════════════════════════════════════
+                 function _fechaVentas(s) {
+                   return s is string && s.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+                 }
+                 function _tsFechaVentas(s) {
+                   return timestamp.date(int(s.split('-')[0]), int(s.split('-')[1]), int(s.split('-')[2]));
+                 }
+                 function _periodoVentasValido(periodoId, d) {
+                   return _fechaVentas(d.fechaInicio) && _fechaVentas(d.fechaFin) && _fechaVentas(d.semanaId)
+                       && periodoId == d.fechaInicio + '_' + d.fechaFin
+                       && d.fechaInicio <= d.fechaFin
+                       && d.semanaId <= d.fechaInicio
+                       && _tsFechaVentas(d.fechaFin) - _tsFechaVentas(d.semanaId) <= duration.value(6, 'd')
+                       && d.lineas is list
+                       && d.lineas.size() <= 3000
+                       && d.origen is string;
+                 }
+                 match /ventas/{periodoId} {
+                   allow read: if hasPerm('sales.read');
+                   allow create: if hasPerm('sales.import')
+                                 && _periodoVentasValido(periodoId, request.resource.data);
+                   allow update, delete: if false;
+                 }
+
+                 // ══════════════════════════════════════════════════════════
                  //  RECONTEO — solo administrador; el conteo que aplica al
                  //  finalizar viaja por userAuditoria/{uid} propio (regla ya
                  //  existente). Este documento es el REGISTRO: quién, cuándo,
@@ -699,14 +822,29 @@
                    allow delete: if false;
                  }
 
-                 // Contador atómico para el número visible (#101, #102...).
-                 // Documento único; se incrementa con FieldValue.increment()
-                 // dentro de una transacción — nunca se lee/escribe el valor
-                 // "a mano", así que dos admins creando casi simultáneamente
-                 // nunca pueden terminar con el mismo número (ver informe).
+                 // Contador del folio visible. Se avanza dentro de una
+                 // transacción, así que dos admins creando a la vez nunca
+                 // reciben el mismo número.
+                 // FASE 12 (2026-09-30) — FOLIO FORMAL DESDE #1001. Antes
+                 // bastaba ser admin para escribir CUALQUIER valor: una copia
+                 // vieja (o un error) podía regresarlo y repetir folios. Ahora:
+                 //   · solo avanza de uno en uno;
+                 //   · desde un valor anterior a 1001, el único salto
+                 //     permitido es a 1001 (migración, una sola vez);
+                 //   · nunca se borra ni se le agregan otros campos.
                  match /contadores/inventarios {
                    allow read:   if request.auth != null;
-                   allow write:  if isAdminUser();
+                   allow create: if isAdminUser()
+                                 && request.resource.data.keys().hasOnly(['ultimoNumero'])
+                                 && request.resource.data.ultimoNumero == 1001;
+                   allow update: if isAdminUser()
+                                 && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ultimoNumero'])
+                                 && request.resource.data.ultimoNumero is int
+                                 && ( (resource.data.ultimoNumero >= 1001
+                                        && request.resource.data.ultimoNumero == resource.data.ultimoNumero + 1)
+                                   || (resource.data.ultimoNumero < 1001
+                                        && request.resource.data.ultimoNumero == 1001) );
+                   allow delete: if false;
                  }
                }
                // ══════════════════════════════════════════════════════════

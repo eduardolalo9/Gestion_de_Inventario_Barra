@@ -84,20 +84,167 @@
         //  cambia, se destruye el listener anterior y se crea uno nuevo,
         //  mismo patrón de desduplicación que _suscribirRolActual() (14.1.1).
         // ══════════════════════════════════════════════════════════════════════
+        // Estado de carga del inventario activo. `_inventarioActivo === null`
+        // significaba dos cosas distintas: "no hay inventario" y "todavía no
+        // lo he leído". La pantalla las trataba igual y ofrecía "Crear
+        // Inventario Físico" mientras el inventario abierto aún no llegaba.
+        //   'sin_sesion' | 'cargando' | 'ok' | 'no_existe' | 'error'
+        let _inventarioActivoCarga = 'sin_sesion';
+
         function _suscribirInventarioActivo(inventoryId) {
-            if (!_db || !inventoryId) { _inventarioActivo = null; return; }
+            if (!_db || !inventoryId) { _inventarioActivo = null; _inventarioActivoCarga = 'sin_sesion'; return; }
             if (_unsubInventarioActivo && _inventarioActivoId === inventoryId) return; // ya escuchando este mismo inventario
             if (typeof _unsubInventarioActivo === 'function') { _unsubInventarioActivo(); _unsubInventarioActivo = null; }
             _inventarioActivoId = inventoryId;
+            _inventarioActivoCarga = 'cargando';
             _unsubInventarioActivo = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
                 .collection('inventories').doc(inventoryId)
                 .onSnapshot(function(snap) {
                     _inventarioActivo = snap.exists ? snap.data() : null;
+                    _inventarioActivoCarga = snap.exists ? 'ok' : 'no_existe';
                     renderTab(); // refleja número/estado (SINCRONIZADO/CERRADO) en tiempo real
                 }, function(err) {
+                    _inventarioActivoCarga = 'error';
+                    // Se suelta el listener caído para que el siguiente
+                    // intento vuelva a suscribirse en vez de creer que ya escucha.
+                    _unsubInventarioActivo = null;
                     console.warn('[InventarioFisico] Error en listener de inventories/' + inventoryId + ':', err);
+                    renderTab();
                 });
         }
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  HOTFIX 4.18 (30/09/2026) — LA SESIÓN SE RECONCILIA SIEMPRE
+        //  Video del propietario: con el Inventario #122 abierto, al cerrar y
+        //  reabrir la app la pantalla de Conteo no mostraba el inventario y
+        //  volvía a ofrecer "Crear". Causa: la única forma de engancharse al
+        //  inventario activo era pasar por _applyCloudData(), y a esa función
+        //  solo se llega si el documento de la nube es MÁS NUEVO que el local
+        //  (loadFromCloud y subscribeMainDoc comparan _lastModified). Un admin
+        //  que ya contó en ese teléfono tiene lo local igual o más nuevo: la
+        //  app nunca preguntaba "¿en qué sesión estamos?" y se quedaba en
+        //  'sin_sesion'. Además subscribeMainDoc descartaba lo escrito por el
+        //  mismo uid, así que la laptop de la MISMA cuenta tampoco se enteraba
+        //  de un inventario creado desde el teléfono.
+        //
+        //  Qué sesión rige NO es un dato que se compare por fecha de
+        //  modificación: lo decide el documento principal. Esta función se
+        //  llama desde los dos puntos de entrada, ANTES de cualquier
+        //  comparación de fechas o de autoría, y delega en
+        //  handleAuditSessionChange (idempotente, con guarda de monotonía: un
+        //  documento rezagado no retrocede la sesión ni borra conteos).
+        // ══════════════════════════════════════════════════════════════════════
+        // ══════════════════════════════════════════════════════════════════════
+        //  HOTFIX 4.20 — REINICIO DE INVENTARIOS ORDENADO DESDE ADMINISTRACIÓN
+        //  herramientas/reiniciar-inventarios.js borra en el servidor los
+        //  inventarios físicos, conteos, iniciales, ventas y existencias, y deja
+        //  en el documento raíz la marca _reinicioInventariosEn. Pero cada
+        //  teléfono guarda su propia copia (localStorage/IndexedDB): sin esto,
+        //  un aparato seguiría mostrando existencias y ventas viejas, y su cola
+        //  de pendientes volvería a subir conteos de antes del reinicio.
+        //
+        //  Al ver una marca más nueva que la última que aplicó, el aparato
+        //  vacía SU copia de esos datos. Lo único que conserva es lo contado
+        //  DESPUÉS del reinicio que todavía no subió (cola con ts >= marca):
+        //  ese trabajo es nuevo y no se toca. Idempotente: la marca aplicada
+        //  se guarda y no se repite.
+        //  (Los conteos del Inventario Físico se vacían por el camino normal:
+        //  el script deja una sesión nueva sin inventario y
+        //  handleAuditSessionChange los reinicia en cada aparato.)
+        // ══════════════════════════════════════════════════════════════════════
+        function _aplicarReinicioSiCorresponde(data) {
+            // (Dentro de la función: las pruebas extraen funciones por nombre.)
+            const _CLAVE_REINICIO_VISTO = 'inventarioApp_reinicioInventariosVisto';
+            const marca = Number(data && data._reinicioInventariosEn) || 0;
+            if (!marca) return false;
+            let visto = 0;
+            try { visto = Number(localStorage.getItem(_CLAVE_REINICIO_VISTO)) || 0; } catch (_) {}
+            if (marca <= visto) return false;
+
+            // 1) Cola de conteos de existencias: solo sobrevive lo posterior.
+            const conservar = {};
+            if (typeof _outboxConteo === 'object' && _outboxConteo) {
+                Object.keys(_outboxConteo).forEach(function(clave) {
+                    const e = _outboxConteo[clave];
+                    if (e && (e.ts || 0) >= marca) conservar[clave] = { ts: e.ts, base: null };
+                    delete _outboxConteo[clave];
+                });
+                Object.keys(conservar).forEach(function(clave) { _outboxConteo[clave] = conservar[clave]; });
+                if (typeof _outboxGuardar === 'function') _outboxGuardar();
+            }
+            // 2) Existencias operativas: en cero, salvo lo conservado.
+            const nuevoConteo = {};
+            Object.keys(conservar).forEach(function(clave) {
+                const corte = clave.indexOf('|');
+                const pid = clave.slice(0, corte), area = clave.slice(corte + 1);
+                const v = inventarioConteo && inventarioConteo[pid] && inventarioConteo[pid][area];
+                if (v) { nuevoConteo[pid] = nuevoConteo[pid] || {}; nuevoConteo[pid][area] = v; }
+            });
+            inventarioConteo = nuevoConteo;
+            if (typeof _versionesConteoProducto === 'object') _versionesConteoProducto = {};
+            (products || []).forEach(function(p) {
+                const antes = p.stockByArea || {};
+                const cero = {};
+                Object.keys(antes).concat(AREAS_CONTEO).forEach(function(a) { cero[a] = 0; });
+                p.stockByArea = cero;
+            });
+            if (typeof syncStockByAreaFromConteo === 'function') syncStockByAreaFromConteo();
+            // 3) Ventas, historial e inicial en memoria.
+            if (typeof ventasPeriodos !== 'undefined') ventasPeriodos = [];
+            if (typeof _historialInventarios !== 'undefined') _historialInventarios = null;
+            if (typeof existenciaInvalidarInicial === 'function') existenciaInvalidarInicial();
+            // 4) Un conteo de Inventario Físico pendiente de subir es del
+            //    inventario borrado: no se archiva como huérfano.
+            if (typeof _auditSyncPending !== 'undefined') _auditSyncPending = false;
+            try { localStorage.removeItem('inventarioApp_auditSyncPending'); } catch (_) {}
+
+            try { localStorage.setItem(_CLAVE_REINICIO_VISTO, String(marca)); } catch (_) {}
+            saveToLocalStorage({ skipSyncTrigger: true });
+            console.info('[Reinicio] Aplicado el reinicio de inventarios del', new Date(marca).toISOString(),
+                '— se conservaron', Object.keys(conservar).length, 'conteo(s) posteriores sin subir.');
+            setTimeout(function() {
+                showNotification('🧹 Administración reinició los inventarios: esta app quedó en cero.');
+            }, 600);
+            return true;
+        }
+
+        function _reconciliarSesionDesdeDocPrincipal(data, origen) {
+            // El reinicio va ANTES que la sesión: así el conteo pendiente del
+            // inventario borrado ya no se archiva al cambiar de sesión.
+            if (typeof _aplicarReinicioSiCorresponde === 'function') _aplicarReinicioSiCorresponde(data);
+            if (!data || !data._auditoriaSessionId) return null;
+            return handleAuditSessionChange(
+                String(data._auditoriaSessionId),
+                origen || 'docPrincipal',
+                data._auditoriaStartedBy,
+                data._auditoriaStartedByDeviceId
+            );
+        }
+
+        // Solo lectura. Para consola: muestra en qué se basa esta pantalla y qué
+        // hay en el servidor. Útil si algún dispositivo vuelve a ver algo distinto.
+        async function diagnosticoInventario() {
+            const r = { local: {
+                sesion: _auditoriaSessionId || null, inventarioId: _inventarioActivoId || null,
+                carga: _inventarioActivoCarga,
+                inventario: _inventarioActivo ? { numero: _inventarioActivo.numero, estado: _inventarioActivo.estado } : null } };
+            if (!_db) return r;
+            const raiz = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID);
+            const res = await Promise.all([
+                raiz.get({ source: 'server' }),
+                raiz.collection('inventories').get({ source: 'server' }),
+                raiz.collection('userAuditoria').get({ source: 'server' })
+            ]);
+            const p = res[0].exists ? res[0].data() : {};
+            r.servidor = {
+                sesion: p._auditoriaSessionId || null,
+                inventarios: res[1].docs.map(function(d) { const x = d.data(); return { id: d.id, numero: x.numero, estado: x.estado }; }),
+                usuarios: res[2].docs.map(function(d) { const x = d.data(); return { uid: d.id, sesion: x.sessionId, productos: Object.keys(x.conteo || {}).length }; })
+            };
+            console.log('[diagnosticoInventario]', JSON.stringify(r, null, 2));
+            return r;
+        }
+        if (typeof window !== 'undefined') window.diagnosticoInventario = diagnosticoInventario;
 
         function handleAuditSessionChange(nuevoSessionId, origen, iniciadoPorUid, iniciadoPorDeviceId) {
             // 1. Validación
@@ -112,6 +259,21 @@
             if (nuevoSessionId === _auditoriaSessionId) {
                 console.info('[AuditSession] (' + origen + ') sessionId', nuevoSessionId,
                     'ya es la sesión activa — sin cambios, no se reprocesa.');
+                // ── ARREGLO (sep 2026): EL INVENTARIO SE PERDÍA AL REABRIR ──
+                // La suscripción al Inventario Físico solo se hacía más abajo,
+                // cuando la sesión CAMBIA. Pero al abrir la app, la sesión ya
+                // viene restaurada de localStorage/IndexedDB, así que la que
+                // llega de Firestore es la MISMA y se salía por aquí: nadie se
+                // suscribía, _inventarioActivo se quedaba en null para toda la
+                // sesión y Conteo mostraba "sin inventario" — sin "Cerrar", sin
+                // "Contabilizar", y ofreciendo "Crear" encima de un inventario
+                // abierto con conteos. Solo funcionaba en el dispositivo que lo
+                // creó, hasta que se cerrara la app.
+                //
+                // No hay nada que reprocesar, pero sí hay que asegurarse de
+                // estar escuchando el inventario de esta sesión. La suscripción
+                // es idempotente: si ya escucha este id, no hace nada.
+                _suscribirInventarioActivo(nuevoSessionId);
                 return { procesado: false, motivo: 'sin_cambio' };
             }
 
@@ -146,6 +308,8 @@
                 console.warn('[AuditSession] (' + origen + ') sessionId ' + nuevoSessionId +
                     ' es ANTERIOR al vigente ' + _auditoriaSessionId +
                     ' — documento rezagado, se ignora. NO se resetea el conteo.');
+                // La sesión que vale es la vigente: se asegura su inventario.
+                _suscribirInventarioActivo(_auditoriaSessionId);
                 return { procesado: false, motivo: 'sessionId_retrocede' };
             }
 
@@ -400,6 +564,30 @@ function subscribeAllUsersAuditoria() {
             }, function(err) { console.warn('[AuditAdmin] Error listener usuarios:', err); });
         }
 
+        /**
+         * _abiertasDivergen(a, b)
+         * ───────────────────────
+         * Compara dos listas de pesos de botellas abiertas para el mismo
+         * producto/área SIN importar el orden en que cada persona las
+         * capturó (dos personas pueden anotar [0.5, 0.3] y [0.3, 0.5] para
+         * la misma realidad física). Tolerancia de 0.001, igual que la
+         * usada en js/47-existencia.js para no marcar como conflicto lo que
+         * solo es cola de coma flotante.
+         *
+         * FASE 8C: sustituye a la detección de "abiertas" que hacía la
+         * transacción de syncConteoAtomicoPorArea (retirada) — ver el
+         * comentario de cabecera en js/40-firestore.js.
+         */
+        function _abiertasDivergen(a, b) {
+            const listaA = Array.isArray(a) ? a.slice().sort(function(x, y) { return x - y; }) : [];
+            const listaB = Array.isArray(b) ? b.slice().sort(function(x, y) { return x - y; }) : [];
+            if (listaA.length !== listaB.length) return true;
+            for (let i = 0; i < listaA.length; i++) {
+                if (Math.abs((listaA[i] || 0) - (listaB[i] || 0)) > 0.001) return true;
+            }
+            return false;
+        }
+
         /** Recalcula auditoriaConteo con la estrategia ADMIN-PRIORITY.
          *
          *  Lógica de prioridad por producto/área:
@@ -470,8 +658,11 @@ const usersList = Object.values(allUsersAuditoria);
                         enteras:       winner.enteras  || 0,
                         abiertas:      winner.abiertas || [],
                         _usuarios:     entries.length,
+                        // FASE 8C: además de enteras, compara abiertas — esto es
+                        // lo que antes cubría alerta_conflicto de conteoAreas.
                         _hayConflicto: entries.length > 1 &&
-                            entries.some(e => (e.d.enteras || 0) !== (winner.enteras || 0)),
+                            entries.some(e => (e.d.enteras || 0) !== (winner.enteras || 0)
+                                || _abiertasDivergen(e.d.abiertas, winner.abiertas)),
                         _adminCorrigió: false
                     };
                 });
@@ -541,14 +732,21 @@ const usersList = Object.values(allUsersAuditoria);
         //  NUNCA puede haber dos inventarios con el mismo número — que es el
         //  requisito real del ticket ("no debe generarse #101 #101").
         // ══════════════════════════════════════════════════════════════════════
+        //  FASE 12 (30/09/2026) — FOLIO FORMAL DESDE #1001. Pedido del
+        //  propietario. Los inventarios anteriores conservan su número (un
+        //  inventario cerrado es inmutable); el contador salta UNA vez de lo que
+        //  tuviera (#101…#1xx) a #1001 y desde ahí avanza de uno en uno. El
+        //  servidor lo exige (firestore.rules → contadores/inventarios) y además
+        //  no acepta un inventario cuyo folio no sea el del contador.
         async function _obtenerSiguienteNumeroInventario() {
+            const FOLIO_INICIAL_INVENTARIO = 1001;
             const contadorRef = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
                                     .collection('contadores').doc('inventarios');
             return _db.runTransaction(async function(tx) {
                 const snap = await tx.get(contadorRef);
-                const anterior = (snap.exists && typeof snap.data().ultimoNumero === 'number')
-                    ? snap.data().ultimoNumero : 100; // primer inventario real = #101
-                const nuevo = anterior + 1;
+                const guardado = (snap.exists && typeof snap.data().ultimoNumero === 'number')
+                    ? snap.data().ultimoNumero : 0;
+                const nuevo = Math.max(guardado, FOLIO_INICIAL_INVENTARIO - 1) + 1;
                 tx.set(contadorRef, { ultimoNumero: nuevo }, { merge: true });
                 return nuevo;
             });
@@ -728,31 +926,14 @@ const usersList = Object.values(allUsersAuditoria);
             exportToExcelConDatos('AUDITORIA', auditoriaConteo, products,
                 'inventario_total_' + new Date().toISOString().split('T')[0] + '.xlsx');
         }
-        /**
-         * loadConflictosDesdeFirestore()
-         * ─────────────────────────────
-         * Al iniciar la app, descarga el estado de conflictos de abiertas
-         * para mostrarlo en las tarjetas de auditoría.
-         */
-        async function loadConflictosDesdeFirestore() {
-            if (!_db || !navigator.onLine || !_haySesionFirebase()) return; // M2a
-            // FASE 2B — se invoca en el arranque sin ninguna guarda de rol y
-            // agrega los conteos de todos los dispositivos. La guarda real
-            // vive dentro de _cargarYAgeregarConteos(), pero se corta también
-            // aquí para no lanzar una consulta por área que no llevará a nada.
-            if (!puedeVerConteosAjenos()) return;
-            try {
-                // R6: una por cada area definida, no tres fijas. Con las areas
-                // escritas a mano, una cuarta area se contaba en el telefono y
-                // nunca llegaba al panel del administrador.
-                await Promise.all(AREAS_CONTEO.map(function(a) {
-                    return _cargarYAgeregarConteos(a);
-                }));
-                console.info('[MultiDisp] Conteos de todos los dispositivos cargados ✓');
-            } catch (err) {
-                console.warn('[MultiDisp] No se pudieron cargar conteos desde Firestore:', err);
-            }
-        }
+        // FASE 8C (26/09/2026): aquí vivía loadConflictosDesdeFirestore(), que
+        // al arranque llamaba a _cargarYAgeregarConteos() por cada área para
+        // traer el estado de conflicto de conteoAreas (colección heredada,
+        // retirada). El aviso de conflicto de "abiertas" ahora sale en vivo de
+        // _hayConflicto dentro de _recalcAdminAggregatedConteo — ya corriendo
+        // por el listener subscribeAllUsersAuditoria(), sin esta llamada
+        // aparte al arranque. Ver el comentario de cabecera en
+        // js/40-firestore.js (sección "FASE 8C — RETIRO DE conteoAreas").
 
         /**
          * loadFromCloud()
@@ -789,6 +970,9 @@ const usersList = Object.values(allUsersAuditoria);
                 }
 
                 const cloudData = snap.data();
+                // HOTFIX 4.18: qué sesión rige (y su Inventario Físico) se
+                // reconcilia SIEMPRE, sin depender de quién tenga la fecha más nueva.
+                _reconciliarSesionDesdeDocPrincipal(cloudData, 'loadFromCloud');
                 const cloudTs   = cloudData._lastModified || 0;
                 const localTs   = parseInt(localStorage.getItem('inventarioApp_lastModified') || '0', 10);
 

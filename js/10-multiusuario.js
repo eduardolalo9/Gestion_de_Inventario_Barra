@@ -24,6 +24,27 @@
         let _inventarioActivo    = null;  // { numero, estado, fechaCreacion, creadoPorNombre, creadoPorRol, ... } | null
         let _unsubInventarioActivo = null;
         let _inventarioActivoId    = null; // qué inventoryId está siendo escuchado ahora mismo
+
+        // ── Ciclo de vida de un Inventario Físico ──────────────────────────
+        //   SINCRONIZADO → CERRADO → CONTABILIZADO
+        //   (abierto: se     (congelado)  (su resultado ya es el inicial
+        //    cuenta)                       de la semana siguiente)
+        //
+        // Hasta ahora la app preguntaba "¿está CERRADO?" para decidir si se
+        // podía contar, cerrar o crear otro. Cuando FASE 3 añadió
+        // CONTABILIZADO, esa pregunta empezó a contestar mal: un inventario
+        // contabilizado NO es 'CERRADO', así que la app lo tomaba por
+        // ABIERTO — dejaba entrar a contar, ofrecía "Cerrar" y, sobre todo,
+        // BLOQUEABA crear el inventario de la semana siguiente. Las reglas de
+        // Firestore sí lo protegían; la interfaz no.
+        //
+        // La pregunta correcta es la inversa: solo hay UN estado en el que
+        // se cuenta. Cualquier otro —incluido uno que se añada en el futuro—
+        // es de solo lectura. Si alguna vez falla, falla cerrando, no abriendo.
+        function inventarioAbierto(inv) {
+            return !!(inv && inv.estado === 'SINCRONIZADO');
+        }
+
         let _unsubMyAuditoria  = null;
         let _unsubAllUsers     = null;
 
@@ -423,10 +444,10 @@
             html += '<input id="auditRenameInput" class="audit-rename-input" type="text" maxlength="32"'
                   + ' placeholder="Tu nombre..."'
                   + ' onkeydown="if(event.key===\"Enter\"){event.preventDefault();auditSaveName();}">';
-            html += '<button onclick="auditSaveName()"'
-                  + ' style="padding:6px 12px;background:var(--accent);color:#fff;border-radius:var(--r-sm);font-size:.75rem;font-weight:600;cursor:pointer;min-height:auto;">Guardar</button>';
-            html += '<button onclick="toggleAuditRename()"'
-                  + ' style="padding:6px 10px;background:var(--surface);border:1px solid var(--border-mid);border-radius:var(--r-sm);color:var(--txt-secondary);font-size:.75rem;cursor:pointer;min-height:auto;">Cancelar</button>';
+            // FASE 10B — antes: texto blanco sobre azul claro (1.72:1) y
+            // botones de 12 px con min-height:auto. Ahora los del pulgar.
+            html += '<button type="button" class="bt bt--primario" onclick="auditSaveName()">Guardar</button>';
+            html += '<button type="button" class="bt bt--secundario" onclick="toggleAuditRename()">Cancelar</button>';
             html += '</div>';
             html += '</div>'; // #auditRenameInline
 

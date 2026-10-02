@@ -1,6 +1,13 @@
         function getTotalStock(product) {
-            if (!product.stockByArea) return 0;
-            return (product.stockByArea.almacen || 0) + (product.stockByArea.barra1 || 0) + (product.stockByArea.barra2 || 0);
+            if (!product || !product.stockByArea) return 0;
+            // PREMIUM — suma las áreas CONFIGURADAS (R6). Antes eran tres fijas,
+            // así que un área nueva nunca contaba en el stock total ni en
+            // "bajo mínimo".
+            var areasStock = (typeof AREAS_CONTEO !== 'undefined' && AREAS_CONTEO.length)
+                ? AREAS_CONTEO : ['almacen', 'barra1', 'barra2'];
+            var t = 0;
+            areasStock.forEach(function(a) { t += (product.stockByArea[a] || 0); });
+            return Math.round(t * 1000) / 1000;
         }
 
         // ══════════════════════════════════════════════════════════════════════
@@ -358,6 +365,8 @@
                 case 'inventario':      content.innerHTML = renderInventarioTab(); break;
                 case 'historia':        content.innerHTML = renderHistoriaTab(); break;
                 case 'compras':         content.innerHTML = renderComprasTab(); break;
+                case 'recetario':       content.innerHTML = renderRecetarioTab(); break;
+                case 'ventas':          content.innerHTML = renderVentasTab(); break;
                 case 'ajustes':         content.innerHTML = renderAjustesTab(); break;
                 case 'notificaciones':  content.innerHTML = renderNotificacionesTab(); break;
                 case 'admin':           content.innerHTML = isAdmin() ? renderAdminTab() : renderInicioTab(); break;
@@ -401,6 +410,35 @@
             } else if (activeTab === 'productos') {
                 if (isAdmin()) {
                     headerActions.innerHTML = '<div class="flex gap-2 sm:gap-3 flex-wrap"><button onclick="openProductModal()" class="bg-gradient-to-r from-purple-500 to-orange-500 text-white px-3 sm:px-6 py-2 sm:py-3 rounded-full flex items-center gap-1 sm:gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs sm:text-base whitespace-nowrap"><svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg><span class="hidden sm:inline">Agregar</span><span class="sm:hidden">+</span></button><button onclick="document.getElementById(\'fileInput\').click()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:#1a4731;border:1px solid rgba(34,197,94,0.28);color:#86efac;"><i class="fa-solid fa-file-arrow-up"></i><span class="hidden sm:inline">Importar Excel</span><span class="sm:hidden">Importar</span></button><button onclick="publicarCatalogoFirestore()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:#1a3a5f;border:1px solid rgba(59,130,246,0.28);color:#93c5fd;"><i class="fa-solid fa-cloud-arrow-up"></i><span class="hidden sm:inline">Publicar catálogo</span><span class="sm:hidden">Publicar</span></button><button onclick="deleteAllProducts()" class="bg-gradient-to-r from-red-500 to-orange-600 text-white px-3 sm:px-6 py-2 sm:py-3 rounded-full flex items-center gap-1 sm:gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs sm:text-base whitespace-nowrap" title="Eliminar todos"><svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg><span class="hidden sm:inline">Eliminar Todos</span><span class="sm:hidden">Del</span></button></div>';
+                } else {
+                    headerActions.innerHTML = '<span style="font-size:.72rem;color:rgba(255,255,255,.55);padding:6px 10px;background:rgba(255,255,255,.08);border-radius:6px;">📋 Solo lectura</span>';
+                }
+            } else if (activeTab === 'recetario') {
+                // RECETARIO-1 — mismo criterio que Productos: sin recipe.edit
+                // no hay botones de escritura, solo la etiqueta de solo lectura.
+                if (hasPermission('recipe.edit')) {
+                    headerActions.innerHTML =
+                        '<div class="flex gap-2 sm:gap-3 flex-wrap">' +
+                        '<button onclick="openRecetaModal()" class="bg-gradient-to-r from-purple-500 to-orange-500 text-white px-3 sm:px-6 py-2 sm:py-3 rounded-full flex items-center gap-1 sm:gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs sm:text-base whitespace-nowrap">' +
+                        '<svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>' +
+                        '<span class="hidden sm:inline">Nueva receta</span><span class="sm:hidden">+</span></button>' +
+                        '<button onclick="recetarioImportarExcel()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:#1a4731;border:1px solid rgba(34,197,94,0.28);color:#86efac;">' +
+                        '<i class="fa-solid fa-file-arrow-up"></i><span class="hidden sm:inline">Importar Excel</span><span class="sm:hidden">Importar</span></button>' +
+                        '<button onclick="publicarRecetarioFirestore()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:#1a3a5f;border:1px solid rgba(59,130,246,0.28);color:#93c5fd;">' +
+                        '<i class="fa-solid fa-cloud-arrow-up"></i><span class="hidden sm:inline">Publicar recetario</span><span class="sm:hidden">Publicar</span></button>' +
+                        '</div>';
+                } else {
+                    headerActions.innerHTML = '<span style="font-size:.72rem;color:rgba(255,255,255,.55);padding:6px 10px;background:rgba(255,255,255,.08);border-radius:6px;">📋 Solo lectura</span>';
+                }
+            } else if (activeTab === 'ventas') {
+                // FASE 10 — mismo criterio: sin sales.import no hay botón de
+                // escritura, solo la etiqueta de solo lectura.
+                if (hasPermission('sales.import')) {
+                    headerActions.innerHTML =
+                        '<div class="flex gap-2 sm:gap-3 flex-wrap">' +
+                        '<button onclick="ventasImportarExcel()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:#1a4731;border:1px solid rgba(34,197,94,0.28);color:#86efac;">' +
+                        '<i class="fa-solid fa-file-arrow-up"></i><span class="hidden sm:inline">Importar ventas</span><span class="sm:hidden">Importar</span></button>' +
+                        '</div>';
                 } else {
                     headerActions.innerHTML = '<span style="font-size:.72rem;color:rgba(255,255,255,.55);padding:6px 10px;background:rgba(255,255,255,.08);border-radius:6px;">📋 Solo lectura</span>';
                 }
@@ -493,7 +531,9 @@
                     html += '<div class="prd-card' + (hasData ? ' has-data' : '') + '" data-sbx-item style="animation-delay:' + delay + 'ms">';
                     // Top row: nombre + botones
                     html += '<div class="prd-card__top">';
-                    html += '<div class="prd-card__name">' + resaltarBusqueda(product.name, searchTerm) + '</div>';
+                    // PREMIUM — el nombre abre la ficha del producto (existencia,
+                    // compras, costo, inicial de la semana). Delegado en 83-panel.js.
+                    html += '<button type="button" class="prd-card__name pm-nombre-btn" data-pm-ficha="' + escapeHtml(product.id) + '" title="Ver ficha del producto">' + resaltarBusqueda(product.name, searchTerm) + '</button>';
                     html += '<div class="prd-card__actions">';
                     html += '<button class="prd-action-btn cart" data-sbx-principal onclick="addToCart(\'' + escapeHtml(product.id) + '\')" title="Agregar al carrito">'
                           + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg></button>';
@@ -506,6 +546,9 @@
                     html += '</div></div>';
                     // Group badge
                     html += '<div class="prd-card__group-badge">' + escapeHtml(product.group || 'General') + '</div>';
+                    if (typeof _bajoMinimo === 'function' && _bajoMinimo(product)) {
+                        html += '<span class="pm-estado pm-estado--critico" style="margin-left:6px;">⛔ Bajo mínimo (' + product.stockMinimo + ')</span>';
+                    }
                     // Meta: ID · Unit · Total
                     html += '<div class="prd-card__meta">' + resaltarBusqueda(product.id, searchTerm) + ' · ' + escapeHtml(product.unit || '') + ' · Total: ' + total.toFixed(2) + '</div>';
                     // Area chips — total contado de auditoría por área
@@ -540,25 +583,11 @@
             const ordersCount      = orders.length;
             const syncOn           = typeof _syncEnabled !== 'undefined' ? _syncEnabled : true;
 
-            // ── Stats 2×2 ─────────────────────────────────────────────────────
-            let html = '<div class="stat-grid">';
-            html += '<div class="stat-card" onclick="void(0)">'
-                  + '<div class="stat-card__icon" style="background:rgba(59,130,246,0.12);">📦</div>'
-                  + '<div><div class="stat-card__val" style="color:#60a5fa;">' + totalProducts + '</div>'
-                  + '<div class="stat-card__label">Productos</div></div></div>';
-            html += '<div class="stat-card" onclick="void(0)">'
-                  + '<div class="stat-card__icon" style="background:rgba(34,197,94,0.12);">📊</div>'
-                  + '<div><div class="stat-card__val" style="color:#4ade80;">' + totalStockAll.toFixed(1) + '</div>'
-                  + '<div class="stat-card__label">Stock Total</div></div></div>';
-            html += '<div class="stat-card" style="cursor:pointer;" onclick="openOrderModal()">'
-                  + '<div class="stat-card__icon" style="background:rgba(245,158,11,0.12);">🛒</div>'
-                  + '<div><div class="stat-card__val" style="color:#fb923c;">' + cartCount + '</div>'
-                  + '<div class="stat-card__label">En Carrito</div></div></div>';
-            html += '<div class="stat-card" onclick="switchTab(\'pedidos\')"  style="cursor:pointer;">'
-                  + '<div class="stat-card__icon" style="background:rgba(59,130,246,0.12);">📋</div>'
-                  + '<div><div class="stat-card__val" style="color:#60a5fa;">' + ordersCount + '</div>'
-                  + '<div class="stat-card__label">Pedidos</div></div></div>';
-            html += '</div>';
+            // ── PREMIUM — panel de indicadores y gráficas (js/83-panel.js).
+            // Sustituye la rejilla 2×2: conserva Productos, Carrito y Pedidos
+            // (mismas acciones) y suma bajo mínimo, valor, compras de la
+            // semana, estado del inventario y existencia de la semana.
+            let html = (typeof renderPanelInicio === 'function') ? renderPanelInicio() : '';
 
             // ── Búsqueda (FASE 6: barra unificada, comparte estado con Productos) ──
             html += BusquedaUI.barra('catalogo', {
@@ -781,7 +810,9 @@
             html += '</tr></thead><tbody>';
 
             filteredProducts.slice(0, lim).forEach(function(product) {
-                var total    = (typeof getTotalStock === 'function') ? getTotalStock(product) : null;
+                // FASE 8 — misma cifra que el resto de la app (ver 47-existencia).
+                var total    = (typeof existenciaMostrada === 'function') ? existenciaMostrada(product)
+                             : ((typeof getTotalStock === 'function') ? getTotalStock(product) : null);
                 var bajoMin  = (typeof product.stockMinimo === 'number' && product.stockMinimo > 0 &&
                                 typeof total === 'number' && total < product.stockMinimo);
                 var usaOz    = tieneConversion(product);

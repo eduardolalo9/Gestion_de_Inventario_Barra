@@ -25,101 +25,286 @@
 
         // Tarjeta de estado en tiempo real — visible para admin y usuario.
         // Se alimenta de _inventarioActivo (mantenido por _suscribirInventarioActivo).
+        // ¿Hay una sesión de conteo cuyo Inventario Físico todavía no se ha
+        // podido leer? En ese estado `_inventarioActivo` vale null igual que
+        // cuando no hay inventario, pero NO significa lo mismo: puede haber uno
+        // abierto con conteos. Mientras no se sepa, no se ofrece "Crear".
+        function _inventarioActivoSinResolver() {
+            return !!_auditoriaSessionId && typeof _inventarioActivoCarga !== 'undefined'
+                && (_inventarioActivoCarga === 'cargando' || _inventarioActivoCarga === 'error');
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  FASE 10B (30/09/2026) — PANTALLA PRINCIPAL EN UNA SOLA COLUMNA
+        //  Pedido del propietario: organización vertical y limpia, botones
+        //  grandes para el pulgar, bien separados y con alto contraste.
+        //  Antes: datos a la izquierda y una columna de 4 botones de 11-12 px
+        //  a la derecha, con "Cerrar Inventario Físico" (irreversible) pegado
+        //  a "Reconteo" y con texto blanco sobre rosa (1.7:1, ilegible en
+        //  oscuro). Ahora, de arriba abajo, en el orden del trabajo:
+        //    1. Estado y avance            (qué inventario y cuánto va)
+        //    2. Datos                      (una fila por dato, sin columnas)
+        //    3. Acciones de consulta       (Reconteo, Reconteos, Historial)
+        //    4. Áreas                      (entrar a contar)
+        //    5. Zona de peligro, al final  (Cerrar Inventario Físico)
+        //  Solo cambia la presentación: las mismas funciones, los mismos
+        //  permisos y los mismos atributos data-* que ya escuchaba la app.
+        // ══════════════════════════════════════════════════════════════════════
+
+        function _ifBtn(clase, contenido, atributos) {
+            return '<button type="button" class="bt ' + clase + '" ' + (atributos || '') + '>' + contenido + '</button>';
+        }
+        // Abrir el Historial: se invalida y renderHistorialInventarios() lo
+        // carga una sola vez (_asegurarHistorialCargado). Antes se pedía dos veces.
+        var _IF_ABRIR_HISTORIAL = 'onclick="auditoriaView=\'historial\'; _historialInventarios=null; _historialLimite=30; renderTab();"';
+
         function _renderInventarioFisicoHeader() {
-            let html = '<div class="bg-white rounded-xl p-4 sm:p-5 mb-4 shadow-md">';
+            if (!_inventarioActivo && _inventarioActivoSinResolver()) {
+                var hCarga = '<div class="pm-paso' + (_inventarioActivoCarga === 'error' ? ' pm-paso--aviso' : '') + '" role="status">';
+                if (_inventarioActivoCarga === 'error') {
+                    hCarga += '<div class="pm-paso__titulo">⚠️ No se pudo leer el Inventario Físico activo</div>'
+                           +  '<div class="pm-paso__txt">Revisa la conexión. Mientras tanto no se ofrece crear otro: '
+                           +  'podría haber uno abierto con conteos.</div>';
+                } else {
+                    hCarga += '<div class="pm-paso__titulo">⏳ Cargando el Inventario Físico activo…</div>';
+                }
+                hCarga += '</div>';
+                return '<div class="if-card">' + hCarga + '</div>';
+            }
 
             if (!_inventarioActivo) {
-                // R7: el estado vacio invita a crear en vez de constatar que no hay nada.
-                html += '<p style="font-size:0.86rem;font-weight:600;color:var(--txt-primary);margin-bottom:4px;">Sin Inventario Físico abierto</p>';
-                html += '<p style="font-size:0.75rem;color:var(--txt-muted);line-height:1.5;">'
-                     +  (isAdmin()
-                         ? 'Crea uno para que el equipo pueda empezar a contar. El número se asigna solo.'
-                         : 'El administrador todavía no ha abierto el inventario de esta semana.')
-                     +  '</p>';
-                if (typeof renderGlosarioEstados === 'function') html += renderGlosarioEstados();
-                html += '</div>';
-                return html;
+                // PREMIUM (sep 2026, decisión del dueño): sin el cuadro "Sin
+                // Inventario Físico abierto". Crear (admin), historial y
+                // reconteos siempre visibles, ahora apilados a lo ancho.
+                var hAcc = '<div class="if-card"><div class="if-card__titulo">Inventario Físico</div>';
+                if (!isAdmin()) {
+                    hAcc += '<p class="pm-nota" style="margin:0;font-size:.95rem;">El administrador todavía no ha abierto el inventario de esta semana.</p>';
+                }
+                hAcc += '<div class="bt-pila">';
+                if (isAdmin() && hasPermission('inventory.create')) {
+                    hAcc += _ifBtn('bt--primario', '➕ Crear Inventario Físico', 'onclick="abrirModalNuevoInventario()"');
+                }
+                if (hasPermission('inventory.history')) {
+                    hAcc += _ifBtn('bt--secundario', '📜 Historial de inventarios', _IF_ABRIR_HISTORIAL);
+                }
+                if (isAdmin()) {
+                    hAcc += _ifBtn('bt--secundario', '📋 Reconteos', 'data-rc-accion="historial"');
+                }
+                hAcc += '</div></div>';
+                return hAcc;
             }
 
             const inv = _inventarioActivo;
-            const esCerrado = inv.estado === 'CERRADO';
-            const badge = esCerrado
-                ? '<span style="background:rgba(107,114,128,.12);color:#4b5563;padding:3px 10px;border-radius:999px;font-size:0.68rem;font-weight:700;">🔒 INVENTARIO BARRA CERRADO</span>'
-                : '<span style="background:rgba(34,197,94,.12);color:#16a34a;padding:3px 10px;border-radius:999px;font-size:0.68rem;font-weight:700;">🟢 INVENTARIO BARRA SINCRONIZADO</span>';
+            // Solo lectura es todo lo que no está abierto (ver inventarioAbierto,
+            // 10-multiusuario): un CONTABILIZADO no es "SINCRONIZADO".
+            const esCerrado = !inventarioAbierto(inv);
+            const esContab  = inv.estado === 'CONTABILIZADO';
+            const badge = !esCerrado
+                ? '<span class="pm-estado pm-estado--abierto pm-estado--cab">🟢 INVENTARIO BARRA SINCRONIZADO</span>'
+                : (esContab
+                    ? '<span class="pm-estado pm-estado--contab pm-estado--cab">📘 INVENTARIO BARRA CONTABILIZADO</span>'
+                    : '<span class="pm-estado pm-estado--cerrado pm-estado--cab">🔒 INVENTARIO BARRA CERRADO</span>');
 
             // Artículos contados = productos con al menos una entrada de conteo
-            // de ALGÚN usuario (unión, no suma) — dato ya disponible en memoria,
-            // sin lecturas adicionales a Firestore.
+            // de ALGÚN usuario (unión, no suma) — dato ya en memoria.
             const productosContados = new Set();
             Object.values(allUsersAuditoria).forEach(function(u) {
                 Object.keys(u.conteo || {}).forEach(function(pid) { productosContados.add(pid); });
             });
+            var _pctCont = products.length ? Math.min(100, Math.round(productosContados.size / products.length * 100)) : 0;
 
-            html += '<div class="flex items-start justify-between gap-3 flex-wrap">';
-            html += '<div>';
-            html += '<div class="flex items-center gap-2 mb-1">';
-            html += '<span style="font-size:1rem;font-weight:800;color:var(--txt-strong);">#' + (inv.numero || '—') + ' · Inventario Barra</span>';
-            html += '</div>';
-            html += '<div style="margin-bottom:4px;">' + badge + '</div>';
-            html += '<p style="font-size:0.72rem;color:var(--txt-muted);">Fecha: ' + new Date(inv.fechaCreacion).toLocaleDateString('es-MX') + ' &nbsp;·&nbsp; Creado por: ' + escapeHtml(inv.creadoPorNombre || '—') + ' (' + escapeHtml(inv.creadoPorRol || '') + ')</p>';
-            if (esCerrado) {
-                html += '<p style="font-size:0.72rem;color:var(--txt-muted);">Cerrado: ' + new Date(inv.fechaCierre).toLocaleDateString('es-MX') + ' por ' + escapeHtml(inv.cerradoPorNombre || '—') + '</p>';
-            }
-            html += '<p style="font-size:0.72rem;color:var(--txt-muted);margin-top:2px;">Artículos contados: ' + productosContados.size + ' / ' + products.length + '</p>';
+            // ── 1. Estado y avance ──────────────────────────────────────────
+            let html = '<div class="if-card">';
+            html += '<div class="if-card__titulo">#' + (inv.numero || '—') + ' · Inventario Barra</div>';
+            html += badge;
+            html += '<div class="if-avance">'
+                 +  '<div class="if-avance__txt"><span>Artículos contados</span><span>' + productosContados.size + ' / ' + products.length + '</span></div>'
+                 +  '<div class="pm-progreso" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + _pctCont + '" aria-label="Avance del conteo">'
+                 +  '<div class="pm-progreso__barra" style="width:' + _pctCont + '%;"></div></div></div>';
 
-            // ── R7: lo que el formulario dejo escrito ────────────────────────
-            // Se lee siempre a la defensiva: los inventarios creados antes de R7
-            // no tienen ninguno de estos campos.
+            // ── 2. Datos: una fila por dato ─────────────────────────────────
+            html += '<dl class="if-datos">';
+            var dato = function(etiqueta, valor, claseValor) {
+                return '<div class="if-dato"><dt>' + etiqueta + '</dt><dd' + (claseValor ? ' class="' + claseValor + '"' : '') + '>' + valor + '</dd></div>';
+            };
+            // R7: lo que el formulario dejó escrito — se lee a la defensiva: los
+            // inventarios anteriores a R7 no tienen estos campos.
             if (inv.fechaRecuento) {
                 var _cl = (typeof clasificarRecuento === 'function') ? clasificarRecuento(inv.fechaRecuento) : null;
-                html += '<p style="font-size:0.72rem;color:var(--txt-muted);margin-top:2px;">Recuento: '
-                     +  escapeHtml(inv.fechaRecuento)
-                     +  (_cl && typeof etiquetaSemana === 'function' ? ' · ' + escapeHtml(etiquetaSemana(inv.fechaRecuento)) : '')
-                     +  (_cl && _cl.cierraSemana ? ' · <span style="color:var(--green,#4ade80);font-weight:600;">cierra semana</span>' : '')
-                     +  '</p>';
+                html += dato('Recuento',
+                    escapeHtml(inv.fechaRecuento)
+                    + (_cl && typeof etiquetaSemana === 'function' ? ' · ' + escapeHtml(etiquetaSemana(inv.fechaRecuento)) : '')
+                    + (_cl && _cl.cierraSemana ? ' · <span style="color:var(--green,#4ade80);font-weight:700;">cierra semana</span>' : ''));
+            } else {
+                // H-40 (hotfix 4.9): inventarios anteriores a R7/FASE 3 no tienen
+                // fechaRecuento y, tal cual, nunca se podrán contabilizar.
+                // Mientras siga abierto, el admin puede registrarla una vez.
+                html += dato('Recuento', '⚠️ No registrado (inventario creado antes de esta regla)', 'if-dato--aviso');
+            }
+            html += dato('Creado', escapeHtml(new Date(inv.fechaCreacion).toLocaleDateString('es-MX')) + ' · '
+                         + escapeHtml(inv.creadoPorNombre || '—') + (inv.creadoPorRol ? ' (' + escapeHtml(inv.creadoPorRol) + ')' : ''));
+            if (esCerrado) {
+                html += dato('Cerrado', escapeHtml(new Date(inv.fechaCierre).toLocaleDateString('es-MX')) + ' por ' + escapeHtml(inv.cerradoPorNombre || '—'));
             }
             if (Array.isArray(inv.warehousesSnapshot) && inv.warehousesSnapshot.length) {
-                html += '<p style="font-size:0.72rem;color:var(--txt-muted);margin-top:2px;">Áreas: '
-                     +  escapeHtml(inv.warehousesSnapshot.map(function(a) {
-                            return (typeof areasAuditoria !== 'undefined' && areasAuditoria[a]) ? areasAuditoria[a] : a;
-                        }).join(', '))
-                     +  '</p>';
+                html += dato('Áreas', escapeHtml(inv.warehousesSnapshot.map(function(a) {
+                    return (typeof areasAuditoria !== 'undefined' && areasAuditoria[a]) ? areasAuditoria[a] : a;
+                }).join(', ')));
             }
-            // Cuantas personas tienen algo contado. Es el dato que el admin mira
-            // antes de cerrar: cerrar con gente contando pierde su trabajo.
+            // Cuántas personas tienen algo contado: es el dato que el admin mira
+            // antes de cerrar (cerrar con gente contando pierde su trabajo).
             var _contando = (typeof _usuariosContando === 'function') ? _usuariosContando() : 0;
             if (!esCerrado) {
-                html += '<p style="font-size:0.72rem;margin-top:2px;color:'
-                     +  (_contando ? 'var(--accent)' : 'var(--txt-muted)') + ';font-weight:'
-                     +  (_contando ? '600' : '400') + ';">Usuarios contando: ' + _contando + '</p>';
+                html += dato('Usuarios contando', String(_contando), _contando ? 'if-dato--resalte' : '');
             }
+            html += '</dl>';
             if (inv.comentario) {
-                html += '<p style="font-size:0.72rem;color:var(--txt-secondary);margin-top:6px;'
-                     +  'padding-left:8px;border-left:2px solid var(--border-mid);line-height:1.5;">'
-                     +  escapeHtml(inv.comentario) + '</p>';
+                html += '<div class="if-comentario">' + escapeHtml(inv.comentario) + '</div>';
             }
-            html += '</div>';
 
-            html += '<div class="flex flex-col gap-2" style="align-items:flex-end;">';
-            if (isAdmin() && !esCerrado && hasPermission('inventory.closeGlobal')) {
-                html += '<button onclick="cerrarInventarioFisico()" style="padding:6px 12px;border-radius:var(--r-md);background:#1f2937;color:#fff;font-size:0.7rem;font-weight:700;cursor:pointer;white-space:nowrap;">🔒 Cerrar Inventario Físico</button>';
+            if (_esInventarioHuerfano()) {
+                html += '<div class="pm-paso pm-paso--aviso" role="status"><div class="pm-paso__titulo">🗂️ Inventario abandonado</div>'
+                     +  '<div class="pm-paso__txt">Este inventario quedó abierto de una versión anterior y no pertenece a la sesión actual: '
+                     +  'sus conteos ya no existen. Ciérralo con el botón del final ("Cerrar inventario abandonado") y después crea el nuevo.</div></div>';
             }
-            // RECONTEO — solo admin. Iniciar/continuar mientras el inventario
-            // esté abierto; el histórico se consulta siempre.
-            if (isAdmin() && !esCerrado) {
-                html += '<button type="button" data-rc-accion="iniciar" style="padding:6px 12px;border-radius:var(--r-md);background:var(--accent);color:var(--accent-on,#003063);font-size:0.7rem;font-weight:700;cursor:pointer;white-space:nowrap;">🔁 Reconteo</button>';
+
+            // ── 3. Acciones de consulta, apiladas a lo ancho ────────────────
+            var acc = '';
+            if (!inv.fechaRecuento && !esCerrado && isAdmin() && hasPermission('inventory.create')) {
+                acc += _ifBtn('bt--secundario', '🗓️ Registrar fecha de recuento', 'onclick="abrirModalRegistrarFechaRecuento()"');
+            }
+            // RECONTEO — solo admin, mientras el inventario esté abierto.
+            if (isAdmin() && !esCerrado && !_esInventarioHuerfano()) {
+                acc += _ifBtn('bt--primario', '🔁 Reconteo', 'data-rc-accion="iniciar"');
             }
             if (isAdmin()) {
-                html += '<button type="button" data-rc-accion="historial" style="padding:5px 10px;border-radius:var(--r-md);background:var(--accent-dim);color:var(--accent);font-size:0.68rem;font-weight:600;cursor:pointer;white-space:nowrap;">📋 Reconteos</button>';
+                acc += _ifBtn('bt--secundario', '📋 Reconteos', 'data-rc-accion="historial"');
             }
             if (hasPermission('inventory.history')) {
-                html += '<button onclick="auditoriaView=\'historial\'; _historialInventarios=null; renderTab(); _cargarHistorialInventarios().then(renderTab);" style="padding:5px 10px;border-radius:var(--r-md);background:var(--accent-dim);color:var(--accent);font-size:0.68rem;font-weight:600;cursor:pointer;white-space:nowrap;">📜 Historial</button>';
+                acc += _ifBtn('bt--secundario', '📜 Historial', _IF_ABRIR_HISTORIAL);
             }
-            html += '</div>';
-            html += '</div>';
+            if (acc) html += '<div class="bt-pila">' + acc + '</div>';
+
+            html += _renderSiguientePasoInventario(inv);
             html += '</div>';
             return html;
         }
+
+        // HOTFIX 4.20 — ¿Lo que se ve es un inventario abierto que NO es el de
+        // la sesión vigente? (huérfano de una versión anterior, p. ej. #102).
+        function _esInventarioHuerfano() {
+            return !!(_inventarioActivo && inventarioAbierto(_inventarioActivo) && _inventarioActivoId
+                      && _auditoriaSessionId && String(_inventarioActivoId) !== String(_auditoriaSessionId));
+        }
+
+        /**
+         * Zona de peligro: "Cerrar Inventario Físico" va SOLO y AL FINAL de la
+         * pantalla, después de las áreas — que es donde termina el trabajo —
+         * y lejos de "Reconteo", con el que antes compartía fila.
+         */
+        function _renderZonaCerrarInventario() {
+            var inv = _inventarioActivo;
+            if (!inv || !inventarioAbierto(inv)) return '';
+            if (!(isAdmin() && hasPermission('inventory.closeGlobal'))) return '';
+            if (_esInventarioHuerfano()) {
+                return '<div class="bt-zona-peligro">'
+                     + '<button type="button" onclick="cerrarInventarioHuerfano(_inventarioActivoId)" class="bt bt--peligro">🗂️ Cerrar inventario abandonado #' + (inv.numero || '—') + '</button>'
+                     + '<p class="bt-nota">Quedó abierto de una versión anterior y ya no tiene conteos. Se cierra sin contabilizar.</p>'
+                     + '</div>';
+            }
+            return '<div class="bt-zona-peligro">'
+                 + '<button type="button" onclick="cerrarInventarioFisico()" class="bt bt--peligro">🔒 Cerrar Inventario Físico</button>'
+                 + '<p class="bt-nota">Congela los conteos de todas las áreas. No se puede deshacer.</p>'
+                 + '</div>';
+        }
+
+        // ── Siguiente paso de un inventario que ya no se cuenta ─────────────
+        //
+        //  Antes, al cerrar un inventario el encabezado de Conteo se quedaba
+        //  mudo: ni "Contabilizar" (vivía tres pantallas más adentro:
+        //  Historial → inventario → Contabilizar) ni "Crear el siguiente".
+        //  Y tras contabilizar, la app creía que el inventario seguía abierto
+        //  y no dejaba crear otro. Aquí se dice qué toca hacer ahora y se
+        //  ofrece el botón para hacerlo, sin salir de Conteo.
+        //
+        //  Solo pinta. La regla de si se puede contabilizar es
+        //  evaluarContabilizable(); la acción es contabilizarInventario(), la
+        //  misma que usa el Historial.
+        function _renderSiguientePasoInventario(inv) {
+            if (!inv || inventarioAbierto(inv)) return '';
+            var ev          = evaluarContabilizable(inv);
+            var puedeContab = hasPermission('inventory.post');
+            var puedeCrear  = isAdmin() && hasPermission('inventory.create');
+            var semana = function(id) {
+                return (id && typeof etiquetaSemana === 'function') ? etiquetaSemana(id) : ('semana ' + (id || '—'));
+            };
+            var btnCrear = function(principal) {
+                return puedeCrear
+                    ? '<button type="button" class="bt ' + (principal ? 'bt--primario' : 'bt--secundario') + '" onclick="abrirModalNuevoInventario()">➕ Crear el siguiente inventario</button>'
+                    : '';
+            };
+            var h = '';
+
+            if (ev.hecho) {
+                h += '<div class="pm-paso pm-paso--hecho" role="status">'
+                   + '<div class="pm-paso__titulo">📘 Contabilizado</div>'
+                   + '<div class="pm-paso__txt">Su resultado ya es el stock inicial de la ' + escapeHtml(semana(ev.semanaDestino))
+                   + (inv.contabilizadoEn ? ' · ' + escapeHtml(new Date(inv.contabilizadoEn).toLocaleDateString('es-MX')) : '')
+                   + '. Queda de solo lectura.</div>';
+                if (puedeCrear) h += '<div class="pm-paso__acc">' + btnCrear(true) + '</div>';
+                h += '</div>';
+                return h;
+            }
+
+            if (ev.puede) {
+                h += '<div class="pm-paso pm-paso--pendiente">'
+                   + '<div class="pm-paso__titulo">📘 Siguiente paso: contabilizar</div>'
+                   + '<div class="pm-paso__txt">'
+                   + (puedeContab
+                        ? 'El resultado físico de este inventario pasará a ser el stock inicial de la '
+                          + escapeHtml(semana(ev.semanaDestino)) + '. <b>Es irreversible</b>: el inicial no se corrige ni se deshace.'
+                        : 'Pendiente de que administración lo contabilice como stock inicial de la '
+                          + escapeHtml(semana(ev.semanaDestino)) + '.')
+                   + '</div>';
+                var acc = '';
+                if (puedeContab) acc += '<button type="button" class="bt bt--primario" data-inv-accion="contabilizar">📘 Contabilizar</button>';
+                acc += btnCrear(false);
+                if (acc) h += '<div class="pm-paso__acc">' + acc + '</div>';
+                h += '</div>';
+                return h;
+            }
+
+            // Cerrado, pero no se puede contabilizar (recuento a media semana,
+            // o inventario anterior a que se guardara la semana). Se dice por
+            // qué, con el mismo texto que usa el Historial.
+            h += '<div class="pm-paso pm-paso--aviso">'
+               + '<div class="pm-paso__titulo">🔒 Inventario cerrado</div>'
+               + '<div class="pm-paso__txt">'
+               + (puedeContab ? '📘 No se puede contabilizar. ' + escapeHtml(ev.motivo) : 'Queda de solo lectura.')
+               + '</div>';
+            if (puedeCrear) h += '<div class="pm-paso__acc">' + btnCrear(true) + '</div>';
+            h += '</div>';
+            return h;
+        }
+
+        // Contabilizar desde Conteo: acción delegada, sin onclick en línea. El
+        // id se toma al hacer clic de _inventarioActivoId —el inventario que
+        // está escuchando la app— y no de un atributo pintado en el HTML, que
+        // podría haberse quedado viejo si el inventario activo cambió.
+        document.addEventListener('click', function(e) {
+            var b = e.target && e.target.closest ? e.target.closest('[data-inv-accion="contabilizar"]') : null;
+            if (!b) return;
+            if (!_inventarioActivo || !_inventarioActivoId) return;
+            // Evita el doble toque mientras se prepara. El servidor ya es
+            // idempotente (el inicial solo se puede crear una vez); esto evita
+            // además dos ventanas de confirmación seguidas. Se rehabilita solo:
+            // si el administrador cancela la confirmación, tiene que poder
+            // volver a intentarlo sin salir de la pantalla.
+            if (b.disabled) return;
+            b.disabled = true;
+            setTimeout(function() { b.disabled = false; }, 2000);
+            contabilizarInventario(_inventarioActivoId, _inventarioActivo.numero);
+        });
 
         // Historial — carga bajo demanda (ver _cargarHistorialInventarios).
         // Admin ve todos los cerrados; usuario normal ve solo aquellos donde
@@ -135,6 +320,7 @@
 
             if (_historialInventarios === null) {
                 html += '<p style="font-size:0.8rem;color:var(--txt-muted);">⏳ Cargando historial…</p></div></div>';
+                if (typeof _asegurarHistorialCargado === 'function') _asegurarHistorialCargado();
                 return html;
             }
 
@@ -146,7 +332,7 @@
             }
 
             if (lista.length === 0) {
-                html += '<p style="font-size:0.8rem;color:var(--txt-muted);">' + (isAdmin() ? 'Todavía no hay inventarios cerrados.' : 'Todavía no participaste en ningún inventario cerrado.') + '</p>';
+                html += '<p style="font-size:0.8rem;color:var(--txt-muted);">' + (isAdmin() ? 'Todavía no hay inventarios cerrados ni contabilizados.' : 'Todavía no participaste en ningún inventario cerrado.') + '</p>';
             } else {
                 lista.forEach(function(inv) {
                     html += '<div onclick="_detalleInventarioCerradoId=\'' + inv.inventoryId + '\'; _detalleInventarioCerradoData=null; auditoriaView=\'detalle_cerrado\'; renderTab();" style="cursor:pointer;padding:10px 12px;border:1px solid var(--border-soft);border-radius:var(--r-md);margin-bottom:8px;">';
@@ -158,7 +344,7 @@
                     var _contab = (inv.estado === 'CONTABILIZADO');
                     html += '<span style="font-size:0.68rem;font-weight:700;color:'
                          +  (_contab ? '#2563eb' : '#16a34a') + ';">'
-                         +  (_contab ? 'CONTABILIZADO' : 'CERRADO') + '</span>';
+                         +  (_contab ? 'CONTABILIZADO' : (inv.cierreTipo === 'abandonado' ? 'CERRADO · ABANDONADO' : 'CERRADO')) + '</span>';
                     html += '</div>';
                     html += '<p style="font-size:0.72rem;color:var(--txt-muted);">Fecha: ' + new Date(inv.fechaCreacion).toLocaleDateString('es-MX') + ' &nbsp;·&nbsp; Artículos: ' + (inv.totalProductos || '—') + '</p>';
                     if (_contab && inv.semanaDestino) {
@@ -167,6 +353,9 @@
                     }
                     html += '</div>';
                 });
+                if (typeof _historialHayMas !== 'undefined' && _historialHayMas) {
+                    html += '<button type="button" class="bt bt--secundario" onclick="historialVerMas()">Ver inventarios más antiguos</button>';
+                }
             }
             html += '</div></div>';
             return html;
@@ -231,16 +420,10 @@
                      +  (meta.contabilizadoEn ? ' · ' + new Date(meta.contabilizadoEn).toLocaleDateString('es-MX') : '')
                      +  '</p></div>';
             } else if (hasPermission('inventory.post')) {
-                var _cl = (typeof clasificarRecuento === 'function' && meta.fechaRecuento)
-                          ? clasificarRecuento(meta.fechaRecuento) : null;
-                var _motivo = null;
-                if (!meta.semanaId) {
-                    _motivo = 'Este inventario se cerró antes de que se guardara la semana en su cabecera.';
-                } else if (!_cl || !_cl.cierraSemana) {
-                    _motivo = 'Solo se contabiliza un recuento fechado en DOMINGO. Este está fechado '
-                            + (meta.fechaRecuento || 'sin fecha de recuento')
-                            + ', y un corte a media semana partiría el ciclo en dos.';
-                }
+                // Misma regla que el encabezado de Conteo y que la propia
+                // contabilización (evaluarContabilizable, 75-auditoria-flujo).
+                var _ev = evaluarContabilizable(meta);
+                var _motivo = _ev.puede ? null : _ev.motivo;
                 if (_motivo) {
                     html += '<div style="padding:9px 12px;border-radius:var(--r-md);background:var(--bg-soft);'
                          +  'border-left:3px solid var(--amber,#f59e0b);margin-bottom:10px;">'
@@ -269,46 +452,34 @@
         function renderAuditoriaSeleccion() {
             const totalCompletas = auditoriaTotalAreasCompletadas();
             // FASE 7 (C2) — antes dividía entre 3 fijo: con una 4ª área la barra
-            // pasaba de 100 %, y con dos se quedaba corta. El texto de al lado
-            // ya usaba AREAS_CONTEO.length; ahora los dos dicen lo mismo.
+            // pasaba de 100 %, y con dos se quedaba corta.
             const totalAreas = (typeof AREAS_CONTEO !== 'undefined' && AREAS_CONTEO.length) ? AREAS_CONTEO.length : 1;
             const porcentaje = Math.min(100, Math.round((totalCompletas / totalAreas) * 100));
             const todasCompletas = auditoriaTodasCompletas();
             const statusRef = isAdmin() ? auditoriaStatus : myAuditoriaStatus;
 
-            let html = '<div class="audit-screen">';
+            // FASE 10B — una sola columna (ver cabecera de _renderInventarioFisicoHeader).
+            let html = '<div class="audit-screen if-pantalla">';
 
-            // ── ETAPA 15: encabezado de Inventario Físico (numero/estado/creador,
-            //    en tiempo real vía _inventarioActivo) ─────────────────────────
+            // ── 1-3. Estado, datos y acciones del Inventario Físico ─────────
             html += _renderInventarioFisicoHeader();
 
-            // ── Header ────────────────────────────────────────────────────────
-            html += '<div class="bg-white rounded-xl p-4 sm:p-5 mb-4 shadow-md">';
-            html += '<div class="flex items-start justify-between gap-3 mb-3">';
-            html += '<div>';
-            html += '<p class="audit-header-title">Auditoría Física Ciega</p>';
-            html += '<p class="audit-header-sub">' + (isAdmin()
+            // ── Avance de las áreas ─────────────────────────────────────────
+            // FASE 10B: aquí había un segundo "Nuevo Inventario Físico" (o un
+            // aviso "Cierra #N primero"). Era el mismo botón que ya ofrecen el
+            // encabezado (sin inventario) y "Siguiente paso" (inventario
+            // cerrado): dos botones iguales en una pantalla chica es justo lo
+            // que se pidió quitar. La guarda de ETAPA 15 sigue en
+            // abrirModalNuevoInventario() y en auditoriaResetear().
+            html += '<div class="if-card">';
+            html += '<div><p class="audit-header-title" style="font-size:1.1rem;">Auditoría Física Ciega</p>';
+            html += '<p class="audit-header-sub" style="font-size:.92rem;line-height:1.5;margin-top:4px;">' + (isAdmin()
                 ? 'Panel de administrador — puedes ver todos los conteos y gestionar la sesión.'
-                : 'Cuenta tu área y finaliza. Solo tú ves tu conteo; el admin lo revisa al final.') + '</p>';
-            html += '</div>';
-            // ETAPA 15 — FIX RIESGO DE PÉRDIDA (auditoría 2026-09-01): mismo
-            // guard que auditoriaResetear() — el botón no se ofrece si hay un
-            // Inventario Físico activo que no esté CERRADO, para que el admin
-            // ni siquiera vea la opción que la función rechazaría.
-            if (isAdmin() && hasPermission('inventory.create') && (!_inventarioActivo || _inventarioActivo.estado === 'CERRADO')) {
-                html += '<button onclick="abrirModalNuevoInventario()" title="Crear nuevo Inventario Físico (solo admin)" style="flex-shrink:0;padding:6px 10px;border-radius:var(--r-md);background:var(--red-dim);border:1px solid rgba(239,68,68,0.18);color:var(--red-text);font-size:0.7rem;font-weight:600;cursor:pointer;white-space:nowrap;" class="flex items-center gap-1">';
-                html += '<svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>';
-                html += ' Nuevo Inventario Físico</button>';
-            } else if (isAdmin() && hasPermission('inventory.create') && _inventarioActivo) {
-                html += '<span title="Cierra el Inventario Físico #' + _inventarioActivo.numero + ' para poder iniciar uno nuevo" style="flex-shrink:0;padding:6px 10px;border-radius:var(--r-md);background:var(--bg-subtle,rgba(148,163,184,0.12));border:1px solid rgba(148,163,184,0.18);color:var(--txt-muted);font-size:0.7rem;font-weight:600;white-space:nowrap;" class="flex items-center gap-1">';
-                html += '🔒 Cierra #' + _inventarioActivo.numero + ' primero</span>';
-            }
-            html += '</div>';
-            // Barra de progreso
-            html += '<div class="flex items-center gap-3">';
-            html += '<div style="font-size:0.68rem;font-weight:600;color:var(--txt-muted);white-space:nowrap;">' + totalCompletas + ' / ' + AREAS_CONTEO.length + ' áreas</div>';
-            html += '<div class="audit-progress-bar" style="flex:1;"><div class="audit-progress-fill" style="width:' + porcentaje + '%;"></div></div>';
-            html += '<div style="font-size:0.68rem;font-weight:700;color:' + (todasCompletas ? 'var(--green)' : 'var(--accent)') + ';white-space:nowrap;">' + porcentaje + '%</div>';
+                : 'Cuenta tu área y finaliza. Solo tú ves tu conteo; el admin lo revisa al final.') + '</p></div>';
+            html += '<div class="if-avance">';
+            html += '<div class="if-avance__txt"><span>' + totalCompletas + ' / ' + AREAS_CONTEO.length + ' áreas</span>'
+                  + '<span style="color:' + (todasCompletas ? 'var(--green)' : 'var(--accent)') + ';">' + porcentaje + '%</span></div>';
+            html += '<div class="audit-progress-bar"><div class="audit-progress-fill" style="width:' + porcentaje + '%;"></div></div>';
             html += '</div>';
             html += '</div>';
 
@@ -321,90 +492,92 @@
 
             html += renderAuditComparePanel();
 
-            // ── Botones de área ───────────────────────────────────────────────
-            html += '<div class="flex flex-col gap-3 mb-4">';
+            // ── 4. Áreas ────────────────────────────────────────────────────
+            // La tarjeta entera es "entrar a contar". Reabrir y "Cerrar área
+            // para todos" salen de la tarjeta como botón propio: antes eran
+            // enlaces de 10 px DENTRO de la zona que entra al área.
+            html += '<p class="if-seccion">Áreas</p>';
+            html += '<div class="if-areas">';
             AREAS_CONTEO.forEach(area => {
                 const isCompleta = statusRef[area] === 'completada';
                 const tieneUnlock = !isAdmin() && Object.keys(myAuditoriaUnlocks)
                     .some(k => k.endsWith('__' + area) && !myAuditoriaUnlocks[k].used);
+                html += '<div class="if-area">';
                 html += '<div class="audit-area-card' + (isCompleta ? ' completada' : '') + '"'
                       + ' onclick="auditoriaEntrarArea(\'' + area + '\')"'
                       + ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();auditoriaEntrarArea(\'' + area + '\');}"'
                       + ' role="button" tabindex="0" aria-label="Entrar a ' + areasAuditoria[area] + '">';
-                html += '<div class="audit-area-icon"><i class="' + areasAuditoriaFA[area] + '" style="font-size:1.2rem;color:' + (isCompleta ? 'var(--green)' : 'var(--accent)') + ';"></i></div>';
+                html += '<div class="audit-area-icon"><i class="' + areasAuditoriaFA[area] + '" style="font-size:1.3rem;color:' + (isCompleta ? 'var(--green)' : 'var(--accent)') + ';"></i></div>';
                 html += '<div class="audit-area-info">';
                 html += '<div class="audit-area-name">' + areasAuditoria[area] + '</div>';
                 html += '<div class="audit-area-status ' + (isCompleta ? 'completada' : 'pendiente') + '">';
                 html += isCompleta
-                    ? '<svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg> Completada'
-                    : '<span style="width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;"></span> Pendiente';
+                    ? '<svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg> Completada'
+                    : '<span style="width:8px;height:8px;border-radius:50%;background:currentColor;display:inline-block;"></span> Pendiente';
                 html += '</div>';
+                var accionArea = '';
                 if (isCompleta) {
                     // FASE 2B — auditoriaConteo es el agregado de TODAS las
-                    // personas; myAuditoriaConteo es el propio. El criterio
-                    // pasa a ser el permiso de privacidad, no el rol.
+                    // personas; myAuditoriaConteo es el propio.
                     const conteoRef = puedeVerConteosAjenos() ? auditoriaConteo : myAuditoriaConteo;
                     const totalProductos = products.filter(p => conteoRef[p.id] && conteoRef[p.id][area] &&
                         (conteoRef[p.id][area].enteras > 0 || (conteoRef[p.id][area].abiertas || []).some(a => a > 0))).length;
-                    html += '<div style="font-size:0.63rem;color:var(--txt-muted);margin-top:3px;">' + totalProductos + ' producto(s) con cantidad';
-                    // D — el enlace se ofrece según el permiso, no según
-                    // isAdmin(): es el mismo criterio que ahora aplica
-                    // reabrirArea(), y así no se muestra una acción que el
-                    // servidor va a rechazar.
+                    html += '<div class="if-area__detalle">' + totalProductos + ' producto(s) con cantidad';
+                    // D — según el permiso, no según isAdmin(): el mismo
+                    // criterio que aplica reabrirArea().
                     if (hasPermission('inventory.reopenArea')) {
-                        html += ' · <a href="#" onclick="event.stopPropagation();reabrirArea(\'' + area + '\');" style="color:var(--amber);text-decoration:underline;font-weight:600;">↩ Reabrir</a>';
+                        accionArea = '<button type="button" class="bt bt--secundario" onclick="reabrirArea(\'' + area + '\')">↩ Reabrir ' + escapeHtml(areasAuditoria[area]) + '</button>';
                     } else if (tieneUnlock) {
-                        html += ' · <span style="color:var(--amber);font-weight:600;">🔓 Corrección habilitada</span>';
+                        html += ' · <span style="color:var(--amber);font-weight:700;">🔓 Corrección habilitada</span>';
                     } else {
-                        html += ' · <span style="color:var(--green);font-weight:600;">🔒 Bloqueada</span>';
+                        html += ' · <span style="color:var(--green);font-weight:700;">🔒 Bloqueada</span>';
                     }
                     html += '</div>';
                 } else if (hasPermission('inventory.closeOther')) {
-                    // FASE 2A — cerrar el área para TODAS las personas deja
-                    // de ser un efecto secundario de "finalizar mi conteo" y
-                    // pasa a ser una acción visible y propia.
-                    html += '<div style="font-size:0.63rem;margin-top:3px;">'
-                          + '<a href="#" onclick="event.stopPropagation();auditoriaCerrarArea(\'' + area + '\');" '
-                          + 'style="color:var(--amber);text-decoration:underline;font-weight:600;">'
-                          + '🔒 Cerrar área para todos</a></div>';
+                    // FASE 2A — cerrar el área para TODAS las personas es una
+                    // acción visible y propia, no un efecto de "finalizar".
+                    accionArea = '<button type="button" class="bt bt--secundario" onclick="auditoriaCerrarArea(\'' + area + '\')">🔒 Cerrar área para todos</button>';
                 }
                 html += '</div>';
-                html += '<svg class="audit-area-arrow" width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 18l6-6-6-6"/></svg>';
+                html += '<svg class="audit-area-arrow" width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 18l6-6-6-6"/></svg>';
+                html += '</div>';
+                html += accionArea;
                 html += '</div>';
             });
             html += '</div>';
 
-            // ── Botones de exportar (rol-específicos) ─────────────────────────
+            // ── Exportar (rol-específico) ────────────────────────────────────
             if (todasCompletas) {
-                html += '<div style="animation: springUp 0.26s var(--ease-out) both;">';
+                html += '<div class="bt-pila" style="animation: springUp 0.26s var(--ease-out) both;">';
                 if (isAdmin()) {
-                    // Admin: descarga total + publica
-                    html += '<button class="audit-export-btn" onclick="exportarExcelAdminTotal()">';
+                    html += '<button type="button" class="audit-export-btn" onclick="exportarExcelAdminTotal()">';
                     html += '<i class="fa-solid fa-file-excel" style="font-size:1.1rem;"></i>';
                     html += 'EXPORTAR INVENTARIO TOTAL (TODOS LOS USUARIOS)';
                     html += '</button>';
-                    html += '<p style="text-align:center;font-size:0.68rem;color:var(--txt-muted);margin-top:8px;">Inventario consolidado de todos los almacenes y todos los usuarios</p>';
-                    html += '<button onclick="generarYPublicarReporte()" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:8px;padding:10px 16px;border-radius:var(--r-md);background:var(--accent);color:#fff;font-size:0.8rem;font-weight:600;border:none;cursor:pointer;">';
+                    html += '<p class="bt-nota">Inventario consolidado de todos los almacenes y todos los usuarios</p>';
+                    html += '<button type="button" class="bt bt--primario" onclick="generarYPublicarReporte()">';
                     html += '<i class="fa-solid fa-cloud-arrow-up"></i> Publicar Inventario Total para Todos los Usuarios';
                     html += '</button>';
                 } else {
-                    // Usuario: solo descarga su propio conteo
-                    html += '<button class="audit-export-btn" onclick="exportarExcelMiConteo()">';
+                    html += '<button type="button" class="audit-export-btn" onclick="exportarExcelMiConteo()">';
                     html += '<i class="fa-solid fa-file-excel" style="font-size:1.1rem;"></i>';
                     html += 'DESCARGAR MI CONTEO (ÁREAS FINALIZADAS)';
                     html += '</button>';
-                    html += '<p style="text-align:center;font-size:0.68rem;color:var(--txt-muted);margin-top:8px;">Exporta únicamente tu conteo personal de las ' + AREAS_CONTEO.length + ' áreas</p>';
+                    html += '<p class="bt-nota">Exporta únicamente tu conteo personal de las ' + AREAS_CONTEO.length + ' áreas</p>';
                 }
                 html += '</div>';
             } else {
                 const faltantes = AREAS_CONTEO
                     .filter(a => statusRef[a] !== 'completada')
                     .map(a => areasAuditoria[a]).join(', ');
-                html += '<div style="text-align:center;padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-md);">';
-                html += '<p style="font-size:0.75rem;color:var(--txt-muted);">El botón de exportación aparecerá cuando completes todas las áreas.</p>';
-                html += '<p style="font-size:0.7rem;color:var(--txt-muted);margin-top:4px;">Pendiente: <strong style="color:var(--amber);">' + faltantes + '</strong></p>';
+                html += '<div class="if-card" style="text-align:center;gap:6px;">';
+                html += '<p style="font-size:.92rem;color:var(--txt-secondary);margin:0;">El botón de exportación aparecerá cuando completes todas las áreas.</p>';
+                html += '<p style="font-size:.92rem;color:var(--txt-secondary);margin:0;">Pendiente: <strong style="color:var(--amber);">' + faltantes + '</strong></p>';
                 html += '</div>';
             }
+
+            // ── 5. Zona de peligro, al final ─────────────────────────────────
+            html += _renderZonaCerrarInventario();
 
             html += '</div>'; // audit-screen
             return html;
@@ -530,26 +703,28 @@
                         html += '<span class="audit-area-row-count">'
                               + numProds + ' prod'
                               + (numProds !== 1 ? 's' : '')
-                              + ' · ' + totalEnteras + ' ent'
+                              // Redondeo de presentación: sumar decimales en coma
+                              // flotante dejaba "2482.3869999999997 ent" en pantalla.
+                              + ' · ' + (Math.round(totalEnteras * 1000) / 1000) + ' ent'
                               + (totalAbiertas > 0 ? ' · ' + totalAbiertas.toFixed(2) + ' ab' : '')
                               + '</span>';
                     }
 
-                    // Botones de acción (solo áreas completadas)
+                    // Botones de acción (solo áreas completadas).
+                    // FASE 10B: eran de 10 px de texto, blanco sobre azul claro
+                    // y sobre ámbar (1.72:1 y 1.63:1, ilegibles) y a 4 px uno del otro.
+                    // Ahora ocupan su propia fila, 48 px de alto y 8 px entre sí.
                     if (completada) {
-                        html += '<div style="display:flex;gap:4px;flex-shrink:0;">';
-                        html += '<button onclick="adminVerConteoUsuario(\'' + escapeHtml(u.uid) + '\',\'' + area + '\')"'
-                              + ' style="padding:2px 7px;border-radius:4px;background:var(--accent);color:#fff;font-size:0.62rem;border:none;cursor:pointer;">'
-                              + 'Ver</button>';
-                        html += '<button onclick="adminUnlockAreaUsuario(\'' + escapeHtml(u.uid) + '\',\'' + area + '\')"'
-                              + ' style="padding:2px 7px;border-radius:4px;background:var(--amber);color:#fff;font-size:0.62rem;border:none;cursor:pointer;">'
+                        html += '<div class="if-acc-usuario">';
+                        html += '<button type="button" class="bt bt--secundario" onclick="adminVerConteoUsuario(\'' + escapeHtml(u.uid) + '\',\'' + area + '\')">'
+                              + '👁 Ver</button>';
+                        html += '<button type="button" class="bt bt--secundario" onclick="adminUnlockAreaUsuario(\'' + escapeHtml(u.uid) + '\',\'' + area + '\')">'
                               + '🔓 Habilitar</button>';
                         // ETAPA 15: reapertura completa del almacén (distinto del
                         // desbloqueo por producto de arriba) — solo mientras el
                         // Inventario Físico esté SINCRONIZADO, solo con permiso.
                         if (hasPermission('inventory.reopenArea') && _inventarioActivo && _inventarioActivo.estado === 'SINCRONIZADO') {
-                            html += '<button onclick="reabrirAlmacenAdmin(\'' + escapeHtml(u.uid) + '\',\'' + area + '\')"'
-                                  + ' style="padding:2px 7px;border-radius:4px;background:#6366f1;color:#fff;font-size:0.62rem;border:none;cursor:pointer;">'
+                            html += '<button type="button" class="bt bt--secundario" onclick="reabrirAlmacenAdmin(\'' + escapeHtml(u.uid) + '\',\'' + area + '\')">'
                                   + '🔄 Reabrir</button>';
                         }
                         html += '</div>';
@@ -637,7 +812,10 @@
                     );
 
                     // FIX #4: onkeydown para activar la tarjeta con Enter/Espacio desde teclado
-                    html += '<div class="inv-card' + (hasData ? ' has-data' : '') + (areaData.alerta_conflicto ? ' inv-card--conflict' : '') + '" data-sbx-item'
+                    // FASE 8C: alerta_conflicto (conteoAreas, retirada) → _hayConflicto,
+                    // que vive en auditoriaConteo vía _recalcAdminAggregatedConteo y ahora
+                    // cubre enteras Y abiertas (ver js/45-inventario-datos.js).
+                    html += '<div class="inv-card' + (hasData ? ' has-data' : '') + (areaData._hayConflicto ? ' inv-card--conflict' : '') + '" data-sbx-item'
                           + ' onclick="openInventarioModal(\'' + escapeHtml(product.id) + '\')"'
                           + ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();openInventarioModal(\'' + escapeHtml(product.id) + '\');}"'
                           + ' role="button" tabindex="0" aria-label="Contar ' + escapeHtml(product.name) + '" style="animation-delay:' + delay + 'ms">';
@@ -647,8 +825,8 @@
                     html += '<div style="min-width:0;flex:1">';
                     html += '<div class="inv-card__name">' + resaltarBusqueda(product.name, _conteoSearchTerm) + '</div>';
                     html += '<span class="inv-card__group-badge">' + escapeHtml(product.group || 'General') + '</span>';
-                    if (areaData.alerta_conflicto) {
-                        html += '<div class="inv-card__conflict-badge"><i class="fa-solid fa-triangle-exclamation"></i> Conflicto abierta</div>';
+                    if (areaData._hayConflicto) {
+                        html += '<div class="inv-card__conflict-badge"><i class="fa-solid fa-triangle-exclamation"></i> Conflicto de conteo</div>';
                     }
                     html += '</div>';
                     // HOTFIX: en modo cantidad (KGS/LTS/PZA) el conteo admite hasta
@@ -1352,6 +1530,10 @@
                 if (proveedor)                 product.proveedor   = proveedor;   else delete product.proveedor;
                 // R2 — mismo criterio: si se vacia el campo, el dato se quita.
                 if (pv)                        product.pv          = pv;          else delete product.pv;
+                // FASE 8 — sello de versión: es lo que permite que esta edición
+                // gane sobre una copia anterior venga de donde venga, en vez de
+                // que decida quién sincroniza al final.
+                product._v = _versionProducto(product._v);
                 // stockByArea se recalcula
                 syncStockByAreaFromConteo();
                 // CORRECCIÓN 3: Auditoría obligatoria en modificación de producto
@@ -1373,7 +1555,8 @@
                     name: name,
                     unit: unit,
                     group: group,
-                    stockByArea: _stockInicialPorArea(0)
+                    stockByArea: _stockInicialPorArea(0),
+                    _v: _versionProducto(0)   // FASE 8 — nace con versión
                 };
                 if (capacidadMl !== undefined)       newProduct.capacidadMl = capacidadMl;
                 if (pesoBotellaLlenaOz !== undefined) newProduct.pesoBotellaLlenaOz = pesoBotellaLlenaOz;

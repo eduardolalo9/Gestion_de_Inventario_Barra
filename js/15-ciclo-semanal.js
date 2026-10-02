@@ -148,6 +148,28 @@
             };
         }
 
+        /**
+         * Próxima fecha (>= la dada, incluida) que cierra semana o es corte de
+         * mes — o sea, la próxima fecha que clasificarRecuento() aceptaría como
+         * "Recuento". Se usa para proponer un valor por defecto útil en 'Nuevo
+         * Inventario Físico' en vez de 'hoy', que la mayoría de los días no
+         * sirve para nada: un inventario creado con una fecha fuera de estas
+         * dos nunca podrá contabilizarse (H-40, hotfix 4.9).
+         *
+         * Domingo cae como máximo a 6 días de cualquier fecha, así que el tope
+         * de 31 iteraciones es solo una salvaguarda contra un bug de fecha, no
+         * un caso real esperado.
+         */
+        function proximaFechaRecuentoValida(desde) {
+            var f = _aFechaLocal(desde) || new Date();
+            for (var i = 0; i < 31; i++) {
+                var c = clasificarRecuento(f);
+                if (c && (c.cierraSemana || c.esCorteMensual)) return fechaISOLocal(f);
+                f = new Date(f.getFullYear(), f.getMonth(), f.getDate() + 1);
+            }
+            return fechaISOLocal(f);
+        }
+
         /** ¿Esa fecha cae dentro de esa semana? */
         function perteneceASemana(fecha, idSemana) {
             var s = semanaId(fecha);

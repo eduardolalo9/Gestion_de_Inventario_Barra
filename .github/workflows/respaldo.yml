@@ -1,0 +1,96 @@
+name: Respaldo semanal de Firestore
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  POR QUÉ
+#  Los respaldos de la app viven en el localStorage del teléfono, así que
+#  desaparecen exactamente cuando más se necesitan (navegador limpiado,
+#  teléfono perdido). Y Firestore en plan Spark no exporta solo: si algo
+#  borra datos, no hay punto de restauración. Esto deja una copia semanal
+#  fuera del teléfono y fuera de Firestore.
+#
+#  OJO — ESTE REPOSITORIO ES PÚBLICO. Los artefactos de Actions son
+#  descargables por cualquiera que pueda ver el repo. Por eso el respaldo se
+#  CIFRA con AES-256 antes de subirse: aunque alguien lo baje, sin la
+#  contraseña no vale nada. NUNCA subir el JSON en claro.
+#
+#  SECRETOS QUE HAY QUE CREAR (Settings → Secrets and variables → Actions):
+#    FIREBASE_SERVICE_ACCOUNT  → contenido completo del JSON de la cuenta de
+#                                servicio (Consola Firebase → Configuración
+#                                del proyecto → Cuentas de servicio →
+#                                Generar nueva clave privada)
+#    RESPALDO_PASSPHRASE       → una contraseña larga inventada por ti.
+#                                GUÁRDALA EN TU GESTOR DE CONTRASEÑAS: sin
+#                                ella el respaldo es irrecuperable.
+#
+#  PARA RESTAURAR:
+#    gpg --batch --yes --passphrase "TU_PASSPHRASE" \
+#        --decrypt respaldo-AAAA-MM-DD.json.gpg > respaldo.json
+# ═══════════════════════════════════════════════════════════════════════════
+
+on:
+  schedule:
+    - cron: '17 9 * * 1'      # lunes 09:17 UTC (~03:17 hora de Monterrey)
+  workflow_dispatch:           # y a mano cuando quieras, desde la pestaña Actions
+
+concurrency:
+  group: respaldo
+  cancel-in-progress: false    # un respaldo a medias no se cancela
+
+jobs:
+  respaldo:
+    name: Copiar Firestore y cifrar
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Preparar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar firebase-admin
+        run: npm install --no-save firebase-admin
+
+      - name: Escribir la credencial en un archivo temporal
+        env:
+          CUENTA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$CUENTA" ]; then
+            echo "Falta el secreto FIREBASE_SERVICE_ACCOUNT"; exit 1
+          fi
+          printf '%s' "$CUENTA" > "$RUNNER_TEMP/cuenta.json"
+
+      - name: Generar el respaldo
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/cuenta.json
+          GOOGLE_CLOUD_PROJECT: gestor-de-inventarios-76c19
+        run: node herramientas/respaldo-firestore.js --salida respaldos
+
+      - name: Cifrar (AES-256) y borrar el JSON en claro
+        env:
+          PASSPHRASE: ${{ secrets.RESPALDO_PASSPHRASE }}
+        run: |
+          if [ -z "$PASSPHRASE" ]; then
+            echo "Falta el secreto RESPALDO_PASSPHRASE"; exit 1
+          fi
+          for f in respaldos/*.json; do
+            gpg --batch --yes --symmetric --cipher-algo AES256 \
+                --passphrase "$PASSPHRASE" "$f"
+            rm -f "$f"          # el claro no sale nunca del runner
+          done
+          ls -la respaldos/
+
+      - name: Guardar el respaldo cifrado
+        uses: actions/upload-artifact@v4
+        with:
+          name: respaldo-firestore-${{ github.run_number }}
+          path: respaldos/*.gpg
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Borrar la credencial del runner
+        if: always()
+        run: rm -f "$RUNNER_TEMP/cuenta.json"

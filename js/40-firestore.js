@@ -21,6 +21,19 @@
             compras       = safeGet('inventarioApp_compras',       []);
             movimientos   = safeGet('inventarioApp_movimientos',   []);
             costosUltimos = safeGet('inventarioApp_costosUltimos', {});
+            // RECETARIO-1 — mismo respaldo local que products: se recibe la
+            // versión definitiva vía subscribeRecetarioUsuario/Admin, esto es
+            // solo lo que había mientras esa suscripción se conecta o si
+            // arranca sin red.
+            recetas       = safeGet('inventarioApp_recetas',       []);
+            // Hotfix 4.14 — cura las recetas guardadas con el esquema anterior
+            // (nombre dentro de `pv`). Idempotente: ver js/91-recetario.js.
+            if (typeof _migrarRecetasNomenclatura === 'function') _migrarRecetasNomenclatura(recetas);
+            // FASE 10 — las ventas de la última semana consultada, para que la
+            // pestaña muestre algo al abrir la app sin red.
+            ventas         = safeGet('inventarioApp_ventas',         []);
+            ventasSemanaId = safeGet('inventarioApp_ventasSemanaId', null);
+            ventasPeriodos = safeGet('inventarioApp_ventasPeriodos', []);
 
             // FIX-CONCURRENCIA: restaurar tombstones de borrado (ver _mergeArrayByIdPreferLocal)
             const rawDelProd = safeGet('inventarioApp_deletedProductIds',   []);
@@ -1168,7 +1181,19 @@
                 // de reabrir). Ahora solo el admin los propaga.
                 if (isAdmin()) {
                     payload.products        = products;
-                    payload.auditoriaStatus = auditoriaStatus;
+                    // FASE 12 — auditoriaStatus y _auditoriaSessionId YA NO viajan
+                    // en esta sincronización general. Eran la COPIA LOCAL de
+                    // este dispositivo: una laptop que se quedó en el inventario
+                    // anterior regresaba el servidor a ese inventario y marcaba
+                    // "completadas" las áreas del nuevo (reproducido en
+                    // pruebas/prueba-folio-integracion.js, F4). Cada uno tiene
+                    // ya su única escritura, atada a la sesión vigente:
+                    //   · la sesión la anuncia el batch de
+                    //     _adminIniciarSesionFirestore(), junto con su inventario;
+                    //   · el estado de un área lo escriben auditoriaCerrarArea()
+                    //     y reabrirArea(), campo por campo.
+                    // El servidor además rechaza que la sesión cambie sin crear
+                    // su inventario (firestore.rules, _cambioDeSesionValido).
                     // D — la marca de purga viaja con el catálogo. Sin ella,
                     // otro dispositivo con los 424 productos todavía en local
                     // los volvería a subir en su siguiente sincronización.
@@ -1177,11 +1202,6 @@
                     // Sin esto, el admin crea un area y los bartenders no la ven:
                     // contarian en tres areas mientras el panel espera cuatro.
                     if (typeof areasConteoDef !== 'undefined') payload.areasConteo = areasConteoDef;
-                    // FIX-SESSION: incluir _auditoriaSessionId para que otros dispositivos
-                    // detecten cambios de ciclo de auditoría incluso sin pasar por
-                    // _adminIniciarSesionFirestore (p.ej., reconexiones tardías).
-                    // Solo el admin inicia sesiones, así que solo él debe anunciarlas.
-                    payload._auditoriaSessionId = _auditoriaSessionId || null;
                 }
 
                 // MIGRACIÓN MÍNIMA DE CONCURRENCIA: el conteo por producto/área
@@ -1234,221 +1254,49 @@
         }
 
         // ══════════════════════════════════════════════════════════════════════
-        //  ESCRITURA ATÓMICA DE CONTEO POR ÁREA (Anticolisión)
+        //  FASE 8C — RETIRO DE conteoAreas (escritura heredada)
         // ══════════════════════════════════════════════════════════════════════
-        /**
-         * syncConteoAtomicoPorArea(area)
-         * ──────────────────────────────
-         * Escribe el conteo de auditoría de UN área en Firestore de forma atómica,
-         * usando FieldValue.increment() para sumar cantidades en paralelo y
-         * detección de conflictos para botellas abiertas.
-         *
-         * Documento de destino (subcolección independiente del doc principal):
-         *   inventarioApp/{FIRESTORE_DOC_ID}/conteoAreas/{area}
-         *
-         * Estrategia por campo:
-         *  • enteras: FieldValue.increment(valor) → dos escrituras simultáneas SUMAN
-         *  • abiertas: transacción que detecta divergencia → si el valor difiere,
-         *    escribe stock_abierto_alternativo y marca alerta_conflicto: true
-         *  • Si la colección del área no existe aún, se crea con set({merge:true})
-         *
-         * @param {string} area - clave del área ('almacen' | 'barra1' | 'barra2')
-         */
-       async function syncConteoAtomicoPorArea(area) {
-            if (!_db) {
-                console.info('[MultiDisp] Firebase no disponible — conteo guardado solo en local.');
-                return;
-            }
-            if (!navigator.onLine) {
-                showNotification('📴 Sin conexión — conteo guardado localmente');
-                updateCloudSyncBadge('offline');
-                return;
-            }
-
-            updateCloudSyncBadge('syncing');
-
-            // Sub-documento exclusivo de este dispositivo.
-            // Nunca compite con el documento de otro bartender.
-            const dispositivoRef = _db
-                .collection('inventarioApp')
-                .doc(FIRESTORE_DOC_ID)
-                .collection('conteoAreas')
-                .doc(area)
-                .collection('dispositivos')
-                .doc(_deviceId);
-
-            try {
-                // FIX 1 CRÍTICO: Leer de myAuditoriaConteo (conteo propio del usuario)
-                // y NO de auditoriaConteo (vista agregada del admin, calculada en memoria).
-                // FASE 2B — AQUÍ SE DEJA isAdmin() A PROPÓSITO. Esta no es una
-                // ruta de lectura sino de ESCRITURA: decide qué sube este
-                // dispositivo a su propio documento. Cambiar el criterio no
-                // aportaría privacidad (nadie lee datos ajenos aquí) y sí
-                // alteraría qué se guarda para un supervisor con viewAll.
-                const conteoFuente = isAdmin() ? auditoriaConteo : myAuditoriaConteo;
-                const productosConDatos = products.filter(p =>
-                    conteoFuente[p.id] && conteoFuente[p.id][area]
-                );
-
-                if (productosConDatos.length === 0) {
-                    updateCloudSyncBadge('ok');
-                    return;
-                }
-
-                const txTimestamp = Date.now();
-
-                // Payload de ESTE dispositivo: valores locales absolutos.
-                const payload = {
-                    _deviceId:  _deviceId,
-                    _lastWrite: txTimestamp,
-                    _area:      area,
-                    _userUid:   currentUserUid || 'anonymous',
-                };
-
-                productosConDatos.forEach(p => {
-                    const localArea = conteoFuente[p.id][area];
-                    payload[p.id] = {
-                        enteras:   typeof localArea.enteras  === 'number'  ? localArea.enteras  : 0,
-                        abiertas:  Array.isArray(localArea.abiertas)       ? localArea.abiertas : [],
-                        _lastWrite: localArea._ts || txTimestamp, // BUG-3 FIX: timestamp por producto para last-write-wins correcto
-                    };
-                });
-
-                // set() SIN merge: reemplaza SOLO el documento de este dispositivo.
-                await dispositivoRef.set(payload);
-
-                // Leer TODOS los dispositivos y calcular los totales agregados en memoria.
-                await _cargarYAgeregarConteos(area);
-
-                updateCloudSyncBadge('ok');
-                showNotification('☁️ Conteo de ' + areasAuditoria[area] + ' guardado en la nube.');
-                console.info('[MultiDisp] Área', area, 'sincronizada. deviceId:', _deviceId);
-
-            } catch (err) {
-                updateCloudSyncBadge('error');
-                console.error('[MultiDisp] Error al guardar conteo:', err);
-                showNotification('⚠️ Error al subir conteo a la nube — guardado localmente');
-            }
-        }
-
-        /**
-         * _cargarYAgeregarConteos(area)
-         * ──────────────────────────────
-         * Descarga los documentos de TODOS los dispositivos desde
-         * conteoAreas/{area}/dispositivos y los fusiona en auditoriaConteo.
-         * Estrategia: los valores del dispositivo más reciente (_lastWrite) ganan.
-         * Se llama después de subir el propio conteo y al arranque de la app.
-         *
-         * @param {string} area - 'almacen' | 'barra1' | 'barra2'
-         */
-        async function _cargarYAgeregarConteos(area) {
-            if (!_db || !navigator.onLine) return;
-            // ── FASE 2B — CONTEO CIEGO ────────────────────────────────────
-            // Esta función descarga el conteo de TODOS los dispositivos, es
-            // decir el de otras personas. Hasta ahora se ejecutaba para
-            // cualquier usuario: un bartender se bajaba el conteo de sus
-            // compañeros al arranque y después de subir su área, y no lo
-            // mostraba en ninguna parte — lo descargaba para nada.
-            //
-            // Se corta AQUÍ, en la consulta, no solo en la regla: si se
-            // dejara correr, la regla nueva la rechazaría y el dispositivo
-            // acumularía errores de permisos en cada arranque.
-            if (!puedeVerConteosAjenos()) return;
-            try {
-                const dispositivosSnap = await _db
-                    .collection('inventarioApp')
-                    .doc(FIRESTORE_DOC_ID)
-                    .collection('conteoAreas')
-                    .doc(area)
-                    .collection('dispositivos')
-                    .get();
-
-                if (dispositivosSnap.empty) return;
-
-                // Para cada documento de dispositivo, mezclar sus productos
-                // en auditoriaConteo sin borrar lo que ya hay de otros dispositivos.
-                dispositivosSnap.docs.forEach(function(doc) {
-                    const data = doc.data();
-                    // Ignorar campos de metadatos (_deviceId, _lastWrite, _area)
-                    Object.keys(data).forEach(function(key) {
-                        if (key.startsWith('_')) return;
-                        const devEntry = data[key];
-                        if (!devEntry || typeof devEntry !== 'object') return;
-
-                        if (!auditoriaConteo[key]) auditoriaConteo[key] = {};
-                        if (!auditoriaConteo[key][area]) {
-                            auditoriaConteo[key][area] = { enteras: 0, abiertas: [] };
-                        }
-
-                        // Actualizar solo si el dato del dispositivo es más reciente
-                        const cloudTs  = devEntry._lastWrite || data._lastWrite || 0;
-                        const localTs  = auditoriaConteo[key][area]._lastWrite || 0;
-                        if (cloudTs >= localTs) {
-                            if (typeof devEntry.enteras === 'number') {
-                                auditoriaConteo[key][area].enteras = devEntry.enteras;
-                            }
-                            if (Array.isArray(devEntry.abiertas)) {
-                                auditoriaConteo[key][area].abiertas = devEntry.abiertas;
-                            }
-                            if (devEntry.alerta_conflicto !== undefined) {
-                                auditoriaConteo[key][area].alerta_conflicto = devEntry.alerta_conflicto;
-                            }
-                            if (devEntry.stock_abierto_alternativo !== undefined) {
-                                auditoriaConteo[key][area].stock_abierto_alternativo = devEntry.stock_abierto_alternativo;
-                            }
-                            auditoriaConteo[key][area]._lastWrite = cloudTs;
-                        }
-                    });
-                });
-
-                console.info('[MultiDisp] Conteos del área ' + area + ' agregados desde ' + dispositivosSnap.size + ' dispositivo(s) ✓');
-            } catch (err) {
-                console.warn('[MultiDisp] Error al cargar conteos de área ' + area + ':', err);
-            }
-        }
-
-        /**
-         * resetConteoAtomicoEnFirestore()
-         * ───────────────────────────────
-         * Elimina los documentos de conteoAreas en Firestore al iniciar nueva auditoría.
-         * Así los increment() del siguiente ciclo parten de cero.
-         */
-        async function resetConteoAtomicoEnFirestore() {
+        // Hasta el 26/09/2026 vivían aquí syncConteoAtomicoPorArea(area) y
+        // _cargarYAgeregarConteos(area): escribían y releían
+        // inventarioApp/{doc}/conteoAreas/{area}/dispositivos/{deviceId},
+        // un conteo por-DISPOSITIVO con FieldValue.increment().
+        //
+        // Por qué ya sobraban (evidencia, no suposición):
+        //  1. El único consumidor del VALOR agregado que ofrecían
+        //     (auditoriaConteo) es hoy subscribeAllUsersAuditoria() →
+        //     _recalcAdminAggregatedConteo() (js/45-inventario-datos.js), un
+        //     listener en vivo sobre userAuditoria/{uid} con lógica de
+        //     prioridad admin — estrictamente más nuevo, más fino (por
+        //     usuario, no por dispositivo) y más frecuente que el de
+        //     conteoAreas. El reporte ya no leía conteoAreas desde FASE 8
+        //     (§5 del informe de cierre): esta es la escritura, no ya el
+        //     único consumidor que quedaba.
+        //  2. Lo único que _cargarYAgeregarConteos aportaba y
+        //     _recalcAdminAggregatedConteo NO cubría era la bandera
+        //     alerta_conflicto de una botella abierta divergente. Se
+        //     preserva esa detección — ver _hayConflicto en
+        //     _recalcAdminAggregatedConteo, que ahora también compara
+        //     `abiertas`, no solo `enteras` — y la UI (85/80) se cambia de
+        //     `alerta_conflicto` a `_hayConflicto` en el mismo commit para
+        //     no perder el aviso ni un ciclo.
+        //
+        // conteoMultiUsuario (syncConteoPorUsuarioToFirestore, en
+        // js/10-multiusuario.js) es OTRO sistema legacy, independiente de
+        // este, y sigue activo: no forma parte de este retiro.
+        async function resetConteoMultiUsuarioEnFirestore() {
             // FIX-PROP-2 (CRÍTICO, mismo patrón que _adminIniciarSesionFirestore):
             // esta función se llama justo después, en la misma secuencia de
             // auditoriaResetear(). Si también traga sus errores, el admin ve
-            // "✅" aunque las áreas legacy (conteoAreas/dispositivos,
-            // conteoMultiUsuario) —de donde depende generarYPublicarReporte()—
-            // queden con datos del ciclo anterior sin que nadie se entere.
+            // "✅" aunque conteoMultiUsuario —de donde lee
+            // renderAuditComparePanel()— quede con datos del ciclo anterior
+            // sin que nadie se entere.
             if (!_db) return;
             if (!navigator.onLine) {
-                throw new Error('sin_conexion: no se puede resetear el conteo atómico offline');
+                throw new Error('sin_conexion: no se puede resetear conteoMultiUsuario offline');
             }
             const AREAS = AREAS_CONTEO;
             const batch = _db.batch();
 
-            for (const area of AREAS) {
-                const dispositivosRef = _db
-                    .collection('inventarioApp')
-                    .doc(FIRESTORE_DOC_ID)
-                    .collection('conteoAreas')
-                    .doc(area)
-                    .collection('dispositivos');
-
-                // Listar y borrar todos los documentos de dispositivos para esta área
-                const snap = await dispositivosRef.get();
-                snap.docs.forEach(doc => batch.delete(doc.ref));
-
-                // También borrar el documento padre del área por compatibilidad
-                batch.delete(_db
-                    .collection('inventarioApp')
-                    .doc(FIRESTORE_DOC_ID)
-                    .collection('conteoAreas')
-                    .doc(area)
-                );
-            }
-
-            // FIX-03 (preservado): borrar también conteoMultiUsuario
             for (const area of AREAS) {
                 batch.delete(_db
                     .collection('inventarioApp')
@@ -1458,13 +1306,11 @@
                 );
             }
 
-            // BUG-11 FIX: borrar los documentos individuales de conteoMultiUsuario/{area}
-            // (el borrado anterior solo borraba el doc padre, no sus contenidos).
-            // Nota: Firestore NO borra subcolecciones automáticamente al borrar el padre.
-            // Los datos de área en conteoMultiUsuario son documentos planos sin subcolección,
-            // así que el borrado del doc es suficiente — verificado.
+            // BUG-11 FIX (preservado): los datos de área en conteoMultiUsuario
+            // son documentos planos sin subcolección, así que borrar el doc
+            // es suficiente — verificado.
             await batch.commit();
-            console.info('[MultiDisp] conteoAreas/dispositivos + conteoMultiUsuario eliminados ✓');
+            console.info('[MultiUser] conteoMultiUsuario eliminado ✓');
             // Sin try/catch — el error se propaga a auditoriaResetear().
         }
 
@@ -1524,10 +1370,11 @@
                     showNotification('⚠️ Tu conteo bajó de ' + ultimoConfirmado + ' a ' + entradasActuales + ' productos contados — revisa antes de seguir');
                 }
 
-                await ref.set({
+                const sesionLocal = _auditoriaSessionId;
+                const datos = {
                     uid:        currentUserUid,
                     email:      (_auth && _auth.currentUser) ? _auth.currentUser.email : currentUserUid,
-                    sessionId:  _auditoriaSessionId,
+                    sessionId:  sesionLocal,
                     status:     myAuditoriaStatus,
                     // D — quién finalizó cada área y cuándo. Viaja con el
                     // conteo porque pertenece al mismo acto: cerrar el área.
@@ -1536,7 +1383,46 @@
                     conteo:     conteoConTs,   // BUG-5 FIX: conteo con _ts por producto
                     updatedAt:  now,
                     isAdmin:    isAdmin()
-                }, { merge: true }); // merge:true → preserva 'unlocks' y otros campos del admin
+                };
+                // ══════════════════════════════════════════════════════════
+                //  HOTFIX 4.19 — UN CONTEO VIEJO YA NO SE MEZCLA NI REGRESA
+                //  Antes era un set(..., {merge:true}) a ciegas. merge:true
+                //  fusiona los mapas campo por campo, así que:
+                //   · si el documento traía productos de un inventario
+                //     ANTERIOR (un teléfono sin señal que subió tarde su
+                //     conteo), esos productos se quedaban dentro del
+                //     inventario nuevo: las áreas no empezaban en cero;
+                //   · y si el que subía tarde era el teléfono atrasado,
+                //     regresaba el documento a la sesión vieja: el conteo de
+                //     esa persona en el inventario nuevo dejaba de verse y
+                //     no entraba al cierre.
+                //  Ahora se lee el documento en una transacción y se decide:
+                //   · misma sesión            → merge (conserva los 'unlocks' del admin)
+                //   · sesión ANTERIOR         → se reemplaza completo
+                //   · sesión MÁS NUEVA que la de este aparato → no se escribe:
+                //     este aparato va atrasado. Se deja pendiente para que,
+                //     al pasar a la sesión nueva, se archive como huérfano (5B)
+                //     en vez de perderse.
+                // ══════════════════════════════════════════════════════════
+                const resultado = await _db.runTransaction(async function(tx) {
+                    const actual = await tx.get(ref);
+                    const sesionDoc = actual.exists ? ((actual.data() || {}).sessionId || null) : null;
+                    if (sesionDoc && sesionLocal && sesionDoc !== sesionLocal) {
+                        const nDoc = Number(sesionDoc), nLocal = Number(sesionLocal);
+                        if (isFinite(nDoc) && isFinite(nLocal) && nDoc > nLocal) return 'aparato_atrasado';
+                        tx.set(ref, datos);
+                        return 'reemplazado';
+                    }
+                    tx.set(ref, datos, { merge: true });
+                    return 'ok';
+                });
+                if (resultado === 'aparato_atrasado') {
+                    _auditSyncPending = true;
+                    try { localStorage.setItem('inventarioApp_auditSyncPending', '1'); } catch(_) {}
+                    console.warn('[AuditUser] El servidor ya está en un inventario más nuevo que este aparato — '
+                        + 'no se sube el conteo del anterior (se archivará al actualizarse).');
+                    return;
+                }
                 _auditSyncPending = false;
                 try { localStorage.setItem('inventarioApp_lastSyncedConteoSize', String(entradasActuales)); } catch(_) {}
                 console.info('[AuditUser] Mi conteo sincronizado ✓');

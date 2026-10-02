@@ -47,6 +47,14 @@ const PRUEBAS = [
     'prueba-fase6.js',              // FASE 6 — buscadores: motor unificado + integracion
     'prueba-fase7.js',              // FASE 7 — seguridad: chunks, ajustes, conflictos, cambios
     'prueba-reconteo.js',      // RECONTEO — ventana de reconteo (estática)
+    'prueba-fase8.js',         // FASE 8 — existencia oficial, versión de catálogo y reporte
+    'prueba-contabilizar-conteo.js', // Contabilizar en Conteo + CONTABILIZADO ya no es "abierto"
+    'prueba-8c.js',                  // FASE 8C — retiro de la escritura heredada de conteoAreas
+    'prueba-recetario1.js',          // RECETARIO-1 — bill of materials, costeo, publicar/suscribir
+    'prueba-recetario2.js',          // RECETARIO-2 — importador de recetas desde Excel
+    'prueba-fase10.js',              // FASE 10 — ventas del POS: permisos, reglas, parser
+    'prueba-fase11a.js',             // FASE 11A — costeo por unidad y consumo teórico
+    'prueba-fase12.js',              // FASE 12 — folio #1001, anti-solapamiento y consistencia entre dispositivos
 ];
 
 let fallaron = [];

@@ -383,6 +383,13 @@ function _idbPruneSyncedQueue() {
                     store.put((typeof compras !== 'undefined') ? compras : [],           'compras');
                     store.put((typeof movimientos !== 'undefined') ? movimientos : [],   'movimientos');
                     store.put((typeof costosUltimos !== 'undefined') ? costosUltimos : {}, 'costosUltimos');
+                    // RECETARIO-1
+                    store.put((typeof recetas !== 'undefined') ? recetas : [],           'recetas');
+                    // FASE 10 — ventas de la semana cargada (no el histórico)
+                    store.put((typeof ventas !== 'undefined') ? ventas : [],             'ventas');
+                    store.put((typeof ventasSemanaId !== 'undefined') ? ventasSemanaId : null, 'ventasSemanaId');
+                    // FASE 10B — qué días de esa semana tienen ventas cargadas
+                    store.put((typeof ventasPeriodos !== 'undefined') ? ventasPeriodos : [], 'ventasPeriodos');
                     // TIER 3 — Estado UI
                     store.put(cart,                      'cart');
                     store.put(activeTab,                 'activeTab');
@@ -458,7 +465,8 @@ function _idbPruneSyncedQueue() {
                     idbAuditoriaStatus, idbMyAuditoriaStatus, idbMyAuditoriaUnlocks,
                     idbSessionId, idbCicloEstado, idbCicloInfo,
                     idbSyncQueue, idbCart, idbActiveTab, idbSelectedArea, idbSelectedGroup,
-                    idbCompras, idbMovimientos, idbCostosUltimos
+                    idbCompras, idbMovimientos, idbCostosUltimos, idbRecetas,
+                    idbVentas, idbVentasSemanaId, idbVentasPeriodos
                 ] = await Promise.all([
                     _idbGet('products'),              _idbGet('inventarioConteo'),
                     _idbGet('myAuditoriaConteo'),     _idbGet('auditoriaConteo'),
@@ -469,7 +477,9 @@ function _idbPruneSyncedQueue() {
                     _idbGet('cart'),                  _idbGet('activeTab'),
                     _idbGet('selectedArea'),          _idbGet('selectedGroup'),
                     _idbGet('compras'),               _idbGet('movimientos'),
-                    _idbGet('costosUltimos')
+                    _idbGet('costosUltimos'),         _idbGet('recetas'),
+                    _idbGet('ventas'),                _idbGet('ventasSemanaId'),
+                    _idbGet('ventasPeriodos')
                 ]);
                 return {
                     products:                  idbProducts,
@@ -491,6 +501,10 @@ function _idbPruneSyncedQueue() {
                     compras:                   idbCompras,
                     movimientos:               idbMovimientos,
                     costosUltimos:             idbCostosUltimos,
+                    recetas:                   idbRecetas,
+                    ventas:                    idbVentas,
+                    ventasSemanaId:            idbVentasSemanaId,
+                    ventasPeriodos:            idbVentasPeriodos,
                     _savedAt:                  savedAt
                 };
             } catch(e) {
@@ -546,6 +560,18 @@ function _idbPruneSyncedQueue() {
                 movimientos = idbData.movimientos;
             if (idbData.costosUltimos && typeof idbData.costosUltimos === 'object')
                 costosUltimos = idbData.costosUltimos;
+            // RECETARIO-1 — mismo criterio que compras/movimientos arriba.
+            if (Array.isArray(idbData.recetas)) {
+                recetas = idbData.recetas;
+                // Hotfix 4.14 — mismo saneo que en loadFromLocalStorage.
+                if (typeof _migrarRecetasNomenclatura === 'function') _migrarRecetasNomenclatura(recetas);
+            }
+            if (Array.isArray(idbData.ventas))
+                ventas = idbData.ventas;
+            if (typeof idbData.ventasSemanaId === 'string')
+                ventasSemanaId = idbData.ventasSemanaId;
+            if (Array.isArray(idbData.ventasPeriodos))
+                ventasPeriodos = idbData.ventasPeriodos;
             isAuditoriaMode = (auditoriaView === 'counting' && !!auditoriaAreaActiva);
             console.info('[IDB] Estado restaurado desde IndexedDB (' +
                 new Date(idbData._savedAt).toLocaleString('es-MX') + ') — ' +
@@ -702,6 +728,17 @@ function _idbPruneSyncedQueue() {
                 ['inventarioApp_compras',                  JSON.stringify(compras)],
                 ['inventarioApp_movimientos',              JSON.stringify(movimientos)],
                 ['inventarioApp_costosUltimos',            JSON.stringify(costosUltimos)],
+                // RECETARIO-1 — respaldo local del bill of materials, mismo
+                // TIER que products (catálogo): no es el conteo activo, pero
+                // sí datos ya publicados que no deben perderse entre sesiones.
+                ['inventarioApp_recetas',                  JSON.stringify(
+                    (typeof recetas !== 'undefined') ? recetas : [])],
+                ['inventarioApp_ventas',                   JSON.stringify(
+                    (typeof ventas !== 'undefined') ? ventas : [])],
+                ['inventarioApp_ventasSemanaId',           JSON.stringify(
+                    (typeof ventasSemanaId !== 'undefined') ? ventasSemanaId : null)],
+                ['inventarioApp_ventasPeriodos',           JSON.stringify(
+                    (typeof ventasPeriodos !== 'undefined') ? ventasPeriodos : [])],
                 // ── TIER 3: Estado de UI ─────────────────────────────────────────────────
                 ['inventarioApp_cart',                     JSON.stringify(cart)],
                 ['inventarioApp_activeTab',                activeTab],

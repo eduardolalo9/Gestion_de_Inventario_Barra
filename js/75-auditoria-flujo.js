@@ -57,8 +57,8 @@
                 showNotification('⚠️ No tienes asignada el área ' + nombreArea);
                 return;
             }
-            if (_inventarioActivo && _inventarioActivo.estado === 'CERRADO') {
-                showNotification('🔒 El inventario está cerrado');
+            if (_inventarioActivo && !inventarioAbierto(_inventarioActivo)) {
+                showNotification('🔒 El inventario está ' + (_inventarioActivo.estado || 'cerrado') + ' — ya no se cuenta');
                 return;
             }
 
@@ -100,9 +100,15 @@
                 // ── SINCRONIZACIÓN A FIREBASE ──────────────────────────────────
                 // Estas llamadas son fire-and-forget pero con mecanismos de retry:
                 //  • syncMyAuditoriaToFirestore tiene su propio retry vía _auditSyncPending
-                //  • syncConteoAtomicoPorArea y syncConteoPorUsuarioToFirestore se marcan
-                //    en _pendingAreaSyncs para reintento en el próximo sync periódico.
+                //  • syncConteoPorUsuarioToFirestore, si falla, activa _cloudSyncPending
+                //    (sync periódico de 3 min).
                 // El dato está seguro en localStorage; Firebase es la capa de distribución.
+                //
+                // FASE 8C (26/09/2026): aquí vivía también syncConteoAtomicoPorArea(area)
+                // —la escritura a la colección heredada conteoAreas— con su propio
+                // registro en _pendingAreaSyncs. Se retiró: ver el comentario de cabecera
+                // en js/40-firestore.js (sección "FASE 8C — RETIRO DE conteoAreas") para
+                // la evidencia de por qué ya no tenía consumidor.
 
                 // Subir conteo propio a Firestore (bajo mi UID, aislado)
                 // syncMyAuditoriaToFirestore tiene retry automático vía _auditSyncPending.
@@ -111,20 +117,6 @@
                     // _auditSyncPending ya se setea internamente en syncMyAuditoriaToFirestore
                 });
 
-                // FIX 2: Registrar áreas pendientes de sync para retry en caso de fallo.
-                // Si el dispositivo está offline o Firebase falla en este momento,
-                // _pendingAreaSyncs garantiza que el conteo llega al admin en el próximo
-                // ciclo de sincronización (updateNetworkStatus → online → reintento).
-                if (!window._pendingAreaSyncs) window._pendingAreaSyncs = new Set();
-                window._pendingAreaSyncs.add(area);
-
-                syncConteoAtomicoPorArea(area)
-                    .then(function() { window._pendingAreaSyncs.delete(area); })
-                    .catch(err => {
-                        console.warn('[Atomico] Error en sync final — reintento pendiente:', err);
-                        // El área queda en _pendingAreaSyncs para reintento
-                        _cloudSyncPending = true; // activa sync periódico de 3 min
-                    });
                 syncConteoPorUsuarioToFirestore(area)
                     .catch(err => {
                         console.warn('[MultiUser] Error en sync multiusuario — reintento pendiente:', err);
@@ -153,8 +145,8 @@
                 showNotification('⚠️ No tienes permiso para cerrar el área completa');
                 return;
             }
-            if (_inventarioActivo && _inventarioActivo.estado === 'CERRADO') {
-                showNotification('🔒 El inventario está cerrado');
+            if (_inventarioActivo && !inventarioAbierto(_inventarioActivo)) {
+                showNotification('🔒 El inventario está ' + (_inventarioActivo.estado || 'cerrado') + ' — ya no se cuenta');
                 return;
             }
             const nombreArea = areasAuditoria[area] || area;
@@ -166,7 +158,36 @@
                 '¿Cerrar el área ' + nombreArea + ' para TODAS las personas?\n\n' +
                 'Nadie podrá seguir capturando en esta área hasta que se reabra. ' +
                 'Los conteos ya guardados no se modifican.\n\n¿Continuar?',
-                function() {
+                async function() {
+                    // FASE 12 — antes se cambiaba solo en local y viajaba con la
+                    // sincronización general, que mandaba el MAPA COMPLETO de
+                    // estados de este dispositivo (y con él, estados viejos de
+                    // otro inventario). Ahora se escribe SOLO este campo, en una
+                    // transacción que comprueba que el servidor sigue en la
+                    // misma sesión que esta pantalla. Sin conexión no se cierra:
+                    // igual que reabrir, es una orden para todos los teléfonos.
+                    if (!_db || !navigator.onLine) {
+                        showNotification('📴 Sin conexión — cerrar un área para todos necesita internet');
+                        return;
+                    }
+                    const sesion = _auditoriaSessionId;
+                    try {
+                        const ref = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID);
+                        await _db.runTransaction(async function(tx) {
+                            const snap = await tx.get(ref);
+                            const vigente = snap.exists ? (snap.data() || {})._auditoriaSessionId : null;
+                            if (!sesion || String(vigente) !== String(sesion)) {
+                                throw new Error('sesion_distinta');
+                            }
+                            tx.update(ref, { ['auditoriaStatus.' + area]: 'completada', _lastModified: Date.now() });
+                        });
+                    } catch (e) {
+                        showNotification(e && e.message === 'sesion_distinta'
+                            ? '⚠️ Esta pantalla estaba en otro inventario. Se actualizó; revisa y vuelve a intentarlo.'
+                            : '❌ No se pudo cerrar el área — revisa la conexión. No se cambió nada.');
+                        renderTab();
+                        return;
+                    }
                     auditoriaStatus[area] = 'completada';
                     saveToLocalStorage();
                     _registrarEnSyncQueue({
@@ -378,12 +399,21 @@
                 showNotification('⚠️ No tienes permiso para cerrar el Inventario Físico');
                 return;
             }
-            if (!_inventarioActivo || _inventarioActivo.estado === 'CERRADO') {
-                showNotification('⚠️ No hay un Inventario Físico activo para cerrar');
+            if (!inventarioAbierto(_inventarioActivo)) {
+                showNotification('⚠️ No hay un Inventario Físico abierto para cerrar');
                 return;
             }
             if (!navigator.onLine) {
                 showNotification('📴 Sin conexión — conecta a internet antes de cerrar el inventario');
+                return;
+            }
+            // HOTFIX 4.20 — el cierre congela los conteos de la sesión vigente
+            // y escribe en inventories/{sesión vigente}. Si lo que está en
+            // pantalla es OTRO inventario (un huérfano de una versión
+            // anterior, como el #102 de agosto), cerrarlo así fallaba contra
+            // el servidor o, peor, congelaría conteos que no son suyos.
+            if (_inventarioActivoId && String(_inventarioActivoId) !== String(_auditoriaSessionId)) {
+                cerrarInventarioHuerfano(_inventarioActivoId);
                 return;
             }
             // RECONTEO — cerrar con un reconteo sin finalizar congelaría los
@@ -475,6 +505,7 @@
                             motivo:       'Cierre de Inventario Físico'
                         });
                         showNotification('🔒 Inventario Físico #' + numeroParaLog + ' cerrado correctamente');
+                        _historialInventarios = null;   // el recién cerrado entra al Historial
                     } catch (err) {
                         console.error('[InventarioFisico] Error al cerrar:', err);
                         showNotification('❌ Error al cerrar el inventario — revisa la conexión y vuelve a intentarlo');
@@ -482,6 +513,76 @@
                 }
             );
         }
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  HOTFIX 4.20 — CERRAR UN INVENTARIO ABANDONADO (HUÉRFANO)
+        //  Versiones anteriores a FASE 12 permitían abrir un inventario nuevo
+        //  dejando el anterior en SINCRONIZADO. Ese "huérfano" ya no tiene
+        //  conteos (se borraron al abrir el siguiente) y bloqueaba crear otro
+        //  sin que ningún botón pudiera cerrarlo. Se cierra marcado como
+        //  abandonado, SIN snapshot: no hay conteo que congelar, así que
+        //  tampoco se puede contabilizar (evaluarContabilizable lo explica).
+        //  Las reglas ya permiten al admin pasar SINCRONIZADO → CERRADO.
+        // ══════════════════════════════════════════════════════════════════════
+        async function cerrarInventarioHuerfano(inventoryId) {
+            if (!hasPermission('inventory.closeGlobal')) {
+                showNotification('⚠️ No tienes permiso para cerrar inventarios');
+                return;
+            }
+            if (!inventoryId || String(inventoryId) === String(_auditoriaSessionId)) return;
+            if (!navigator.onLine) {
+                showNotification('📴 Sin conexión — conecta a internet antes de cerrar el inventario');
+                return;
+            }
+            const ref = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID).collection('inventories').doc(String(inventoryId));
+            let inv;
+            try {
+                const snap = await ref.get({ source: 'server' });
+                if (!snap.exists) { showNotification('❌ No se encontró ese inventario'); return; }
+                inv = snap.data() || {};
+            } catch (e) {
+                showNotification('❌ No se pudo leer el inventario — revisa la conexión');
+                return;
+            }
+            if (!inventarioAbierto(inv)) {
+                showNotification('ℹ️ El Inventario #' + (inv.numero || '—') + ' ya estaba cerrado');
+                return;
+            }
+            showConfirm(
+                '🗂️ CERRAR INVENTARIO ABANDONADO #' + (inv.numero || '—') + '\n\n' +
+                'Quedó abierto de una versión anterior y no pertenece a la sesión actual: ' +
+                'sus conteos ya no existen.\n\n' +
+                'Se cerrará como ABANDONADO (sin conteo congelado) y no se podrá contabilizar. ' +
+                'Después podrás crear el inventario nuevo.\n\n¿Confirmar?',
+                async function() {
+                    try {
+                        await ref.update({
+                            estado:           'CERRADO',
+                            cierreTipo:       'abandonado',
+                            fechaCierre:      Date.now(),
+                            cerradoPorUid:    currentUserUid,
+                            cerradoPorNombre: (_auth && _auth.currentUser) ? _auth.currentUser.email : currentUserUid
+                        });
+                        _registrarEnSyncQueue({
+                            tipo: 'cierre_inventario_abandonado',
+                            detalle: 'Inventario Físico #' + (inv.numero || '—') + ' cerrado como abandonado',
+                            valorAntes: JSON.stringify({ estado: 'SINCRONIZADO' }),
+                            valorDespues: JSON.stringify({ estado: 'CERRADO', cierreTipo: 'abandonado' }),
+                            motivo: 'Inventario huérfano de una versión anterior'
+                        });
+                        _historialInventarios = null;
+                        // Vuelve a escuchar el inventario de la sesión vigente.
+                        if (typeof _suscribirInventarioActivo === 'function') _suscribirInventarioActivo(_auditoriaSessionId);
+                        showNotification('✅ Inventario #' + (inv.numero || '—') + ' cerrado como abandonado. Ya puedes crear el nuevo.');
+                        renderTab();
+                    } catch (err) {
+                        console.error('[InventarioFisico] Error al cerrar abandonado:', err);
+                        showNotification('❌ No se pudo cerrar — revisa la conexión y vuelve a intentarlo');
+                    }
+                }
+            );
+        }
+        window.cerrarInventarioHuerfano = cerrarInventarioHuerfano;
 
         // Exporta un inventario CERRADO reutilizando el motor Excel EXISTENTE
         // (exportToExcelConDatos) — nunca crea productos ni toca el catálogo
@@ -647,6 +748,54 @@
             }
         }
 
+        // ── ¿Se puede contabilizar este inventario? — LA regla, en un sitio ──
+        //
+        //  La usan tres lugares: el encabezado de Conteo (para decidir si
+        //  dibuja el botón o explica por qué no), el detalle del Historial, y
+        //  contabilizarInventario() — que la vuelve a aplicar sobre el
+        //  documento recién leído del servidor, porque lo que hay en pantalla
+        //  puede ir un paso por detrás. Antes cada uno tenía su propia copia de
+        //  las condiciones, y dos copias de una regla acaban diciendo cosas
+        //  distintas.
+        //
+        //  Pura: no lee Firestore ni toca el DOM.
+        //  @returns { puede, hecho?, motivo?, semanaDestino? }
+        function evaluarContabilizable(inv) {
+            if (!inv) return { puede: false, motivo: 'No hay inventario.' };
+            if (inv.estado === 'CONTABILIZADO') {
+                return { puede: false, hecho: true, semanaDestino: inv.semanaDestino || null,
+                         motivo: 'Este inventario ya está contabilizado.' };
+            }
+            if (inv.estado !== 'CERRADO') {
+                return { puede: false, motivo: 'Primero hay que cerrar el inventario: solo se contabiliza uno CERRADO.' };
+            }
+            if (inv.cierreTipo === 'abandonado') {
+                return { puede: false, motivo: 'Se cerró como ABANDONADO (quedó abierto de una versión anterior, sin conteos): no hay nada que contabilizar.' };
+            }
+            // Decisión N-4: FASE 3 opera sobre inventarios cerrados a partir
+            // del paso previo, que es cuando semanaId empezó a guardarse en
+            // la cabecera. Un inventario anterior se bloquea con un motivo
+            // legible en vez de inventarle una semana.
+            if (!inv.semanaId) {
+                return { puede: false, motivo: 'Este inventario se cerró antes de que se guardara la semana '
+                                             + 'en su cabecera, así que no se puede contabilizar.' };
+            }
+            // Decisión N-1: solo un recuento fechado en domingo arrastra.
+            // La regla ya existía en clasificarRecuento(); aquí se explica.
+            const clase = (typeof clasificarRecuento === 'function' && inv.fechaRecuento)
+                          ? clasificarRecuento(inv.fechaRecuento) : null;
+            if (!clase || !clase.cierraSemana) {
+                return { puede: false, motivo: 'Solo se contabiliza un recuento fechado en DOMINGO. '
+                                             + 'Este está fechado ' + (inv.fechaRecuento || 'sin fecha de recuento')
+                                             + ', y un corte a media semana partiría el ciclo en dos.' };
+            }
+            const semanaDestino = (typeof semanaSiguiente === 'function')
+                                  ? semanaSiguiente(inv.fechaRecuento) : null;
+            if (!semanaDestino) return { puede: false, motivo: 'No se pudo calcular la semana destino.' };
+            return { puede: true, semanaDestino: semanaDestino };
+        }
+        window.evaluarContabilizable = evaluarContabilizable;
+
         async function contabilizarInventario(inventoryId, numero) {
             if (!hasPermission('inventory.post')) {
                 showNotification('⚠️ No tienes permiso para contabilizar inventarios');
@@ -674,29 +823,15 @@
                 }
 
                 // ── La semana destino ────────────────────────────────────────
-                // Decisión N-4: FASE 3 opera sobre inventarios cerrados a partir
-                // del paso previo, que es cuando semanaId empezó a guardarse en
-                // la cabecera. Un inventario anterior se bloquea con un motivo
-                // legible en vez de inventarle una semana.
-                if (!inv.semanaId) {
-                    showNotification('⚠️ Este inventario se cerró antes de que se guardara la semana '
-                        + 'en su cabecera, así que no se puede contabilizar.');
+                // Semana en cabecera (N-4), recuento en domingo (N-1) y semana
+                // destino: la misma regla que decide si la pantalla ofrece el
+                // botón, aplicada aquí al documento recién leído del servidor.
+                const ev = evaluarContabilizable(inv);
+                if (!ev.puede) {
+                    showNotification('⚠️ ' + ev.motivo);
                     return;
                 }
-                // Decisión N-1: solo un recuento fechado en domingo arrastra.
-                // La regla ya existía en clasificarRecuento(); aquí se explica.
-                const clase = (typeof clasificarRecuento === 'function' && inv.fechaRecuento)
-                              ? clasificarRecuento(inv.fechaRecuento) : null;
-                if (!clase || !clase.cierraSemana) {
-                    showNotification('⚠️ Solo se contabiliza un recuento fechado en DOMINGO. '
-                        + 'Este está fechado ' + (inv.fechaRecuento || 'sin fecha de recuento')
-                        + ', y un corte a media semana partiría el ciclo en dos.');
-                    return;
-                }
-
-                const semanaDestino = (typeof semanaSiguiente === 'function')
-                                      ? semanaSiguiente(inv.fechaRecuento) : null;
-                if (!semanaDestino) { showNotification('❌ No se pudo calcular la semana destino'); return; }
+                const semanaDestino = ev.semanaDestino;
 
                 // ── ¿Ya está hecho? ──────────────────────────────────────────
                 const previo = await _verificarInicialExistente(semanaDestino, inventoryId);
@@ -788,6 +923,13 @@
                             showNotification('✅ Contabilizado — el inicial de la semana '
                                 + inicial.semanaId + ' quedó registrado');
                             _historialInventarios = null;
+                            // El detalle abierto se relee para que diga
+                            // "📘 Contabilizado" en vez de seguir ofreciendo el botón.
+                            if (typeof _detalleInventarioCerradoData !== 'undefined') _detalleInventarioCerradoData = null;
+                            // Si se contabilizó tarde (ya en la semana destino),
+                            // el panel tenía guardado "esta semana no tiene
+                            // inicial". Se olvida para que lo vuelva a leer.
+                            if (typeof existenciaInvalidarInicial === 'function') existenciaInvalidarInicial();
                             renderTab();
                         } catch (err) {
                             // ── El manejo que hace que la idempotencia funcione ──
@@ -802,6 +944,7 @@
                                     showNotification('✅ Ya estaba contabilizado — la operación se había '
                                         + 'completado antes. No se duplicó nada.');
                                     _historialInventarios = null;
+                                    if (typeof _detalleInventarioCerradoData !== 'undefined') _detalleInventarioCerradoData = null;
                                     renderTab();
                                     return;
                                 }
@@ -906,23 +1049,70 @@
 
         // Historial — carga BAJO DEMANDA (no listener en vivo, ver
         // "RENDIMIENTO" del ticket: evitar escuchar toda la colección).
-        let _historialInventarios = null; // cache en memoria de la última carga
+        //
+        // HOTFIX 4.19 (30/09/2026) — LOS CONTABILIZADOS DESAPARECÍAN.
+        // La consulta era where('estado','==','CERRADO'): en cuanto un
+        // inventario pasaba a CONTABILIZADO dejaba de cumplirla y se esfumaba
+        // del Historial, justo cuando más importa consultarlo. El dato nunca
+        // se perdió (inventories/{id} es inmutable y no se borra); lo que
+        // fallaba era la lista. Ahora se piden los más recientes por folio y
+        // se muestran TODOS los que ya no se cuentan (CERRADO y CONTABILIZADO).
+        //
+        // Además, igualdad + orderBy sobre otro campo exige un índice
+        // compuesto que el emulador no pide y producción sí: si faltaba, la
+        // consulta fallaba en silencio y el Historial salía vacío. orderBy
+        // sobre un solo campo usa el índice automático: no depende de nada.
+        let _historialInventarios = null;      // cache en memoria de la última carga
+        let _historialCargando    = false;     // evita dos cargas a la vez
+        let _historialHayMas      = false;     // ¿hay inventarios más antiguos?
+        let _historialLimite      = 30;        // cuántos mostrar ("Ver más antiguos" suma 30)
+        const _HISTORIAL_ESTADOS  = ['CERRADO', 'CONTABILIZADO'];
+
         async function _cargarHistorialInventarios() {
-            if (!_db) return [];
+            // Sin Firestore se marca vacío (no null): si se quedara en null,
+            // renderHistorialInventarios lo volvería a pedir en cada repintado.
+            if (!_db) { _historialInventarios = []; _historialHayMas = false; return []; }
+            _historialCargando = true;
             try {
+                // +5: el inventario abierto (y algún huérfano de versiones
+                // anteriores) ocupan lugar en la consulta y se descartan abajo.
                 const snap = await _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
                                        .collection('inventories')
-                                       .where('estado', '==', 'CERRADO')
                                        .orderBy('numero', 'desc')
-                                       .limit(30)
+                                       .limit(_historialLimite + 5)
                                        .get();
-                _historialInventarios = snap.docs.map(function(d) { return d.data(); });
+                const terminados = snap.docs.map(function(d) {
+                    const x = d.data() || {};
+                    if (!x.inventoryId) x.inventoryId = d.id;
+                    return x;
+                }).filter(function(x) { return _HISTORIAL_ESTADOS.indexOf(x.estado) !== -1; });
+                _historialHayMas = snap.size >= _historialLimite + 5 || terminados.length > _historialLimite;
+                _historialInventarios = terminados.slice(0, _historialLimite);
                 return _historialInventarios;
             } catch (err) {
                 console.warn('[InventarioFisico] Error cargando historial:', err);
-                return _historialInventarios || [];
+                if (_historialInventarios === null) _historialInventarios = [];
+                return _historialInventarios;
+            } finally {
+                _historialCargando = false;
             }
         }
+        window._cargarHistorialInventarios = _cargarHistorialInventarios;
+
+        // Cualquier pantalla que invalide el historial (contabilizar, cerrar)
+        // lo pone en null; esta función lo vuelve a pedir una sola vez y
+        // repinta. Antes, volver al Historial después de contabilizar se
+        // quedaba para siempre en "⏳ Cargando historial…".
+        function _asegurarHistorialCargado() {
+            if (_historialInventarios !== null || _historialCargando) return;
+            _cargarHistorialInventarios().then(function() { renderTab(); });
+        }
+        function historialVerMas() {
+            _historialLimite += 30;
+            _historialInventarios = null;
+            renderTab();
+        }
+        window.historialVerMas = historialVerMas;
 
 
         function auditoriaEntrarArea(area) {
@@ -931,8 +1121,8 @@
             // Firestore ya lo protege a nivel de datos (inventories/{id}
             // inmutable); este chequeo evita además que la UI intente
             // siquiera ofrecer la acción.
-            if (_inventarioActivo && _inventarioActivo.estado === 'CERRADO') {
-                showNotification('🔒 Este Inventario Físico está CERRADO — solo lectura');
+            if (_inventarioActivo && !inventarioAbierto(_inventarioActivo)) {
+                showNotification('🔒 Este Inventario Físico está ' + (_inventarioActivo.estado || 'CERRADO') + ' — solo lectura');
                 return;
             }
             // Bloquear entrada si el usuario ya finalizó esa área (solo admin puede entrar igual)
@@ -980,6 +1170,41 @@
             showConfirm(mensaje, alAceptar);
         }
 
+        // ── ¿Hay un Inventario Físico ABIERTO según el servidor? ─────────────
+        //  Lee la sesión vigente del documento principal y su inventario, SIEMPRE
+        //  del servidor (source: 'server'): la caché local es justo lo que puede
+        //  ir desfasado. Dos lecturas, solo al crear un inventario (una vez por
+        //  semana), así que el coste es despreciable frente a lo que protege.
+        //  @returns { abierto, sesion?, numero?, estado? } | { error: true }
+        async function _inventarioAbiertoEnServidor() {
+            try {
+                const raiz = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID);
+                const principal = await raiz.get({ source: 'server' });
+                const sesion = principal.exists ? (principal.data() || {})._auditoriaSessionId : null;
+                const inv = sesion ? await raiz.collection('inventories').doc(String(sesion)).get({ source: 'server' }) : null;
+                const d = (inv && inv.exists) ? (inv.data() || {}) : {};
+                if (inv && inv.exists && inventarioAbierto(d)) {
+                    return { abierto: true, sesion: String(sesion), numero: d.numero || null, estado: d.estado || null };
+                }
+                // FASE 12 — además de la sesión vigente, CUALQUIER inventario
+                // activo bloquea: si alguna vez quedó uno huérfano (versiones
+                // anteriores, sin la regla del servidor), no se crea otro
+                // encima. Consulta de un solo campo: no necesita índice.
+                const activos = await raiz.collection('inventories').where('estado', '==', 'SINCRONIZADO').limit(1).get({ source: 'server' });
+                if (!activos.empty) {
+                    const otro = activos.docs[0];
+                    // Si no es el de la sesión vigente, es un HUÉRFANO de una
+                    // versión anterior: su "Cerrar" normal no lo alcanza.
+                    return { abierto: true, sesion: otro.id, numero: (otro.data() || {}).numero || null, estado: 'SINCRONIZADO',
+                             huerfano: String(otro.id) !== String(sesion || '') };
+                }
+                return { abierto: false, sesion: sesion ? String(sesion) : null, numero: d.numero || null, estado: d.estado || null };
+            } catch (e) {
+                console.warn('[InventarioFisico] No se pudo comprobar el inventario vigente en el servidor:', e);
+                return { error: true };
+            }
+        }
+
         function auditoriaResetear() {
             if (!isAdmin()) {
                 showNotification('⚠️ Solo el administrador puede iniciar un nuevo ciclo de inventario');
@@ -989,7 +1214,7 @@
                 showNotification('📴 Sin conexión — conecta a internet antes de iniciar nueva auditoría');
                 return;
             }
-            if (_inventarioActivo && _inventarioActivo.estado !== 'CERRADO') {
+            if (inventarioAbierto(_inventarioActivo)) {
                 showNotification('🔒 Debes cerrar el Inventario Físico #' + _inventarioActivo.numero + ' antes de iniciar uno nuevo — los conteos en curso se perderían');
                 return;
             }
@@ -1029,6 +1254,45 @@
                                 return;
                             }
                             _auditoriaCreandoEnProgreso = true;
+
+                            // ── GUARDA DE SERVIDOR (sep 2026) ────────────────────
+                            // Lo que sigue BORRA los conteos de todos los usuarios
+                            // de la sesión actual. La única protección era
+                            // `inventarioAbierto(_inventarioActivo)`, una variable en
+                            // memoria — y esa variable se quedaba en null tras
+                            // reabrir la app (ver handleAuditSessionChange). Con un
+                            // inventario ABIERTO y contado, la pantalla ofrecía
+                            // "Crear" y esta función lo habría vaciado sin cerrarlo
+                            // ni congelarlo. Por el formulario de R7, además, sin
+                            // pasar por los dos avisos de arriba.
+                            //
+                            // Una acción que destruye datos no se decide con lo que
+                            // la pantalla cree: se pregunta al servidor. Si no se
+                            // puede preguntar, no se borra nada.
+                            const vigente = await _inventarioAbiertoEnServidor();
+                            if (vigente.error) {
+                                _auditoriaCreandoEnProgreso = false;
+                                _opcionesNuevoInventario = null;
+                                showNotification('📴 No se pudo comprobar en el servidor si hay un inventario abierto. '
+                                    + 'No se borró nada — revisa la conexión e inténtalo de nuevo.');
+                                return;
+                            }
+                            if (vigente.abierto) {
+                                _auditoriaCreandoEnProgreso = false;
+                                _opcionesNuevoInventario = null;
+                                showNotification(vigente.huerfano
+                                    ? ('🛑 El Inventario Físico #' + (vigente.numero || '—') + ' quedó ABIERTO de una versión anterior '
+                                       + 'y no pertenece a la sesión actual. En Conteo aparece "Cerrar inventario abandonado": '
+                                       + 'ciérralo y después crea el nuevo. No se borró nada.')
+                                    : ('🛑 El Inventario Físico #' + (vigente.numero || '—')
+                                       + ' sigue ABIERTO, con sus conteos. Para empezar de cero: primero "Cerrar Inventario Físico" '
+                                       + '(al final de la pantalla de Conteo) y después "Crear". No se borró nada.'));
+                                // Y se engancha a ese inventario, para que la
+                                // pantalla deje de decir que no hay ninguno.
+                                if (typeof _suscribirInventarioActivo === 'function') _suscribirInventarioActivo(vigente.sesion);
+                                renderTab();
+                                return;
+                            }
 
                             // Crear respaldo antes de resetear. Se hace con el
                             // estado AÚN vigente (sesión anterior) — nada se ha
@@ -1115,24 +1379,35 @@
                                 // lo reciben vía el snapshot entrante, que sí pasa por
                                 // handleAuditSessionChange() y ya lo hace por su cuenta.
                                 _suscribirInventarioActivo(newSessionId);
+                                // FASE 12 — el inventario recién creado se muestra en la
+                                // PRIMERA pantalla de Conteo, venga de donde venga la
+                                // creación (Historial, "Crear el siguiente", Inicio).
+                                if (typeof switchTab === 'function') switchTab('inventario');
+                                else activeTab = 'inventario';
                                 saveToLocalStorage();
                                 renderTab();
 
-                                // FIX P0.1: la limpieza de colecciones LEGACY
-                                // (conteoAreas/dispositivos, conteoMultiUsuario — usadas
-                                // solo por generarYPublicarReporte(), ver comentarios en
-                                // resetConteoAtomicoEnFirestore) se trata como paso
+                                // FIX P0.1: la limpieza de la colección LEGACY conteoMultiUsuario
+                                // (usada por renderAuditComparePanel(), ver comentarios en
+                                // resetConteoMultiUsuarioEnFirestore) se trata como paso
                                 // SECUNDARIO y NO bloqueante: la sesión de auditoría ya
                                 // quedó confirmada en Firestore aunque este paso falle, así
                                 // que NO se revierte la sesión por un fallo aquí. Si falla,
                                 // se avisa honestamente (nunca se muestra un "✅" que
                                 // implique éxito total) y queda marcado para reintento.
+                                //
+                                // FASE 8C (26/09/2026): esta llamada limpiaba también
+                                // conteoAreas/dispositivos. Esa colección dejó de escribirse
+                                // (ver js/40-firestore.js) así que ya no hace falta borrarla
+                                // aquí — la función se renombró a
+                                // resetConteoMultiUsuarioEnFirestore() para reflejar su
+                                // alcance real.
                                 try {
-                                    await resetConteoAtomicoEnFirestore();
+                                    await resetConteoMultiUsuarioEnFirestore();
                                     try { localStorage.removeItem('inventarioApp_legacyCleanupPending'); } catch(_) {}
                                     showNotification('✅ Inventario Físico #' + numeroInventario + ' iniciado — todos los conteos en ceros');
                                 } catch (errLegacy) {
-                                    console.error('[AuditReset] Sesión ' + newSessionId + ' confirmada en Firestore, pero falló la limpieza de conteos legacy (conteoAreas/conteoMultiUsuario):', errLegacy);
+                                    console.error('[AuditReset] Sesión ' + newSessionId + ' confirmada en Firestore, pero falló la limpieza de conteoMultiUsuario:', errLegacy);
                                     try { localStorage.setItem('inventarioApp_legacyCleanupPending', newSessionId); } catch(_) {}
                                     showNotification('⚠️ Nueva auditoría iniciada, pero algunos datos históricos de reportes no se limpiaron — reintenta desde Ajustes o contacta soporte');
                                 }
@@ -1323,12 +1598,14 @@
         //  se lleven el mismo número.
         // ══════════════════════════════════════════════════════════════════════
 
+        let _saltarAvisoContabilizar = false;
+
         function abrirModalNuevoInventario() {
             if (!isAdmin() || !hasPermission('inventory.create')) {
                 showNotification('⚠️ Solo el administrador puede crear un Inventario Físico');
                 return;
             }
-            if (_inventarioActivo && _inventarioActivo.estado !== 'CERRADO') {
+            if (inventarioAbierto(_inventarioActivo)) {
                 showNotification('🔒 Cierra el Inventario Físico #' + _inventarioActivo.numero + ' antes de crear otro');
                 return;
             }
@@ -1336,18 +1613,43 @@
                 showNotification('📴 Sin conexión — el número de inventario se pide al servidor');
                 return;
             }
+            // El inventario cerrado cierra semana y todavía no se contabilizó.
+            // Crear el siguiente no lo impide (se puede contabilizar después
+            // desde Historial), pero lo saca del encabezado de Conteo, que es
+            // donde está el botón. Se pregunta una vez, no se bloquea.
+            // (evaluarContabilizable solo dice "puede" de un CERRADO que cierra
+            // semana, así que un CONTABILIZADO no pasa por aquí.)
+            if (!_saltarAvisoContabilizar && _inventarioActivo
+                && hasPermission('inventory.post') && evaluarContabilizable(_inventarioActivo).puede) {
+                showConfirm('📘 El Inventario Físico #' + (_inventarioActivo.numero || '—') + ' cierra semana '
+                    + 'y todavía NO está contabilizado.\n\n'
+                    + 'Si creas el siguiente ahora, lo podrás contabilizar después desde Historial.\n\n'
+                    + '¿Crear el siguiente de todos modos?',
+                    function() {
+                        _saltarAvisoContabilizar = true;
+                        try { abrirModalNuevoInventario(); }
+                        finally { _saltarAvisoContabilizar = false; }
+                    });
+                return;
+            }
 
-            var hoy = (typeof fechaISOLocal === 'function')
-                      ? fechaISOLocal(new Date())
-                      : new Date().toISOString().slice(0, 10);
+            // H-40 (hotfix 4.9): 'hoy' casi nunca sirve — solo domingo o fin de
+            // mes cierran algo. Proponer 'hoy' llevaba a crear inventarios que
+            // después nunca se podían contabilizar, sin que nadie lo notara
+            // hasta el momento de cerrar. Se propone la próxima fecha válida.
+            var hoy = (typeof proximaFechaRecuentoValida === 'function')
+                      ? proximaFechaRecuentoValida(new Date())
+                      : ((typeof fechaISOLocal === 'function') ? fechaISOLocal(new Date())
+                                                                : new Date().toISOString().slice(0, 10));
 
             var cont = document.getElementById('nuevoInvAreas');
             if (cont) {
                 cont.innerHTML = areasDefinidas().map(function(a) {
-                    return '<label style="display:flex;align-items:center;gap:10px;min-height:44px;cursor:pointer;">'
-                         + '<input type="checkbox" class="nuevoInvArea" value="' + escapeHtml(a.id) + '" checked '
-                         + 'style="width:20px;height:20px;accent-color:var(--accent);flex-shrink:0;cursor:pointer;">'
-                         + '<span style="font-size:.88rem;">' + escapeHtml(a.icono || '📍') + ' ' + escapeHtml(a.nombre) + '</span>'
+                    // FASE 10B — cada área es una fila de 56 px que se marca
+                    // tocándola completa, no solo la casilla.
+                    return '<label class="ni-area">'
+                         + '<input type="checkbox" class="nuevoInvArea" value="' + escapeHtml(a.id) + '" checked>'
+                         + '<span>' + escapeHtml(a.icono || '📍') + ' ' + escapeHtml(a.nombre) + '</span>'
                          + '</label>';
                 }).join('');
             }
@@ -1372,28 +1674,47 @@
         }
 
         /**
-         * Dice a qué semana pertenece la fecha elegida y si ese día cierra
-         * semana. No bloquea nada: un conteo a media semana es legítimo, pero
-         * el administrador debe saber que ese NO arrastra el inicial.
+         * H-40 (hotfix 4.9): antes solo avisaba de color; un inventario podía
+         * crearse con cualquier fecha y quedar, tras cerrarlo, sin ninguna vía
+         * para contabilizarse (evaluarContabilizable lo rechaza para siempre).
+         * Ahora, si la fecha no cierra semana ni es corte de mes, se BLOQUEA
+         * la creación: se explica por qué y se deshabilita 'Crear inventario'.
+         * Un corte de fin de mes entre semana sigue permitido (no cierra
+         * semana, pero sirve de corte contable — evaluarContabilizable lo
+         * distingue igual que antes).
          */
         function _pintarAvisoFechaNuevoInv() {
-            var el = document.getElementById('nuevoInvAvisoFecha');
-            var f  = document.getElementById('nuevoInvFecha');
+            var el  = document.getElementById('nuevoInvAvisoFecha');
+            var f   = document.getElementById('nuevoInvFecha');
+            var btn = document.getElementById('nuevoInvBtnCrear');
             if (!el || !f || typeof clasificarRecuento !== 'function') return;
             var cl = clasificarRecuento(f.value);
-            if (!cl) { el.textContent = ''; return; }
+
+            if (!cl) {
+                el.style.color = 'var(--red, #f87171)';
+                el.textContent = '⚠️ Elige una fecha válida.';
+                if (btn) btn.disabled = true;
+                return;
+            }
 
             var semana = (typeof etiquetaSemana === 'function') ? etiquetaSemana(f.value) : cl.semanaId;
             if (cl.cierraSemana) {
                 el.style.color = 'var(--green, #4ade80)';
                 el.textContent = '✓ Domingo — cierra la ' + semana +
                                  (cl.esCorteMensual ? ' y además es corte de fin de mes.' : '.');
+                if (btn) btn.disabled = false;
             } else if (cl.esCorteMensual) {
                 el.style.color = 'var(--amber, #fbbf24)';
-                el.textContent = 'Corte de fin de mes. No cierra semana: el inicial del lunes seguirá saliendo del domingo.';
+                el.textContent = 'Corte de fin de mes. No cierra semana — el inicial del lunes seguirá saliendo '
+                                + 'del domingo, pero este corte sí se podrá contabilizar como corte mensual.';
+                if (btn) btn.disabled = false;
             } else {
-                el.style.color = 'var(--txt-muted)';
-                el.textContent = 'Pertenece a la ' + semana + '. Al no ser domingo, no arrastra el inicial.';
+                el.style.color = 'var(--red, #f87171)';
+                // textContent, no innerHTML: no hace falta escapeHtml aquí.
+                el.textContent = '⚠️ ' + f.value + ' no es domingo ni fin de mes. Un inventario con esta fecha '
+                                + 'no se podrá contabilizar nunca. Elige un domingo (por ejemplo, ' + semana
+                                + ') o el último día del mes.';
+                if (btn) btn.disabled = true;
             }
         }
 
@@ -1408,6 +1729,14 @@
             var fecha   = fechaEl ? fechaEl.value : '';
             if (typeof parseFechaLocal === 'function' && !parseFechaLocal(fecha)) {
                 showNotification('⚠️ La fecha no es válida');
+                return;
+            }
+            // Defensa en profundidad: _pintarAvisoFechaNuevoInv ya deshabilita
+            // el botón, pero esto es lo que de verdad decide si se crea.
+            var _cl = (typeof clasificarRecuento === 'function') ? clasificarRecuento(fecha) : null;
+            if (!_cl || (!_cl.cierraSemana && !_cl.esCorteMensual)) {
+                showNotification('⚠️ Esa fecha no es domingo ni fin de mes — elige una de esas para poder '
+                    + 'contabilizar este inventario después');
                 return;
             }
 
@@ -1430,6 +1759,110 @@
                 auditoriaResetear();
             } finally {
                 _saltarConfirmacionNuevoInv = false;
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  H-40 (hotfix 4.9) — REGISTRAR FECHA DE RECUENTO EN UN INVENTARIO
+        //  ANTIGUO SIN ESE CAMPO
+        //  ────────────────────────────────────────────────────────────────────
+        //  Los inventarios creados antes de R7/FASE 3 no tienen fechaRecuento
+        //  ni semanaId. Sin ellos, evaluarContabilizable() los rechaza para
+        //  siempre en cuanto se cierran — no hay forma de arreglarlo después.
+        //  Esto deja completar esos dos campos UNA sola vez, mientras el
+        //  inventario sigue abierto (nunca sobre uno CERRADO/CONTABILIZADO:
+        //  eso violaría la inmutabilidad de FASE 7). Las reglas de Firestore
+        //  ya permiten esta escritura (admin + estado != CERRADO/CONTABILIZADO,
+        //  ver inventories/{id}), así que no hace falta tocarlas.
+        // ══════════════════════════════════════════════════════════════════════
+
+        function abrirModalRegistrarFechaRecuento() {
+            if (!isAdmin() || !hasPermission('inventory.create')) {
+                showNotification('⚠️ Solo el administrador puede registrar la fecha de recuento');
+                return;
+            }
+            if (!_inventarioActivo || !inventarioAbierto(_inventarioActivo)) {
+                showNotification('⚠️ No hay un inventario abierto al que registrarle la fecha');
+                return;
+            }
+            if (_inventarioActivo.fechaRecuento) {
+                showNotification('ℹ️ Este inventario ya tiene fecha de recuento registrada');
+                return;
+            }
+            var f = document.getElementById('regFechaRecuentoInput');
+            if (f) {
+                f.value = (typeof proximaFechaRecuentoValida === 'function')
+                          ? proximaFechaRecuentoValida(new Date()) : '';
+            }
+            _pintarAvisoFechaRegistrar();
+            var m = document.getElementById('regFechaRecuentoModal');
+            if (m) { m.classList.remove('hidden'); document.body.classList.add('modal-open'); }
+        }
+
+        function cerrarModalRegistrarFechaRecuento() {
+            var m = document.getElementById('regFechaRecuentoModal');
+            if (m) { m.classList.add('hidden'); document.body.classList.remove('modal-open'); }
+        }
+
+        function _pintarAvisoFechaRegistrar() {
+            var el  = document.getElementById('regFechaRecuentoAviso');
+            var f   = document.getElementById('regFechaRecuentoInput');
+            var btn = document.getElementById('regFechaRecuentoBtnGuardar');
+            if (!el || !f || typeof clasificarRecuento !== 'function') return;
+            var cl = clasificarRecuento(f.value);
+            if (!cl || (!cl.cierraSemana && !cl.esCorteMensual)) {
+                el.style.color = 'var(--red, #f87171)';
+                el.textContent = '⚠️ Debe ser domingo o fin de mes — si no, este inventario tampoco podrá '
+                                + 'contabilizarse después.';
+                if (btn) btn.disabled = true;
+                return;
+            }
+            el.style.color = 'var(--green, #4ade80)';
+            el.textContent = cl.cierraSemana ? '✓ Domingo — cierra semana.' : '✓ Corte de fin de mes.';
+            if (btn) btn.disabled = false;
+        }
+
+        async function confirmarRegistrarFechaRecuento() {
+            if (!isAdmin() || !hasPermission('inventory.create')) return;
+            if (!_db) { showNotification('📴 Sin conexión a Firestore'); return; }
+
+            var f     = document.getElementById('regFechaRecuentoInput');
+            var fecha = f ? f.value : '';
+            var cl    = (typeof clasificarRecuento === 'function') ? clasificarRecuento(fecha) : null;
+            if (!cl || (!cl.cierraSemana && !cl.esCorteMensual)) {
+                showNotification('⚠️ Elige domingo o fin de mes');
+                return;
+            }
+            var invId = _inventarioActivoId;
+            if (!invId) { showNotification('❌ No se encontró el inventario activo'); return; }
+
+            showNotification('⏳ Guardando…');
+            try {
+                var ref  = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
+                              .collection('inventories').doc(invId);
+                // Se relee del servidor: entre abrir el modal y pulsar Guardar
+                // pudo haberse cerrado el inventario, o (dos admins a la vez)
+                // ya haberle puesto fecha. No se confía en el estado en memoria
+                // para decidir si se escribe.
+                var snap = await ref.get();
+                if (!snap.exists) { showNotification('❌ No se encontró el inventario'); return; }
+                var inv = snap.data() || {};
+                if (inv.fechaRecuento) {
+                    showNotification('ℹ️ Ya tenía una fecha registrada — no se cambió nada');
+                    cerrarModalRegistrarFechaRecuento();
+                    return;
+                }
+                if (!inventarioAbierto(inv)) {
+                    showNotification('⚠️ Este inventario ya no está abierto — no se puede registrar aquí');
+                    cerrarModalRegistrarFechaRecuento();
+                    return;
+                }
+                await ref.update({ fechaRecuento: fecha, semanaId: cl.semanaId });
+                showNotification('✅ Fecha de recuento registrada: ' + fecha);
+                cerrarModalRegistrarFechaRecuento();
+            } catch (e) {
+                console.error('confirmarRegistrarFechaRecuento', e);
+                showNotification('❌ No se pudo guardar: ' + (e && e.message ? e.message : e));
             }
         }
 

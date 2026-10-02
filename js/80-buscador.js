@@ -54,7 +54,11 @@
         function _bajoMinimo(p) {
             // Misma regla que ya marcaba en rojo la columna Stock del catálogo.
             if (!(typeof p.stockMinimo === 'number' && p.stockMinimo > 0)) return false;
-            var total = (typeof getTotalStock === 'function') ? getTotalStock(p) : null;
+            // FASE 8 — se pregunta por la cifra que la app da por buena. Con la
+            // fuente oficial apagada devuelve el mismo getTotalStock de siempre,
+            // así que hoy marca exactamente lo mismo que antes.
+            var total = (typeof existenciaMostrada === 'function') ? existenciaMostrada(p)
+                      : ((typeof getTotalStock === 'function') ? getTotalStock(p) : null);
             return typeof total === 'number' && total < p.stockMinimo;
         }
 
@@ -126,7 +130,7 @@
             enG.forEach(function(p) {
                 var d = _datoConteo(p, area, conteoRef);
                 if (_estaContado(d)) contados++;
-                if (d && d.alerta_conflicto) conflicto++;
+                if (d && d._hayConflicto) conflicto++; // FASE 8C: campo legacy retirado → _hayConflicto
             });
             var lista = [
                 { id: 'sinContar', etiqueta: 'Sin contar', contador: enG.length - contados, grupo: 'estado' },
@@ -156,7 +160,7 @@
                     var d = _datoConteo(p, area, conteoRef);
                     if (f.sinContar && _estaContado(d)) return false;
                     if (f.contados  && !_estaContado(d)) return false;
-                    if (f.conflicto && !(d && d.alerta_conflicto)) return false;
+                    if (f.conflicto && !(d && d._hayConflicto)) return false; // FASE 8C
                     return true;
                 }
             });

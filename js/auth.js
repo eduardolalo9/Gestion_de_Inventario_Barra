@@ -78,6 +78,7 @@
                     if (typeof _unsubInventarioActivo === 'function') { _unsubInventarioActivo(); _unsubInventarioActivo = null; }
                     _inventarioActivoId = null;
                     _inventarioActivo   = null;
+                    if (typeof _inventarioActivoCarga !== 'undefined') _inventarioActivoCarga = 'sin_sesion';
                     allUsersAuditoria = {};
                     _ajustes = [];
                     // MICROFASE P0.2: sin este reset, si el siguiente usuario

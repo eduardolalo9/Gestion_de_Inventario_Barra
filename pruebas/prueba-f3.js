@@ -76,11 +76,17 @@ if (contab) {
         /inv\.estado === 'CONTABILIZADO'/.test(contab));
     chk('Exige conexión: no se contabiliza a ciegas',
         /navigator\.onLine/.test(contab));
+    // Las reglas N-1 y N-4 viven ahora en evaluarContabilizable(), que
+    // comparten la pantalla de Conteo, el Historial y esta función. Se
+    // comprueba que la función las aplique Y que siguen escritas en la regla.
+    const evalc = extraer(flujo, 'evaluarContabilizable') || '';
+    chk('contabilizarInventario aplica la regla compartida al documento del servidor',
+        /const ev = evaluarContabilizable\(inv\);/.test(contab) && /if \(!ev\.puede\)/.test(contab));
     chk('N-1 · solo un recuento que cierra semana',
-        /clase\.cierraSemana/.test(contab) && /DOMINGO/.test(contab),
+        /clase\.cierraSemana/.test(evalc) && /DOMINGO/.test(evalc),
         'y el motivo se explica, no se deja un botón mudo');
     chk('N-4 · un inventario sin semanaId en cabecera se bloquea',
-        /if \(!inv\.semanaId\)/.test(contab));
+        /if \(!inv\.semanaId\)/.test(evalc));
 
     // ── El corazón del asunto: la atomicidad y la idempotencia ──
     chk('Escribe el inicial y el estado en UN SOLO batch',

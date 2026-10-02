@@ -54,6 +54,10 @@ async function reiniciarConDatosBase() {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
         const db = ctx.firestore();
         await db.doc('usuarios/admin1').set({ uid: 'admin1', role: 'ADMIN' });
+        // HOTFIX 4.19 — como en producción, el documento raíz anuncia la
+        // sesión vigente: el documento PROPIO de userAuditoria solo se
+        // escribe para ella.
+        await db.doc('inventarioApp/barra-principal').set({ _auditoriaSessionId: 'inv-activo' });
         await db.doc('usuarios/bartender1').set({ uid: 'bartender1', role: 'BARTENDER' });
         await db.doc('usuarios/bartender2').set({ uid: 'bartender2', role: 'BARTENDER' });
         await db.doc('roles/BARTENDER').set({ roleId: 'BARTENDER', nombre: 'Bartender', permissions: ['inventory.count'], esSistema: true });
@@ -98,6 +102,17 @@ async function main() {
     await prueba('1. Un usuario normal puede escribir su propio userAuditoria', async () => {
         await reiniciarConDatosBase();
         await assertSucceeds(rutaAuditoria(bt1, 'bartender1').set({ sessionId: 'inv-activo', conteo: {} }));
+    });
+
+    await prueba('UA-1. HOTFIX 4.19: NO se escribe el documento propio con la sesión de un inventario anterior', async () => {
+        await reiniciarConDatosBase();
+        // El teléfono sin señal que sube tarde su conteo del inventario cerrado.
+        await assertFails(rutaAuditoria(bt1, 'bartender1').set({ sessionId: 'inv-cerrado', conteo: { P: { almacen: { enteras: 9 } } } }));
+        await assertFails(rutaAuditoria(bt1, 'bartender1').set({ conteo: {} }));   // sin sesión tampoco
+        // Y si ya contó en el vigente, no puede regresar su documento al anterior.
+        await assertSucceeds(rutaAuditoria(bt1, 'bartender1').set({ sessionId: 'inv-activo', conteo: {} }));
+        await assertFails(rutaAuditoria(bt1, 'bartender1').set({ sessionId: 'inv-cerrado' }, { merge: true }));
+        await assertSucceeds(rutaAuditoria(bt1, 'bartender1').set({ status: { almacen: 'completada' } }, { merge: true }));
     });
 
     await prueba('2. Un usuario normal NO puede escribir userAuditoria de otro usuario', async () => {
@@ -214,11 +229,55 @@ async function main() {
     //  reapertura de almacén, snapshot)
     // ══════════════════════════════════════════════════════════════════
 
+    // FASE 12: crear exige que el folio sea el del contador y que el
+    // inventario de la sesión vigente no esté activo.
+    const sembrarFolio = async (sesion, ultimo) => {
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            const d = ctx.firestore();
+            await d.doc('inventarioApp/barra-principal').set({ _auditoriaSessionId: sesion }, { merge: true });
+            await d.doc('inventarioApp/barra-principal/contadores/inventarios').set({ ultimoNumero: ultimo });
+        });
+    };
     await prueba('20. Solo admin puede crear un Inventario Físico', async () => {
         await reiniciarConDatosBase();
-        const nuevo = { inventoryId: 'inv-nuevo', numero: 102, estado: 'SINCRONIZADO', fechaCreacion: Date.now(), creadoPorUid: 'x' };
+        await sembrarFolio('inv-cerrado', 1001);
+        const nuevo = { inventoryId: 'inv-nuevo', numero: 1001, estado: 'SINCRONIZADO', fechaCreacion: Date.now(), creadoPorUid: 'x' };
         await assertFails(rutaInventario(bt1, 'inv-nuevo').set(nuevo));
         await assertSucceeds(rutaInventario(admin1, 'inv-nuevo').set(nuevo));
+    });
+
+    await prueba('FOL-1. ★ El folio del inventario debe ser exactamente el del contador (sin repetidos ni inventados)', async () => {
+        await reiniciarConDatosBase();
+        await sembrarFolio('inv-cerrado', 1005);
+        const con = (n) => ({ inventoryId: 'inv-nuevo', numero: n, estado: 'SINCRONIZADO', fechaCreacion: Date.now() });
+        await assertFails(rutaInventario(admin1, 'inv-nuevo').set(con(1004)));   // uno anterior
+        await assertFails(rutaInventario(admin1, 'inv-nuevo').set(con(1006)));   // uno que no se ha emitido
+        await assertFails(rutaInventario(admin1, 'inv-nuevo').set(Object.assign(con(1005), { estado: 'CERRADO' })));  // nace activo
+        await assertFails(rutaInventario(admin1, 'inv-nuevo').set(Object.assign(con(1005), { inventoryId: 'otro' }))); // id coherente
+        await assertSucceeds(rutaInventario(admin1, 'inv-nuevo').set(con(1005)));
+    });
+
+    await prueba('FOL-2. ★ Anti-solapamiento: con el inventario de la sesión vigente ACTIVO no se crea otro, ni siendo admin', async () => {
+        await reiniciarConDatosBase();
+        await sembrarFolio('inv-activo', 1001);
+        await assertFails(rutaInventario(admin1, 'inv-nuevo').set({ inventoryId: 'inv-nuevo', numero: 1001, estado: 'SINCRONIZADO' }));
+    });
+
+    await prueba('FOL-3. ★ La sesión del documento raíz solo cambia creando su inventario en la misma escritura', async () => {
+        await reiniciarConDatosBase();
+        await sembrarFolio('inv-cerrado', 1001);
+        const raiz = admin1.doc('inventarioApp/barra-principal');
+        // Una copia vieja que regresa la sesión a un inventario que ya existe
+        await assertFails(raiz.set({ _auditoriaSessionId: 'inv-activo', _lastModified: Date.now() }, { merge: true }));
+        // Una sesión inventada, sin inventario
+        await assertFails(raiz.set({ _auditoriaSessionId: 'sesion-sin-inventario' }, { merge: true }));
+        // Escribir otros campos sin tocar la sesión sigue funcionando
+        await assertSucceeds(raiz.set({ _lastModified: Date.now(), cart: [] }, { merge: true }));
+        // El camino real: sesión + inventario nuevo en el mismo batch
+        const b = admin1.batch();
+        b.set(raiz, { _auditoriaSessionId: 'inv-1001' }, { merge: true });
+        b.set(admin1.doc('inventarioApp/barra-principal/inventories/inv-1001'), { inventoryId: 'inv-1001', numero: 1001, estado: 'SINCRONIZADO' });
+        await assertSucceeds(b.commit());
     });
 
     await prueba('21. Inventario SINCRONIZADO puede modificarse por admin (según permisos)', async () => {
@@ -289,8 +348,27 @@ async function main() {
 
     await prueba('31. Solo admin puede escribir el contador de numeración (contadores/inventarios)', async () => {
         await reiniciarConDatosBase();
-        await assertFails(bt1.doc('inventarioApp/barra-principal/contadores/inventarios').set({ ultimoNumero: 999 }));
-        await assertSucceeds(admin1.doc('inventarioApp/barra-principal/contadores/inventarios').set({ ultimoNumero: 101 }));
+        const c = (db) => db.doc('inventarioApp/barra-principal/contadores/inventarios');
+        await assertFails(c(bt1).set({ ultimoNumero: 1001 }));
+        // FASE 12: el primer folio es #1001 y solo avanza de uno en uno
+        await assertFails(c(admin1).set({ ultimoNumero: 101 }));
+        await assertSucceeds(c(admin1).set({ ultimoNumero: 1001 }));
+        await assertSucceeds(c(admin1).set({ ultimoNumero: 1002 }, { merge: true }));
+        await assertFails(c(admin1).set({ ultimoNumero: 1001 }, { merge: true }));   // atrás
+        await assertFails(c(admin1).set({ ultimoNumero: 1010 }, { merge: true }));   // salto
+        await assertFails(c(admin1).set({ ultimoNumero: 1003, otro: 1 }, { merge: true }));   // campos extra
+        await assertFails(c(admin1).delete());
+    });
+
+    await prueba('FOL-4. Migración: desde el contador anterior (#1xx) el único salto permitido es a #1001', async () => {
+        await reiniciarConDatosBase();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await ctx.firestore().doc('inventarioApp/barra-principal/contadores/inventarios').set({ ultimoNumero: 108 });
+        });
+        const c = admin1.doc('inventarioApp/barra-principal/contadores/inventarios');
+        await assertFails(c.set({ ultimoNumero: 109 }, { merge: true }));
+        await assertFails(c.set({ ultimoNumero: 1500 }, { merge: true }));
+        await assertSucceeds(c.set({ ultimoNumero: 1001 }, { merge: true }));
     });
 
     await prueba('32. Nadie puede eliminar (delete) un documento de Inventario Físico — ni admin', async () => {
@@ -1601,6 +1679,160 @@ async function main() {
         await assertSucceeds(admin1.doc(RC + 'rc1').set(reconteo({ estado: 'descartado', actualizadoEn: 2000 })));
         await assertFails(admin1.doc(RC + 'rc1').set(reconteo({ estado: 'abierto', actualizadoEn: 3000 })));
         await assertFails(admin1.doc(RC + 'rc1').delete());
+    });
+
+    // ══════════════════════════════════════════════════════════════════
+    //  RECETARIO-1 (27/09/2026) — recetario/{docId}
+    //  ────────────────────────────────────────────────────────────────
+    //  Mismo patrón de "documento único" que catalogo/productos (ver P5),
+    //  pero con una asimetría deliberada: la LECTURA no exige recipe.read
+    //  (decisión del propietario: "admin edita, todos consultan"), solo
+    //  estar autenticado — igual que catalogo NO exige catalog.read para
+    //  leer. La ESCRITURA sí exige recipe.edit explícito, sin excepción.
+    //  La matriz genérica rol × permiso × override para recipe.edit ya
+    //  queda cubierta por P21/P21b (paridad, extraída mecánicamente del
+    //  catálogo real de permisos); esto prueba el match del documento.
+    // ══════════════════════════════════════════════════════════════════
+    const rutaRecetario = (db) => db.doc('recetario/recetas');
+
+    await prueba('REC-1. Cualquier autenticado puede LEER recetario/recetas, aunque no tenga recipe.read', async () => {
+        await sembrarFase2();
+        await assertSucceeds(rutaRecetario(bt1).get());
+        await assertSucceeds(rutaRecetario(subjefe1).get());
+    });
+
+    await prueba('REC-2. Sin recipe.edit no se puede escribir recetario/recetas DIRECTAMENTE', async () => {
+        await sembrarFase2();
+        await assertFails(rutaRecetario(bt1).set({ recetas: [], version: Date.now() }));
+        await assertFails(rutaRecetario(subjefe1).set({ recetas: [], version: Date.now() }));
+        await assertSucceeds(rutaRecetario(admin1).set({ recetas: [], version: Date.now() }));
+    });
+
+    await prueba('REC-3. Un override "allow" de recipe.edit concede la escritura real', async () => {
+        await sembrarFase2(async (db) => {
+            await db.doc('usuarios/bartender1').set({
+                uid: 'bartender1', role: 'BARTENDER',
+                permissionOverrides: { 'recipe.edit': 'allow' }
+            });
+        });
+        await assertSucceeds(rutaRecetario(bt1).set({ recetas: [], version: Date.now() }));
+    });
+
+    await prueba('REC-4. Sin autenticación no se puede ni leer ni escribir recetario/recetas', async () => {
+        await sembrarFase2();
+        const anonimo = testEnv.unauthenticatedContext().firestore();
+        await assertFails(rutaRecetario(anonimo).get());
+        await assertFails(rutaRecetario(anonimo).set({ recetas: [], version: Date.now() }));
+    });
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  FASE 10 / 10B — VENTAS DEL POS, un documento por PERIODO
+    //  (inventarioApp/{docId}/ventas/{fechaInicio}_{fechaFin}). Desde 10B
+    //  una fecha cargada no se vuelve a subir: create sí, update/delete no.
+    // ══════════════════════════════════════════════════════════════════════
+    const idPeriodo = (ini, fin) => ini + '_' + fin;
+    const rutaVentas = (db, id) => db.doc('inventarioApp/barra-principal/ventas/' + (id || idPeriodo('2026-09-21', '2026-09-27')));
+    const ventasValidas = (ini, fin, semana) => ({
+        semanaId: semana || '2026-09-21',
+        fechaInicio: ini || '2026-09-21', fechaFin: fin || ini || '2026-09-27',
+        lineas: [{ sku: 'PVB1000001', nombre: '1800 ANEJO BOTELLA', tipo: 'Bebidas', cantidad: 3, ventaNeta: 100 }],
+        totalSkus: 1, totalUnidades: 3, origen: 'excel', archivo: 'Ventas_27-09-2026.xlsx',
+        importadoPor: 'admin1', importadoEn: Date.now()
+    });
+
+    await prueba('VEN-1. Sin sales.read NO se pueden leer las ventas (información comercial, como compras)', async () => {
+        await sembrarFase2();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await ctx.firestore().doc('inventarioApp/barra-principal/ventas/' + idPeriodo('2026-09-21', '2026-09-27')).set(ventasValidas());
+        });
+        await assertFails(rutaVentas(bt1).get());
+        await assertFails(rutaVentas(subjefe1).get());
+        await assertSucceeds(rutaVentas(admin1).get());
+    });
+
+    await prueba('VEN-2. Sin sales.import NO se pueden escribir ventas', async () => {
+        await sembrarFase2();
+        await assertFails(rutaVentas(bt1).set(ventasValidas()));
+        await assertFails(rutaVentas(subjefe1).set(ventasValidas()));
+        await assertSucceeds(rutaVentas(admin1).set(ventasValidas()));
+    });
+
+    await prueba('VEN-3. ★ 10B: un periodo ya cargado NO se vuelve a subir (update denegado, ni por el admin)', async () => {
+        await sembrarFase2();
+        await assertSucceeds(rutaVentas(admin1).set(ventasValidas()));
+        const otraVez = ventasValidas();
+        otraVez.lineas = [{ sku: 'PVB1000001', nombre: '1800 ANEJO BOTELLA', tipo: 'Bebidas', cantidad: 9, ventaNeta: 300 }];
+        await assertFails(rutaVentas(admin1).set(otraVez));
+        await assertFails(rutaVentas(admin1).update({ totalUnidades: 9 }));
+    });
+
+    await prueba('VEN-4. ★ Un periodo de ventas NUNCA se borra', async () => {
+        await sembrarFase2();
+        await assertSucceeds(rutaVentas(admin1).set(ventasValidas()));
+        await assertFails(rutaVentas(admin1).delete());
+    });
+
+    await prueba('VEN-5. El id debe ser inicio_fin, fechas bien formadas, inicio ≤ fin, y la lista tiene tope', async () => {
+        await sembrarFase2();
+        // id que no coincide con las fechas del documento
+        await assertFails(rutaVentas(admin1, idPeriodo('2026-09-21', '2026-09-27')).set(ventasValidas('2026-09-21', '2026-09-26')));
+        // fin antes que inicio
+        await assertFails(rutaVentas(admin1, idPeriodo('2026-09-25', '2026-09-23')).set(ventasValidas('2026-09-25', '2026-09-23')));
+        // fecha mal formada
+        await assertFails(rutaVentas(admin1, idPeriodo('2026-9-21', '2026-9-21')).set(ventasValidas('2026-9-21', '2026-9-21')));
+        // sin fechas (la forma anterior a 10B) ya no se puede crear
+        const legado = ventasValidas(); delete legado.fechaInicio; delete legado.fechaFin;
+        await assertFails(rutaVentas(admin1, '2026-09-21').set(legado));
+        const enorme = ventasValidas();
+        enorme.lineas = Array.from({ length: 3001 }, (_, i) => ({ sku: 'S' + i, cantidad: 1 }));
+        await assertFails(rutaVentas(admin1).set(enorme));
+    });
+
+    await prueba('VEN-6. Un override "allow" de sales.read concede la lectura real a un bartender', async () => {
+        await sembrarFase2(async (db) => {
+            await db.doc('usuarios/bartender1').set({
+                uid: 'bartender1', role: 'BARTENDER',
+                permissionOverrides: { 'sales.read': 'allow' }
+            });
+            await db.doc('inventarioApp/barra-principal/ventas/' + idPeriodo('2026-09-21', '2026-09-27')).set(ventasValidas());
+        });
+        await assertSucceeds(rutaVentas(bt1).get());
+        await assertFails(rutaVentas(bt1, idPeriodo('2026-09-14', '2026-09-14')).set(ventasValidas('2026-09-14', '2026-09-14', '2026-09-14')));   // leer no es escribir
+    });
+
+    await prueba('VEN-7. Sin autenticación no se puede ni leer ni escribir ventas', async () => {
+        await sembrarFase2();
+        const anonimo = testEnv.unauthenticatedContext().firestore();
+        await assertFails(rutaVentas(anonimo).get());
+        await assertFails(rutaVentas(anonimo).set(ventasValidas()));
+    });
+
+    await prueba('VEN-8. ★ 10B: un solo día (inicio = fin) y varios periodos distintos en la misma semana', async () => {
+        await sembrarFase2();
+        await assertSucceeds(rutaVentas(admin1, idPeriodo('2026-09-23', '2026-09-23')).set(ventasValidas('2026-09-23', '2026-09-23')));
+        await assertSucceeds(rutaVentas(admin1, idPeriodo('2026-09-21', '2026-09-22')).set(ventasValidas('2026-09-21', '2026-09-22')));
+        await assertSucceeds(rutaVentas(admin1, idPeriodo('2026-09-27', '2026-09-27')).set(ventasValidas('2026-09-27', '2026-09-27')));
+        // el mismo día otra vez: rechazado por el servidor
+        await assertFails(rutaVentas(admin1, idPeriodo('2026-09-23', '2026-09-23')).set(ventasValidas('2026-09-23', '2026-09-23')));
+    });
+
+    await prueba('VEN-9. ★ 10B: el servidor no acepta un periodo que se salga de su semana', async () => {
+        await sembrarFase2();
+        // Sábado 26 → martes 29: cruza al lunes 28
+        await assertFails(rutaVentas(admin1, idPeriodo('2026-09-26', '2026-09-29')).set(ventasValidas('2026-09-26', '2026-09-29', '2026-09-21')));
+        // semanaId posterior al inicio
+        await assertFails(rutaVentas(admin1, idPeriodo('2026-09-21', '2026-09-21')).set(ventasValidas('2026-09-21', '2026-09-21', '2026-09-28')));
+        // domingo 27 sí es de la semana del 21 (día 6)
+        await assertSucceeds(rutaVentas(admin1, idPeriodo('2026-09-26', '2026-09-27')).set(ventasValidas('2026-09-26', '2026-09-27', '2026-09-21')));
+    });
+
+    await prueba('VEN-10. Un documento semanal anterior a 10B se sigue leyendo, pero ya no se reescribe', async () => {
+        await sembrarFase2(async (db) => {
+            const legado = ventasValidas(); delete legado.fechaInicio; delete legado.fechaFin;
+            await db.doc('inventarioApp/barra-principal/ventas/2026-09-14').set(Object.assign(legado, { semanaId: '2026-09-14' }));
+        });
+        await assertSucceeds(rutaVentas(admin1, '2026-09-14').get());
+        await assertFails(rutaVentas(admin1, '2026-09-14').update({ totalUnidades: 1 }));
     });
 
     await testEnv.cleanup();

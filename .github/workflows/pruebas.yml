@@ -71,6 +71,15 @@ jobs:
       - name: Ejecutar las pruebas
         run: npm test
 
+      # AÑADIDO (auditoría 26/09): hasta aquí CI solo corría las locales y las
+      # de reglas. Las 201 comprobaciones de integración —las que montan el
+      # código REAL contra Firestore de verdad— solo se ejecutaban a mano. Los
+      # dos fallos críticos de la semana del 25/09 (CONTABILIZADO tomado por
+      # abierto; inventario no re-suscrito al reabrir, que dejaba "Crear"
+      # borrando los conteos de todos) los caza esta suite, no las otras.
+      - name: Pruebas de integración contra Firestore real
+        run: npm run test:integracion
+
       # Si algo falla, el log del emulador suele decir por qué. Se sube como
       # artefacto para poder mirarlo sin tener que reproducir el fallo.
       - name: Guardar el log del emulador si algo falló
@@ -81,3 +90,36 @@ jobs:
           path: firestore-debug.log
           if-no-files-found: ignore
           retention-days: 7
+
+  # ════════════════════════════════════════════════════════════════════════
+  #  Job aparte: las pruebas de navegador necesitan Chromium (~120 MB) y un
+  #  servidor estático, pero NO el emulador. Separarlas deja que las de
+  #  reglas e integración den resultado sin esperar a la descarga de
+  #  Playwright, y que un fallo de navegador se distinga de un fallo de datos.
+  # ════════════════════════════════════════════════════════════════════════
+  navegador:
+    name: Pruebas en navegador real (Chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Preparar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Instalar Chromium para Playwright
+        run: npx playwright install --with-deps chromium
+
+      # todas-navegador.js levanta y apaga su propio http-server.
+      # prueba-p0.js baja SheetJS de cdnjs: si la red del runner lo bloquea,
+      # el fallo dirá "XLSX is not defined" y no es un fallo del código.
+      - name: Ejecutar las pruebas de navegador
+        run: npm run test:navegador
