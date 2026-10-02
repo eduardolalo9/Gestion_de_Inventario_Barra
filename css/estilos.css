@@ -554,10 +554,10 @@ button[class*="from-purple-5"][class*="to-orange"]:hover {
 
 /* Verde (compartir WhatsApp, guardar inventario) */
 button[class*="from-green"][class*="to-emerald"] {
-    background: #1a4731 !important;
+    background: var(--ok-dim) !important;
     background-image: none !important;
-    color: #86efac !important;
-    border: 1px solid rgba(34,197,94,0.20) !important;
+    color: var(--ok) !important;
+    border: 1px solid var(--ok-dim) !important;
 }
 button[class*="from-green"][class*="to-emerald"]:hover {
     background: #14532d !important; opacity: 1;
@@ -568,8 +568,8 @@ button[class*="from-red"][class*="to-orange"],
 button[class*="from-red-5"][class*="to-orange"] {
     background: #4a1010 !important;
     background-image: none !important;
-    color: #fca5a5 !important;
-    border: 1px solid rgba(239,68,68,0.18) !important;
+    color: var(--danger) !important;
+    border: 1px solid var(--danger-dim) !important;
 }
 button[class*="from-red"][class*="to-orange"]:hover,
 button[class*="from-red-5"][class*="to-orange"]:hover {
@@ -618,7 +618,7 @@ button[class*="border-green"]:hover {
 button[class*="from-blue-5"][class*="to-purple"] {
     background: #1e3a5f !important;
     background-image: none !important;
-    color: #93c5fd !important;
+    color: var(--brass) !important;
 }
 
 /* ─── Inputs / Select / Textarea ─────────────────────────── */
@@ -1006,7 +1006,7 @@ html[data-theme="light"] .bg-white.rounded-2xl:hover { box-shadow: 0 2px 6px rgb
     line-height: 1.15;
 }
 .inv-chip.entera  { border-color: var(--accent-dim2); }
-.inv-chip.entera  .inv-chip__val { color: #93c5fd; }
+.inv-chip.entera  .inv-chip__val { color: var(--brass); }
 .inv-chip.abierta { border-color: rgba(245,158,11,0.22); }
 .inv-chip.abierta .inv-chip__val { color: #fcd34d; }
 .inv-chip.empty   { opacity: 0.32; }
@@ -1098,12 +1098,12 @@ html[data-theme="light"] .inv-card__group-badge { background: #f8fafc; border-co
 }
 .audit-area-card:active { transform: scale(0.988); }
 .audit-area-card.completada {
-    border-color: rgba(34,197,94,0.38);
-    background: linear-gradient(135deg, var(--card) 0%, rgba(34,197,94,0.04) 100%);
+    border-color: var(--ok-dim);
+    background: linear-gradient(135deg, var(--card) 0%, var(--ok-dim) 100%);
 }
 .audit-area-card.completada:hover {
-    border-color: rgba(34,197,94,0.60);
-    box-shadow: 0 0 0 2px rgba(34,197,94,0.10), var(--shadow-card);
+    border-color: var(--ok-dim);
+    box-shadow: 0 0 0 2px var(--ok-dim), var(--shadow-card);
 }
 
 .audit-area-icon {
@@ -1117,7 +1117,7 @@ html[data-theme="light"] .inv-card__group-badge { background: #f8fafc; border-co
 }
 .audit-area-card.completada .audit-area-icon {
     background: var(--green-dim);
-    border-color: rgba(34,197,94,0.22);
+    border-color: var(--ok-dim);
 }
 .audit-area-info { flex: 1; min-width: 0; }
 .audit-area-name {
@@ -1141,7 +1141,7 @@ html[data-theme="light"] .inv-card__group-badge { background: #f8fafc; border-co
 .audit-area-status.completada {
     background: var(--green-dim);
     color: var(--green-text);
-    border: 1px solid rgba(34,197,94,0.22);
+    border: 1px solid var(--ok-dim);
 }
 html[data-theme="light"] .audit-area-status.completada { color: #166534; }
 
@@ -1156,19 +1156,19 @@ html[data-theme="light"] .audit-area-status.completada { color: #166534; }
 .audit-export-btn {
     display: flex; align-items: center; justify-content: center; gap: 10px;
     width: 100%; padding: 14px 20px;
-    background: linear-gradient(135deg, #065f46 0%, #047857 100%);
-    border: 1px solid rgba(34,197,94,0.28);
+    background: linear-gradient(135deg, var(--ok-dim) 0%, #047857 100%);
+    border: 1px solid var(--ok-dim);
     border-radius: var(--r-lg);
-    color: #86efac;
+    color: var(--ok);
     font-family: 'IBM Plex Sans', sans-serif;
     font-weight: 600; font-size: 0.875rem;
     letter-spacing: 0.02em;
     cursor: pointer;
-    box-shadow: 0 2px 12px rgba(34,197,94,0.15);
+    box-shadow: 0 2px 12px var(--ok-dim);
     transition: opacity 0.12s ease, box-shadow 0.12s ease;
     animation: springUp 0.28s var(--ease-out) both;
 }
-.audit-export-btn:hover { opacity: 0.88; box-shadow: 0 4px 20px rgba(34,197,94,0.22); }
+.audit-export-btn:hover { opacity: 0.88; box-shadow: 0 4px 20px var(--ok-dim); }
 .audit-export-btn:active { transform: scale(0.975); }
 
 /* Banner de progreso */
@@ -1243,7 +1243,7 @@ html[data-theme="light"] .audit-count-area-badge { background: var(--accent-dim)
 
 /* ── PANEL ADMIN TIEMPO REAL ─────────────────────────────── */
 @keyframes livePulse {
-    0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 0 rgba(34,197,94,0.55); }
+    0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 0 var(--ok-dim); }
     50%       { opacity: 0.7; transform: scale(1.18); box-shadow: 0 0 0 5px rgba(34,197,94,0); }
 }
 @keyframes countingBlink {
@@ -1270,8 +1270,8 @@ html[data-theme="light"] .audit-count-area-badge { background: var(--accent-dim)
 .audit-done-badge {
     display: inline-flex; align-items: center; gap: 4px;
     padding: 1px 6px; border-radius: 20px;
-    background: rgba(34,197,94,0.10);
-    border: 1px solid rgba(34,197,94,0.22);
+    background: var(--ok-dim);
+    border: 1px solid var(--ok-dim);
     color: #22c55e;
     font-size: 0.6rem; font-weight: 700;
 }
@@ -1283,7 +1283,7 @@ html[data-theme="light"] .audit-count-area-badge { background: var(--accent-dim)
     background: var(--bg);
     transition: border-color 0.2s;
 }
-.audit-user-row.live { border-color: rgba(34,197,94,0.28); }
+.audit-user-row.live { border-color: var(--ok-dim); }
 .audit-area-row {
     display: flex; align-items: center;
     justify-content: space-between;
@@ -1309,10 +1309,10 @@ html[data-theme="light"] .audit-user-row.live { border-color: rgba(22,163,74,0.2
     cursor: default;
     position: relative;
 }
-#syncDot[data-state="ok"]      { background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,0.22); }
+#syncDot[data-state="ok"]      { background: #22c55e; box-shadow: 0 0 0 3px var(--ok-dim); }
 #syncDot[data-state="syncing"] { background: #4cc9f0; box-shadow: 0 0 0 3px rgba(76,201,240,0.25); animation: syncPulse 1.2s ease-in-out infinite; }
 #syncDot[data-state="pending"] { background: #fbbf24; box-shadow: 0 0 0 3px rgba(251,191,36,0.22); }
-#syncDot[data-state="error"]   { background: #ef4444; box-shadow: 0 0 0 3px rgba(239,68,68,0.22); }
+#syncDot[data-state="error"]   { background: #ef4444; box-shadow: 0 0 0 3px var(--danger-dim); }
 #syncDot[data-state="offline"] { background: #9ca3af; box-shadow: 0 0 0 3px rgba(156,163,175,0.18); }
 @keyframes syncPulse {
     0%, 100% { opacity: 1; transform: scale(1); }
@@ -1615,8 +1615,8 @@ body.modal-open { overflow: hidden; position: fixed; width: 100%; }
     font-size: 0.64rem; font-weight: 700;
     letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap;
 }
-.csb-tag--ok   { background: rgba(34,197,94,0.15);  color: #22c55e; }
-.csb-tag--none { background: rgba(239,68,68,0.13);  color: #ef4444; }
+.csb-tag--ok   { background: var(--ok-dim);  color: #22c55e; }
+.csb-tag--none { background: var(--danger-dim);  color: #ef4444; }
 .csb-tag--esc  {
     background: var(--border-mid); color: var(--txt-muted);
     font-weight: 500; text-transform: none; font-size: 0.67rem; letter-spacing: 0;
@@ -1891,125 +1891,143 @@ html[data-theme="light"] .sbx--sticky { background: var(--bg); }
 }
 
 /* Product card estilo screenshot */
+/* ══════════════════════════════════════════════════════════
+   REDISEÑO R3 — TARJETA DE PRODUCTO
+   ────────────────────────────────────────────────────────
+   Tres cambios de forma, todos para que una lista de 431
+   productos se pueda leer de pie y con prisa:
+     · el monograma ancla la fila a la izquierda y da al
+       producto una identidad visual sin usar imágenes;
+     · la existencia va a la DERECHA en mono tabular, así la
+       columna de cifras se escanea en vertical;
+     · las acciones bajan al pie, de modo que el nombre se
+       queda con todo el ancho (los nombres reales son largos:
+       "ACEITUNA SIN HUESO", "LIMON CON SEMILLA").
+   ══════════════════════════════════════════════════════════ */
 .prd-card {
-    background: var(--card);
-    border: 1px solid var(--border);
+    background: var(--surface);
+    border: 1px solid var(--border-mid);
     border-radius: var(--r-lg);
-    padding: 12px 14px;
-    box-shadow: var(--shadow-card);
-    margin-bottom: 10px;
-    transition: border-color 0.13s ease;
+    padding: 12px;
+    margin-bottom: 9px;
+    transition: border-color 0.14s var(--ease-out), background-color 0.14s var(--ease-out);
     animation: cardIn 0.20s var(--ease-out) both;
 }
-.prd-card:hover { border-color: var(--border-mid); }
+.prd-card:hover { border-color: var(--border-strong); }
+/* Con datos contados, la tarjeta sube de superficie: en una lista larga se
+   distingue de un vistazo lo que ya se tocó de lo que está pendiente. */
+.prd-card.has-data { background: var(--card); border-color: var(--accent-dim2); }
+
 .prd-card__top {
     display: flex; align-items: flex-start;
-    justify-content: space-between; gap: 8px;
-    margin-bottom: 5px;
+    gap: 10px;
+    margin-bottom: 0;
 }
+.prd-card__ident { display: flex; flex-direction: column; min-width: 0; flex-grow: 1; }
 .prd-card__name {
     font-family: 'IBM Plex Sans', sans-serif;
-    font-weight: 700; font-size: 0.82rem;
+    font-weight: 600; font-size: 0.84rem;
     color: var(--txt-primary);
-    text-transform: uppercase;
-    line-height: 1.3; flex: 1; min-width: 0;
-}
-.prd-card__actions { display: flex; gap: 5px; flex-shrink: 0; }
-/* M3 Filled Tonal Icon Button — 40dp, Full radius */
-.prd-action-btn {
-    width: 40px; height: 40px;
-    border-radius: var(--r-full);
-    display: flex; align-items: center; justify-content: center;
-    border: none; cursor: pointer; flex-shrink: 0;
-    transition: box-shadow 0.18s var(--ease-std),
-                transform 0.12s var(--ease-out);
+    line-height: 1.25;
+    text-align: left;
+    background: transparent; border: none; padding: 0;
     min-height: unset !important;
-    position: relative; overflow: hidden;
-    -webkit-tap-highlight-color: transparent;
+    cursor: pointer;
+    /* Dos líneas como máximo: un nombre largo no debe empujar la cifra. */
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden;
 }
-.prd-action-btn::after {
-    content: '';
-    position: absolute; inset: 0;
-    background: #fff; opacity: 0;
-    border-radius: inherit;
-    transition: opacity 0.15s ease; pointer-events: none;
-}
-.prd-action-btn:hover::after  { opacity: 0.10; }
-.prd-action-btn:active::after { opacity: 0.20; }
-.prd-action-btn:hover  { box-shadow: var(--shadow-elev2); }
-.prd-action-btn:active { transform: scale(0.90); box-shadow: none; }
-.prd-action-btn svg { width: 18px; height: 18px; position: relative; z-index: 1; }
-/* M3 Tonal: Container + On-Container */
-.prd-action-btn.cart { background: var(--accent-container); color: var(--accent); }
-.prd-action-btn.edit { background: rgba(130,212,230,0.14); color: var(--sky); }
-.prd-action-btn.del  { background: rgba(255,180,171,0.14); color: var(--red); }
+.prd-card__name:hover { color: var(--brass); }
+.prd-card__cifra { flex-shrink: 0; text-align: right; padding-top: 1px; }
+.prd-card__cifra .bi-cifra { font-size: 0.82rem; white-space: nowrap; }
 
-.prd-card__group-badge {
-    display: inline-flex; align-items: center;
-    background: var(--accent-dim);
-    border: 1px solid var(--accent-dim2);
-    border-radius: 20px;
-    padding: 2px 9px;
-    font-size: 0.62rem; font-weight: 700;
-    letter-spacing: 0.04em; text-transform: uppercase;
-    color: #93c5fd;
-    margin-bottom: 5px;
-}
-html[data-theme="light"] .prd-card__group-badge {
-    background: var(--accent-dim);
-    border-color: var(--accent-dim2);
-    color: var(--accent);
-}
+.prd-card__estado { margin-top: 8px; }
 
 .prd-card__meta {
     font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.72rem; color: var(--txt-secondary);
-    margin-bottom: 8px;
+    font-size: 0.66rem; color: var(--txt-muted);
+    margin-top: 3px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.prd-card__grupo { color: var(--brass); font-weight: 600; }
+.prd-card__sep { opacity: 0.45; margin: 0 5px; }
+
 .prd-card__areas {
-    display: flex; gap: 8px;
+    display: flex; gap: 6px;
+    margin-top: 9px;
 }
+/* Un chip por área de conteo. Lleva la etiqueta arriba y la cifra abajo en
+   mono: las tres se leen como una fila de medidores, no como tres frases. */
 .prd-area-chip {
-    flex: 1; background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--r-md);
-    padding: 4px 6px;
+    flex: 1; min-width: 0;
+    background: var(--bg);
+    border: 1px solid var(--border-mid);
+    border-radius: var(--r-sm);
+    padding: 5px 6px;
     text-align: center;
 }
+/* Área sin nada contado: se apaga, pero sigue ocupando su sitio. Una columna
+   que desaparece se lee como "no existe"; apagada se lee como "sin contar". */
+.prd-area-chip--vacio { background: transparent; border-style: dashed; }
 .prd-area-chip__label {
     font-size: 0.52rem; font-weight: 600;
     letter-spacing: 0.07em; text-transform: uppercase;
     color: var(--txt-muted); display: block;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-/* FASE 11B (parte 2) — niveles de alerta nuevos. 'advertencia' reutiliza el
-   ámbar ya usado en las gráficas del panel (--amber); 'limitado' reutiliza el
-   par rojo/on-rojo de Material 3 que ya definen ambos temas (--red /
-   --red-dark), igual que .pm-estado--critico usa --red-dim/--red-text, para
-   que el badge más grave de los tres sea también el más opaco/sólido. */
-.pm-estado--advertencia { background: var(--amber-dim, rgba(246,195,82,.18)); color: var(--amber); }
-.pm-estado--limitado    { background: var(--red); color: var(--red-dark); }
 
-/* FASE 11B (parte 2) — pedido sugerido dentro de la tarjeta de producto. */
+/* FASE 11B (parte 2) — niveles de alerta. Desde R3 los pinta UI.badge() con el
+   diccionario común (neutral / warn / danger), así que estas dos reglas solo
+   quedan para los sitios que aún usan .pm-estado directamente. */
+.pm-estado--advertencia { background: var(--warn-dim); color: var(--warn); }
+.pm-estado--limitado    { background: var(--danger-dim); color: var(--danger); }
+
+/* FASE 11B (parte 2) — pedido sugerido dentro de la tarjeta de producto.
+   R3: deja de ser una caja ámbar llena y pasa a una línea con su acción al
+   final, para que no compita con la existencia ni con el badge de nivel. */
 .prd-card__pedido {
     display: flex; align-items: center; justify-content: space-between;
     gap: 8px; flex-wrap: wrap;
-    margin: 2px 0 8px; padding: 6px 10px;
-    border-radius: var(--r-md); background: var(--accent-dim);
-    font-size: 0.78rem; color: var(--txt-primary);
+    margin-top: 9px; padding: 7px 10px;
+    border-radius: var(--r-sm);
+    background: var(--accent-dim);
+    border: 1px solid var(--accent-dim2);
+    font-size: 0.72rem; color: var(--txt-secondary);
 }
-.prd-card__pedido b { color: var(--accent); font-family: 'IBM Plex Mono', monospace; }
+.prd-card__pedido-txt { font-weight: 500; }
+.prd-card__pedido b {
+    color: var(--brass); font-size: 0.92rem;
+    margin-left: 3px;
+}
 .prd-card__pedido-btn {
-    font-size: 0.7rem; font-weight: 600; white-space: nowrap;
-    padding: 4px 10px; border: none; border-radius: 999px;
-    background: var(--accent); color: var(--bg); cursor: pointer;
+    font-size: 0.68rem; font-weight: 700; white-space: nowrap;
+    padding: 0 12px; min-height: 32px;
+    border: 1px solid var(--accent-dim2); border-radius: var(--r-full);
+    background: transparent; color: var(--brass); cursor: pointer;
 }
-.prd-card__pedido--sin-datos { background: transparent; padding-left: 0; color: var(--txt-muted); font-style: italic; }
+.prd-card__pedido-btn:hover { background: var(--accent-dim2); }
+.prd-card__pedido--sin-datos {
+    background: transparent; border: none; border-top: 1px dashed var(--border-mid);
+    border-radius: 0; padding: 7px 0 0;
+    color: var(--txt-muted); font-style: italic;
+}
+
+/* Acciones al pie, alineadas a la derecha y separadas por una línea: se ven
+   como lo que son, operaciones sobre la tarjeta, no parte de su contenido. */
+.prd-card__actions {
+    display: flex; gap: 6px; justify-content: flex-end;
+    margin-top: 10px; padding-top: 9px;
+    border-top: 1px solid var(--border);
+}
 
 .prd-area-chip__val {
     font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.92rem; font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.8rem; font-weight: 700;
     color: var(--txt-primary); display: block;
+    margin-top: 2px;
 }
+.prd-area-chip--vacio .prd-area-chip__val { color: var(--txt-muted); font-weight: 500; }
 
 /* ── CONTEO DE AUDITORÍA en tarjetas de inicio ────────────── */
 .prd-audit-divider {
@@ -2032,8 +2050,8 @@ html[data-theme="light"] .prd-card__group-badge {
     border-color: var(--book-dim);
 }
 html[data-theme="light"] .prd-area-chip--audit {
-    background: rgba(109,40,217,0.06);
-    border-color: rgba(109,40,217,0.16);
+    background: var(--book-dim);
+    border-color: var(--book-dim);
 }
 /* Valor principal (enteras) */
 .prd-area-chip__val--audit {
@@ -2119,12 +2137,15 @@ html[data-theme="light"] .prd-audit-abiertas { color: var(--book); }
 .grp-pill:active { transform: scale(0.96); }
 
 /* M3 Filter Chip Selected: Secondary Container */
+/* R3: el grupo activo se pinta en latón SÓLIDO, igual que la pestaña activa
+   de la barra inferior. Con el fondo tonal anterior, en una fila de doce
+   grupos costaba ver cuál estaba puesto. */
 .grp-pill--active {
-    background: var(--accent-container);
-    border-color: transparent;
-    color: var(--accent);
-    font-weight: 600;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.35);
+    background: var(--brass);
+    border-color: var(--brass);
+    color: var(--brass-on);
+    font-weight: 700;
+    box-shadow: none;
 }
 html[data-theme="light"] .grp-pill--active {
     color: var(--accent);
@@ -2173,8 +2194,9 @@ html[data-theme="light"] .grp-rail-wrap::after {
 /* M3 Button height 40dp, shape Full, Label Large 14sp */
 .inicio-btn {
     display: flex; align-items: center; gap: 8px;
-    padding: 10px 20px;
-    height: 40px;
+    padding: 10px 18px;
+    /* R3: 44 px, la medida táctil del sistema (antes 40) */
+    height: 44px;
     border-radius: var(--r-full);
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 0.875rem; font-weight: 500; letter-spacing: 0.005em;
@@ -2204,30 +2226,33 @@ html[data-theme="light"] .grp-rail-wrap::after {
     color: var(--accent-on, #003063);
     box-shadow: var(--shadow-card);
 }
-html[data-theme="light"] .inicio-btn.primary { color: #ffffff; }
+/* En claro, --accent-on ya es blanco: no hace falta un override. */
 /* M3 Tonal Button (Secondary Container tone) */
 .inicio-btn.success {
-    background: rgba(109,213,140,0.18);
-    color: var(--green);
-    border: none;
+    background: var(--ok-dim);
+    color: var(--ok);
+    border: 1px solid var(--ok-dim);
 }
 /* M3 Tonal Button destructive */
 .inicio-btn.danger {
-    background: rgba(255,180,171,0.14);
-    color: var(--red);
-    border: none;
+    background: transparent;
+    color: var(--danger);
+    border: 1px solid var(--danger-dim);
     width: 100%; justify-content: center;
 }
+.inicio-btn.danger:hover { background: var(--danger-dim); }
 
+/* R3: misma superficie y mismo borde que una tarjeta del kit, sin sombra: en
+   una pantalla larga, una sombra por tarjeta acaba siendo ruido. */
 .sync-card {
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: var(--r-lg); padding: 13px 16px; margin-bottom: 10px;
-    box-shadow: var(--shadow-card);
+    background: var(--surface); border: 1px solid var(--border-mid);
+    border-radius: var(--r-lg); padding: 14px; margin-bottom: 10px;
 }
+/* Mismo encabezado que UI.seccion(): una sola voz para los títulos. */
 .sync-card h3 {
-    font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em;
-    text-transform: uppercase; color: var(--txt-secondary);
-    display: flex; align-items: center; gap: 6px; margin-bottom: 9px;
+    font-size: 0.69rem; font-weight: 700; letter-spacing: 0.09em;
+    text-transform: uppercase; color: var(--txt-muted);
+    display: flex; align-items: center; gap: 6px; margin-bottom: 10px;
 }
 .sync-card__row {
     display: flex; align-items: center; justify-content: space-between; gap: 10px;
@@ -2239,14 +2264,18 @@ html[data-theme="light"] .inicio-btn.primary { color: #ffffff; }
 .sync-status-sub {
     font-size: 0.68rem; color: var(--txt-muted); margin-top: 2px;
 }
+/* R3: llevaba un ladrillo fijo (var(--warn-dim) con texto var(--danger)) que no salía de
+   ningún token y no cambiaba con el tema. Pausar la sincronización es una
+   acción de atención, no destructiva: va en ámbar. */
 .sync-pause-btn {
     display: flex; align-items: center; gap: 5px;
-    padding: 7px 13px; border-radius: 20px;
-    background: #7c2d12; border: 1px solid rgba(239,68,68,0.22);
-    color: #fca5a5; font-size: 0.73rem; font-weight: 600;
-    cursor: pointer; white-space: nowrap; min-height: unset !important;
-    transition: opacity 0.12s;
+    padding: 0 14px; min-height: 36px; border-radius: var(--r-full);
+    background: var(--warn-dim); border: 1px solid var(--warn-dim);
+    color: var(--warn); font-size: 0.73rem; font-weight: 700;
+    cursor: pointer; white-space: nowrap;
+    transition: background-color 0.14s var(--ease-out);
 }
+.sync-pause-btn:hover { background: var(--accent-dim); }
 .sync-pause-btn:hover { opacity: 0.82; }
 
 /* ══════════════════════════════════════════════════════════
@@ -2393,7 +2422,7 @@ html[data-theme="light"] .login-input:focus {
 .login-error {
     margin-top: 12px; padding: 9px 12px;
     background: var(--red-dim);
-    border: 1px solid rgba(239,68,68,0.28);
+    border: 1px solid var(--danger-dim);
     border-radius: var(--r-md);
     color: var(--red-text);
     font-size: 0.775rem; font-weight: 500;
@@ -2446,7 +2475,7 @@ html[data-theme="light"] .login-input:focus {
     display: flex; align-items: center; gap: 10px;
     width: 100%; padding: 10px 16px; height: 48px;
     border-radius: var(--r-full);
-    background: rgba(255,180,171,0.12);
+    background: var(--danger-dim);
     color: var(--red);
     border: none; cursor: pointer;
     font-family: 'IBM Plex Sans', sans-serif;
@@ -2455,8 +2484,8 @@ html[data-theme="light"] .login-input:focus {
     -webkit-tap-highlight-color: transparent;
     margin-bottom: 6px;
 }
-.sb-logout-btn:hover  { background: rgba(255,180,171,0.20); box-shadow: var(--shadow-xs); }
-.sb-logout-btn:active { background: rgba(255,180,171,0.28); }
+.sb-logout-btn:hover  { background: var(--danger-dim); box-shadow: var(--shadow-xs); }
+.sb-logout-btn:active { background: var(--danger-dim); }
 html[data-theme="light"] .sb-logout-btn { background: rgba(186,26,26,0.08); color: #ba1a1a; }
 html[data-theme="light"] .sb-logout-btn:hover { background: rgba(186,26,26,0.14); }
 .sb-logout-btn svg { width: 18px; height: 18px; flex-shrink: 0; }
@@ -2497,8 +2526,8 @@ html[data-theme="light"] .sb-logout-btn:hover { background: rgba(186,26,26,0.14)
 .adm-btn{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;padding:10px;border-radius:var(--r-md);font-family:'IBM Plex Sans',sans-serif;font-weight:600;font-size:.78rem;cursor:pointer;border:none;margin-bottom:6px;transition:opacity .12s;}
 .adm-btn:hover{opacity:.85;}
 .adm-btn.primary{background:var(--accent);color:#fff;}
-.adm-btn.success{background:#065f46;color:#86efac;border:1px solid rgba(34,197,94,.28);}
-.adm-btn.warn   {background:#4a1010;color:#fca5a5;border:1px solid rgba(239,68,68,.18);}
+.adm-btn.success{background:var(--ok-dim);color:var(--ok);border:1px solid var(--ok-dim);}
+.adm-btn.warn   {background:#4a1010;color:var(--danger);border:1px solid var(--danger-dim);}
 .adm-device-row{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:.75rem;}
 .adm-device-row:last-child{border-bottom:none;}
 .adm-device-name{color:var(--txt-primary);font-weight:500;}
@@ -2513,8 +2542,8 @@ html[data-theme="light"] .sb-logout-btn:hover { background: rgba(186,26,26,0.14)
 .ajuste-desc{font-size:.8rem;color:var(--txt-primary);}
 .ajuste-btns{display:flex;gap:5px;margin-top:7px;}
 .ajuste-btn{padding:3px 10px;border-radius:var(--r-sm);font-size:.72rem;font-weight:600;cursor:pointer;border:none;}
-.ajuste-btn.ok {background:var(--green-dim);color:var(--green-text);border:1px solid rgba(34,197,94,.28);}
-.ajuste-btn.nok{background:var(--red-dim)  ;color:var(--red-text)  ;border:1px solid rgba(239,68,68,.28);}
+.ajuste-btn.ok {background:var(--green-dim);color:var(--green-text);border:1px solid var(--ok-dim);}
+.ajuste-btn.nok{background:var(--red-dim)  ;color:var(--red-text)  ;border:1px solid var(--danger-dim);}
 
 /* ── Notificaciones ───────────────────────────────────────── */
 .notif-wrap{background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;box-shadow:var(--shadow-card);}
@@ -2529,7 +2558,7 @@ html[data-theme="light"] .sb-logout-btn:hover { background: rgba(186,26,26,0.14)
 #sbNotifBadge{margin-left:auto;background:var(--red);color:#fff;font-size:.58rem;font-weight:700;padding:1px 5px;border-radius:7px;display:none;}
 
 /* ── Reportes publicados ──────────────────────────────────── */
-.rep-card{background:var(--card);border:1px solid rgba(34,197,94,.28);border-radius:var(--r-lg);padding:13px 16px;margin-bottom:10px;}
+.rep-card{background:var(--card);border:1px solid var(--ok-dim);border-radius:var(--r-lg);padding:13px 16px;margin-bottom:10px;}
 .rep-card-title{font-weight:600;font-size:.86rem;color:var(--txt-primary);margin-bottom:3px;}
 .rep-card-meta {font-size:.72rem;color:var(--txt-muted);margin-bottom:9px;}
 
@@ -2642,11 +2671,11 @@ html[data-theme="light"] .sb-logout-btn:hover { background: rgba(186,26,26,0.14)
 }
 .audit-compare-badge.ok   {
     background: var(--green-dim); color: var(--green-text);
-    border: 1px solid rgba(34,197,94,.20);
+    border: 1px solid var(--ok-dim);
 }
 .audit-compare-badge.warn {
     background: var(--red-dim); color: var(--red-text);
-    border: 1px solid rgba(239,68,68,.20);
+    border: 1px solid var(--danger-dim);
 }
 .audit-compare-badge.pend {
     background: rgba(148,163,184,.10);
@@ -2718,11 +2747,11 @@ html[data-theme="light"] .sb-logout-btn:hover { background: rgba(186,26,26,0.14)
 }
 .audit-cstat-pill.ok   {
     background: var(--green-dim); color: var(--green-text);
-    border-color: rgba(34,197,94,.22);
+    border-color: var(--ok-dim);
 }
 .audit-cstat-pill.warn {
     background: var(--red-dim); color: var(--red-text);
-    border-color: rgba(239,68,68,.22);
+    border-color: var(--danger-dim);
 }
 .audit-cstat-pill.info {
     background: var(--accent-dim); color: var(--accent);
@@ -2799,10 +2828,10 @@ tbody td { padding: 12px !important; color: var(--txt-primary) !important; }
     transition: background 0.35s ease, box-shadow 0.35s ease;
     cursor: default; position: relative;
 }
-#syncDot[data-state="ok"]      { background: var(--green); box-shadow: 0 0 0 3px rgba(109,213,140,0.22); }
-#syncDot[data-state="syncing"] { background: var(--sky);   box-shadow: 0 0 0 3px rgba(130,212,230,0.25); animation: syncPulse 1.2s ease-in-out infinite; }
+#syncDot[data-state="ok"]      { background: var(--green); box-shadow: 0 0 0 3px var(--ok-dim); }
+#syncDot[data-state="syncing"] { background: var(--sky);   box-shadow: 0 0 0 3px var(--info-dim); animation: syncPulse 1.2s ease-in-out infinite; }
 #syncDot[data-state="pending"] { background: var(--amber); box-shadow: 0 0 0 3px rgba(246,195,82,0.22); }
-#syncDot[data-state="error"]   { background: var(--red);   box-shadow: 0 0 0 3px rgba(255,180,171,0.22); }
+#syncDot[data-state="error"]   { background: var(--red);   box-shadow: 0 0 0 3px var(--danger-dim); }
 #syncDot[data-state="offline"] { background: var(--txt-muted);      box-shadow: 0 0 0 3px rgba(147,143,153,0.18); }
 
 /* M3 grp-rail fade */
@@ -2980,7 +3009,7 @@ button.pm-tile { cursor: pointer; transition: transform .15s var(--ease-out), bo
 button.pm-tile:hover, button.pm-tile:focus-visible { border-color: var(--accent); outline: none; }
 button.pm-tile:active { transform: scale(.98); }
 .pm-tile__ico { font-size: 1.05rem; line-height: 1; }
-.pm-tile__val { font-family: 'IBM Plex Mono', monospace; font-size: 1.25rem; font-weight: 700; margin-top: 4px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-tile__val { font-family: 'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; font-size: 1.25rem; font-weight: 700; margin-top: 4px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pm-tile__etq { font-size: 0.7rem; font-weight: 600; color: var(--txt-secondary); text-transform: uppercase; letter-spacing: .03em; }
 .pm-tile__sub { font-size: 0.66rem; color: var(--txt-muted); }
 .pm-tile--critico { border-color: var(--red); }
@@ -3001,7 +3030,12 @@ button.pm-tile:active { transform: scale(.98); }
 .pm-barra { display: grid; grid-template-columns: minmax(0, 42%) minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 5px 4px; border: none; background: transparent; border-radius: var(--r-sm, 6px); color: inherit; font: inherit; text-align: left; cursor: default; }
 .pm-barra[data-pm-ficha] { cursor: pointer; }
 .pm-barra[data-pm-ficha]:hover, .pm-barra[data-pm-ficha]:focus-visible { background: var(--accent-dim); outline: none; }
-.pm-barra__etq { font-size: 0.74rem; color: var(--txt-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-barra__etq { display: flex; align-items: center; gap: 5px; font-size: 0.74rem; color: var(--txt-primary); overflow: hidden; white-space: nowrap; }
+/* REDISEÑO R3 — el nombre se recorta, el icono de estado nunca */
+.pm-barra__etq > span:not(.bi-sr) { overflow: hidden; text-overflow: ellipsis; }
+.pm-barra__ico { flex-shrink: 0; font-size: 0.8rem; }
+.pm-barra--aviso .pm-barra__ico { color: var(--amber); }
+.pm-barra--critico .pm-barra__ico { color: var(--red); }
 .pm-barra__svg { width: 100%; height: 12px; display: block; }
 .pm-barra__fondo { fill: var(--border); }
 .pm-barra__valor { fill: var(--accent); }
@@ -3043,7 +3077,8 @@ button.pm-tile:active { transform: scale(.98); }
 .pm-ficha__cab { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
 .pm-ficha__titulo { font-size: 1.02rem; font-weight: 800; color: var(--txt-primary); }
 .pm-ficha__sub { font-size: 0.72rem; color: var(--txt-muted); margin-top: 2px; }
-.pm-ficha__x { width: 34px; height: 34px; border-radius: 999px; border: none; background: var(--border); color: var(--txt-primary); cursor: pointer; flex-shrink: 0; }
+.pm-ficha__x { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 999px; border: 1px solid var(--border); background: var(--card-high); color: var(--txt-secondary); cursor: pointer; flex-shrink: 0; transition: background-color .14s ease, color .14s ease; }
+.pm-ficha__x:hover { background: var(--border); color: var(--txt-primary); }
 .pm-ficha__sec { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--txt-secondary); margin: 14px 0 6px; }
 .pm-ficha__areas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .pm-ficha__area { display: flex; flex-direction: column; align-items: center; padding: 8px 4px; border-radius: var(--r-md); border: 1px solid var(--border); font-size: 0.66rem; color: var(--txt-secondary); text-align: center; }
@@ -3102,7 +3137,7 @@ html[data-theme="light"] .pm-btn--peligro { color: #fff; }
 .vt-campo input:focus { border-color: var(--accent); outline: none; }
 .vt-semana { padding: 12px 14px; border-radius: 12px; background: var(--accent-dim2); color: var(--txt-primary); font-size: .95rem; line-height: 1.55; }
 .vt-msg { padding: 12px 14px; border-radius: 12px; font-size: .92rem; line-height: 1.5; border: 1px solid; }
-.vt-msg--error { background: rgba(239,68,68,.12); border-color: rgba(239,68,68,.45); color: var(--red-text, var(--red)); }
+.vt-msg--error { background: var(--danger-dim); border-color: var(--danger-dim); color: var(--red-text, var(--red)); }
 .vt-msg--aviso { background: rgba(246,195,82,.12); border-color: rgba(246,195,82,.45); color: var(--amber); }
 .vt-msg--info  { background: var(--accent-dim); border-color: var(--border-mid); color: var(--txt-primary); }
 .vt-dias { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
@@ -3444,3 +3479,26 @@ html[data-theme="light"] .vt-dia--ok { color: #fff; }
     color: var(--txt-muted);
 }
 .bi-seccion__der { font-size: 0.72rem; font-weight: 600; color: var(--brass); }
+
+/* ═════════════════════════════════════════════════════════════════════════
+   REDISEÑO R3 — estados vacíos de Inicio
+   ─────────────────────────────────────────────────────────────────────────
+   Antes eran un emoji a 2.5rem metido en un style= en línea. El emoji lo
+   dibujaba cada teléfono a su manera y no se podía apagar con el tema: en
+   una pantalla vacía era lo único que había y se veía como un error.
+   Ahora es un icono local, grande pero apagado, que no compite con el
+   texto que de verdad dice qué hacer.
+   ═════════════════════════════════════════════════════════════════════════ */
+.inicio-vacio {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--txt-muted);
+}
+.inicio-vacio__ico {
+    display: block;
+    width: 38px; height: 38px;
+    margin: 0 auto 12px;
+    color: var(--txt-muted);
+    opacity: 0.55;
+}
+.inicio-vacio__txt { font-size: 0.88rem; }

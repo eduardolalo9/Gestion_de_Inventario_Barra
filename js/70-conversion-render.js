@@ -413,6 +413,24 @@
             }
         }
 
+        /**
+         * REDISEÑO R3 — el chip "Solo lectura" de la cabecera.
+         *
+         * Estaba escrito tres veces idéntico (Productos, Recetario, Ventas) con
+         * `rgba(255,255,255,.55)` a mano: en tema claro quedaba ilegible y no
+         * había forma de cambiarlo en un sitio. Ahora es una función y un badge
+         * del kit, igual que el resto de los estados de la app.
+         *
+         * Neutral a propósito: que tu rol no pueda escribir aquí no es un fallo
+         * ni un aviso. El rojo se reserva para lo que está mal.
+         */
+        function _chipSoloLectura() {
+            if (typeof UI !== 'undefined' && UI.badge) {
+                return UI.badge({ texto: 'Solo lectura', tono: 'neutral', vivo: false });
+            }
+            return '<span class="bi-badge bi-badge--neutral">Solo lectura</span>';
+        }
+
         function updateHeaderActions() {
             const headerActions = document.getElementById('headerActions');
             if (activeTab === 'inicio') {
@@ -420,12 +438,12 @@
                 headerActions.innerHTML = '';
             } else if (activeTab === 'inventario') {
                 // Conteo — botón Excel para exportar
-                headerActions.innerHTML = '<button onclick="exportarAuditoriaExcel()" style="display:flex;align-items:center;gap:6px;padding:7px 13px;border-radius:var(--r-md);background:#065f46;border:1px solid rgba(34,197,94,.28);color:#86efac;font-size:.75rem;font-weight:600;cursor:pointer;"><svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>Excel</button>';
+                headerActions.innerHTML = '<button onclick="exportarAuditoriaExcel()" style="display:flex;align-items:center;gap:6px;padding:7px 13px;border-radius:var(--r-md);background:var(--ok-dim);border:1px solid var(--ok-dim);color:var(--ok);font-size:.75rem;font-weight:600;cursor:pointer;"><svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>Excel</button>';
             } else if (activeTab === 'productos') {
                 if (isAdmin()) {
-                    headerActions.innerHTML = '<div class="flex gap-2 sm:gap-3 flex-wrap"><button onclick="openProductModal()" class="bg-gradient-to-r from-purple-500 to-orange-500 text-white px-3 sm:px-6 py-2 sm:py-3 rounded-full flex items-center gap-1 sm:gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs sm:text-base whitespace-nowrap"><svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg><span class="hidden sm:inline">Agregar</span><span class="sm:hidden">+</span></button><button onclick="document.getElementById(\'fileInput\').click()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:#1a4731;border:1px solid rgba(34,197,94,0.28);color:#86efac;"><i class="fa-solid fa-file-arrow-up"></i><span class="hidden sm:inline">Importar Excel</span><span class="sm:hidden">Importar</span></button><button onclick="publicarCatalogoFirestore()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:#1a3a5f;border:1px solid var(--accent-dim2);color:#93c5fd;"><i class="fa-solid fa-cloud-arrow-up"></i><span class="hidden sm:inline">Publicar catálogo</span><span class="sm:hidden">Publicar</span></button><button onclick="deleteAllProducts()" class="bg-gradient-to-r from-red-500 to-orange-600 text-white px-3 sm:px-6 py-2 sm:py-3 rounded-full flex items-center gap-1 sm:gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs sm:text-base whitespace-nowrap" title="Eliminar todos"><svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg><span class="hidden sm:inline">Eliminar Todos</span><span class="sm:hidden">Del</span></button></div>';
+                    headerActions.innerHTML = '<div class="flex gap-2 sm:gap-3 flex-wrap"><button onclick="openProductModal()" class="bg-gradient-to-r from-purple-500 to-orange-500 text-white px-3 sm:px-6 py-2 sm:py-3 rounded-full flex items-center gap-1 sm:gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs sm:text-base whitespace-nowrap"><svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg><span class="hidden sm:inline">Agregar</span><span class="sm:hidden">+</span></button><button onclick="document.getElementById(\'fileInput\').click()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:var(--ok-dim);border:1px solid var(--ok-dim);color:var(--ok);"><i class="fa-solid fa-file-arrow-up"></i><span class="hidden sm:inline">Importar Excel</span><span class="sm:hidden">Importar</span></button><button onclick="publicarCatalogoFirestore()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:var(--accent-dim);border:1px solid var(--accent-dim2);color:var(--brass);"><i class="fa-solid fa-cloud-arrow-up"></i><span class="hidden sm:inline">Publicar catálogo</span><span class="sm:hidden">Publicar</span></button><button onclick="deleteAllProducts()" class="bg-gradient-to-r from-red-500 to-orange-600 text-white px-3 sm:px-6 py-2 sm:py-3 rounded-full flex items-center gap-1 sm:gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs sm:text-base whitespace-nowrap" title="Eliminar todos"><svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg><span class="hidden sm:inline">Eliminar Todos</span><span class="sm:hidden">Del</span></button></div>';
                 } else {
-                    headerActions.innerHTML = '<span style="font-size:.72rem;color:rgba(255,255,255,.55);padding:6px 10px;background:rgba(255,255,255,.08);border-radius:6px;">📋 Solo lectura</span>';
+                    headerActions.innerHTML = _chipSoloLectura();
                 }
             } else if (activeTab === 'recetario') {
                 // RECETARIO-1 — mismo criterio que Productos: sin recipe.edit
@@ -436,13 +454,13 @@
                         '<button onclick="openRecetaModal()" class="bg-gradient-to-r from-purple-500 to-orange-500 text-white px-3 sm:px-6 py-2 sm:py-3 rounded-full flex items-center gap-1 sm:gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs sm:text-base whitespace-nowrap">' +
                         '<svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>' +
                         '<span class="hidden sm:inline">Nueva receta</span><span class="sm:hidden">+</span></button>' +
-                        '<button onclick="recetarioImportarExcel()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:#1a4731;border:1px solid rgba(34,197,94,0.28);color:#86efac;">' +
+                        '<button onclick="recetarioImportarExcel()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:var(--ok-dim);border:1px solid var(--ok-dim);color:var(--ok);">' +
                         '<i class="fa-solid fa-file-arrow-up"></i><span class="hidden sm:inline">Importar Excel</span><span class="sm:hidden">Importar</span></button>' +
-                        '<button onclick="publicarRecetarioFirestore()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:#1a3a5f;border:1px solid var(--accent-dim2);color:#93c5fd;">' +
+                        '<button onclick="publicarRecetarioFirestore()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:var(--accent-dim);border:1px solid var(--accent-dim2);color:var(--brass);">' +
                         '<i class="fa-solid fa-cloud-arrow-up"></i><span class="hidden sm:inline">Publicar recetario</span><span class="sm:hidden">Publicar</span></button>' +
                         '</div>';
                 } else {
-                    headerActions.innerHTML = '<span style="font-size:.72rem;color:rgba(255,255,255,.55);padding:6px 10px;background:rgba(255,255,255,.08);border-radius:6px;">📋 Solo lectura</span>';
+                    headerActions.innerHTML = _chipSoloLectura();
                 }
             } else if (activeTab === 'ventas') {
                 // FASE 10 — mismo criterio: sin sales.import no hay botón de
@@ -450,11 +468,11 @@
                 if (hasPermission('sales.import')) {
                     headerActions.innerHTML =
                         '<div class="flex gap-2 sm:gap-3 flex-wrap">' +
-                        '<button onclick="ventasImportarExcel()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:#1a4731;border:1px solid rgba(34,197,94,0.28);color:#86efac;">' +
+                        '<button onclick="ventasImportarExcel()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:var(--ok-dim);border:1px solid var(--ok-dim);color:var(--ok);">' +
                         '<i class="fa-solid fa-file-arrow-up"></i><span class="hidden sm:inline">Importar ventas</span><span class="sm:hidden">Importar</span></button>' +
                         '</div>';
                 } else {
-                    headerActions.innerHTML = '<span style="font-size:.72rem;color:rgba(255,255,255,.55);padding:6px 10px;background:rgba(255,255,255,.08);border-radius:6px;">📋 Solo lectura</span>';
+                    headerActions.innerHTML = _chipSoloLectura();
                 }
             } else {
                 headerActions.innerHTML = '';
@@ -526,9 +544,9 @@
             let html = '';
             // ── Tarjetas de productos ─────────────────────────────────────────
             if (products.length === 0) {
-                html += '<div style="text-align:center;padding:40px 20px;color:var(--txt-muted);">'
-                      + '<div style="font-size:2.5rem;margin-bottom:12px;">📦</div>'
-                      + '<p style="font-size:.88rem;">No hay productos en el catálogo</p></div>';
+                html += '<div class="inicio-vacio">'
+                      + '<i class="fa-solid fa-box inicio-vacio__ico" aria-hidden="true"></i>'
+                      + '<p class="inicio-vacio__txt">No hay productos en el catálogo</p></div>';
             } else if (filteredProducts.length === 0) {
                 html += BusquedaUI.vacio('catalogo', 'productos');
             } else {
@@ -556,66 +574,109 @@
                     const nivel   = (typeof nivelAlertaProducto === 'function') ? nivelAlertaProducto(product) : null;
                     const pedido  = (typeof pedidoSugeridoProducto === 'function') ? pedidoSugeridoProducto(product) : null;
 
+                    // ══════════════════════════════════════════════════════
+                    //  REDISEÑO R3 — la tarjeta de producto
+                    //  ────────────────────────────────────────────────────
+                    //  Misma información que antes, reordenada para que se
+                    //  lea de un vistazo en una lista de 431:
+                    //    · monograma a la izquierda (sustituye a cualquier
+                    //      imagen: tres letras y un tinte por grupo);
+                    //    · nombre y meta en el centro;
+                    //    · la EXISTENCIA a la derecha, en mono tabular, de
+                    //      modo que la columna de cifras se escanee en
+                    //      vertical sin leer los nombres;
+                    //    · los badges de nivel salen de UI.badge(), el mismo
+                    //      diccionario que usa el resto de la app, en vez de
+                    //      tres spans con emoji propios de esta pantalla.
+                    //  Se conservan intactos los atributos funcionales
+                    //  (data-sbx-item, data-sbx-principal, data-pm-ficha) y
+                    //  las clases que el buscador y las pruebas usan.
+                    // ══════════════════════════════════════════════════════
+                    var monograma = (typeof UI !== 'undefined' && UI.mono)
+                                    ? UI.mono(product.name, product.group) : '';
                     html += '<div class="prd-card' + (hasData ? ' has-data' : '') + '" data-sbx-item style="animation-delay:' + delay + 'ms">';
-                    // Top row: nombre + botones
+
                     html += '<div class="prd-card__top">';
+                    html += monograma;
+                    html += '<div class="prd-card__ident">';
                     // PREMIUM — el nombre abre la ficha del producto (existencia,
                     // compras, costo, inicial de la semana). Delegado en 83-panel.js.
                     html += '<button type="button" class="prd-card__name pm-nombre-btn" data-pm-ficha="' + escapeHtml(product.id) + '" title="Ver ficha del producto">' + resaltarBusqueda(product.name, searchTerm) + '</button>';
-                    html += '<div class="prd-card__actions">';
-                    html += '<button class="prd-action-btn cart" data-sbx-principal onclick="addToCart(\'' + escapeHtml(product.id) + '\')" title="Agregar al carrito">'
-                          + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg></button>';
-                    if (isAdmin()) {
-                        html += '<button class="prd-action-btn edit" onclick="editProduct(\'' + escapeHtml(product.id) + '\')" title="Editar producto">'
-                              + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button>';
-                        html += '<button class="prd-action-btn del" onclick="deleteProduct(\'' + escapeHtml(product.id) + '\')" title="Eliminar producto">'
-                              + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>';
-                    }
-                    html += '</div></div>';
-                    // Group badge
-                    html += '<div class="prd-card__group-badge">' + escapeHtml(product.group || 'General') + '</div>';
+                    html += '<div class="prd-card__meta">'
+                          + '<span class="prd-card__grupo">' + escapeHtml(product.group || 'General') + '</span>'
+                          + '<span class="prd-card__sep">·</span>' + escapeHtml(product.unit || '')
+                          + '<span class="prd-card__sep">·</span>' + resaltarBusqueda(product.id, searchTerm)
+                          + '</div>';
+                    html += '</div>';
+                    // La existencia, a la derecha y en mono. Es la MISMA cifra que
+                    // decide los badges y el pedido sugerido (existenciaMostrada),
+                    // así que la tarjeta no se puede contradecir a sí misma.
+                    html += '<div class="prd-card__cifra">'
+                          + '<span class="num bi-cifra' + (nivel === 'limitado' ? ' bi-cifra--danger' : (nivel === 'advertencia' ? ' bi-cifra--warn' : '')) + '">Total: ' + total.toFixed(2) + '</span>'
+                          + '</div>';
+                    html += '</div>';
+
                     // FASE 11B (parte 2) — un solo badge, el nivel MÁS severo que
                     // aplique (nivelAlertaProducto ya resuelve la jerarquía:
                     // limitado ⊂ advertencia ⊂ bajo). _bajoMinimo() sigue siendo
                     // el criterio de los chips/contadores — esto solo decide qué
                     // etiqueta mostrar dentro de ese mismo conjunto.
-                    if (nivel === 'limitado') {
-                        html += '<span class="pm-estado pm-estado--limitado" style="margin-left:6px;">🔴 Limitado</span>';
-                    } else if (nivel === 'advertencia') {
-                        html += '<span class="pm-estado pm-estado--advertencia" style="margin-left:6px;">⚠️ Advertencia producto bajo</span>';
-                    } else if (nivel === 'bajo') {
-                        html += '<span class="pm-estado pm-estado--critico" style="margin-left:6px;">⛔ Bajo mínimo (' + product.stockMinimo + ')</span>';
+                    if (nivel) {
+                        var textoNivel = (nivel === 'bajo')
+                                         ? 'Bajo mínimo (' + product.stockMinimo + ')'
+                                         : (nivel === 'advertencia' ? 'Advertencia producto bajo' : 'Limitado');
+                        var tonoNivel  = (nivel === 'limitado') ? 'danger'
+                                       : (nivel === 'advertencia' ? 'warn' : 'neutral');
+                        html += '<div class="prd-card__estado">';
+                        html += (typeof UI !== 'undefined' && UI.badge)
+                                ? UI.badge({ texto: textoNivel, tono: tonoNivel, vivo: false })
+                                : '<span class="bi-badge bi-badge--' + tonoNivel + '">' + escapeHtml(textoNivel) + '</span>';
+                        html += '</div>';
                     }
-                    // Meta: ID · Unit · Total
-                    html += '<div class="prd-card__meta">' + resaltarBusqueda(product.id, searchTerm) + ' · ' + escapeHtml(product.unit || '') + ' · Total: ' + total.toFixed(2) + '</div>';
+
                     // FASE 11B (parte 2) — pedido sugerido, solo cuando hay algo
                     // honesto que mostrar: con cantidad (>0), o explícitamente
                     // sin poder calcularla (falta `conversion`) para un producto
                     // que sí está por debajo del mínimo. Nunca un número inventado.
                     if (typeof pedido === 'number' && pedido > 0) {
                         html += '<div class="prd-card__pedido">'
-                              + '<span>📦 Pedido sugerido: <b>' + pedido + '</b></span>'
-                              + '<button type="button" class="prd-card__pedido-btn" onclick="agregarPedidoSugerido(\'' + escapeHtml(product.id) + '\')" title="Agregar la cantidad sugerida al carrito">🛒 Agregar sugerido</button>'
+                              + '<span class="prd-card__pedido-txt">Pedido sugerido <b class="num">' + pedido + '</b></span>'
+                              + '<button type="button" class="prd-card__pedido-btn" onclick="agregarPedidoSugerido(\'' + escapeHtml(product.id) + '\')" title="Agregar la cantidad sugerida al carrito">Al carrito</button>'
                               + '</div>';
                     } else if (pedido === null && nivel) {
-                        html += '<div class="prd-card__pedido prd-card__pedido--sin-datos">📦 Sin dato de conversión para sugerir cantidad</div>';
+                        html += '<div class="prd-card__pedido prd-card__pedido--sin-datos">Sin dato de conversión para sugerir cantidad</div>';
                     }
-                    // Area chips — total contado de auditoría por área
-                    var ad           = adCheck;   // reutilizar el resultado ya calculado arriba
-                    var CHIP_LABELS  = areas;   // R6: las etiquetas salen de la configuracion
+
+                    // Chips por área — lo contado en el conteo operativo en vivo
+                    // (auditoriaConteo), que es distinto de la existencia de
+                    // arriba: ver claude/fase11b-parte2-pedido-sugerido §2.
+                    var ad          = adCheck;   // reutilizar el resultado ya calculado arriba
+                    var CHIP_LABELS = areas;     // R6: las etiquetas salen de la configuracion
                     html += '<div class="prd-card__areas">';
                     AREAS_CONTEO.forEach(function(area) {
                         var d          = ad[area];
                         var totalAudit = d ? (d.enteras + d.sumaAbiertas) : null;
-                        html += '<div class="prd-area-chip">';
+                        html += '<div class="prd-area-chip' + (totalAudit === null ? ' prd-area-chip--vacio' : '') + '">';
                         html += '<span class="prd-area-chip__label">' + CHIP_LABELS[area] + '</span>';
-                        if (totalAudit !== null) {
-                            html += '<span class="prd-area-chip__val">' + totalAudit.toFixed(2) + '</span>';
-                        } else {
-                            html += '<span class="prd-area-chip__val" style="color:var(--txt-muted);font-size:0.78rem;font-weight:500;">—</span>';
-                        }
+                        html += '<span class="prd-area-chip__val num">'
+                              + (totalAudit !== null ? totalAudit.toFixed(2) : '—')
+                              + '</span>';
                         html += '</div>';
                     });
+                    html += '</div>';
+
+                    // Acciones, al pie: así el nombre del producto se queda con
+                    // todo el ancho de arriba (los nombres reales son largos:
+                    // "ACEITUNA SIN HUESO", "LIMON CON SEMILLA").
+                    html += '<div class="prd-card__actions">';
+                    html += '<button class="prd-action-btn cart" data-sbx-principal onclick="addToCart(\'' + escapeHtml(product.id) + '\')" title="Agregar al carrito" aria-label="Agregar al carrito">'
+                          + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg></button>';
+                    if (isAdmin()) {
+                        html += '<button class="prd-action-btn edit" onclick="editProduct(\'' + escapeHtml(product.id) + '\')" title="Editar producto" aria-label="Editar producto">'
+                              + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button>';
+                        html += '<button class="prd-action-btn del" onclick="deleteProduct(\'' + escapeHtml(product.id) + '\')" title="Eliminar producto" aria-label="Eliminar producto">'
+                              + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>';
+                    }
                     html += '</div>';
 
                     html += '</div>';
@@ -681,9 +742,13 @@
 
             // ── Sincronización ─────────────────────────────────────────────────
             html += '<div class="sync-card" style="margin-top:14px;">';
-            html += '<h3><span>⚙️</span> Sincronización</h3>';
+            html += '<h3><i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i> Sincronización</h3>';
             html += '<div class="sync-card__row">';
-            html += '<div><div class="sync-status-text">☁️ ' + (syncOn ? 'Activa' : 'Pausada') + '</div>'
+            html += '<div><div class="sync-status-text">'
+                  + (typeof UI !== 'undefined' && UI.badge
+                     ? UI.badge(syncOn ? 'sincronizado' : 'pendiente', { texto: syncOn ? 'Activa' : 'Pausada' })
+                     : (syncOn ? 'Activa' : 'Pausada'))
+                  + '</div>'
                   + '<div class="sync-status-sub">' + (syncOn ? 'Datos subiéndose automáticamente a la nube.' : 'Sincronización en pausa.') + '</div></div>';
             html += '<button class="sync-pause-btn" onclick="toggleSyncEnabled(); renderTab();">'
                   + '<svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="' + (syncOn ? 'M10 9v6m4-6v6' : 'M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z') + 'M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>'
@@ -693,7 +758,7 @@
             // ── Reportes publicados (solo admin) ──────────────────────────────
             if (isAdmin()) {
                 html += '<div class="sync-card">';
-                html += '<h3><span>📊</span> Reportes Publicados</h3>';
+                html += '<h3><i class="fa-solid fa-file-chart-column" aria-hidden="true"></i> Reportes Publicados</h3>';
                 html += '<button class="inicio-btn success" style="width:100%;justify-content:center;" onclick="generarYPublicarReporte()">'
                       + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:15px;height:15px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>'
                       + 'Generar y publicar reporte final</button>';
@@ -767,14 +832,14 @@
             html += BusquedaUI.chips('catalogo', _chipsCatalogo(admin));
 
             if (!admin) {
-                html += '<div style="background:var(--accent-dim);border:1px solid var(--accent-dim2);border-radius:var(--r-md);padding:8px 12px;margin-bottom:12px;font-size:.78rem;color:var(--accent);">📋 Catálogo de solo lectura — solo el administrador puede modificar productos</div>';
+                html += '<div style="background:var(--accent-dim);border:1px solid var(--accent-dim2);border-radius:var(--r-md);padding:8px 12px;margin-bottom:12px;font-size:.78rem;color:var(--accent);"><i class="fa-solid fa-clipboard-list" aria-hidden="true"></i> Catálogo de solo lectura — solo el administrador puede modificar productos</div>';
             }
 
             // ── Catálogo vacío ────────────────────────────────────────────────
             if (products.length === 0) {
                 html += '<div style="text-align:center;padding:42px 18px;background:var(--surface);'
                      + 'border:1px solid var(--border-mid);border-radius:12px">'
-                     + '<div style="font-size:2.2rem;margin-bottom:10px">📦</div>'
+                     + '<i class="fa-solid fa-box inicio-vacio__ico" aria-hidden="true"></i>'
                      + '<div style="font-weight:600;margin-bottom:6px">El catálogo está vacío</div>'
                      + '<div style="color:var(--txt-secondary);font-size:.88rem;max-width:420px;margin:0 auto;line-height:1.55">'
                      + (admin
@@ -926,7 +991,16 @@
         function renderPedidosTab() {
             let headerHtml = '<div style="margin-bottom:14px;"><h2 style="font-size:1.05rem;font-weight:700;color:var(--txt-primary);">Pedidos WhatsApp</h2><p style="font-size:.75rem;color:var(--txt-muted);">Solo en este dispositivo</p></div>';
             if (orders.length === 0) {
-                return headerHtml + '<div class="bg-white rounded-2xl shadow-md" style="padding:50px 20px;text-align:center;"><div style="font-size:3rem;margin-bottom:12px;">🛒</div><p style="font-size:.95rem;font-weight:600;color:var(--txt-secondary);margin-bottom:6px;">No hay pedidos todavía</p><p style="font-size:.78rem;color:var(--txt-muted);">Ve a Inicio, agrega productos con 🛒 y genera un pedido</p></div>';
+                // REDISEÑO R3 — el vacío de Pedidos cae dentro de R7, pero su
+                // emoji vivía en este archivo y la prueba de R3 vigila el
+                // archivo entero, no una región: dejarlo como excepción habría
+                // sido abrir la puerta a que volvieran los demás. Es el mismo
+                // estado vacío de Inicio, con el icono del carrito.
+                return headerHtml
+                     + '<div class="bi-card inicio-vacio" style="padding:50px 20px;">'
+                     + '<i class="fa-solid fa-cart-shopping inicio-vacio__ico" aria-hidden="true"></i>'
+                     + '<p style="font-size:.95rem;font-weight:600;color:var(--txt-secondary);margin-bottom:6px;">No hay pedidos todavía</p>'
+                     + '<p style="font-size:.78rem;color:var(--txt-muted);">Ve a Inicio, agrega productos al pedido y genera uno</p></div>';
             }
             // FASE 6 — barra unificada sobre folio, proveedor, nota y productos.
             let html = headerHtml;

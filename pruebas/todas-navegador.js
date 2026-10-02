@@ -49,6 +49,7 @@ const PRUEBAS = [
     'prueba-fase13-navegador.js',       // FASE 13 — contabilizar el corte de fin de mes
     'prueba-redis-r1-navegador.js',     // REDISEÑO R1 — la app se pinta correcta sin Tailwind ni FontAwesome
     'prueba-redis-r2-navegador.js',     // REDISEÑO R2 — una sola navegación en pantalla, activo en latón
+    'prueba-redis-r3-navegador.js',     // REDISEÑO R3 — Inicio en pantalla: tarjetas, cifras y panel del kit
 ];
 
 function esperarServidor(intentos) {

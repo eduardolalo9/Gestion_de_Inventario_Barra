@@ -206,9 +206,16 @@ chk('Existe el kit con sus componentes',
     /window\.UI = UI;/.test(kit) &&
     ['badge', 'mono', 'cifra', 'meter', 'btn', 'card', 'row', 'kpi', 'field', 'stepper', 'seccion']
         .every(f => new RegExp('function ' + f + '\\(').test(kit)));
+// R3 añadió `opciones.texto` a badge(), para poder decir "Activa" reusando el
+// tono de "sincronizado". La regla no cambió —un badge nunca es solo color—
+// así que esta comprobación pasa a verificar la REGLA en vez de la expresión
+// exacta: que la palabra se emita siempre, y que cuando nadie la pida salga la
+// del diccionario. Antes fijaba el literal `esc(def.texto)` y habría fallado
+// por una mejora que no rompe nada.
 chk('★ Un badge nunca es solo color: siempre lleva la palabra del estado',
     /ESTADOS = \{/.test(kit) && /texto:/.test(kit) &&
-    /esc\(def\.texto\)/.test(kit));
+    /h \+= esc\(texto\);/.test(kit) &&
+    /\(opciones\.texto != null\) \? opciones\.texto : def\.texto/.test(kit));
 chk('★ Toda cifra sale en mono tabular',
     /font-variant-numeric: tabular-nums/.test(esti) &&
     /class="num bi-cifra/.test(kit));

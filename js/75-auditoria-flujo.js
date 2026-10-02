@@ -1919,7 +1919,7 @@
 
             var semana = (typeof etiquetaSemana === 'function') ? etiquetaSemana(f.value) : cl.semanaId;
             if (cl.cierraSemana) {
-                el.style.color = 'var(--green, #4ade80)';
+                el.style.color = 'var(--ok)';
                 el.textContent = '✓ Domingo — cierra la ' + semana +
                                  (cl.esCorteMensual ? ' y además es corte de fin de mes.' : '.');
                 if (btn) btn.disabled = false;
@@ -2037,7 +2037,7 @@
                 if (btn) btn.disabled = true;
                 return;
             }
-            el.style.color = 'var(--green, #4ade80)';
+            el.style.color = 'var(--ok)';
             el.textContent = cl.cierraSemana ? '✓ Domingo — cierra semana.' : '✓ Corte de fin de mes.';
             if (btn) btn.disabled = false;
         }

@@ -136,7 +136,7 @@
                 html += dato('Recuento',
                     escapeHtml(inv.fechaRecuento)
                     + (_cl && typeof etiquetaSemana === 'function' ? ' · ' + escapeHtml(etiquetaSemana(inv.fechaRecuento)) : '')
-                    + (_cl && _cl.cierraSemana ? ' · <span style="color:var(--green,#4ade80);font-weight:700;">cierra semana</span>' : '')
+                    + (_cl && _cl.cierraSemana ? ' · <span style="color:var(--ok);font-weight:700;">cierra semana</span>' : '')
                     // FASE 13 — el corte de fin de mes es una condición aparte
                     // (puede darse sola o junto con "cierra semana"), así que
                     // lleva su propio indicador en vez de pisar al anterior.

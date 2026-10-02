@@ -4,6 +4,13 @@
 // "Pedido sugerido" aparece con la cantidad real (TECHO del déficit entre la
 // conversión) y agregarlo al carrito fija esa cantidad exacta, de forma
 // idempotente, sin tocar el comportamiento del botón 🛒 normal.
+// AJUSTE DE R3 (2-oct-2026): el rediseño cambió la PRESENTACIÓN de estos
+// badges —los pinta UI.badge() con el diccionario común, sin emoji y en
+// mayúsculas por CSS— y el pedido sugerido perdió los dos puntos. Las
+// aserciones se reescribieron para comprobar el FONDO (qué nivel aplica, que
+// no se apilen, qué cantidad se sugiere y que sin `conversion` se avise en vez
+// de inventar un número) sin depender de cómo se dibuja. Lo que protegían
+// sigue protegido; lo que medían de la forma, ya no.
 const { chromium } = require('playwright');
 const C = []; const chk = (n, ok, d) => C.push({ n, ok, d });
 const PUERTO = process.env.PUERTO || '8080';
@@ -70,21 +77,21 @@ const PUERTO = process.env.PUERTO || '8080';
   chk('P está por encima de su mínimo (5): sin ningún badge de alerta', !!tP && !/Bajo mínimo|Limitado|Advertencia/.test(tP), tP);
 
   const tQ = await tarjeta('PRODUCTO LIMITADO');
-  chk('★ Q (total=0, mínimo=12) muestra el badge "Limitado" (el más severo)', !!tQ && /🔴 Limitado/.test(tQ), tQ);
-  chk('Q NO muestra también "Bajo mínimo" ni "Advertencia" apilados', !!tQ && !/Bajo mínimo \(/.test(tQ) && !/Advertencia producto bajo/.test(tQ), tQ);
-  chk('★ Q muestra "Pedido sugerido: 2" — TECHO((12−0)/6)', !!tQ && /Pedido sugerido:\s*2/.test(tQ), tQ);
+  chk('★ Q (total=0, mínimo=12) muestra el badge "Limitado" (el más severo)', !!tQ && /\bLIMITADO\b/i.test(tQ), tQ);
+  chk('Q NO muestra también "Bajo mínimo" ni "Advertencia" apilados', !!tQ && !/Bajo mínimo \(/i.test(tQ) && !/Advertencia producto bajo/i.test(tQ), tQ);
+  chk('★ Q muestra el pedido sugerido 2 — TECHO((12−0)/6)', !!tQ && /Pedido sugerido\s*:?\s*2\b/i.test(tQ), tQ);
 
   const tR = await tarjeta('PRODUCTO SIN CONVERSION');
-  chk('R está en el mismo umbral que Q (limitado)', !!tR && /🔴 Limitado/.test(tR), tR);
+  chk('R está en el mismo umbral que Q (limitado)', !!tR && /\bLIMITADO\b/i.test(tR), tR);
   chk('★ R, sin `conversion`, nunca inventa una cantidad — avisa honestamente', !!tR && /Sin dato de conversión para sugerir cantidad/.test(tR), tR);
 
   const tS = await tarjeta('PRODUCTO BAJO');
-  chk('★ S (total=9 de 12) → "Bajo mínimo" (el más leve de los tres)', !!tS && /⛔ Bajo mínimo \(12\)/.test(tS), tS);
+  chk('★ S (total=9 de 12) → "Bajo mínimo (12)", el más leve de los tres', !!tS && /Bajo mínimo \(12\)/i.test(tS), tS);
   chk('S no tiene pedido sugerido (sin conversión y sin alcanzar los umbrales nuevos no cambia: aquí no hay `conversion`)',
       !!tS && /Sin dato de conversión/.test(tS), tS);
 
   const tT = await tarjeta('PRODUCTO ADVERTENCIA');
-  chk('★ T (total=7 de 12, entre ⅔ y ½) → "Advertencia producto bajo"', !!tT && /⚠️ Advertencia producto bajo/.test(tT), tT);
+  chk('★ T (total=7 de 12, entre ⅔ y ½) → "Advertencia producto bajo"', !!tT && /Advertencia producto bajo/i.test(tT), tT);
 
   // ── Agregar pedido sugerido: cantidad exacta, idempotente ──────────────
   await p.evaluate(() => agregarPedidoSugerido('Q'));

@@ -95,7 +95,20 @@
             filas.forEach(function(f) {
                 var pct = f.max > 0 ? Math.max(2, Math.min(100, f.valor / f.max * 100)) : 0;
                 var cls = f.estado === 'critico' ? ' pm-barra--critico' : (f.estado === 'aviso' ? ' pm-barra--aviso' : '');
-                var ico = f.estado === 'critico' ? '⛔ ' : (f.estado === 'aviso' ? '⚠️ ' : '');
+                /**
+                 * REDISEÑO R3 — el emoji se sustituye por un icono local que
+                 * hereda el color de la clase de estado, y la palabra del
+                 * estado viaja oculta para el lector de pantalla: la barra
+                 * ya va coloreada, y el color por sí solo no es un dato.
+                 */
+                var ico = '';
+                if (f.estado === 'critico') {
+                    ico = '<i class="fa-solid fa-circle-exclamation pm-barra__ico" aria-hidden="true"></i>'
+                        + '<span class="bi-sr">Crítico: </span>';
+                } else if (f.estado === 'aviso') {
+                    ico = '<i class="fa-solid fa-triangle-exclamation pm-barra__ico" aria-hidden="true"></i>'
+                        + '<span class="bi-sr">Aviso: </span>';
+                }
                 h += '<button type="button" class="pm-barra' + cls + '" role="listitem"'
                    + (f.id ? ' data-pm-ficha="' + escapeHtml(f.id) + '"' : '')
                    + ' title="' + escapeHtml(f.etiqueta + ': ' + f.texto) + '">';
@@ -110,12 +123,18 @@
             return h;
         }
 
+        /**
+         * REDISEÑO R3 — `icono` ya no es un emoji, es el nombre de un icono
+         * local (ver css/utilidades.css). El emoji lo dibujaba cada teléfono
+         * a su manera, no se podía colorear con un token y era lo que más
+         * delataba "hecho a mano" frente a un producto.
+         */
         function _panelTile(icono, valor, etiqueta, extra) {
             extra = extra || {};
             var tag = extra.accion ? 'button type="button" onclick="' + extra.accion + '"' : 'div';
             var cierre = extra.accion ? 'button' : 'div';
             return '<' + tag + ' class="pm-tile' + (extra.clase ? ' ' + extra.clase : '') + '">'
-                 + '<span class="pm-tile__ico" aria-hidden="true">' + icono + '</span>'
+                 + '<span class="pm-tile__ico" aria-hidden="true"><i class="fa-solid ' + icono + '"></i></span>'
                  + '<span class="pm-tile__val">' + valor + '</span>'
                  + '<span class="pm-tile__etq">' + escapeHtml(etiqueta) + '</span>'
                  + (extra.sub ? '<span class="pm-tile__sub">' + escapeHtml(extra.sub) + '</span>' : '')
@@ -126,7 +145,7 @@
             var inv = (typeof _inventarioActivo !== 'undefined') ? _inventarioActivo : null;
             var h = '<div class="pm-inv">';
             if (!inv && typeof _inventarioActivoSinResolver === 'function' && _inventarioActivoSinResolver()) {
-                h += '<div><div class="pm-inv__titulo">⏳ Cargando el inventario físico…</div>'
+                h += '<div><div class="pm-inv__titulo"><i class="fa-solid fa-hourglass"></i> Cargando el inventario físico…</div>'
                    + '<div class="pm-inv__sub">Leyendo el inventario de la sesión actual.</div></div>';
             } else if (!inv) {
                 h += '<div><div class="pm-inv__titulo">Sin inventario físico abierto</div>'
@@ -155,7 +174,7 @@
             var ent = _panelEntradasSemana();
             var nEnt = Object.keys(ent).length;
             var h = '<div class="pm-card">';
-            h += '<div class="pm-card__titulo">📦 Existencia de la semana</div>';
+            h += '<div class="pm-card__titulo"><i class="fa-solid fa-box"></i> Existencia de la semana</div>';
             if (est.estado === 'cargando' || est.estado === 'sin_cargar') {
                 h += '<div class="pm-card__sub">Cargando inventario inicial…</div>';
             } else if (est.estado === 'ok') {
@@ -167,7 +186,7 @@
                 h += '<div class="pm-card__fila"><span>Entradas por compras</span><b>' + nEnt + ' productos</b></div>';
                 h += '<div class="pm-card__sub">Toca un producto para ver su existencia. Aún no descuenta ventas (el módulo de ventas es una fase pendiente).</div>';
             } else if (est.estado === 'no_existe') {
-                h += '<div class="pm-card__sub">Esta semana todavía no tiene inventario inicial. Se crea al <b>contabilizar</b> el inventario cerrado del domingo: en Conteo, botón 📘 Contabilizar.</div>';
+                h += '<div class="pm-card__sub">Esta semana todavía no tiene inventario inicial. Se crea al <b>contabilizar</b> el inventario cerrado del domingo: en Conteo, botón <b>Contabilizar</b>.</div>';
                 if (nEnt) h += '<div class="pm-card__fila"><span>Entradas por compras</span><b>' + nEnt + ' productos</b></div>';
             } else {
                 h += '<div class="pm-card__sub">No se pudo consultar el inventario inicial (¿sin conexión?).</div>';
@@ -185,7 +204,7 @@
             _panelCargarInicial();
             var est = _panelInicialEstado();
             var h = '<div class="pm-card pm-card--compara">';
-            h += '<div class="pm-card__titulo">🔍 Comparación de existencias</div>';
+            h += '<div class="pm-card__titulo"><i class="fa-solid fa-magnifying-glass"></i> Comparación de existencias</div>';
 
             if (est.estado === 'cargando' || est.estado === 'sin_cargar') {
                 h += '<div class="pm-card__sub">Cargando el inventario inicial para comparar…</div></div>';
@@ -233,7 +252,7 @@
                 h += _panelBarras(filas, 'Mayores diferencias',
                         c.filas.length > PANEL_TOP ? 'Las ' + PANEL_TOP + ' mayores de ' + c.filas.length : null);
             } else if (c.comparados) {
-                h += '<div class="pm-card__sub">✅ Las dos cifras coinciden en los ' + c.comparados + ' productos comparables.</div>';
+                h += '<div class="pm-card__sub"><i class="fa-solid fa-circle-check"></i> Las dos cifras coinciden en los ' + c.comparados + ' productos comparables.</div>';
             }
             h += '</div>';
             return h;
@@ -245,16 +264,16 @@
             var h = '<section id="pm-panel" class="pm-panel" aria-label="Panel de indicadores">';
 
             h += '<div class="pm-tiles">';
-            h += _panelTile('📦', k.productos, 'Productos', { accion: "switchTab('productos')" });
-            h += _panelTile(k.bajo.length ? '⛔' : '✅', k.bajo.length, 'Bajo mínimo',
+            h += _panelTile('fa-boxes-stacked', k.productos, 'Productos', { accion: "switchTab('productos')" });
+            h += _panelTile(k.bajo.length ? 'fa-triangle-exclamation' : 'fa-circle-check', k.bajo.length, 'Bajo mínimo',
                     { clase: k.bajo.length ? 'pm-tile--critico' : 'pm-tile--ok',
                       accion: k.bajo.length ? 'panelVerBajoMinimo()' : null });
-            h += _panelTile('💰', k.conPrecio ? _panelMoneda(k.valor) : '—', 'Valor en existencia',
+            h += _panelTile('fa-coins', k.conPrecio ? _panelMoneda(k.valor) : '—', 'Valor en existencia',
                     { sub: k.conPrecio < k.productos ? (k.productos - k.conPrecio) + ' sin precio' : null });
-            h += _panelTile('🧾', k.comprasN ? _panelMoneda(k.comprasImp) : '0', 'Compras esta semana',
+            h += _panelTile('fa-receipt', k.comprasN ? _panelMoneda(k.comprasImp) : '0', 'Compras esta semana',
                     { sub: k.comprasN + ' documento' + (k.comprasN === 1 ? '' : 's'), accion: "switchTab('compras')" });
-            h += _panelTile('🛒', k.carrito, 'En carrito', { accion: 'openOrderModal()' });
-            h += _panelTile('📋', k.pedidos, 'Pedidos', { accion: "switchTab('pedidos')" });
+            h += _panelTile('fa-cart-shopping', k.carrito, 'En carrito', { accion: 'openOrderModal()' });
+            h += _panelTile('fa-clipboard-list', k.pedidos, 'Pedidos', { accion: "switchTab('pedidos')" });
             h += '</div>';
 
             h += _panelEstadoInventario();
@@ -269,7 +288,7 @@
             h += '<div class="pm-grafs">';
             h += filasBajo.length
                 ? _panelBarras(filasBajo, 'Bajo mínimo — existencia / mínimo', k.bajo.length > PANEL_TOP ? 'Los ' + PANEL_TOP + ' más urgentes de ' + k.bajo.length : null)
-                : '<div class="pm-card"><div class="pm-card__titulo">✅ Sin productos bajo mínimo</div><div class="pm-card__sub">Ningún producto con mínimo definido está por debajo.</div></div>';
+                : '<div class="pm-card"><div class="pm-card__titulo"><i class="fa-solid fa-circle-check"></i> Sin productos bajo mínimo</div><div class="pm-card__sub">Ningún producto con mínimo definido está por debajo.</div></div>';
 
             // Productos por grupo (magnitud, un solo tono)
             var grupos = {};
@@ -318,14 +337,14 @@
             h += '<div class="pm-ficha__cab"><div style="min-width:0;flex:1;"><div id="pm-ficha-titulo" class="pm-ficha__titulo">' + escapeHtml(p.name || pid) + '</div>'
                + '<div class="pm-ficha__sub">' + escapeHtml(p.group || 'General') + ' · ' + escapeHtml(p.unit || '') + ' · ID ' + escapeHtml(pid)
                + (p.pv ? ' · PV ' + escapeHtml(p.pv) : '') + '</div></div>'
-               + '<button type="button" class="pm-ficha__x" data-pm-cerrar aria-label="Cerrar">✕</button></div>';
+               + '<button type="button" class="pm-ficha__x" data-pm-cerrar aria-label="Cerrar"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></div>';
 
             h += '<div class="pm-ficha__sec">Existencia actual por área</div><div class="pm-ficha__areas">';
             areasF.forEach(function(a) {
                 h += '<div class="pm-ficha__area"><span>' + escapeHtml(etq(a)) + '</span><b>' + _panelNum((p.stockByArea || {})[a] || 0) + '</b></div>';
             });
             h += '</div>';
-            h += '<div class="pm-card__fila"><span>Total</span><b>' + _panelNum(st) + (bajo ? ' <span class="pm-estado pm-estado--critico">⛔ bajo mínimo</span>' : '') + '</b></div>';
+            h += '<div class="pm-card__fila"><span>Total</span><b>' + _panelNum(st) + (bajo ? ' <span class="pm-estado pm-estado--critico">bajo mínimo</span>' : '') + '</b></div>';
             if (typeof p.stockMinimo === 'number') h += '<div class="pm-card__fila"><span>Mínimo</span><b>' + _panelNum(p.stockMinimo) + '</b></div>';
             if (typeof p.precio === 'number') h += '<div class="pm-card__fila"><span>Precio</span><b>' + _panelMoneda(p.precio) + '</b></div>';
             if (costo) h += '<div class="pm-card__fila"><span>Último costo</span><b>' + _panelMoneda(Number(costo.costo) || 0) + ' <small>(' + escapeHtml(costo.fecha || '') + ')</small></b></div>';
@@ -372,9 +391,9 @@
             }
 
             h += '<div class="pm-ficha__acc">';
-            h += '<button type="button" class="pm-btn pm-btn--primario" data-pm-carrito="' + escapeHtml(pid) + '">🛒 Agregar al carrito</button>';
+            h += '<button type="button" class="pm-btn pm-btn--primario" data-pm-carrito="' + escapeHtml(pid) + '"><i class="fa-solid fa-cart-shopping"></i> Agregar al carrito</button>';
             if (typeof hasPermission === 'function' && hasPermission('catalog.edit')) {
-                h += '<button type="button" class="pm-btn" data-pm-editar="' + escapeHtml(pid) + '">✏️ Editar</button>';
+                h += '<button type="button" class="pm-btn" data-pm-editar="' + escapeHtml(pid) + '"><i class="fa-solid fa-pen-to-square"></i> Editar</button>';
             }
             h += '</div></div></div>';
 

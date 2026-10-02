@@ -124,7 +124,7 @@ const PUERTO = process.env.PUERTO || '8080';
   await p.waitForTimeout(100);
   chk('Sin recipe.edit, el header dice "Solo lectura" y no ofrece Nueva receta / Publicar',
       await p.evaluate(() => !document.querySelector('[onclick="openRecetaModal()"]') && !document.querySelector('[onclick="publicarRecetarioFirestore()"]') &&
-          /Solo lectura/.test(document.getElementById('headerActions').innerText)), '');
+          /solo lectura/i.test(document.getElementById('headerActions').innerText)), '');
   const listaSoloLectura = await p.evaluate(() => document.getElementById('tabContent').innerText);
   chk('Sin recipe.edit, la tarjeta muestra el nombre pero NO el costo (bartender no ve costos)',
       /MARGARITA/.test(listaSoloLectura) && !/\$23\.40/.test(listaSoloLectura), listaSoloLectura.slice(0, 200));

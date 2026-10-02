@@ -339,7 +339,7 @@
                       + '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:baseline">'
                       + '<span style="font-weight:700">' + escapeHtml(r.nombre) + '</span>'
                       + '<span style="font-size:.72rem;padding:2px 8px;border-radius:999px;white-space:nowrap;' +
-                        (r.esNueva ? 'background:#065f46;color:#86efac;' : 'background:#1e3a8a;color:#93c5fd;') + '">' +
+                        (r.esNueva ? 'background:var(--ok-dim);color:var(--ok);' : 'background:var(--accent-dim);color:var(--brass);') + '">' +
                         (r.esNueva ? 'Nueva' : 'Actualiza') + '</span></div>'
                       + '<div style="color:var(--txt-secondary);font-size:.82rem;margin-top:5px">'
                       + 'PV ' + escapeHtml(r.pv) + (r.categoria ? ' · ' + escapeHtml(r.categoria) : '')

@@ -84,9 +84,18 @@
                 var def = (typeof estado === 'string') ? ESTADOS[estado] : estado;
                 if (!def) def = { texto: String(estado || '—'), tono: 'neutral', vivo: false };
                 var tono = opciones.tono || def.tono || 'neutral';
+                /**
+                 * REDISEÑO R3 — `opciones.texto` reusa el tono y el punto vivo de
+                 * un estado del diccionario con la palabra que toque en esa
+                 * pantalla ("Activa" en vez de "Sincronizado"), sin inventar un
+                 * estado nuevo ni volver a escribir la píldora a mano. El tono
+                 * sigue saliendo del diccionario: la palabra cambia, el
+                 * significado del color no.
+                 */
+                var texto = (opciones.texto != null) ? opciones.texto : def.texto;
                 var h = '<span class="bi-badge bi-badge--' + esc(tono) + '">';
                 if (def.vivo) h += '<span class="bi-badge__punto" aria-hidden="true"></span>';
-                h += esc(def.texto);
+                h += esc(texto);
                 h += '</span>';
                 return h;
             }

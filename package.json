@@ -41,6 +41,8 @@
     "test:r1nav": "node pruebas/prueba-redis-r1-navegador.js",
     "test:r2": "node pruebas/prueba-redis-r2.js",
     "test:r2nav": "node pruebas/prueba-redis-r2-navegador.js",
+    "test:r3redis": "node pruebas/prueba-redis-r3.js",
+    "test:r3nav": "node pruebas/prueba-redis-r3-navegador.js",
     "test:folio": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-folio-integracion.js && node pruebas/prueba-arranque-integracion.js && node pruebas/prueba-ciclo-completo-integracion.js && node pruebas/prueba-reinicio-integracion.js\"",
     "test:arranque": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-arranque-integracion.js && node pruebas/prueba-ciclo-completo-integracion.js && node pruebas/prueba-reinicio-integracion.js\"",
     "test:ciclo": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-ciclo-completo-integracion.js && node pruebas/prueba-reinicio-integracion.js\"",

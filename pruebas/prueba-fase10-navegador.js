@@ -221,7 +221,7 @@ const PUERTO = process.env.PUERTO || '8080';
   await p.waitForTimeout(100);
   chk('Sin sales.import el header dice "Solo lectura" y no ofrece importar',
       await p.evaluate(() => !document.querySelector('[onclick="ventasImportarExcel()"]') &&
-          /Solo lectura/.test(document.getElementById('headerActions').innerText)), '');
+          /solo lectura/i.test(document.getElementById('headerActions').innerText)), '');
   chk('Con sales.read la lista sí se ve', /Rib Eye Mochomos/.test(await p.evaluate(() => document.getElementById('tabContent').innerText)), '');
 
   await p.evaluate(() => { _authzState.permissions = new Set([]); renderTab(); });
