@@ -112,7 +112,12 @@
                 h += '<button type="button" class="pm-barra' + cls + '" role="listitem"'
                    + (f.id ? ' data-pm-ficha="' + escapeHtml(f.id) + '"' : '')
                    + ' title="' + escapeHtml(f.etiqueta + ': ' + f.texto) + '">';
-                h += '<span class="pm-barra__etq">' + ico + escapeHtml(f.etiqueta) + '</span>';
+                // El nombre va en su propio span: text-overflow:ellipsis no actúa
+                // sobre un nodo de texto suelto dentro de un contenedor flex, y
+                // sin él los nombres largos se cortaban a hachazos
+                // ("JOHNNIE WALKER I") en vez de terminar en puntos suspensivos.
+                h += '<span class="pm-barra__etq">' + ico
+                   + '<span class="pm-barra__nombre">' + escapeHtml(f.etiqueta) + '</span></span>';
                 h += '<svg class="pm-barra__svg" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true">'
                    + '<rect class="pm-barra__fondo" x="0" y="2" width="100" height="6" rx="3"></rect>'
                    + '<rect class="pm-barra__valor" x="0" y="2" width="' + pct.toFixed(1) + '" height="6" rx="3"></rect></svg>';

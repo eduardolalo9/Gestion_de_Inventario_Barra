@@ -2019,6 +2019,45 @@ html[data-theme="light"] .sbx--sticky { background: var(--bg); }
     margin-top: 10px; padding-top: 9px;
     border-top: 1px solid var(--border);
 }
+/* ═════════════════════════════════════════════════════════════════════════
+   Los tres botones del pie de la tarjeta: carrito, editar, eliminar.
+   ─────────────────────────────────────────────────────────────────────────
+   REGRESIÓN DE R3, CORREGIDA AQUÍ. Al rehacer la tarjeta borré estas reglas
+   sin darme cuenta: los botones se quedaron con el fondo gris por defecto
+   del navegador y de 16px de ancho (el SVG sin tamaño no los empujaba), y
+   salían como tres ladrillos blancos en cada una de las 431 tarjetas. Las
+   pruebas no lo vieron porque comprobaban que los botones EXISTEN, no que
+   se vean. La captura sí. De ahí la comprobación de aspecto que ahora hay
+   en prueba-redis-r3-navegador.js.
+
+   Re-tematizadas al sistema: el carrito es la acción que se quiere, y se
+   gana el latón; editar es secundaria y va neutra; eliminar es destructiva
+   y va en rojo apagado — visible, pero sin gritar desde la lista.
+   ═════════════════════════════════════════════════════════════════════════ */
+.prd-action-btn {
+    position: relative;
+    width: 40px; height: 40px;
+    border-radius: var(--r-full);
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid transparent; cursor: pointer; flex-shrink: 0;
+    transition: background-color 0.15s var(--ease-std),
+                border-color 0.15s var(--ease-std),
+                transform 0.12s var(--ease-out);
+}
+.prd-action-btn svg { width: 18px; height: 18px; position: relative; z-index: 1; }
+.prd-action-btn:active { transform: scale(0.92); }
+.prd-action-btn.cart {
+    background: var(--accent-dim); border-color: var(--accent-dim2); color: var(--brass);
+}
+.prd-action-btn.cart:hover { background: var(--accent-dim2); }
+.prd-action-btn.edit {
+    background: var(--card-high); border-color: var(--border); color: var(--txt-secondary);
+}
+.prd-action-btn.edit:hover { background: var(--border); color: var(--txt-primary); }
+.prd-action-btn.del {
+    background: transparent; border-color: var(--border); color: var(--danger, var(--red));
+}
+.prd-action-btn.del:hover { background: var(--danger-dim, var(--red-dim)); }
 
 .prd-area-chip__val {
     font-family: 'IBM Plex Mono', monospace;
@@ -3031,8 +3070,10 @@ button.pm-tile:active { transform: scale(.98); }
 .pm-barra[data-pm-ficha] { cursor: pointer; }
 .pm-barra[data-pm-ficha]:hover, .pm-barra[data-pm-ficha]:focus-visible { background: var(--accent-dim); outline: none; }
 .pm-barra__etq { display: flex; align-items: center; gap: 5px; font-size: 0.74rem; color: var(--txt-primary); overflow: hidden; white-space: nowrap; }
-/* REDISEÑO R3 — el nombre se recorta, el icono de estado nunca */
-.pm-barra__etq > span:not(.bi-sr) { overflow: hidden; text-overflow: ellipsis; }
+/* REDISEÑO R3 — el nombre se recorta con puntos suspensivos, el icono de
+   estado nunca. Hace falta el span propio: text-overflow no actúa sobre un
+   nodo de texto suelto dentro de un contenedor flex. */
+.pm-barra__nombre { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pm-barra__ico { flex-shrink: 0; font-size: 0.8rem; }
 .pm-barra--aviso .pm-barra__ico { color: var(--amber); }
 .pm-barra--critico .pm-barra__ico { color: var(--red); }

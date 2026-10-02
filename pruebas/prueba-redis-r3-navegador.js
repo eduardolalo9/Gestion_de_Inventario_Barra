@@ -114,7 +114,43 @@ const PUERTO = process.env.PUERTO || '8080';
       JSON.stringify({ derecha: card.cifraALaDerecha, fuente: card.cifraFuente, texto: card.cifraTexto }));
   chk('★ Las acciones bajan al pie (el nombre se queda con el ancho de arriba)',
       card.accionesAlPie === true);
-  chk('★ Los botones de acción son táctiles (≥ 44 px)', card.botonesTactiles === true);
+  chk('★ Los botones de acción son táctiles (≥ 44 px de alto)', card.botonesTactiles === true);
+
+  /**
+   * ESTA COMPROBACIÓN NACE DE UN FALLO REAL DE R3.
+   *
+   * Al rehacer la tarjeta borré sin querer las reglas de .prd-action-btn. Los
+   * tres botones —carrito, editar, eliminar— se quedaron con el fondo gris por
+   * defecto del navegador y 16 px de ancho, y salían como tres ladrillos
+   * blancos en cada una de las 431 tarjetas. Ninguna prueba lo vio: todas
+   * comprobaban que los botones EXISTEN y que miden 44 de alto (los medían,
+   * porque el contenedor los estiraba). Lo vio la captura de pantalla.
+   *
+   * Así que aquí no se pregunta si están: se pregunta si se VEN. Un botón sin
+   * ancho o con el gris de fábrica del navegador es un botón sin estilo.
+   */
+  const aspectoBotones = await p.evaluate(() => {
+    const c = [...document.querySelectorAll('.prd-card')].find(x => x.textContent.includes('DON JULIO 70'));
+    const bs = c ? [...c.querySelectorAll('.prd-card__actions button')] : [];
+    return bs.map(b => {
+      const cs = getComputedStyle(b), r = b.getBoundingClientRect();
+      const svg = b.querySelector('svg');
+      const sr = svg ? svg.getBoundingClientRect() : null;
+      return { cls: b.className, w: Math.round(r.width), h: Math.round(r.height),
+               bg: cs.backgroundColor, svgW: sr ? Math.round(sr.width) : 0 };
+    });
+  });
+  // El gris de fábrica del botón sin estilar en Chromium.
+  const GRIS_DE_FABRICA = /rgb\(239, 239, 239\)|buttonface/i;
+  chk('★ Los tres botones de acción tienen ancho real (no colapsados a 16 px)',
+      aspectoBotones.length === 3 && aspectoBotones.every(b => b.w >= 36),
+      JSON.stringify(aspectoBotones));
+  chk('★ Ningún botón de acción se quedó con el gris de fábrica del navegador',
+      aspectoBotones.length === 3 && !aspectoBotones.some(b => GRIS_DE_FABRICA.test(b.bg)),
+      'un botón con buttonface es un botón al que no le llegó ninguna regla: ' + JSON.stringify(aspectoBotones));
+  chk('★ El icono de cada botón de acción tiene tamaño (no es un SVG de 0 px)',
+      aspectoBotones.length === 3 && aspectoBotones.every(b => b.svgW >= 12),
+      JSON.stringify(aspectoBotones));
   chk('Conserva los tres chips de área', card.chips === 3, 'chips: ' + card.chips);
   chk('★ La tarjeta ya no usa emoji como iconografía',
       card.sinEmoji === true, 'quedan emoji en el texto de la tarjeta');
