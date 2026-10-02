@@ -50,6 +50,7 @@ const PRUEBAS = [
     'prueba-redis-r1-navegador.js',     // REDISEÑO R1 — la app se pinta correcta sin Tailwind ni FontAwesome
     'prueba-redis-r2-navegador.js',     // REDISEÑO R2 — una sola navegación en pantalla, activo en latón
     'prueba-redis-r3-navegador.js',     // REDISEÑO R3 — Inicio en pantalla: tarjetas, cifras y panel del kit
+    'prueba-redis-r4-navegador.js',     // REDISEÑO R4 — el modal de captura y la tarjeta de conteo, con el kit
 ];
 
 function esperarServidor(intentos) {

@@ -666,10 +666,15 @@ html[data-theme="light"] input:disabled { background-color: var(--surface) !impo
 .bg-gray-50.rounded-xl.overflow-hidden { background-color: var(--surface) !important; }
 
 /* ─── MODALES ────────────────────────────────────────────── */
+/* REDISEÑO R4 — este bloque viene de la época del tema claro Material, y sus
+   !important pisaban al sistema: el velo era un negro fijo al 38% (sobre una app
+   ya oscura apenas despegaba el modal del fondo) y no cambiaba con el tema.
+   Se cambian los VALORES por tokens y se respeta la estructura: los otros dos
+   modales la comparten y no es su fase. Quitar los !important es trabajo de R8,
+   junto con la regla global de `input`. */
 #productModal, #orderModal, #inventarioModal {
     animation: fadeIn 0.22s var(--ease-std) both !important;
-    /* M3 scrim: negro a 32% */
-    background-color: rgba(0,0,0,0.38) !important;
+    background-color: var(--scrim) !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
     align-items: flex-end !important;   /* Bottom Sheet en móvil */
@@ -681,8 +686,8 @@ html[data-theme="light"] input:disabled { background-color: var(--surface) !impo
 }
 #productModal > div, #orderModal > div, #inventarioModal > div {
     animation: springUp 0.28s var(--ease-out) both !important;
-    /* M3 Bottom Sheet surface */
-    background-color: var(--surface) !important;
+    /* La caja del modal es una superficie elevada: --card, no --surface. */
+    background-color: var(--card) !important;
     border: none !important;
     /* Bottom Sheet: corners arriba redondeados 28dp, abajo 0 */
     border-radius: 28px 28px 0 0 !important;
@@ -949,8 +954,11 @@ html[data-theme="light"] .bg-white.rounded-2xl:hover { box-shadow: 0 2px 6px rgb
 .inv-card__header {
     display: flex; align-items: flex-start; justify-content: space-between;
     padding: 10px 12px 7px;
-    gap: 8px;
+    gap: 9px;
 }
+/* REDISEÑO R4 — el monograma de la tarjeta de conteo, algo más pequeño que
+   el de Inicio: aquí la lista se recorre en vertical y a toda velocidad. */
+.inv-card__header .bi-mono { width: 34px; height: 34px; font-size: 0.6rem; flex-shrink: 0; }
 .inv-card__name {
     font-family: 'IBM Plex Sans', sans-serif;
     font-weight: 600; font-size: 0.8125rem;
@@ -960,6 +968,8 @@ html[data-theme="light"] .bg-white.rounded-2xl:hover { box-shadow: 0 2px 6px rgb
     overflow: hidden; text-overflow: ellipsis;
     white-space: nowrap;
 }
+/* REDISEÑO R4 — .inv-card__code se conserva por si alguna vista antigua lo
+   usa, pero la tarjeta de conteo ya no lo pinta: el total pasó a .inv-card__total. */
 .inv-card__code {
     font-family: 'IBM Plex Mono', monospace;
     font-size: 0.6875rem; font-weight: 500;
@@ -971,6 +981,24 @@ html[data-theme="light"] .bg-white.rounded-2xl:hover { box-shadow: 0 2px 6px rgb
     flex-shrink: 0;
     letter-spacing: 0.02em;
 }
+/* El total contado, a la derecha y en grande. Es lo que se mira para saber si
+   un producto ya está contado y en cuánto. */
+.inv-card__total {
+    display: flex; align-items: baseline; gap: 3px;
+    flex-shrink: 0;
+}
+.inv-card__total-n {
+    font-size: 1.0625rem; font-weight: 700;
+    color: var(--txt-primary);
+}
+.inv-card__total-u {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.68rem; font-weight: 600;
+    color: var(--txt-muted);
+}
+/* Sin contar: apagado, para que no se confunda con un cero contado en firme. */
+.inv-card__total--vacio .inv-card__total-n { color: var(--txt-muted); opacity: 0.55; }
+.inv-card__total--vacio .inv-card__total-u { opacity: 0.55; }
 
 .inv-card__chips {
     display: flex; gap: 5px;
@@ -1007,8 +1035,8 @@ html[data-theme="light"] .bg-white.rounded-2xl:hover { box-shadow: 0 2px 6px rgb
 }
 .inv-chip.entera  { border-color: var(--accent-dim2); }
 .inv-chip.entera  .inv-chip__val { color: var(--brass); }
-.inv-chip.abierta { border-color: rgba(245,158,11,0.22); }
-.inv-chip.abierta .inv-chip__val { color: #fcd34d; }
+.inv-chip.abierta { border-color: var(--warn-dim); }
+.inv-chip.abierta .inv-chip__val { color: var(--warn); }
 .inv-chip.empty   { opacity: 0.32; }
 
 .inv-card__expand-btn {
@@ -1258,14 +1286,22 @@ html[data-theme="light"] .audit-count-area-badge { background: var(--accent-dim)
     animation: livePulse 1.6s ease-in-out infinite;
     flex-shrink: 0;
 }
+/* REDISEÑO R4 — llevaba el ámbar de la paleta anterior escrito a mano, y el
+   "contando" lo marcaba un carácter ⬤ que cada teléfono dibujaba a su manera.
+   Ahora el punto es un elemento que late, igual que el de los badges del kit. */
 .audit-counting-badge {
-    display: inline-flex; align-items: center; gap: 4px;
-    padding: 1px 6px; border-radius: 20px;
-    background: rgba(251,191,36,0.13);
-    border: 1px solid rgba(251,191,36,0.28);
-    color: #fbbf24;
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 2px 8px; border-radius: var(--r-full);
+    background: var(--warn-dim);
+    border: 1px solid var(--warn-dim);
+    color: var(--warn);
     font-size: 0.6rem; font-weight: 700;
-    animation: countingBlink 2s ease-in-out infinite;
+    letter-spacing: 0.06em;
+}
+.audit-counting-badge__punto {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: currentColor;
+    animation: statusPulse 2.4s ease-in-out infinite;
 }
 .audit-done-badge {
     display: inline-flex; align-items: center; gap: 4px;
@@ -1341,16 +1377,12 @@ html[data-theme="light"] .audit-user-row.live { border-color: rgba(22,163,74,0.2
 .inv-card--conflict {
     border-left: 2px solid #f59e0b !important;
 }
+/* REDISEÑO R4 — era una píldora propia, con #92400e (un marrón oscuro pensado
+   para fondo claro) sobre ámbar: sobre el fondo oscuro apenas se leía. Ahora
+   dentro va un badge del kit y este contenedor solo pone el hueco. */
 .inv-card__conflict-badge {
-    display: inline-flex; align-items: center; gap: 4px;
-    font-size: 0.58rem; font-weight: 700;
-    letter-spacing: 0.06em; text-transform: uppercase;
-    color: #92400e;
-    background: rgba(245,158,11,0.14);
-    border: 1px solid rgba(245,158,11,0.30);
-    border-radius: 3px;
-    padding: 1px 6px;
-    margin-top: 3px;
+    display: inline-flex; align-items: center;
+    margin-top: 4px;
 }
 html[data-theme="light"] #syncDot::after { background: #1e293b; }
 
@@ -3543,3 +3575,150 @@ html[data-theme="light"] .vt-dia--ok { color: #fff; }
     opacity: 0.55;
 }
 .inicio-vacio__txt { font-size: 0.88rem; }
+
+/* ═════════════════════════════════════════════════════════════════════════
+   REDISEÑO R4 — MODAL DE CAPTURA DEL CONTEO
+   ─────────────────────────────────────────────────────────────────────────
+   Es la pantalla más usada de la app: un bartender la abre y la cierra
+   cientos de veces en un turno, de pie, con el teléfono en una mano. Todo
+   lo de aquí se juzga por eso.
+
+   EL FLUJO NO CAMBIA (decisión de Eduardo): se toca la tarjeta y se captura
+   en el modal. Los id y los onclick son los mismos que antes.
+
+   DEUDA CONOCIDA, PARA R8: los font-family y font-size de .inv-modal__num
+   llevan !important porque existe una regla global
+   `input, select, textarea { ... !important }` (línea ~625) que si no gana
+   siempre. Es la misma deuda que ya se documentó en .bi-field__input. Se
+   limpian las dos juntas cuando se quite la regla global.
+   ═════════════════════════════════════════════════════════════════════════ */
+.inv-modal {
+    background: var(--card);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-elev3, var(--shadow-elev2));
+    padding: 14px 16px 16px;
+}
+.inv-modal__grabber {
+    width: 44px; height: 4px;
+    background: var(--border-strong);
+    border-radius: var(--r-full);
+    margin: 0 auto 14px;
+}
+.inv-modal__titulo {
+    font-size: 1.1rem; font-weight: 700;
+    color: var(--txt-primary);
+    line-height: 1.25;
+}
+.inv-modal__sub {
+    font-size: 0.78rem; color: var(--txt-secondary);
+    margin-top: 3px; margin-bottom: 14px;
+}
+.inv-modal__campo { margin-bottom: 16px; }
+.inv-modal__etq {
+    display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+    font-size: 0.72rem; font-weight: 700;
+    letter-spacing: 0.07em; text-transform: uppercase;
+    color: var(--txt-secondary);
+    margin-bottom: 8px;
+}
+.inv-modal__etq i { color: var(--txt-muted); font-size: 0.9rem; }
+/* La pista de unidad ("ingresa el peso en oz") NO va en mayúsculas: es una
+   frase, no una etiqueta, y en versales se leía como un grito. */
+.inv-modal__pista {
+    font-size: 0.7rem; font-weight: 500;
+    letter-spacing: 0; text-transform: none;
+    color: var(--brass);
+}
+/* El campo numérico: mono tabular y grande. Es LA cifra de esta pantalla. */
+.inv-modal__num {
+    width: 100%;
+    padding: 10px 14px;
+    text-align: center;
+    font-family: 'IBM Plex Mono', monospace !important;
+    font-variant-numeric: tabular-nums;
+    font-size: 1.375rem !important;
+    font-weight: 700;
+    min-height: 52px !important;
+    background-color: var(--bg) !important;
+    border: 1px solid var(--border-mid) !important;
+    border-radius: var(--r-md) !important;
+    color: var(--txt-primary) !important;
+}
+.inv-modal__ayuda {
+    font-size: 0.7rem; color: var(--txt-muted);
+    margin-top: 8px; line-height: 1.45;
+}
+/* Agregar otra abierta: acción SECUNDARIA, en su propia línea y a todo el
+   ancho. Antes era un botón azul pequeño que compartía fila con la etiqueta
+   y la pisaba cuando el texto crecía a dos líneas. */
+.inv-modal__agregar {
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    width: 100%; min-height: 44px;
+    margin-top: 10px;
+    border-radius: var(--r-md);
+    border: 1px dashed var(--border-strong);
+    background: transparent;
+    color: var(--txt-secondary);
+    font-size: 0.82rem; font-weight: 600;
+    cursor: pointer;
+    transition: border-color .14s ease, color .14s ease, background-color .14s ease;
+}
+.inv-modal__agregar:hover {
+    border-color: var(--accent-dim2); color: var(--brass);
+    background: var(--accent-dim);
+}
+
+/* ── Una botella abierta ───────────────────────────────────────────────── */
+.inv-abierta { display: flex; align-items: center; gap: 8px; }
+.inv-abierta__etq {
+    width: 88px; flex-shrink: 0;
+    font-size: 0.68rem; font-weight: 600;
+    color: var(--txt-muted);
+    line-height: 1.25;
+    white-space: nowrap;
+}
+.inv-abierta__num { flex: 1; font-size: 1.125rem !important; min-height: 48px !important; }
+.inv-abierta__hueco { width: 36px; flex-shrink: 0; }
+.inv-abierta__quitar {
+    display: flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px; flex-shrink: 0;
+    border-radius: var(--r-md);
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--txt-muted);
+    cursor: pointer;
+    transition: background-color .14s ease, color .14s ease;
+}
+.inv-abierta__quitar:hover {
+    background: var(--danger-dim, var(--red-dim));
+    color: var(--danger, var(--red));
+}
+
+/* ── Acciones ──────────────────────────────────────────────────────────── */
+.inv-modal__acciones {
+    display: flex; gap: 10px;
+    position: sticky; bottom: 0;
+    padding-top: 10px; padding-bottom: 2px;
+    background: var(--card);
+    z-index: 1;
+}
+.inv-modal__btn {
+    flex: 1; min-height: 48px;
+    border-radius: var(--r-full);
+    border: 1px solid transparent;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.9rem; font-weight: 600;
+    cursor: pointer;
+    transition: background-color .14s ease, border-color .14s ease;
+}
+.inv-modal__btn--fantasma {
+    background: transparent; border-color: var(--border);
+    color: var(--txt-secondary);
+}
+.inv-modal__btn--fantasma:hover { background: var(--card-high); color: var(--txt-primary); }
+/* El único latón del modal. Guardar es lo que se quiere que pase. */
+.inv-modal__btn--primario {
+    background: var(--accent); color: var(--accent-on);
+    box-shadow: var(--shadow-card);
+}
+.inv-modal__btn--primario:hover { background: var(--accent-hover, var(--accent)); }

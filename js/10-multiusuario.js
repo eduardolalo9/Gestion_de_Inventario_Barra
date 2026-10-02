@@ -524,7 +524,7 @@
 
                 html += '<div class="audit-compare-area-row">';
                 html += '<span class="audit-compare-area-name">'
-                      + areasAuditoriaIcons[info.area] + ' '
+                      + '<i class="' + (areasAuditoriaFA[info.area] || 'fa-solid fa-location-dot') + '" aria-hidden="true"></i> '
                       + escapeHtml(areasAuditoria[info.area]) + '</span>';
                 html += '<span class="audit-compare-users">'
                       + info.userCount + ' conteo' + (info.userCount !== 1 ? 's' : '')

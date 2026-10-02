@@ -1219,16 +1219,22 @@ document.body.appendChild(overlay);
         function renderAbiertaInput(val, idx, usaOz) {
             const container = document.getElementById('inv_abiertasContainer');
             const div = document.createElement('div');
-            div.className = 'flex items-center gap-2';
+            // REDISEÑO R4 — la fila de una botella abierta. Mismos id, mismo
+            // oninput, mismo onclick de quitar: solo cambia el aspecto. El campo
+            // pasa a mono tabular (es un peso que se escribe y se relee) y el
+            // borde naranja de la paleta anterior pasa a token.
+            div.className = 'inv-abierta';
             div.id = 'abierta_row_' + idx;
             const unidadLabel = usaOz ? ' (oz)' : '';
-            const placeholder = usaOz ? 'ej: 33.45 oz' : '0.0';
-            div.innerHTML = '<span class="text-xs font-medium text-gray-500 w-20 flex-shrink-0">Abierta ' + (idx + 1) + unidadLabel + '</span>' +
+            const placeholder = usaOz ? 'ej: 33.45' : '0.0';
+            div.innerHTML = '<span class="inv-abierta__etq">Abierta ' + (idx + 1) + unidadLabel + '</span>' +
                 '<input type="text" id="inv_abierta_' + idx + '" inputmode="decimal" min="0" step="0.01" value="' + val + '" ' +
                 'oninput="_sanearEntradaDecimal(this)" ' +
-                'class="flex-1 px-3 py-2 bg-white text-gray-900 border-2 border-orange-200 rounded-xl focus:ring-2 focus:ring-orange-400 focus:border-transparent text-center font-bold" ' +
+                'class="inv-modal__num inv-abierta__num" ' +
                 'placeholder="' + placeholder + '">' +
-                (idx > 0 ? '<button onclick="removeAbiertaInModal(' + idx + ')" class="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>' : '<div class="w-8"></div>');
+                (idx > 0
+                    ? '<button type="button" onclick="removeAbiertaInModal(' + idx + ')" class="inv-abierta__quitar" aria-label="Quitar abierta ' + (idx + 1) + '" title="Quitar esta botella abierta"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>'
+                    : '<span class="inv-abierta__hueco" aria-hidden="true"></span>');
             container.appendChild(div);
         }
 

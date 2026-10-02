@@ -688,15 +688,15 @@
                     if (hasPermission('inventory.reopenArea')) {
                         accionArea = '<button type="button" class="bt bt--secundario" onclick="reabrirArea(\'' + area + '\')">↩ Reabrir ' + escapeHtml(areasAuditoria[area]) + '</button>';
                     } else if (tieneUnlock) {
-                        html += ' · <span style="color:var(--amber);font-weight:700;">🔓 Corrección habilitada</span>';
+                        html += ' · <span style="color:var(--amber);font-weight:700;"><i class="fa-solid fa-unlock" aria-hidden="true"></i> Corrección habilitada</span>';
                     } else {
-                        html += ' · <span style="color:var(--green);font-weight:700;">🔒 Bloqueada</span>';
+                        html += ' · <span style="color:var(--green);font-weight:700;"><i class="fa-solid fa-lock" aria-hidden="true"></i> Bloqueada</span>';
                     }
                     html += '</div>';
                 } else if (hasPermission('inventory.closeOther')) {
                     // FASE 2A — cerrar el área para TODAS las personas es una
                     // acción visible y propia, no un efecto de "finalizar".
-                    accionArea = '<button type="button" class="bt bt--secundario" onclick="auditoriaCerrarArea(\'' + area + '\')">🔒 Cerrar área para todos</button>';
+                    accionArea = '<button type="button" class="bt bt--secundario" onclick="auditoriaCerrarArea(\'' + area + '\')"><i class="fa-solid fa-lock" aria-hidden="true"></i> Cerrar área para todos</button>';
                 }
                 html += '</div>';
                 html += '<svg class="audit-area-arrow" width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 18l6-6-6-6"/></svg>';
@@ -788,7 +788,7 @@
 
             // ── Cabecera del panel con indicador EN VIVO ────────────────────
             html += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:10px;">';
-            html += '<p style="font-size:0.75rem;font-weight:700;color:var(--txt-primary);margin:0;">👥 Conteos por usuario</p>';
+            html += '<p style="font-size:0.75rem;font-weight:700;color:var(--txt-primary);margin:0;"><i class="fa-solid fa-users" aria-hidden="true"></i> Conteos por usuario</p>';
             if (hayAlguienContando) {
                 html += '<span style="display:inline-flex;align-items:center;gap:5px;font-size:0.62rem;font-weight:700;color:#22c55e;">'
                       + '<span class="audit-live-dot"></span>EN VIVO</span>';
@@ -812,7 +812,7 @@
                 // Cabecera del usuario
                 html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:4px;">';
                 html += '<div style="display:flex;flex-direction:column;gap:1px;">';
-                html += '<span style="font-size:0.72rem;font-weight:600;color:var(--accent);">👤 ' + escapeHtml(u.email) + '</span>';
+                html += '<span style="font-size:0.72rem;font-weight:600;color:var(--accent);"><i class="fa-solid fa-user" aria-hidden="true"></i> ' + escapeHtml(u.email) + '</span>';
                 if (relTime) {
                     html += '<span class="audit-timestamp">⏱ ' + relTime + '</span>';
                 }
@@ -853,7 +853,7 @@
                               + '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>'
                               + ' Finalizado</span>';
                     } else if (hayDatosEnCurso) {
-                        html += '<span class="audit-counting-badge">⬤ CONTANDO…</span>';
+                        html += '<span class="audit-counting-badge"><span class="audit-counting-badge__punto" aria-hidden="true"></span>CONTANDO…</span>';
                     } else {
                         html += '<span style="font-size:0.62rem;color:var(--txt-muted);">Sin iniciar</span>';
                     }
@@ -981,12 +981,31 @@
                           + ' role="button" tabindex="0" aria-label="Contar ' + escapeHtml(product.name) + '" style="animation-delay:' + delay + 'ms">';
                     html += '<div class="inv-card__ripple"></div>';
 
+                    // ══════════════════════════════════════════════════════
+                    //  REDISEÑO R4 — la cabecera de la tarjeta de conteo
+                    //  ────────────────────────────────────────────────────
+                    //  Mismo contenido, mismo onclick, misma tarjeta: lo que
+                    //  cambia es qué se ve primero.
+                    //    · Monograma a la izquierda, el MISMO que en Inicio:
+                    //      un producto debe verse igual en toda la app.
+                    //    · El total pasa de una cajita de 0.6875rem a la
+                    //      cifra grande de la tarjeta, en mono tabular. Es lo
+                    //      que el jefe de barra mira para saber si un
+                    //      producto ya está contado y en cuánto.
+                    //    · El conflicto lo pinta UI.badge(), no una píldora
+                    //      propia de esta pantalla.
+                    // ══════════════════════════════════════════════════════
                     html += '<div class="inv-card__header">';
+                    html += (typeof UI !== 'undefined' && UI.mono) ? UI.mono(product.name, product.group) : '';
                     html += '<div style="min-width:0;flex:1">';
                     html += '<div class="inv-card__name">' + resaltarBusqueda(product.name, _conteoSearchTerm) + '</div>';
                     html += '<span class="inv-card__group-badge">' + escapeHtml(product.group || 'General') + '</span>';
                     if (areaData._hayConflicto) {
-                        html += '<div class="inv-card__conflict-badge"><i class="fa-solid fa-triangle-exclamation"></i> Conflicto de conteo</div>';
+                        html += '<div class="inv-card__conflict-badge">'
+                              + ((typeof UI !== 'undefined' && UI.badge)
+                                 ? UI.badge('conflicto', { texto: 'Conflicto de conteo' })
+                                 : '<i class="fa-solid fa-triangle-exclamation"></i> Conflicto de conteo')
+                              + '</div>';
                     }
                     html += '</div>';
                     // HOTFIX: en modo cantidad (KGS/LTS/PZA) el conteo admite hasta
@@ -994,7 +1013,14 @@
                     // redondeaba la vista a 2 y ocultaba, por ejemplo, 1.245 -> "1.25".
                     // El dato guardado siempre fue exacto: esto solo corrige la vista.
                     const totalFinalTexto = usaConversion ? totalFinal.toFixed(2) : String(Math.round(totalFinal * 1000) / 1000);
-                    html += '<span class="inv-card__code" title="Total (enteras + fracciones de abiertas)">' + totalFinalTexto + ' u</span>';
+                    // Sin contar y contado en cero NO son lo mismo: el primero sale
+                    // apagado, el segundo con la cifra en firme. En un inventario esa
+                    // diferencia decide si hay que volver a pasar por el producto.
+                    html += '<div class="inv-card__total' + (hasData ? '' : ' inv-card__total--vacio') + '"'
+                          + ' title="Total (enteras + fracciones de abiertas)">'
+                          + '<span class="num bi-cifra inv-card__total-n">' + totalFinalTexto + '</span>'
+                          + '<span class="inv-card__total-u">u</span>'
+                          + '</div>';
                     html += '</div>';
 
                     html += '<div class="inv-card__chips">';
@@ -1003,9 +1029,22 @@
                     html += '<span class="inv-chip__label">Entera</span>';
                     html += '</div>';
 
+                    /**
+                     * R4 — EL MISMO NÚMERO, DOS VALORES EN LA MISMA TARJETA.
+                     *
+                     * El HOTFIX de decimales (ver claude/hotfix-decimales-conteo-fisico)
+                     * arregló el TOTAL: en modo cantidad el conteo admite 3 decimales y
+                     * toFixed(2) redondeaba 1.245 a "1.25". Pero el chip se quedó con
+                     * toFixed(2), así que una aceituna contada en 1.245 salía con el
+                     * total en 1.245 y el chip en 1.25, uno al lado del otro.
+                     *
+                     * Se aplica aquí el mismo redondeo que al total. Solo afecta a la
+                     * VISTA: el dato guardado siempre fue exacto.
+                     */
+                    const _chipCantidad = (v) => String(Math.round((v || 0) * 1000) / 1000);
                     const pt1 = puntosAbiertas.length > 0 ? puntosAbiertas[0] : 0;
                     const ab1Raw = abiertas.length > 0 ? abiertas[0] : 0;
-                    const ab1Label = usaConversion ? (pt1 * 100).toFixed(0) + '%' : pt1.toFixed(2);
+                    const ab1Label = usaConversion ? (pt1 * 100).toFixed(0) + '%' : _chipCantidad(pt1);
                     html += '<div class="inv-chip abierta' + (pt1 === 0 ? ' empty' : '') + '">';
                     html += '<span class="inv-chip__val">' + ab1Label + '</span>';
                     html += '<span class="inv-chip__label">' + (usaConversion ? ab1Raw.toFixed(1) + ' oz' : 'Abierta 1') + '</span>';
@@ -1019,7 +1058,7 @@
                         html += '<div class="inv-card__extra' + (isExpanded ? ' open' : '') + '" id="card-extra-' + escapeHtml(product.id) + '">';
                         puntosAbiertas.slice(1).forEach((pt, i) => {
                             const rawOz = abiertas[i + 1] || 0;
-                            const chipLabel = usaConversion ? (pt * 100).toFixed(0) + '%' : pt.toFixed(2);
+                            const chipLabel = usaConversion ? (pt * 100).toFixed(0) + '%' : _chipCantidad(pt);
                             html += '<div class="inv-chip abierta' + (pt === 0 ? ' empty' : '') + '">';
                             html += '<span class="inv-chip__val">' + chipLabel + '</span>';
                             html += '<span class="inv-chip__label">' + (usaConversion ? rawOz.toFixed(1) + ' oz' : 'Abierta ' + (i + 2)) + '</span>';
@@ -1074,12 +1113,12 @@
             html += '<i class="fa-solid fa-chevron-left"></i> Áreas';
             html += '</button>';
             html += '<div>';
-            html += '<div class="audit-count-area-badge">' + areasAuditoriaIcons[area] + ' &nbsp;' + nombreArea + '</div>';
+            html += '<div class="audit-count-area-badge"><i class="' + (areasAuditoriaFA[area] || 'fa-solid fa-location-dot') + '" aria-hidden="true"></i>&nbsp;' + nombreArea + '</div>';
             if (soloLectura) {
                 // FIX #4 — Mensaje claro de que el área está bloqueada para el bartender
-                html += '<div style="font-size:0.62rem;color:var(--amber);margin-top:4px;font-weight:600;">🔒 Área completada — solicita al administrador reabrir para corregir</div>';
+                html += '<div style="font-size:0.62rem;color:var(--amber);margin-top:4px;font-weight:600;"><i class="fa-solid fa-lock" aria-hidden="true"></i> Área completada — solicita al administrador reabrir para corregir</div>';
             } else if (estaCompleta && isAdmin()) {
-                html += '<div style="font-size:0.62rem;color:var(--green);margin-top:4px;font-weight:600;">✓ Área completada — editando como administrador</div>';
+                html += '<div style="font-size:0.62rem;color:var(--green);margin-top:4px;font-weight:600;"><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Área completada — editando como administrador</div>';
             }
             html += '</div>';
             html += '</div>';
@@ -1095,7 +1134,7 @@
             // FIX #4: Si soloLectura, mostrar vista de resumen en lugar del formulario
             if (soloLectura) {
                 html += '<div style="margin:16px 0;padding:20px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);text-align:center;">';
-                html += '<div style="font-size:2rem;margin-bottom:8px;">🔒</div>';
+                html += '<i class="fa-solid fa-lock inicio-vacio__ico" aria-hidden="true"></i>';
                 html += '<p style="font-size:0.85rem;font-weight:600;color:var(--txt-primary);margin-bottom:6px;">Tu conteo de "' + nombreArea + '" está registrado</p>';
                 html += '<p style="font-size:0.75rem;color:var(--txt-muted);">Si necesitas hacer correcciones, pide al administrador que reabra esta área.</p>';
                 html += '<div style="margin-top:16px;padding:12px;background:var(--bg);border-radius:var(--r-md);">';
@@ -1112,7 +1151,7 @@
                         const key = p.id + '__' + area;
                         const hasUnlock = myAuditoriaUnlocks[key] && !myAuditoriaUnlocks[key].used;
                         html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border);font-size:0.72rem;">';
-                        html += '<span style="color:var(--txt-primary);">' + escapeHtml(p.name) + (hasUnlock ? ' <span style="color:var(--amber);">🔓</span>' : '') + '</span>';
+                        html += '<span style="color:var(--txt-primary);">' + escapeHtml(p.name) + (hasUnlock ? ' <i class="fa-solid fa-unlock" style="color:var(--amber);" title="Corrección habilitada"></i>' : '') + '</span>';
                         html += '<span style="color:var(--accent);font-weight:600;">' + (d.enteras || 0) + ' ent · ' + (d.abiertas || []).length + ' ab</span>';
                         html += '</div>';
                     });

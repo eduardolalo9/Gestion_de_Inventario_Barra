@@ -62,6 +62,7 @@ const PRUEBAS = [
     'prueba-redis-r1.js',            // REDISEÑO R1 — tokens, kit y retiro de los CDN
     'prueba-redis-r2.js',            // REDISEÑO R2 — una sola navegación y limpieza de la paleta anterior
     'prueba-redis-r3.js',            // REDISEÑO R3 — Inicio: mismo contenido, aspecto del kit, sin emoji de interfaz
+    'prueba-redis-r4.js',            // REDISEÑO R4 — Conteo: el modal no cambia de flujo, solo de aspecto
 ];
 
 let fallaron = [];
