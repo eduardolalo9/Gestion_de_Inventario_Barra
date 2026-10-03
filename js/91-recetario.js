@@ -384,7 +384,7 @@
                         'onchange="_recetaOnCambioIngrediente(' + idx + ',\'insumo\',this.value)" ' +
                         'class="w-full px-2 py-2 bg-white text-gray-900 border border-gray-200 rounded text-sm" placeholder="Código o nombre del insumo">';
                 if (ing.productoId && !producto) {
-                    html += '<p class="text-xs mt-1" style="color:#dc2626">⚠️ No existe en el catálogo' +
+                    html += '<p class="text-xs mt-1" style="color:var(--danger)"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> No existe en el catálogo' +
                             (ing.descripcionExcel ? ' — el Excel lo traía como "' + escapeHtml(ing.descripcionExcel) + '"' : '') + '</p>';
                 }
                 html += '</div>';
@@ -401,7 +401,7 @@
                         'class="w-full px-2 py-2 bg-white text-gray-900 border border-gray-200 rounded text-sm" placeholder="ml, oz…">';
                 html += '</div>';
                 html += '<button type="button" onclick="_recetaQuitarIngrediente(' + idx + ')" title="Quitar insumo" ' +
-                        'style="height:38px;width:38px;margin-top:18px;border-radius:8px;border:1px solid var(--border-mid,#e5e7eb);background:transparent;color:#dc2626;cursor:pointer;flex-shrink:0;">✕</button>';
+                        'style="height:38px;width:38px;margin-top:18px;border-radius:8px;border:1px solid var(--border-mid);background:transparent;color:var(--danger);cursor:pointer;flex-shrink:0;"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>';
                 html += '</div>';
             });
             cont.innerHTML = html;
@@ -498,7 +498,7 @@
         function renderRecetarioTab() {
             if (!hasPermission('recipe.read')) {
                 return '<div style="text-align:center;padding:60px 20px;color:var(--txt-secondary);">' +
-                       '<p style="font-size:1rem;">🔒 No tienes acceso al recetario.</p></div>';
+                       '<p style="font-size:1rem;"><i class="fa-solid fa-lock" aria-hidden="true"></i> No tienes acceso al recetario.</p></div>';
             }
             // RECETARIO-2 — la vista de importación tiene prioridad sobre lista/ficha,
             // mismo patrón que renderComprasTab() con comprasImportView.
@@ -534,7 +534,7 @@
             if (lista.length === 0) {
                 html += '<div style="text-align:center;padding:50px 20px;color:var(--txt-secondary);">';
                 if (recetas.length === 0) {
-                    html += '<p>📖 Aún no hay recetas. ' +
+                    html += '<p><i class="fa-solid fa-book" aria-hidden="true"></i> Aún no hay recetas. ' +
                             (puedeEditar ? 'Agrega la primera con el botón de arriba.' : 'El administrador todavía no publica el recetario.') +
                             '</p>';
                 } else {
@@ -549,17 +549,17 @@
                 var cr = costoReceta(r);
                 var costoTxt = cr.incompleto ? 'Costo incompleto' : ('$' + cr.costo.toFixed(2));
                 html += '<div onclick="_recetarioAbrirFicha(\'' + r.id + '\')" ' +
-                        'style="cursor:pointer;background:var(--card,#fff);border:1px solid var(--border-mid,#e5e7eb);border-radius:14px;padding:14px 16px;">';
+                        'style="cursor:pointer;background:var(--card);border:1px solid var(--border-mid);border-radius:14px;padding:14px 16px;">';
                 html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">';
                 html += '<p style="font-weight:700;color:var(--txt-primary);margin:0;">' + escapeHtml(r.nombre || '(sin nombre)') + '</p>';
-                if (!r.activa) html += '<span style="font-size:.68rem;background:#4b5563;color:#fff;padding:2px 8px;border-radius:999px;white-space:nowrap;">Inactiva</span>';
+                if (!r.activa) html += '<span style="font-size:.68rem;background:var(--card-high);color:var(--txt-muted);padding:2px 8px;border-radius:999px;white-space:nowrap;">Inactiva</span>';
                 html += '</div>';
                 if (r.categoria) html += '<p style="font-size:.78rem;color:var(--txt-secondary);margin:4px 0 0;">' + escapeHtml(r.categoria) + '</p>';
                 html += '<p style="font-size:.78rem;color:var(--txt-secondary);margin:6px 0 0;">' +
                         r.ingredientes.length + ' insumo' + (r.ingredientes.length === 1 ? '' : 's') + '</p>';
                 if (puedeEditar) {
                     html += '<p style="font-size:.85rem;font-weight:600;margin:8px 0 0;color:' +
-                            (cr.incompleto ? '#d97706' : 'var(--accent)') + ';">' + costoTxt + '</p>';
+                            (cr.incompleto ? 'var(--warn)' : 'var(--accent)') + ';">' + costoTxt + '</p>';
                 }
                 html += '</div>';
             });
@@ -578,8 +578,8 @@
             var cr = costoReceta(r);
 
             var html = '<button type="button" onclick="_recetarioVolverALista()" ' +
-                       'style="background:none;border:none;color:var(--accent);font-size:.85rem;cursor:pointer;margin-bottom:14px;padding:0;">← Volver al recetario</button>';
-            html += '<div style="background:var(--card,#fff);border:1px solid var(--border-mid,#e5e7eb);border-radius:16px;padding:20px;">';
+                       'style="background:none;border:none;color:var(--accent);font-size:.85rem;cursor:pointer;margin-bottom:14px;padding:0;"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i> Volver al recetario</button>';
+            html += '<div style="background:var(--card);border:1px solid var(--border-mid);border-radius:16px;padding:20px;">';
             html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">';
             html += '<div><h2 style="font-size:1.4rem;font-weight:800;margin:0;color:var(--txt-primary);">' + escapeHtml(r.nombre || '') + '</h2>';
             if (r.categoria) html += '<p style="color:var(--txt-secondary);margin:4px 0 0;">' + escapeHtml(r.categoria) + '</p>';
@@ -589,10 +589,10 @@
             html += '</div>';
             if (puedeEditar) {
                 html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
-                html += '<button onclick="openRecetaModal(\'' + r.id + '\')" style="padding:8px 16px;border-radius:999px;border:none;background:var(--accent);color:var(--accent-on,#003063);font-size:.8rem;font-weight:600;cursor:pointer;">Editar</button>';
-                html += '<button onclick="toggleRecetaActiva(\'' + r.id + '\')" style="padding:8px 16px;border-radius:999px;border:1px solid var(--border-mid,#e5e7eb);background:transparent;color:var(--txt-secondary);font-size:.8rem;cursor:pointer;">' +
+                html += '<button onclick="openRecetaModal(\'' + r.id + '\')" style="padding:8px 16px;border-radius:999px;border:none;background:var(--accent);color:var(--accent-on);font-size:.8rem;font-weight:600;cursor:pointer;">Editar</button>';
+                html += '<button onclick="toggleRecetaActiva(\'' + r.id + '\')" style="padding:8px 16px;border-radius:999px;border:1px solid var(--border-mid);background:transparent;color:var(--txt-secondary);font-size:.8rem;cursor:pointer;">' +
                         (r.activa ? 'Desactivar' : 'Activar') + '</button>';
-                html += '<button onclick="eliminarReceta(\'' + r.id + '\')" style="padding:8px 16px;border-radius:999px;border:1px solid rgba(220,38,38,.35);background:transparent;color:#dc2626;font-size:.8rem;cursor:pointer;">Eliminar</button>';
+                html += '<button onclick="eliminarReceta(\'' + r.id + '\')" style="padding:8px 16px;border-radius:999px;border:1px solid var(--danger-dim);background:transparent;color:var(--danger);font-size:.8rem;cursor:pointer;">Eliminar</button>';
                 html += '</div>';
             }
             html += '</div>';
@@ -603,23 +603,23 @@
             r.ingredientes.forEach(function(ing) {
                 var producto = products.find(function(p) { return p.id === ing.productoId; });
                 var costoLinea = producto ? costoLineaReceta(ing, producto) : null;
-                html += '<tr style="border-bottom:1px solid var(--border-mid,#e5e7eb);">';
+                html += '<tr style="border-bottom:1px solid var(--border-mid);">';
                 html += '<td style="padding:8px 4px;color:var(--txt-primary);">' + escapeHtml(producto ? producto.name : (ing.descripcionExcel || ing.productoId)) +
-                        (producto ? '' : ' <span style="color:#dc2626;font-size:.72rem;">(no está en el catálogo)</span>') + '</td>';
+                        (producto ? '' : ' <span style="color:var(--danger);font-size:.72rem;">(no está en el catálogo)</span>') + '</td>';
                 html += '<td style="padding:8px 4px;text-align:right;color:var(--txt-secondary);white-space:nowrap;">' +
                         escapeHtml(ing.cantidad) + ' ' + escapeHtml(ing.uom || '') + '</td>';
                 if (puedeEditar) {
                     html += '<td style="padding:8px 4px;text-align:right;color:var(--txt-secondary);white-space:nowrap;">' +
-                            (costoLinea === null ? '<span style="color:#d97706;">sin costo</span>' : ('$' + costoLinea.toFixed(2))) + '</td>';
+                            (costoLinea === null ? '<span style="color:var(--warn);">sin costo</span>' : ('$' + costoLinea.toFixed(2))) + '</td>';
                 }
                 html += '</tr>';
             });
             html += '</table></div>';
 
             if (puedeEditar) {
-                html += '<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border-mid,#e5e7eb);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">';
+                html += '<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border-mid);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">';
                 html += '<span style="font-weight:700;color:var(--txt-primary);">Costo por porción</span>';
-                html += '<span style="font-weight:800;font-size:1.05rem;color:' + (cr.incompleto ? '#d97706' : 'var(--accent)') + ';">' +
+                html += '<span style="font-weight:800;font-size:1.05rem;color:' + (cr.incompleto ? 'var(--warn)' : 'var(--accent)') + ';">' +
                         (cr.incompleto ? 'Incompleto — falta: ' + escapeHtml(cr.faltantes.join(', ')) : ('$' + cr.costo.toFixed(2))) + '</span>';
                 html += '</div>';
             }

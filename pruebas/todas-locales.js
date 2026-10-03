@@ -66,6 +66,7 @@ const PRUEBAS = [
     'prueba-redis-r5.js',            // REDISEÑO R5 — Inventario y áreas: historial, físico vs sistema y detalle cerrado
     'prueba-hotfix-4.25-almacenamiento.js', // HOTFIX 4.25 — almacenamiento local al 104%: respaldos por peso real, guardado que no se corta
     'prueba-redis-r6.js',             // REDISEÑO R6 — Catálogo y ficha: la ficha de producto (#productModal)
+    'prueba-redis-r7.js',             // REDISEÑO R7 — Recetario y los modales pendientes
 ];
 
 let fallaron = [];

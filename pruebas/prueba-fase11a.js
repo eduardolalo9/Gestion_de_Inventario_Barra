@@ -58,7 +58,10 @@ chk('★ costoReceta ya NO multiplica por costoPorUnidadBase (que asumía milili
     /costoLineaReceta\(ing, producto\)/.test(receta) &&
     !/total \+= cu \* \(typeof ing\.cantidad/.test(receta));
 chk('La ficha muestra el costo por línea con el mismo cálculo corregido',
-    /costoLinea === null \? '<span style="color:#d97706;">sin costo<\/span>' : \('\$' \+ costoLinea\.toFixed\(2\)\)/.test(receta));
+    // REDISEÑO R7 retokenizó el color de "sin costo" (#d97706 a mano →
+    // var(--warn), el alias semántico de --amber); el cálculo que importa
+    // aquí —costoLinea, sin convertir de más— no cambió.
+    /costoLinea === null \? '<span style="color:var\(--warn\);">sin costo<\/span>' : \('\$' \+ costoLinea\.toFixed\(2\)\)/.test(receta));
 
 // ═══ 2 · Motor de consumo teórico ══════════════════════════════════════════
 chk('El motor vive en su propia capa (js/48-consumo-teorico.js) y no pinta nada',

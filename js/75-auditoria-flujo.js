@@ -1867,9 +1867,14 @@
                 cont.innerHTML = areasDefinidas().map(function(a) {
                     // FASE 10B — cada área es una fila de 56 px que se marca
                     // tocándola completa, no solo la casilla.
+                    // REDISEÑO R7 — este checklist era el único lugar que pintaba
+                    // el icono de área con el emoji configurable (a.icono) en vez
+                    // del icono real del kit (areasAuditoriaFA), que es lo que ya
+                    // usan las otras dos pantallas que muestran estas mismas áreas
+                    // (js/85-ui-inventario-fisico.js líneas 665 y 1111).
                     return '<label class="ni-area">'
                          + '<input type="checkbox" class="nuevoInvArea" value="' + escapeHtml(a.id) + '" checked>'
-                         + '<span>' + escapeHtml(a.icono || '📍') + ' ' + escapeHtml(a.nombre) + '</span>'
+                         + '<span><i class="' + (areasAuditoriaFA[a.id] || 'fa-solid fa-location-dot') + '" aria-hidden="true"></i> ' + escapeHtml(a.nombre) + '</span>'
                          + '</label>';
                 }).join('');
             }
@@ -1911,8 +1916,8 @@
             var cl = clasificarRecuento(f.value);
 
             if (!cl) {
-                el.style.color = 'var(--red, #f87171)';
-                el.textContent = '⚠️ Elige una fecha válida.';
+                el.style.color = 'var(--red)';
+                el.textContent = 'Elige una fecha válida.';
                 if (btn) btn.disabled = true;
                 return;
             }
@@ -1920,18 +1925,18 @@
             var semana = (typeof etiquetaSemana === 'function') ? etiquetaSemana(f.value) : cl.semanaId;
             if (cl.cierraSemana) {
                 el.style.color = 'var(--ok)';
-                el.textContent = '✓ Domingo — cierra la ' + semana +
+                el.textContent = 'Domingo — cierra la ' + semana +
                                  (cl.esCorteMensual ? ' y además es corte de fin de mes.' : '.');
                 if (btn) btn.disabled = false;
             } else if (cl.esCorteMensual) {
-                el.style.color = 'var(--amber, #fbbf24)';
+                el.style.color = 'var(--amber)';
                 el.textContent = 'Corte de fin de mes. No cierra semana — el inicial del lunes seguirá saliendo '
                                 + 'del domingo, pero este corte sí se podrá contabilizar como corte mensual.';
                 if (btn) btn.disabled = false;
             } else {
-                el.style.color = 'var(--red, #f87171)';
+                el.style.color = 'var(--red)';
                 // textContent, no innerHTML: no hace falta escapeHtml aquí.
-                el.textContent = '⚠️ ' + f.value + ' no es domingo ni fin de mes. Un inventario con esta fecha '
+                el.textContent = f.value + ' no es domingo ni fin de mes. Un inventario con esta fecha '
                                 + 'no se podrá contabilizar nunca. Elige un domingo (por ejemplo, ' + semana
                                 + ') o el último día del mes.';
                 if (btn) btn.disabled = true;
@@ -2031,14 +2036,14 @@
             if (!el || !f || typeof clasificarRecuento !== 'function') return;
             var cl = clasificarRecuento(f.value);
             if (!cl || (!cl.cierraSemana && !cl.esCorteMensual)) {
-                el.style.color = 'var(--red, #f87171)';
-                el.textContent = '⚠️ Debe ser domingo o fin de mes — si no, este inventario tampoco podrá '
+                el.style.color = 'var(--red)';
+                el.textContent = 'Debe ser domingo o fin de mes — si no, este inventario tampoco podrá '
                                 + 'contabilizarse después.';
                 if (btn) btn.disabled = true;
                 return;
             }
             el.style.color = 'var(--ok)';
-            el.textContent = cl.cierraSemana ? '✓ Domingo — cierra semana.' : '✓ Corte de fin de mes.';
+            el.textContent = cl.cierraSemana ? 'Domingo — cierra semana.' : 'Corte de fin de mes.';
             if (btn) btn.disabled = false;
         }
 
