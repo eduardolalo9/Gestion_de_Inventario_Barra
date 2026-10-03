@@ -52,6 +52,7 @@ const PRUEBAS = [
     'prueba-redis-r3-navegador.js',     // REDISEÑO R3 — Inicio en pantalla: tarjetas, cifras y panel del kit
     'prueba-redis-r4-navegador.js',     // REDISEÑO R4 — el modal de captura y la tarjeta de conteo, con el kit
     'prueba-redis-r5-navegador.js',     // REDISEÑO R5 — Historial y detalle cerrado en pantalla, con el kit
+    'prueba-redis-r6-navegador.js',     // REDISEÑO R6 — la ficha de producto (#productModal) en pantalla
 ];
 
 function esperarServidor(intentos) {

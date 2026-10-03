@@ -1484,10 +1484,10 @@
             var choque = _buscarPVDuplicado(pv);
             if (choque) {
                 aviso.textContent = 'Ese PV ya lo usa ' + (choque.name || choque.id) + '.';
-                aviso.style.color = '#dc2626';
+                aviso.style.color = 'var(--danger)';
             } else {
                 aviso.textContent = 'Déjalo vacío si el producto no se vende tal cual en el punto de venta.';
-                aviso.style.color = '#9ca3af';
+                aviso.style.color = 'var(--txt-muted)';
             }
         }
 
