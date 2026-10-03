@@ -64,6 +64,7 @@ const PRUEBAS = [
     'prueba-redis-r3.js',            // REDISEÑO R3 — Inicio: mismo contenido, aspecto del kit, sin emoji de interfaz
     'prueba-redis-r4.js',            // REDISEÑO R4 — Conteo: el modal no cambia de flujo, solo de aspecto
     'prueba-redis-r5.js',            // REDISEÑO R5 — Inventario y áreas: historial, físico vs sistema y detalle cerrado
+    'prueba-hotfix-4.25-almacenamiento.js', // HOTFIX 4.25 — almacenamiento local al 104%: respaldos por peso real, guardado que no se corta
 ];
 
 let fallaron = [];

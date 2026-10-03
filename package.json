@@ -47,6 +47,7 @@
     "test:r4nav": "node pruebas/prueba-redis-r4-navegador.js",
     "test:r5redis": "node pruebas/prueba-redis-r5.js",
     "test:r5nav": "node pruebas/prueba-redis-r5-navegador.js",
+    "test:h425": "node pruebas/prueba-hotfix-4.25-almacenamiento.js",
     "test:folio": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-folio-integracion.js && node pruebas/prueba-arranque-integracion.js && node pruebas/prueba-ciclo-completo-integracion.js && node pruebas/prueba-reinicio-integracion.js\"",
     "test:arranque": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-arranque-integracion.js && node pruebas/prueba-ciclo-completo-integracion.js && node pruebas/prueba-reinicio-integracion.js\"",
     "test:ciclo": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-ciclo-completo-integracion.js && node pruebas/prueba-reinicio-integracion.js\"",
