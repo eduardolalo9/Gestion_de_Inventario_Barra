@@ -206,7 +206,7 @@ chk('sinInicial ahora cuenta 2 (B y C), no los 3',
 
 // ═══ 5 · Cableado en la app ═════════════════════════════════════════════
 chk('★ El botón solo aparece con inventory.viewAll y el inventario abierto',
-    /hasPermission\('inventory\.viewAll'\) && !esCerrado\) \{\s*acc \+= _ifBtn\('bt--secundario', '📊 Físico vs Sistema'/.test(uiInv));
+    /hasPermission\('inventory\.viewAll'\) && !esCerrado\) \{\s*acc \+= _ifBtn\('bt--secundario', '[^']*Físico vs Sistema'/.test(uiInv));
 chk("renderInventarioTab() enruta 'fisico_vs_sistema' a renderFisicoVsSistema()",
     /auditoriaView === 'fisico_vs_sistema'\)\s*return renderFisicoVsSistema\(\);/.test(uiInv));
 chk('★ renderFisicoVsSistema() vuelve a negar el acceso si no hay inventory.viewAll (defensa en profundidad, no solo el botón)',

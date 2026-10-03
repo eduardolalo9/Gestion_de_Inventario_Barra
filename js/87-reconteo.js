@@ -759,7 +759,7 @@
             h += '</div>';
             if (edicion) {
                 h += '<button type="button" class="rc-card__quitar" data-rc-accion="quitar" data-rc-pid="' + _rcAttr(pid) + '"'
-                   + ' aria-label="Quitar ' + _rcAttr(it.nombre) + ' del reconteo" title="Quitar">✕</button>';
+                   + ' aria-label="Quitar ' + _rcAttr(it.nombre) + ' del reconteo" title="Quitar"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>';
             }
             h += '</div>';
             h += '<div class="rc-areas" style="grid-template-columns:repeat(' + Math.min(areasRc.length, 3) + ',minmax(0,1fr));">' + filas + '</div>';
@@ -788,7 +788,7 @@
             h += '<div class="rc-pie__resumen">' + r.orden.length + ' producto' + (r.orden.length === 1 ? '' : 's')
                + ' · <b>' + _rcNCorr(n) + '</b></div>';
             h += '<button type="button" class="rc-btn rc-btn--primario" data-rc-accion="finalizar"'
-               + ((!editable || !r.orden.length) ? ' disabled' : '') + '>✅ Finalizar reconteo</button>';
+               + ((!editable || !r.orden.length) ? ' disabled' : '') + '><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Finalizar reconteo</button>';
             h += '</div>';
             return h;
         }
@@ -818,7 +818,7 @@
                           + '<div class="rc-res__sub">' + escapeHtml(p.group || '') + (p.unit ? ' · ' + escapeHtml(p.unit) : '') + '</div></div>';
                     html += '<button type="button" class="rc-btn' + (ya ? ' rc-btn--hecho' : '') + '" data-sbx-principal'
                           + ' data-rc-accion="agregar" data-rc-pid="' + _rcAttr(p.id) + '"' + (ya ? ' disabled' : '') + '>'
-                          + (ya ? 'Agregado ✓' : '+ Agregar') + '</button>';
+                          + (ya ? '<i class="fa-solid fa-circle-check" aria-hidden="true"></i> Agregado' : '<i class="fa-solid fa-plus" aria-hidden="true"></i> Agregar') + '</button>';
                     html += '</div>';
                 });
                 if (r.items.length > RECONTEO_RESULTADOS) {
@@ -843,11 +843,11 @@
             h += '<div class="rc-cab">';
             h += '<button type="button" class="audit-back-btn" data-rc-accion="salir"><i class="fa-solid fa-chevron-left"></i> Inventario</button>';
             h += '<div style="min-width:0;flex:1;">';
-            h += '<div class="rc-titulo">🔁 Reconteo · Inventario #' + escapeHtml(String(r.inventarioNumero || '—'))
+            h += '<div class="rc-titulo"><i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i> Reconteo · Inventario #' + escapeHtml(String(r.inventarioNumero || '—'))
                + (r.ronda > 1 ? ' <span class="rc-badge">Ronda ' + r.ronda + '</span>' : '') + '</div>';
             h += '<div class="rc-sub">Iniciado: ' + escapeHtml(_rcFecha(r.creadoEn)) + '</div>';
             h += '</div>';
-            h += '<button type="button" class="rc-btn" data-rc-accion="historial">📋 Histórico</button>';
+            h += '<button type="button" class="rc-btn" data-rc-accion="historial"><i class="fa-solid fa-clipboard-list" aria-hidden="true"></i> Histórico</button>';
             h += '</div>';
 
             if (!editable) {
@@ -886,7 +886,7 @@
             var h = '<div class="rc-screen">';
             h += '<div class="rc-cab">';
             h += '<button type="button" class="audit-back-btn" data-rc-accion="salir"><i class="fa-solid fa-chevron-left"></i> Inventario</button>';
-            h += '<div style="min-width:0;flex:1;"><div class="rc-titulo">📋 Histórico de reconteos</div></div>';
+            h += '<div style="min-width:0;flex:1;"><div class="rc-titulo"><i class="fa-solid fa-clipboard-list" aria-hidden="true"></i> Histórico de reconteos</div></div>';
             h += '</div>';
             if (_reconteoLista === null) {
                 h += '<div class="rc-vacio">Cargando…</div>';
@@ -900,8 +900,8 @@
                     h += '<button type="button" class="rc-hist" data-rc-accion="ver" data-rc-id="' + _rcAttr(r.id) + '">';
                     h += '<div class="rc-hist__fila"><span class="rc-hist__titulo">Inventario #' + escapeHtml(String(r.inventarioNumero || '—'))
                        + (r.ronda > 1 ? ' · Ronda ' + r.ronda : '') + '</span>' + _rcEstadoBadge(r) + '</div>';
-                    h += '<div class="rc-hist__dato">📅 ' + escapeHtml(_rcFecha(fecha)) + '</div>';
-                    h += '<div class="rc-hist__dato">👤 Recontó: ' + escapeHtml(r.recontadoPor || '—') + '</div>';
+                    h += '<div class="rc-hist__dato"><i class="fa-solid fa-calendar-days" aria-hidden="true"></i> ' + escapeHtml(_rcFecha(fecha)) + '</div>';
+                    h += '<div class="rc-hist__dato"><i class="fa-solid fa-user" aria-hidden="true"></i> Recontó: ' + escapeHtml(r.recontadoPor || '—') + '</div>';
                     h += '<div class="rc-hist__dato">' + (r.orden || []).length + ' productos · ' + (n || 0) + ' correcciones</div>';
                     h += '</button>';
                 });
@@ -926,11 +926,11 @@
             h += '<div class="rc-resumen">';
             h += '<div>' + _rcEstadoBadge(r) + '</div>';
             (r.rondas || []).forEach(function(ro) {
-                h += '<div class="rc-hist__dato">Ronda ' + ro.ronda + ' · 📅 ' + escapeHtml(_rcFecha(ro.finalizadoEn))
-                   + ' · 👤 ' + escapeHtml(ro.recontadoPor || '—') + ' · ' + (ro.correcciones || 0) + ' correcciones</div>';
+                h += '<div class="rc-hist__dato">Ronda ' + ro.ronda + ' · <i class="fa-solid fa-calendar-days" aria-hidden="true"></i> ' + escapeHtml(_rcFecha(ro.finalizadoEn))
+                   + ' · <i class="fa-solid fa-user" aria-hidden="true"></i> ' + escapeHtml(ro.recontadoPor || '—') + ' · ' + (ro.correcciones || 0) + ' correcciones</div>';
             });
             if (r.estado !== 'finalizado') {
-                h += '<div class="rc-hist__dato">👤 Recontando: ' + escapeHtml(r.recontadoPor || '—') + '</div>';
+                h += '<div class="rc-hist__dato"><i class="fa-solid fa-user" aria-hidden="true"></i> Recontando: ' + escapeHtml(r.recontadoPor || '—') + '</div>';
             }
             h += '</div>';
 
@@ -938,7 +938,7 @@
             var puedeSeguir  = r.estado === 'abierto' && _rcInventarioAbierto() && r.inventoryId === _auditoriaSessionId;
             if (puedeReabrir) {
                 h += '<button type="button" class="rc-btn rc-btn--primario" style="width:100%;margin:10px 0;" data-rc-accion="reabrir" data-rc-id="'
-                   + _rcAttr(r.id) + '">🔁 Reabrir reconteo (segunda ronda)</button>';
+                   + _rcAttr(r.id) + '"><i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i> Reabrir reconteo (segunda ronda)</button>';
             } else if (puedeSeguir) {
                 h += '<button type="button" class="rc-btn rc-btn--primario" style="width:100%;margin:10px 0;" data-rc-accion="continuar" data-rc-id="'
                    + _rcAttr(r.id) + '">Continuar reconteo</button>';
