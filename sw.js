@@ -29,7 +29,7 @@
 // pruebas/prueba-integridad-split.js falla si se desincronizan: un index.html
 // nuevo sirviendo un .js viejo desde cache es el fallo mas dificil de
 // diagnosticar que puede tener una PWA partida en archivos.
-const APP_VERSION = '4.20';
+const APP_VERSION = '5.3';
 const CACHE_NAME  = 'barinventory-v' + APP_VERSION;
 
 // SW8 FIX: OFFLINE_URL calculado desde el scope del SW en tiempo de ejecución.
@@ -49,6 +49,12 @@ let OFFLINE_URL = '';
 const PRECACHE_URLS = [
     './index.html',
     './manifest.json',
+    // CRÍTICO desde R1: aquí viven las utilidades y los iconos que antes
+    // traía el CDN de Tailwind/Font Awesome. Sin este archivo la app
+    // arranca SIN ESTILOS, así que pertenece al camino crítico igual que
+    // estilos.css. (El kit, en cambio, está en WARM_URLS: todavía no lo
+    // usa ninguna pantalla y addAll() es todo-o-nada.)
+    './css/utilidades.css?v=' + APP_VERSION,
     './css/estilos.css?v=' + APP_VERSION,
     './js/00-nucleo.js?v=' + APP_VERSION,
     './js/auth.js?v=' + APP_VERSION,
@@ -70,6 +76,7 @@ const PRECACHE_URLS = [
 // A diferencia de addAll(), esto va UNO POR UNO y cada fallo se tolera: que un
 // archivo no se pueda traer no puede tumbar al resto ni impedir la activacion.
 const WARM_URLS = [
+    './js/03-ui-kit.js?v=' + APP_VERSION,            // BI UI KIT (rediseño R1)
     './js/05-busqueda-motor.js?v=' + APP_VERSION,   // FASE 6
     './js/06-busqueda-ui.js?v=' + APP_VERSION,       // FASE 6
     './js/10-multiusuario.js?v=' + APP_VERSION,
@@ -81,6 +88,7 @@ const WARM_URLS = [
     './js/45-inventario-datos.js?v=' + APP_VERSION,
     './js/47-existencia.js?v=' + APP_VERSION,
     './js/48-consumo-teorico.js?v=' + APP_VERSION,  // FASE 11A
+    './js/49-fisico-vs-sistema.js?v=' + APP_VERSION, // FASE 11B
     './js/50-roles-permisos.js?v=' + APP_VERSION,
     './js/60-arranque.js?v=' + APP_VERSION,
     './js/70-conversion-render.js?v=' + APP_VERSION,

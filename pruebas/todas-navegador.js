@@ -43,6 +43,14 @@ const PRUEBAS = [
     'prueba-fase10-navegador.js',       // FASE 10 — ventas del POS: parseo, semana, vista previa, permisos
     'prueba-fase11a-navegador.js',      // FASE 11A — costeo por unidad, consumo teórico y enchufe en existencia
     'prueba-fase10b-ui-navegador.js',   // FASE 10B — Inventario Físico para el pulgar: medidas, separación y contraste
+    'prueba-fisico-vs-sistema-navegador.js', // FASE 11B — botón por permiso, tabla, búsqueda y chip de filtro
+    'prueba-hotfix-4.22-navegador.js',  // HOTFIX 4.22 — recorte de movimientos y aviso de cuota real
+    'prueba-fase11b-parte2-navegador.js', // FASE 11B (parte 2) — pedido sugerido y niveles de alerta
+    'prueba-fase13-navegador.js',       // FASE 13 — contabilizar el corte de fin de mes
+    'prueba-redis-r1-navegador.js',     // REDISEÑO R1 — la app se pinta correcta sin Tailwind ni FontAwesome
+    'prueba-redis-r2-navegador.js',     // REDISEÑO R2 — una sola navegación en pantalla, activo en latón
+    'prueba-redis-r3-navegador.js',     // REDISEÑO R3 — Inicio en pantalla: tarjetas, cifras y panel del kit
+    'prueba-redis-r4-navegador.js',     // REDISEÑO R4 — el modal de captura y la tarjeta de conteo, con el kit
 ];
 
 function esperarServidor(intentos) {

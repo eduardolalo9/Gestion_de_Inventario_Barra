@@ -475,7 +475,8 @@ chk('ALCANCE · los identificadores de área siguen intactos',
     /const AREAS_SISTEMA = \['almacen', 'barra1', 'barra2'\]/.test(areasCfg));
 chk('ALCANCE · la inmutabilidad del inventario cerrado sigue en pie',
     (/allow update: if isAdminUser\(\) && \(\s*\n\s*\(resource\.data\.estado != 'CERRADO' && resource\.data\.estado != 'CONTABILIZADO'/.test(reglas) &&
-     /\.hasOnly\(\['estado','contabilizadoEn','contabilizadoPor','semanaDestino'\]\)/.test(reglas)) &&
+     // FASE 13 sumó 'mesDestino' a la lista blanca (corte de fin de mes).
+     /\.hasOnly\(\['estado','contabilizadoEn','contabilizadoPor','semanaDestino','mesDestino'\]\)/.test(reglas)) &&
     /allow update, delete: if false;/.test(reglas));
 
 // ═══════════════════════════════════════════════════════════════════════════

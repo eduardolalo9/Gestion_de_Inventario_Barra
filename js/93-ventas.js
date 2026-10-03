@@ -948,7 +948,12 @@
             }
 
             html += '<div style="margin-top:10px;color:var(--txt-secondary);font-size:.76rem">'
-                  + 'La app todavía NO decide con esta cifra: la fuente oficial sigue apagada hasta que la compares con tu Excel.</div>';
+                  + (EXISTENCIA_FUENTE_OFICIAL_ACTIVA
+                     ? 'La fuente oficial ya está encendida: en cuanto haya un inicial contabilizado para esta semana, '
+                       + 'esta cifra pasa a decidir "bajo mínimo" y la existencia en catálogo. Compárala contra tu Excel '
+                       + 'antes de cerrar y contabilizar el inventario — después de eso ya no es solo informativa.'
+                     : 'La app todavía NO decide con esta cifra: la fuente oficial sigue apagada hasta que la compares con tu Excel.')
+                  + '</div>';
             html += '</div>';
             return html;
         }

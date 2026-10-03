@@ -34,6 +34,13 @@ const PUERTO = process.env.PUERTO || '8080';
     compras = []; cart = []; orders = []; _inventarioActivo = null;
     // El inicial ya resuelto: la capa no consulta Firestore (lo comprobamos abajo).
     _existenciaInicial = { semana: sem, estado: 'ok', saldos: { A: 12, B: 2, X: 0 }, origen: { numero: 9 } };
+    // Decisión de Eduardo (FASE 11B, 1-oct-2026): la fuente oficial ya quedó
+    // encendida por defecto en la app real. Este archivo prueba justo el
+    // comportamiento de AMBOS estados del interruptor (de hecho esa es su
+    // razón de ser), así que fija el punto de partida en vez de heredar el
+    // default — los próximos bloques comprueban la app con la bandera
+    // explícitamente apagada.
+    EXISTENCIA_FUENTE_OFICIAL_ACTIVA = false;
     activeTab = 'inicio'; renderTab();
   });
   await p.waitForTimeout(300);
@@ -74,7 +81,10 @@ const PUERTO = process.env.PUERTO || '8080';
       /Sin inicial contabilizado/.test(fn.replace(/\s+/g, ' ')), fn.slice(0, 200));
   await p.keyboard.press('Escape'); await p.waitForTimeout(100);
 
-  // EL INTERRUPTOR: esto es lo que se encenderá al terminar la comprobación.
+  // EL INTERRUPTOR: ya está encendido por defecto en la app real (FASE 11B),
+  // pero el comportamiento que importa comprobar es el cambio en sí — que de
+  // verdad reordena quién está bajo mínimo — así que se sigue probando de
+  // forma explícita en los dos sentidos.
   const tras = await p.evaluate(() => {
     EXISTENCIA_FUENTE_OFICIAL_ACTIVA = true;
     renderTab();
@@ -89,7 +99,11 @@ const PUERTO = process.env.PUERTO || '8080';
       /1 BAJO M[ÍI]NIMO/i.test(tras.tiles[1] || ''), tras.tiles[1]);
 
   const vuelta = await p.evaluate(() => { renderTab(); return document.querySelectorAll('.pm-tile')[1].innerText.replace(/\s+/g, ' ').trim(); });
-  chk('Apagar la bandera devuelve la app a la cifra de siempre', /2 BAJO M[ÍI]NIMO/i.test(vuelta), vuelta);
+  chk('Apagar la bandera devuelve la app a la cifra operativa', /2 BAJO M[ÍI]NIMO/i.test(vuelta), vuelta);
+
+  // La dejamos en su valor real de hoy — el resto de la prueba (y la app de
+  // verdad) corren con la fuente oficial encendida.
+  await p.evaluate(() => { EXISTENCIA_FUENTE_OFICIAL_ACTIVA = true; });
 
   chk('Sin errores de JS en toda la prueba', errs.length === 0, errs.join(' | '));
   await nav.close();

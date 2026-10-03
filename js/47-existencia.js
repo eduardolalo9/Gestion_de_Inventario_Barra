@@ -27,17 +27,29 @@
         //    origen: 'operativo_no_reconciliado'. La regla del proyecto es no
         //    presentar como oficial un número que no lo es.
         //
-        //  MIENTRAS TANTO (semana de observación, decisión de Eduardo):
-        //  EXISTENCIA_FUENTE_OFICIAL_ACTIVA = false. Las dos cifras se calculan
-        //  y se muestran lado a lado, pero "bajo mínimo", el valor en existencia
-        //  y el catálogo siguen usando la cifra operativa de siempre. Cambiar
-        //  esa constante a true es lo único que hace falta para que la app
-        //  entera pase a la fuente oficial: por eso todo el mundo pregunta por
-        //  existenciaMostrada() y nadie llama a getTotalStock() por su cuenta.
+        //  ENCENDIDA (decisión de Eduardo, 1-oct-2026, con el reinicio de
+        //  inventarios de HOTFIX 4.20 recién aplicado): EXISTENCIA_FUENTE_
+        //  OFICIAL_ACTIVA = true. "Bajo mínimo", el valor en existencia y el
+        //  catálogo ya preguntan por la cifra oficial, no por la operativa.
+        //
+        //  UN MATIZ QUE IMPORTA Y QUE NO CAMBIA SOLO: el día que se encendió
+        //  no había todavía ningún inicial contabilizado (el reinicio lo
+        //  borró todo), así que la salvedad de arriba sigue vigente para
+        //  TODOS los productos hasta que se cierre y contabilice el primer
+        //  inventario de la base nueva: hasta entonces, existenciaOficial()
+        //  cae a 'operativo_no_reconciliado' en cada producto y encender el
+        //  interruptor no mueve ni un número. El cambio real de cifra llega
+        //  solo, automáticamente, la semana siguiente a la primera
+        //  contabilización — no hace falta tocar código otra vez.
+        //
+        //  Cambiar esta constante a false es lo único que haría falta para
+        //  regresar a la cifra operativa en toda la app: por eso todo el
+        //  mundo pregunta por existenciaMostrada() y nadie llama a
+        //  getTotalStock() por su cuenta.
         // ═════════════════════════════════════════════════════════════════════
 
         // El interruptor. Una sola línea cambia la fuente de toda la app.
-        var EXISTENCIA_FUENTE_OFICIAL_ACTIVA = false;
+        var EXISTENCIA_FUENTE_OFICIAL_ACTIVA = true;
 
         // Diferencia por debajo de la cual dos cifras se consideran iguales.
         // El conteo se redondea a 3 decimales; sin tolerancia, una cola de coma
@@ -237,8 +249,11 @@
          * La cifra que la interfaz debe mostrar y usar para decidir.
          *
          * Un único sitio donde se elige entre las dos fuentes. Con la bandera
-         * apagada devuelve exactamente lo de siempre, así que encender FASE 8
-         * no cambió ni un número mientras dure la semana de observación.
+         * encendida (1-oct-2026) devuelve la oficial — que hasta que exista
+         * un inicial contabilizado es, para cada producto, exactamente la
+         * misma cifra operativa de siempre (ver nota de cabecera: la
+         * salvedad "sin inicial" cubre justo ese tramo sin que nadie tenga
+         * que tocar esta función otra vez).
          */
         function existenciaMostrada(product, cacheEntradas, cacheVentas) {
             if (!EXISTENCIA_FUENTE_OFICIAL_ACTIVA) return existenciaOperativa(product);
@@ -247,9 +262,13 @@
         }
 
         /**
-         * Comparación de las dos cifras para la semana de observación.
-         * Solo entra a la comparación lo que tiene inicial: un producto sin
-         * arrastre no "difiere", simplemente todavía no se puede comparar.
+         * Comparación de las dos cifras (operativa vs. oficial), producto
+         * por producto. Sigue útil con la fuente oficial ya encendida: es
+         * donde se ve, de un vistazo, para cuántos productos "oficial" ya
+         * es un número real y para cuántos sigue siendo el respaldo
+         * operativo por falta de inicial. Solo entra a la comparación lo
+         * que tiene inicial: un producto sin arrastre no "difiere",
+         * simplemente todavía no se puede comparar.
          */
         function existenciaComparacion() {
             var ent   = existenciaEntradasSemana();

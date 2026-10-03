@@ -220,7 +220,9 @@ chk('X11 · update y delete de un fragmento siguen prohibidos',
     /allow update, delete: if false;/.test(_chunks));
 chk('X11 · el inventario cerrado sigue siendo inmutable e imborrable',
     /resource\.data\.estado != 'CERRADO' && resource\.data\.estado != 'CONTABILIZADO'/.test(_inv) &&
-    /\.hasOnly\(\['estado','contabilizadoEn','contabilizadoPor','semanaDestino'\]\)/.test(_inv) &&
+    // FASE 13 añadió 'mesDestino' a la lista blanca (un corte de fin de mes
+    // puro lo escribe sin semanaDestino); el resto de la regla no cambió.
+    /\.hasOnly\(\['estado','contabilizadoEn','contabilizadoPor','semanaDestino','mesDestino'\]\)/.test(_inv) &&
     /allow delete: if false;/.test(_inv));
 chk('X11 · el comentario de las reglas ya no afirma algo falso sobre el batch',
     !/cuando el padre pasa a CERRADO en el MISMO\s*\n?\s*\/\/\s*batch\), nunca se actualiza después/.test(reglas),

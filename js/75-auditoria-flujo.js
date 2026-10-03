@@ -712,7 +712,13 @@
                     total += suma;
                 });
                 if (total === 0) enCero++;
-                return { id: p.id, total: total };
+                // FASE 13 — se arrastra también el precio CONGELADO (el que
+                // tenía el producto el día del cierre, no el del catálogo de
+                // hoy): lo necesita cierreMensualDesdeSnapshot() para
+                // valorizar el corte sin recalcular nada con datos de otra
+                // fecha. id/total siguen siendo los únicos campos que arma el
+                // inicial semanal, así que esto no cambia nada para él.
+                return { id: p.id, total: total, precio: (typeof p.precio === 'number') ? p.precio : null };
             });
 
             return {
@@ -748,6 +754,109 @@
             }
         }
 
+        // ══════════════════════════════════════════════════════════════════════
+        //  FASE 13 — CONTABILIZAR, CORTE DE FIN DE MES
+        //  ────────────────────────────────────────────────────────────────────
+        //  R4 (js/15-ciclo-semanal.js) ya distinguía un corte de fin de mes de
+        //  un cierre de semana: el primero NO arrastra inicial (partiría la
+        //  semana en dos), pero hasta esta fase tampoco generaba nada —
+        //  evaluarContabilizable() lo bloqueaba sin excepción (decisión N-1
+        //  original). Esta fase le da un destino propio: un documento
+        //  mensual, separado del inicial semanal, que valoriza el cierre en
+        //  dinero para contabilidad. Un domingo que además es fin de mes
+        //  genera los dos documentos en el mismo clic (decisión confirmada
+        //  con Eduardo, 1-oct-2026).
+        //
+        //  Mismo principio que el inicial semanal: NO recalcula con el
+        //  catálogo de hoy. El precio que valoriza este corte es el que
+        //  quedó CONGELADO en el snapshot el día del cierre (ver
+        //  'producto'.precio más arriba) — si en marzo se corrige un precio,
+        //  el corte de enero no cambia.
+        //
+        //  "Nunca se inventa un número": un producto sin precio congelado no
+        //  se valoriza en cero ni se le asigna el precio de otro. Se cuenta
+        //  aparte (productosSinPrecio) y se excluye del total, igual que
+        //  "Valor en existencia" en el panel (83-panel.js, _panelIndicadores).
+        // ══════════════════════════════════════════════════════════════════════
+
+        /**
+         * cierreMensualDesdeSnapshot(cierre) — construye el corte contable del mes.
+         *
+         * Devuelve null si la fecha del cierre no es un corte de fin de mes
+         * (clasificarRecuento().esCorteMensual === false): un miércoles
+         * cualquiera no genera nada aquí, igual que el inicial semanal
+         * devuelve null si la fecha no cierra semana.
+         *
+         * @param {object} cierre { fecha, inventoryId, numero, productos: [{id, total, precio}] }
+         */
+        function cierreMensualDesdeSnapshot(cierre) {
+            if (!cierre || !cierre.fecha) return null;
+            var clase = (typeof clasificarRecuento === 'function') ? clasificarRecuento(cierre.fecha) : null;
+            if (!clase || !clase.esCorteMensual) return null;
+
+            var saldos = {};
+            var conPrecio = 0, sinPrecio = 0, valorTotal = 0;
+            (cierre.productos || []).forEach(function(p) {
+                if (!p || !p.id) return;
+                var t = Number(p.total);
+                if (!isFinite(t)) t = 0;
+                // Mismo redondeo a 3 decimales que el inicial semanal, por la
+                // misma razón: sin esto, sumar tres áreas en coma flotante
+                // deja colas de 0.30000000000000004 escritas para siempre en
+                // un documento inmutable.
+                var saldo = Math.round(t * 1000) / 1000;
+                saldos[p.id] = saldo;
+                if (typeof p.precio === 'number') {
+                    conPrecio++;
+                    valorTotal += saldo * p.precio;
+                } else {
+                    sinPrecio++;
+                }
+            });
+
+            return {
+                // 'YYYY-MM' derivado de la fecha del recuento, ya validada por
+                // clasificarRecuento() — el string ISO ya está en hora local,
+                // no hace falta volver a partirlo con cuidado de huso horario.
+                mesId: String(clase.fecha).slice(0, 7),
+                origen: {
+                    tipo:          'cierre_inventario',
+                    inventoryId:   cierre.inventoryId || null,
+                    numero:        (cierre.numero !== undefined) ? cierre.numero : null,
+                    fechaCierre:   clase.fecha,
+                    semanaCerrada: clase.semanaId
+                },
+                saldos:             saldos,
+                totalProductos:     Object.keys(saldos).length,
+                productosConPrecio: conPrecio,
+                productosSinPrecio: sinPrecio,
+                // Redondeado a centavos: es dinero, no un conteo de botellas.
+                valorTotal:         Math.round(valorTotal * 100) / 100
+            };
+        }
+        window.cierreMensualDesdeSnapshot = cierreMensualDesdeSnapshot;
+
+        // ── ¿Este mes ya tiene un corte contable? — mismo patrón que la semana ──
+        async function _verificarCorteMensualExistente(mesId, inventoryId) {
+            try {
+                const snap = await _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
+                                      .collection('cortesMensuales').doc(mesId).get();
+                if (!snap.exists) return { existe: false };
+                const d = snap.data() || {};
+                const origenId = (d.origen && d.origen.inventoryId) || null;
+                return {
+                    existe: true,
+                    mismoOrigen: origenId === inventoryId,
+                    origenId: origenId,
+                    origenNumero: (d.origen && d.origen.numero) || null,
+                    datos: d
+                };
+            } catch (e) {
+                console.warn('[Contabilizar] No se pudo leer el corte mensual existente:', e);
+                return { existe: false, error: true };
+            }
+        }
+
         // ── ¿Se puede contabilizar este inventario? — LA regla, en un sitio ──
         //
         //  La usan tres lugares: el encabezado de Conteo (para decidir si
@@ -763,7 +872,9 @@
         function evaluarContabilizable(inv) {
             if (!inv) return { puede: false, motivo: 'No hay inventario.' };
             if (inv.estado === 'CONTABILIZADO') {
-                return { puede: false, hecho: true, semanaDestino: inv.semanaDestino || null,
+                return { puede: false, hecho: true,
+                         semanaDestino: inv.semanaDestino || null,
+                         mesDestino:    inv.mesDestino || null,
                          motivo: 'Este inventario ya está contabilizado.' };
             }
             if (inv.estado !== 'CERRADO') {
@@ -780,19 +891,28 @@
                 return { puede: false, motivo: 'Este inventario se cerró antes de que se guardara la semana '
                                              + 'en su cabecera, así que no se puede contabilizar.' };
             }
-            // Decisión N-1: solo un recuento fechado en domingo arrastra.
-            // La regla ya existía en clasificarRecuento(); aquí se explica.
+            // Decisión N-1 (FASE 3) ampliada en FASE 13: un recuento fechado
+            // en DOMINGO cierra semana; uno fechado en el ÚLTIMO DÍA DEL MES
+            // es un corte contable mensual; un domingo que además es fin de
+            // mes hace las dos cosas a la vez. Fuera de esas fechas sigue
+            // bloqueado: un corte a media semana que no es fin de mes no
+            // tiene nada que arrastrar ni que valorizar.
             const clase = (typeof clasificarRecuento === 'function' && inv.fechaRecuento)
                           ? clasificarRecuento(inv.fechaRecuento) : null;
-            if (!clase || !clase.cierraSemana) {
-                return { puede: false, motivo: 'Solo se contabiliza un recuento fechado en DOMINGO. '
-                                             + 'Este está fechado ' + (inv.fechaRecuento || 'sin fecha de recuento')
-                                             + ', y un corte a media semana partiría el ciclo en dos.' };
+            if (!clase || clase.tipo === 'fuera_de_calendario') {
+                return { puede: false, motivo: 'Solo se contabiliza un recuento fechado en DOMINGO (cierre semanal) '
+                                             + 'o en el último día del mes (corte mensual). Este está fechado '
+                                             + (inv.fechaRecuento || 'sin fecha de recuento')
+                                             + ', y un corte a media semana no arrastra ni valoriza nada.' };
             }
-            const semanaDestino = (typeof semanaSiguiente === 'function')
+            const haceSemanal = !!clase.cierraSemana;
+            const haceMensual = !!clase.esCorteMensual;
+            const semanaDestino = haceSemanal && typeof semanaSiguiente === 'function'
                                   ? semanaSiguiente(inv.fechaRecuento) : null;
-            if (!semanaDestino) return { puede: false, motivo: 'No se pudo calcular la semana destino.' };
-            return { puede: true, semanaDestino: semanaDestino };
+            if (haceSemanal && !semanaDestino) return { puede: false, motivo: 'No se pudo calcular la semana destino.' };
+            const mesId = haceMensual ? String(inv.fechaRecuento).slice(0, 7) : null;
+            return { puede: true, tipo: clase.tipo, haceSemanal: haceSemanal, haceMensual: haceMensual,
+                     semanaDestino: semanaDestino, mesId: mesId };
         }
         window.evaluarContabilizable = evaluarContabilizable;
 
@@ -814,7 +934,8 @@
 
                 if (inv.estado === 'CONTABILIZADO') {
                     showNotification('ℹ️ Este inventario ya estaba contabilizado'
-                        + (inv.semanaDestino ? ' — semana ' + inv.semanaDestino : ''));
+                        + (inv.semanaDestino ? ' — semana ' + inv.semanaDestino : '')
+                        + (inv.mesDestino ? (inv.semanaDestino ? ' · mes ' : ' — mes ') + inv.mesDestino : ''));
                     return;
                 }
                 if (inv.estado !== 'CERRADO') {
@@ -822,29 +943,58 @@
                     return;
                 }
 
-                // ── La semana destino ────────────────────────────────────────
-                // Semana en cabecera (N-4), recuento en domingo (N-1) y semana
-                // destino: la misma regla que decide si la pantalla ofrece el
-                // botón, aplicada aquí al documento recién leído del servidor.
+                // ── Semana destino y/o mes de corte ───────────────────────────
+                // Semana en cabecera (N-4), domingo y/o fin de mes (N-1,
+                // FASE 13): la misma regla que decide si la pantalla ofrece
+                // el botón, aplicada aquí al documento recién leído del
+                // servidor.
                 const ev = evaluarContabilizable(inv);
                 if (!ev.puede) {
                     showNotification('⚠️ ' + ev.motivo);
                     return;
                 }
+                const haceSemanal   = ev.haceSemanal;
+                const haceMensual   = ev.haceMensual;
                 const semanaDestino = ev.semanaDestino;
+                const mesId         = ev.mesId;
 
                 // ── ¿Ya está hecho? ──────────────────────────────────────────
-                const previo = await _verificarInicialExistente(semanaDestino, inventoryId);
-                if (previo.existe && previo.mismoOrigen) {
-                    showNotification('ℹ️ Este inventario ya generó el inicial de la semana ' + semanaDestino);
+                // Cada destino se comprueba por separado: un domingo-fin-de-
+                // mes escribe dos documentos independientes, y uno de los dos
+                // pudo haber quedado ya hecho de un intento anterior que
+                // falló a medio camino (el batch es atómico, así que en
+                // condiciones normales esto no pasa — pero la comprobación no
+                // le cuesta nada al caso normal y cubre el caso raro).
+                let previoSemana = { existe: false };
+                let previoMes    = { existe: false };
+                if (haceSemanal) previoSemana = await _verificarInicialExistente(semanaDestino, inventoryId);
+                if (haceMensual) previoMes    = await _verificarCorteMensualExistente(mesId, inventoryId);
+
+                const semanaHecha = !haceSemanal || (previoSemana.existe && previoSemana.mismoOrigen);
+                const mesHecho    = !haceMensual || (previoMes.existe && previoMes.mismoOrigen);
+                if (semanaHecha && mesHecho) {
+                    const partes = [];
+                    if (haceSemanal) partes.push('el inicial de la semana ' + semanaDestino);
+                    if (haceMensual) partes.push('el corte mensual ' + mesId);
+                    showNotification('ℹ️ Este inventario ya generó ' + partes.join(' y '));
                     return;
                 }
-                if (previo.existe && !previo.mismoOrigen) {
+                if (haceSemanal && previoSemana.existe && !previoSemana.mismoOrigen) {
                     showNotification('🛑 La semana ' + semanaDestino + ' ya tiene un inicial generado por el '
-                        + 'Inventario Físico #' + (previo.origenNumero || previo.origenId)
+                        + 'Inventario Físico #' + (previoSemana.origenNumero || previoSemana.origenId)
                         + '. No se sobrescribe nada.');
                     return;
                 }
+                if (haceMensual && previoMes.existe && !previoMes.mismoOrigen) {
+                    showNotification('🛑 El mes ' + mesId + ' ya tiene un corte contable generado por el '
+                        + 'Inventario Físico #' + (previoMes.origenNumero || previoMes.origenId)
+                        + '. No se sobrescribe nada.');
+                    return;
+                }
+                // A partir de aquí: lo que faltaba (uno de los dos, o ambos)
+                // se puede generar.
+                const faltaSemana = haceSemanal && !semanaHecha;
+                const faltaMes    = haceMensual && !mesHecho;
 
                 // ── El físico congelado ──────────────────────────────────────
                 const registros = await _readChunkedSubcollection(inventoryRef, 'snapshotChunks');
@@ -858,70 +1008,128 @@
                     return;
                 }
 
-                const inicial = inicialDesdeCierre({
-                    fecha:       inv.fechaRecuento,
-                    inventoryId: inventoryId,
-                    numero:      inv.numero,
-                    productos:   saldos.productos
-                });
-                if (!inicial) {
-                    showNotification('⚠️ El cierre no arrastra a la semana siguiente (no cierra semana)');
-                    return;
+                let inicial = null, corteMensual = null;
+                if (faltaSemana) {
+                    inicial = inicialDesdeCierre({
+                        fecha:       inv.fechaRecuento,
+                        inventoryId: inventoryId,
+                        numero:      inv.numero,
+                        productos:   saldos.productos
+                    });
+                    if (!inicial) {
+                        showNotification('⚠️ El cierre no arrastra a la semana siguiente (no cierra semana)');
+                        return;
+                    }
+                }
+                if (faltaMes) {
+                    corteMensual = cierreMensualDesdeSnapshot({
+                        fecha:       inv.fechaRecuento,
+                        inventoryId: inventoryId,
+                        numero:      inv.numero,
+                        productos:   saldos.productos
+                    });
+                    if (!corteMensual) {
+                        showNotification('⚠️ El cierre no es un corte de fin de mes');
+                        return;
+                    }
                 }
 
                 const totalUnidades = saldos.productos.reduce(function(a, p) { return a + p.total; }, 0);
 
+                // ── Mensaje de confirmación — solo menciona lo que de verdad se va a escribir ──
+                let msg = '📘 CONTABILIZAR INVENTARIO FÍSICO #' + (inv.numero || numero) + '\n\n'
+                         + 'Recuento: ' + inv.fechaRecuento + '\n';
+                if (faltaSemana) msg += 'Semana destino: ' + inicial.semanaId + '\n';
+                if (faltaMes)    msg += 'Corte mensual: '  + corteMensual.mesId + '\n';
+                msg += 'Productos: ' + saldos.totalProductos
+                     + (saldos.enCero ? '  (' + saldos.enCero + ' en cero)' : '') + '\n'
+                     + 'Total de unidades: ' + (Math.round(totalUnidades * 1000) / 1000) + '\n';
+                if (faltaMes) {
+                    msg += 'Valor estimado del corte: '
+                         + (corteMensual.productosConPrecio
+                             ? (typeof _panelMoneda === 'function' ? _panelMoneda(corteMensual.valorTotal) : ('$' + corteMensual.valorTotal))
+                             : 'sin datos de precio')
+                         + (corteMensual.productosSinPrecio
+                             ? '  (' + corteMensual.productosSinPrecio + ' producto(s) sin precio, no incluidos)'
+                             : '')
+                         + '\n';
+                }
+                msg += '\n';
+                if (faltaSemana) msg += 'El resultado físico pasará a ser el stock inicial de esa semana.\n';
+                if (faltaMes)    msg += 'El corte mensual queda guardado para contabilidad, valorizado en dinero.\n';
+                msg += '\nEl inventario cerrado NO se modifica: su conteo queda intacto.\n'
+                     + 'Lo que se genere aquí es INMUTABLE — una vez creado no se puede corregir ni deshacer.\n\n'
+                     + '¿Confirmar?';
+
                 showConfirm(
-                    '📘 CONTABILIZAR INVENTARIO FÍSICO #' + (inv.numero || numero) + '\n\n' +
-                    'Recuento: ' + inv.fechaRecuento + '\n' +
-                    'Semana destino: ' + inicial.semanaId + '\n' +
-                    'Productos: ' + inicial.totalProductos +
-                    (saldos.enCero ? '  (' + saldos.enCero + ' en cero)' : '') + '\n' +
-                    'Total de unidades: ' + (Math.round(totalUnidades * 1000) / 1000) + '\n\n' +
-                    'El resultado físico pasará a ser el stock inicial de esa semana.\n\n' +
-                    'El inventario cerrado NO se modifica: su conteo queda intacto.\n' +
-                    'El inicial es INMUTABLE — una vez creado no se puede corregir ni deshacer.\n\n' +
-                    '¿Confirmar?',
+                    msg,
                     async function() {
                         showNotification('⏳ Contabilizando…');
-                        const inicialRef = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
-                                              .collection('inventariosIniciales').doc(inicial.semanaId);
                         try {
-                            // Un solo batch: o queda todo, o no queda nada.
+                            // Un solo batch: o queda todo, o no queda nada —
+                            // incluso cuando son dos documentos a la vez.
                             const batch = _db.batch();
-                            batch.set(inicialRef, {
-                                semanaId:         inicial.semanaId,
-                                origen:           inicial.origen,
-                                saldos:           inicial.saldos,
-                                totalProductos:   inicial.totalProductos,
-                                productosEnCero:  saldos.enCero,
-                                areas:            saldos.areas,
-                                contabilizadoPor: currentUserUid,
-                                contabilizadoEn:  Date.now(),
-                                semanaOrigenDato: inv.semanaIdOrigen || 'cabecera'
-                            });
-                            batch.update(inventoryRef, {
+                            if (faltaSemana) {
+                                const inicialRef = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
+                                                      .collection('inventariosIniciales').doc(inicial.semanaId);
+                                batch.set(inicialRef, {
+                                    semanaId:         inicial.semanaId,
+                                    origen:           inicial.origen,
+                                    saldos:           inicial.saldos,
+                                    totalProductos:   inicial.totalProductos,
+                                    productosEnCero:  saldos.enCero,
+                                    areas:            saldos.areas,
+                                    contabilizadoPor: currentUserUid,
+                                    contabilizadoEn:  Date.now(),
+                                    semanaOrigenDato: inv.semanaIdOrigen || 'cabecera'
+                                });
+                            }
+                            if (faltaMes) {
+                                const corteRef = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
+                                                    .collection('cortesMensuales').doc(corteMensual.mesId);
+                                batch.set(corteRef, {
+                                    mesId:              corteMensual.mesId,
+                                    origen:             corteMensual.origen,
+                                    saldos:             corteMensual.saldos,
+                                    totalProductos:     corteMensual.totalProductos,
+                                    productosConPrecio: corteMensual.productosConPrecio,
+                                    productosSinPrecio: corteMensual.productosSinPrecio,
+                                    valorTotal:         corteMensual.valorTotal,
+                                    productosEnCero:    saldos.enCero,
+                                    areas:              saldos.areas,
+                                    contabilizadoPor:   currentUserUid,
+                                    contabilizadoEn:    Date.now(),
+                                    semanaOrigenDato:   inv.semanaIdOrigen || 'cabecera'
+                                });
+                            }
+                            const estadoUpdate = {
                                 estado:           'CONTABILIZADO',
                                 contabilizadoEn:  Date.now(),
-                                contabilizadoPor: currentUserUid,
-                                semanaDestino:    inicial.semanaId
-                            });
+                                contabilizadoPor: currentUserUid
+                            };
+                            if (faltaSemana) estadoUpdate.semanaDestino = inicial.semanaId;
+                            if (faltaMes)    estadoUpdate.mesDestino    = corteMensual.mesId;
+                            batch.update(inventoryRef, estadoUpdate);
                             await batch.commit();
 
                             _registrarEnSyncQueue({
                                 tipo:         'contabilizacion',
-                                detalle:      'Inventario Físico #' + (inv.numero || numero)
-                                              + ' contabilizado → inicial de la semana ' + inicial.semanaId,
-                                inventoryId:  inventoryId,
-                                numero:       inv.numero || numero,
-                                semanaOrigen: inicial.origen.semanaCerrada,
-                                semanaDestino: inicial.semanaId,
-                                totalProductos: inicial.totalProductos,
+                                detalle:      'Inventario Físico #' + (inv.numero || numero) + ' contabilizado'
+                                              + (faltaSemana ? ' → inicial de la semana ' + inicial.semanaId : '')
+                                              + (faltaMes ? ' → corte mensual ' + corteMensual.mesId : ''),
+                                inventoryId:    inventoryId,
+                                numero:         inv.numero || numero,
+                                semanaOrigen:   (inicial && inicial.origen.semanaCerrada)
+                                                || (corteMensual && corteMensual.origen.semanaCerrada) || null,
+                                semanaDestino:  faltaSemana ? inicial.semanaId : null,
+                                mesDestino:     faltaMes ? corteMensual.mesId : null,
+                                totalProductos: saldos.totalProductos,
                                 motivo:       'Contabilización de Inventario Físico'
                             });
 
-                            showNotification('✅ Contabilizado — el inicial de la semana '
-                                + inicial.semanaId + ' quedó registrado');
+                            showNotification('✅ Contabilizado'
+                                + (faltaSemana ? ' — inicial de la semana ' + inicial.semanaId : '')
+                                + (faltaMes ? (faltaSemana ? ' y corte mensual ' : ' — corte mensual ') + corteMensual.mesId : ''));
                             _historialInventarios = null;
                             // El detalle abierto se relee para que diga
                             // "📘 Contabilizado" en vez de seguir ofreciendo el botón.
@@ -936,11 +1144,18 @@
                             // Un permission-denied aquí NO es necesariamente un
                             // fallo: puede ser que la operación ya se completara
                             // en un intento anterior cuya confirmación se perdió.
-                            // Se distingue leyendo el documento.
+                            // Se distingue leyendo cada documento por separado.
                             console.error('[Contabilizar] Error:', err);
                             if (err && err.code === 'permission-denied') {
-                                const post = await _verificarInicialExistente(inicial.semanaId, inventoryId);
-                                if (post.existe && post.mismoOrigen) {
+                                const postSemana = faltaSemana
+                                    ? await _verificarInicialExistente(inicial.semanaId, inventoryId)
+                                    : { existe: true, mismoOrigen: true };
+                                const postMes = faltaMes
+                                    ? await _verificarCorteMensualExistente(corteMensual.mesId, inventoryId)
+                                    : { existe: true, mismoOrigen: true };
+                                const semanaOk = !faltaSemana || (postSemana.existe && postSemana.mismoOrigen);
+                                const mesOk    = !faltaMes    || (postMes.existe && postMes.mismoOrigen);
+                                if (semanaOk && mesOk) {
                                     showNotification('✅ Ya estaba contabilizado — la operación se había '
                                         + 'completado antes. No se duplicó nada.');
                                     _historialInventarios = null;
@@ -948,8 +1163,13 @@
                                     renderTab();
                                     return;
                                 }
-                                if (post.existe && !post.mismoOrigen) {
+                                if (faltaSemana && postSemana.existe && !postSemana.mismoOrigen) {
                                     showNotification('🛑 Otro inventario ocupó la semana ' + inicial.semanaId
+                                        + ' mientras confirmabas. No se sobrescribió nada.');
+                                    return;
+                                }
+                                if (faltaMes && postMes.existe && !postMes.mismoOrigen) {
+                                    showNotification('🛑 Otro inventario ocupó el mes ' + corteMensual.mesId
                                         + ' mientras confirmabas. No se sobrescribió nada.');
                                     return;
                                 }
@@ -1699,7 +1919,7 @@
 
             var semana = (typeof etiquetaSemana === 'function') ? etiquetaSemana(f.value) : cl.semanaId;
             if (cl.cierraSemana) {
-                el.style.color = 'var(--green, #4ade80)';
+                el.style.color = 'var(--ok)';
                 el.textContent = '✓ Domingo — cierra la ' + semana +
                                  (cl.esCorteMensual ? ' y además es corte de fin de mes.' : '.');
                 if (btn) btn.disabled = false;
@@ -1817,7 +2037,7 @@
                 if (btn) btn.disabled = true;
                 return;
             }
-            el.style.color = 'var(--green, #4ade80)';
+            el.style.color = 'var(--ok)';
             el.textContent = cl.cierraSemana ? '✓ Domingo — cierra semana.' : '✓ Corte de fin de mes.';
             if (btn) btn.disabled = false;
         }
@@ -1868,37 +2088,41 @@
 
         // ── Glosario y tarjeta de estado ──────────────────────────────────────
 
+        //  REDISEÑO R2 — este diccionario llevaba sus propios colores fijos
+        //  (#60a5fa, #4ade80, #818cf8) y dibujaba su propia píldora, en
+        //  paralelo a los badges del resto de la app: era uno de los sitios
+        //  donde el MISMO estado se veía distinto según la pantalla.
+        //  Ahora el color y la palabra los decide UI.ESTADOS (js/03-ui-kit.js)
+        //  y aquí solo queda lo que es propio de este glosario: la explicación
+        //  de qué significa cada estado, que no vive en ningún otro lado.
         const ESTADOS_INVENTARIO = {
             SINCRONIZADO: {
-                etiqueta: 'Sincronizado',
-                color:    '#60a5fa',
-                fondo:    'rgba(96,165,250,.12)',
-                texto:    'Conteo en curso. El stock todavía no se ha afectado.'
+                estadoKit: 'sincronizado',
+                texto: 'Conteo en curso. El stock todavía no se ha afectado.'
             },
             CERRADO: {
-                etiqueta: 'Cerrado',
-                color:    '#4ade80',
-                fondo:    'rgba(74,222,128,.12)',
-                texto:    'Cerrado e inmutable. Queda como histórico y nadie puede modificarlo, ni el administrador.'
+                estadoKit: 'cerrado',
+                texto: 'Cerrado e inmutable. Queda como histórico y nadie puede modificarlo, ni el administrador.'
             },
             // FASE 3 — el estado nuevo TAMBIÉN va aquí. Sin esta entrada el
             // historial mostraba "CONTABILIZADO" y el glosario seguía
             // explicando solo dos estados: la pantalla decía una cosa y la
             // ayuda otra. Lo detectó la comprobación de alcance de R7.
             CONTABILIZADO: {
-                etiqueta: 'Contabilizado',
-                color:    '#818cf8',
-                fondo:    'rgba(129,140,248,.12)',
-                texto:    'Su resultado ya es el stock inicial de la semana siguiente. Además de inmutable, no se puede volver a contabilizar.'
+                estadoKit: 'contabilizado',
+                texto: 'Su resultado ya es el stock inicial de la semana siguiente. Además de inmutable, no se puede volver a contabilizar.'
             }
         };
 
         function _pillEstadoInventario(estado) {
-            var e = ESTADOS_INVENTARIO[estado] || { etiqueta: estado || '—', color: '#9aa2b4', fondo: 'rgba(154,162,180,.12)' };
-            return '<span style="display:inline-block;padding:3px 10px;border-radius:999px;'
-                 + 'background:' + e.fondo + ';color:' + e.color + ';font-size:.68rem;font-weight:700;'
-                 + 'text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;">'
-                 + escapeHtml(e.etiqueta) + '</span>';
+            var e = ESTADOS_INVENTARIO[estado];
+            if (typeof UI !== 'undefined' && UI.badge) {
+                // Un estado que no esté en el glosario se muestra tal cual
+                // llegó, en gris: no se le inventa un color.
+                return e ? UI.badge(e.estadoKit)
+                         : UI.badge({ texto: estado || '—', tono: 'neutral', vivo: false });
+            }
+            return '<span class="bi-badge bi-badge--neutral">' + escapeHtml(estado || '—') + '</span>';
         }
 
         /** Cuántas personas tienen algo contado en este inventario ahora mismo. */

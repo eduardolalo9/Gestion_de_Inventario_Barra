@@ -659,13 +659,22 @@
                    //  evidencia física detrás. Lo detectó la prueba P12 antes de
                    //  desplegarse. Ahora CONTABILIZADO solo se alcanza desde
                    //  CERRADO, por la segunda rama.
+                   //
+                   //  FASE 13 — se agregó 'mesDestino' a la lista blanca de abajo:
+                   //  un corte de fin de mes puro lo escribe SIN semanaDestino, y
+                   //  un domingo-fin-de-mes escribe los dos a la vez. Comprobado
+                   //  contra el emulador real: un campo nuevo que NO está en esa
+                   //  lista no deja la condición en "false" sin más — hasOnly()
+                   //  revienta con un error de evaluación y tumba el batch entero
+                   //  con un mensaje opaco, incluida la escritura del corte
+                   //  mensual que viaja en el MISMO batch.
                    allow update: if isAdminUser() && (
                         (resource.data.estado != 'CERRADO' && resource.data.estado != 'CONTABILIZADO'
                          && request.resource.data.estado != 'CONTABILIZADO')
                      || ( resource.data.estado == 'CERRADO'
                           && request.resource.data.estado == 'CONTABILIZADO'
                           && request.resource.data.diff(resource.data).affectedKeys()
-                               .hasOnly(['estado','contabilizadoEn','contabilizadoPor','semanaDestino'])
+                               .hasOnly(['estado','contabilizadoEn','contabilizadoPor','semanaDestino','mesDestino'])
                           && hasPerm('inventory.post') )
                    );
                    allow delete: if false;
@@ -736,6 +745,38 @@
                    allow read:   if request.auth != null;
                    allow create: if hasPerm('inventory.post')
                                     && request.resource.data.semanaId == semanaId
+                                    && request.resource.data.origen.inventoryId is string
+                                    && request.resource.data.saldos is map;
+                   allow update, delete: if false;
+                 }
+
+                 // ══════════════════════════════════════════════════════════
+                 //  FASE 13 — CORTES MENSUALES (contabilizar, fin de mes)
+                 //  ────────────────────────────────────────────────────────
+                 //  Hermano de inventariosIniciales, mismo patrón de
+                 //  inmutabilidad (create-sin-update-ni-delete) y la misma
+                 //  idempotencia garantizada por el servidor: el id del
+                 //  documento ES el mes ('YYYY-MM'), así que dos intentos de
+                 //  contabilizar el mismo cierre, o dos cierres distintos
+                 //  reclamando el mismo mes, se resuelven igual que en
+                 //  inventariosIniciales (ver ese bloque).
+                 //
+                 //  A diferencia del inicial semanal, este documento SÍ lleva
+                 //  dinero (valorTotal, con el precio que quedó congelado en
+                 //  el snapshot del cierre): por eso la lectura se restringe
+                 //  a quien puede ver todos los conteos (inventory.viewAll),
+                 //  igual de sensible que el resto de reportes monetarios del
+                 //  sistema (compras, ventas), y no se abre a cualquier
+                 //  autenticado como el inicial semanal.
+                 // ══════════════════════════════════════════════════════════
+                 function _mesIdValido(s) {
+                   return s is string && s.matches('^[0-9]{4}-(0[1-9]|1[0-2])$');
+                 }
+                 match /cortesMensuales/{mesId} {
+                   allow read:   if hasPerm('inventory.viewAll');
+                   allow create: if hasPerm('inventory.post')
+                                    && _mesIdValido(mesId)
+                                    && request.resource.data.mesId == mesId
                                     && request.resource.data.origen.inventoryId is string
                                     && request.resource.data.saldos is map;
                    allow update, delete: if false;

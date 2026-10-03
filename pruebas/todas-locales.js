@@ -55,6 +55,14 @@ const PRUEBAS = [
     'prueba-fase10.js',              // FASE 10 — ventas del POS: permisos, reglas, parser
     'prueba-fase11a.js',             // FASE 11A — costeo por unidad y consumo teórico
     'prueba-fase12.js',              // FASE 12 — folio #1001, anti-solapamiento y consistencia entre dispositivos
+    'prueba-fisico-vs-sistema.js',   // FASE 11B (parte 1) — comparación físico vs. sistema
+    'prueba-hotfix-4.22-movimientos.js', // HOTFIX 4.22 — recorte de movimientos y aviso de cuota
+    'prueba-fase11b-parte2.js',      // FASE 11B (parte 2) — pedido sugerido y niveles de alerta
+    'prueba-fase13-contabilizar-fin-de-mes.js', // FASE 13 — contabilizar el corte de fin de mes
+    'prueba-redis-r1.js',            // REDISEÑO R1 — tokens, kit y retiro de los CDN
+    'prueba-redis-r2.js',            // REDISEÑO R2 — una sola navegación y limpieza de la paleta anterior
+    'prueba-redis-r3.js',            // REDISEÑO R3 — Inicio: mismo contenido, aspecto del kit, sin emoji de interfaz
+    'prueba-redis-r4.js',            // REDISEÑO R4 — Conteo: el modal no cambia de flujo, solo de aspecto
 ];
 
 let fallaron = [];

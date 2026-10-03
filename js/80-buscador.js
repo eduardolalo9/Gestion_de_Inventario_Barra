@@ -49,14 +49,24 @@
             ]
         });
 
+        // FASE 11B — "Físico vs Sistema". Mismo criterio que el catálogo
+        // (nombre manda, id es código exacto): es la misma lista de
+        // productos, solo que aquí cada fila ya trae su comparación.
+        var _motorFvs = crearMotorBusqueda({
+            claves: [
+                { nombre: 'nombre', peso: 3 },
+                { nombre: 'id',     peso: 2, codigo: true }
+            ]
+        });
+
         // ── Catálogo (Inicio + Productos comparten estado) ──────────────────
 
         function _bajoMinimo(p) {
             // Misma regla que ya marcaba en rojo la columna Stock del catálogo.
             if (!(typeof p.stockMinimo === 'number' && p.stockMinimo > 0)) return false;
-            // FASE 8 — se pregunta por la cifra que la app da por buena. Con la
-            // fuente oficial apagada devuelve el mismo getTotalStock de siempre,
-            // así que hoy marca exactamente lo mismo que antes.
+            // FASE 8 — se pregunta por la cifra que la app da por buena
+            // (existenciaMostrada: oficial si está encendida, operativa si
+            // no, con el mismo respaldo honesto sin inicial en cualquier caso).
             var total = (typeof existenciaMostrada === 'function') ? existenciaMostrada(p)
                       : ((typeof getTotalStock === 'function') ? getTotalStock(p) : null);
             return typeof total === 'number' && total < p.stockMinimo;
@@ -253,5 +263,20 @@
             alAplicar:  function(v) { _historiaSearchTerm = v; },
             refrescar:  function() { return _pintarRegionBusqueda('historia', _renderHistoriaResultados()); },
             precalentar: function() { _motorInventarios.indexar(inventories); },
+            paso: 40
+        });
+
+        // FASE 11B — Físico vs Sistema. La lista a indexar es la tabla ya
+        // calculada (fisicoVsSistemaCalcular), no el catálogo: se recalcula
+        // en cada refrescar() porque el conteo en vivo cambia constantemente
+        // mientras el equipo sigue contando.
+        BusquedaUI.registrar('fvs', {
+            obtenerConsulta: function() { return _fvsSearchTerm; },
+            alAplicar:  function(v) { _fvsSearchTerm = v; },
+            refrescar:  function() { return _pintarRegionBusqueda('fvs', _renderFvsResultados()); },
+            precalentar: function() {
+                var d = (typeof fisicoVsSistemaCalcular === 'function') ? fisicoVsSistemaCalcular() : null;
+                if (d) _motorFvs.indexar(d.filas);
+            },
             paso: 40
         });

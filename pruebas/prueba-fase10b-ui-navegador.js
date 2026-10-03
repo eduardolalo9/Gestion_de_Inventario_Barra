@@ -44,8 +44,23 @@ const PUERTO = process.env.PUERTO || '8080';
       return { t: b.innerText.trim().slice(0, 30), r: Math.round(((Math.max(a, f) + 0.05) / (Math.min(a, f) + 0.05)) * 100) / 100 };
     });
   };
+  // REDISEÑO R1 — se añade `wp`: el ancho del contenedor del botón.
+  // Antes se comprobaba "w >= 300", un número absoluto, y eso resultó ser
+  // frágil por una razón que conviene dejar escrita: en la caja de pruebas el
+  // proxy de salida BLOQUEA cdn.tailwindcss.com (403), así que hasta la 4.24
+  // Chromium cargaba la app SIN Tailwind y las utilidades (px-3, max-w-7xl…)
+  // no aplicaban. En el teléfono del usuario, con internet, sí aplicaban: las
+  // medidas de esta prueba describían un layout que solo existía sin red.
+  // Desde R1 las utilidades son locales y SIEMPRE aplican, aquí y en
+  // producción, de modo que el contenedor recupera sus 12 px de padding y el
+  // botón mide 284 px en vez de 308. Lo que la prueba quería afirmar —que la
+  // acción ocupa todo el ancho disponible, no media fila— se mide ahora
+  // contra su contenedor, que es lo que de verdad importa y no cambia con el
+  // padding de los ancestros ni con el ancho del viewport.
   const MEDIDAS = () => [...document.querySelectorAll('#tabContent .bt')].filter(b => b.offsetParent).map(b => {
-    const r = b.getBoundingClientRect(); return { t: b.innerText.trim().slice(0, 30), h: r.height, w: r.width, fs: parseFloat(getComputedStyle(b).fontSize) };
+    const r = b.getBoundingClientRect();
+    const padre = b.parentElement ? b.parentElement.getBoundingClientRect().width : r.width;
+    return { t: b.innerText.trim().slice(0, 30), h: r.height, w: r.width, wp: padre, fs: parseFloat(getComputedStyle(b).fontSize) };
   });
 
   // ── Inventario ABIERTO (admin) ──────────────────────────────────────────
@@ -101,8 +116,10 @@ const PUERTO = process.env.PUERTO || '8080';
   // ── Inventario CERRADO: siguiente paso con botones grandes ──────────────
   await montar('CERRADO'); await p.waitForTimeout(250);
   m = await p.evaluate(MEDIDAS);
+  const aLoAncho = (b) => b.h >= 48 && b.w >= b.wp - 1;   // ocupa su contenedor
   chk('Con el inventario cerrado: "Contabilizar" y "Crear el siguiente" son botones grandes y apilados',
-      m.some(b => /Contabilizar/.test(b.t) && b.h >= 48 && b.w >= 300) && m.some(b => /Crear el siguiente/.test(b.t) && b.h >= 48 && b.w >= 300), JSON.stringify(m));
+      m.some(b => /Contabilizar/.test(b.t) && aLoAncho(b)) && m.some(b => /Crear el siguiente/.test(b.t) && aLoAncho(b)),
+      JSON.stringify(m.map(b => [b.t, Math.round(b.h), Math.round(b.w), Math.round(b.wp)])));
   chk('Con el inventario cerrado no se ofrece "Cerrar Inventario Físico"',
       !m.some(b => /Cerrar Inventario Físico/.test(b.t)), '');
   chk('Contraste ≥ 4.5:1 también con el inventario cerrado', (await p.evaluate(CONTRASTE)).every(x => x.r >= 4.5), '');

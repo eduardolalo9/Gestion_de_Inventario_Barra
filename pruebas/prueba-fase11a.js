@@ -90,9 +90,9 @@ chk('★ Si las ventas cargadas son de OTRA semana, NO se restan (devuelve {})',
 chk('Si el motor todavía no cargó, se comporta como antes de FASE 11A (no revienta)',
     /if \(typeof consumoTeorico !== 'function'\) return \{\};/.test(existencia));
 
-// ═══ 4 · La fuente oficial sigue apagada ═══════════════════════════════════
-chk('★ EXISTENCIA_FUENTE_OFICIAL_ACTIVA sigue en false (decisión del propietario: comparar antes de confiar)',
-    /var EXISTENCIA_FUENTE_OFICIAL_ACTIVA = false;/.test(existencia));
+// ═══ 4 · La fuente oficial (FASE 11B: ya encendida) ════════════════════════
+chk('★ EXISTENCIA_FUENTE_OFICIAL_ACTIVA está en true (decisión de Eduardo, 1-oct-2026, FASE 11B)',
+    /var EXISTENCIA_FUENTE_OFICIAL_ACTIVA = true;/.test(existencia));
 chk('FASE 11A no calcula desviación ni pedido sugerido (eso es 11B)',
     !/function .*desviacion/i.test(consumo) && !/pedidoSugerido/i.test(consumo));
 

@@ -14,6 +14,8 @@
             if (auditoriaView === 'reconteo')           return renderReconteo();
             if (auditoriaView === 'reconteo_historial') return renderReconteoHistorial();
             if (auditoriaView === 'reconteo_detalle')   return renderReconteoDetalle();
+            // FASE 11B — FÍSICO VS SISTEMA (js/49-fisico-vs-sistema.js)
+            if (auditoriaView === 'fisico_vs_sistema')  return renderFisicoVsSistema();
             // ── PANTALLA DE SELECCIÓN DE ÁREAS (default) ───────────────────────
             return renderAuditoriaSeleccion();
         }
@@ -134,7 +136,11 @@
                 html += dato('Recuento',
                     escapeHtml(inv.fechaRecuento)
                     + (_cl && typeof etiquetaSemana === 'function' ? ' · ' + escapeHtml(etiquetaSemana(inv.fechaRecuento)) : '')
-                    + (_cl && _cl.cierraSemana ? ' · <span style="color:var(--green,#4ade80);font-weight:700;">cierra semana</span>' : ''));
+                    + (_cl && _cl.cierraSemana ? ' · <span style="color:var(--ok);font-weight:700;">cierra semana</span>' : '')
+                    // FASE 13 — el corte de fin de mes es una condición aparte
+                    // (puede darse sola o junto con "cierra semana"), así que
+                    // lleva su propio indicador en vez de pisar al anterior.
+                    + (_cl && _cl.esCorteMensual ? ' · <span style="color:var(--book);font-weight:700;">corte de mes</span>' : ''));
             } else {
                 // H-40 (hotfix 4.9): inventarios anteriores a R7/FASE 3 no tienen
                 // fechaRecuento y, tal cual, nunca se podrán contabilizar.
@@ -182,6 +188,14 @@
             }
             if (hasPermission('inventory.history')) {
                 acc += _ifBtn('bt--secundario', '📜 Historial', _IF_ABRIR_HISTORIAL);
+            }
+            // FASE 11B — rompe el conteo ciego (muestra el consolidado de
+            // todos los que están contando), así que usa el mismo permiso
+            // que ya protege "ver todos los conteos". Solo mientras el
+            // inventario sigue SINCRONIZADO: cerrado, es cosa del Historial.
+            if (hasPermission('inventory.viewAll') && !esCerrado) {
+                acc += _ifBtn('bt--secundario', '📊 Físico vs Sistema',
+                    'onclick="auditoriaView=\'fisico_vs_sistema\'; renderTab();"');
             }
             if (acc) html += '<div class="bt-pila">' + acc + '</div>';
 
@@ -243,12 +257,22 @@
                     ? '<button type="button" class="bt ' + (principal ? 'bt--primario' : 'bt--secundario') + '" onclick="abrirModalNuevoInventario()">➕ Crear el siguiente inventario</button>'
                     : '';
             };
+            // FASE 13 — un domingo-fin-de-mes genera dos destinos a la vez;
+            // esto arma la frase ("stock inicial de la semana X" / "corte
+            // contable del mes X" / las dos) una sola vez para los tres
+            // estados (hecho, pendiente, bloqueado) de abajo.
+            var destinos = function(semanaId, mesId) {
+                var partes = [];
+                if (semanaId) partes.push('el stock inicial de la ' + escapeHtml(semana(semanaId)));
+                if (mesId)    partes.push('el corte contable del mes ' + escapeHtml(mesId));
+                return partes.length ? partes.join(' y ') : 'el stock inicial de la ' + escapeHtml(semana(null));
+            };
             var h = '';
 
             if (ev.hecho) {
                 h += '<div class="pm-paso pm-paso--hecho" role="status">'
                    + '<div class="pm-paso__titulo">📘 Contabilizado</div>'
-                   + '<div class="pm-paso__txt">Su resultado ya es el stock inicial de la ' + escapeHtml(semana(ev.semanaDestino))
+                   + '<div class="pm-paso__txt">Su resultado ya es ' + destinos(ev.semanaDestino, ev.mesDestino)
                    + (inv.contabilizadoEn ? ' · ' + escapeHtml(new Date(inv.contabilizadoEn).toLocaleDateString('es-MX')) : '')
                    + '. Queda de solo lectura.</div>';
                 if (puedeCrear) h += '<div class="pm-paso__acc">' + btnCrear(true) + '</div>';
@@ -261,13 +285,16 @@
                    + '<div class="pm-paso__titulo">📘 Siguiente paso: contabilizar</div>'
                    + '<div class="pm-paso__txt">'
                    + (puedeContab
-                        ? 'El resultado físico de este inventario pasará a ser el stock inicial de la '
-                          + escapeHtml(semana(ev.semanaDestino)) + '. <b>Es irreversible</b>: el inicial no se corrige ni se deshace.'
-                        : 'Pendiente de que administración lo contabilice como stock inicial de la '
-                          + escapeHtml(semana(ev.semanaDestino)) + '.')
+                        ? 'El resultado físico de este inventario pasará a ser ' + destinos(ev.semanaDestino, ev.mesId)
+                          + '. <b>Es irreversible</b>: no se corrige ni se deshace.'
+                        : 'Pendiente de que administración lo contabilice como ' + destinos(ev.semanaDestino, ev.mesId) + '.')
                    + '</div>';
                 var acc = '';
-                if (puedeContab) acc += '<button type="button" class="bt bt--primario" data-inv-accion="contabilizar">📘 Contabilizar</button>';
+                if (puedeContab) {
+                    var etiquetaBtn = (ev.haceSemanal && ev.haceMensual) ? '📘 Contabilizar (semana + mes)'
+                                     : (ev.haceMensual ? '📅 Contabilizar cierre de mes' : '📘 Contabilizar');
+                    acc += '<button type="button" class="bt bt--primario" data-inv-accion="contabilizar">' + etiquetaBtn + '</button>';
+                }
                 acc += btnCrear(false);
                 if (acc) h += '<div class="pm-paso__acc">' + acc + '</div>';
                 h += '</div>';
@@ -343,13 +370,21 @@
                     // semana siguiente, y eso se ve de un vistazo.
                     var _contab = (inv.estado === 'CONTABILIZADO');
                     html += '<span style="font-size:0.68rem;font-weight:700;color:'
-                         +  (_contab ? '#2563eb' : '#16a34a') + ';">'
+                         +  (_contab ? 'var(--accent)' : '#16a34a') + ';">'
                          +  (_contab ? 'CONTABILIZADO' : (inv.cierreTipo === 'abandonado' ? 'CERRADO · ABANDONADO' : 'CERRADO')) + '</span>';
                     html += '</div>';
                     html += '<p style="font-size:0.72rem;color:var(--txt-muted);">Fecha: ' + new Date(inv.fechaCreacion).toLocaleDateString('es-MX') + ' &nbsp;·&nbsp; Artículos: ' + (inv.totalProductos || '—') + '</p>';
                     if (_contab && inv.semanaDestino) {
-                        html += '<p style="font-size:0.7rem;color:#2563eb;font-weight:600;">📘 Inicial de la semana '
+                        html += '<p style="font-size:0.7rem;color:var(--accent);font-weight:600;">📘 Inicial de la semana '
                              +  escapeHtml(inv.semanaDestino) + '</p>';
+                    }
+                    // FASE 13 — el corte mensual es un segundo destino,
+                    // independiente del semanal: se muestra aparte para que
+                    // un domingo-fin-de-mes no esconda que también generó un
+                    // corte contable.
+                    if (_contab && inv.mesDestino) {
+                        html += '<p style="font-size:0.7rem;color:var(--book);font-weight:600;">📅 Corte mensual '
+                             +  escapeHtml(inv.mesDestino) + '</p>';
                     }
                     html += '</div>';
                 });
@@ -357,6 +392,124 @@
                     html += '<button type="button" class="bt bt--secundario" onclick="historialVerMas()">Ver inventarios más antiguos</button>';
                 }
             }
+            html += '</div></div>';
+            return html;
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        //  FASE 11B — FÍSICO VS SISTEMA
+        //  La lógica vive en js/49-fisico-vs-sistema.js (capa pura); aquí
+        //  solo se pinta y se conecta a la barra de búsqueda unificada
+        //  (06-busqueda-ui.js), igual que Historial y Reconteos.
+        // ══════════════════════════════════════════════════════════════════
+
+        function _fvsNum(n) {
+            return (typeof n === 'number')
+                ? n.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                : '—';
+        }
+        function _fvsMoneda(n) {
+            if (typeof n !== 'number') return '—';
+            // El signo va ANTES del símbolo ($-250.00 se lee como un precio
+            // raro; -$250.00 se lee como lo que es: un faltante en dinero).
+            var neg = n < 0;
+            return (neg ? '-' : '') + '$' + Math.abs(n).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+        function _chipsFvs() {
+            return [{ id: 'solo_dif', etiqueta: 'Solo con diferencias' }];
+        }
+
+        /** Aplica el chip "solo con diferencias" sobre las filas ya calculadas. */
+        function _buscarFvs(datos) {
+            var soloDif = BusquedaUI.filtroActivo('fvs', 'solo_dif');
+            var tol = (typeof EXISTENCIA_TOLERANCIA === 'number') ? EXISTENCIA_TOLERANCIA : 0.001;
+            return _motorFvs.buscar(datos.filas, _fvsSearchTerm, {
+                filtro: soloDif
+                    ? function(f) { return f.estado === 'contado' && Math.abs(f.diferencia) > tol; }
+                    : null
+            });
+        }
+
+        function _renderFvsResultados() {
+            var datos = fisicoVsSistemaCalcular();
+            if (!datos) {
+                return {
+                    html: '<p class="pm-nota" style="margin:0;font-size:.85rem;">No hay un Inventario Físico abierto (SINCRONIZADO) para comparar.</p>',
+                    coincidencias: 0, total: 0
+                };
+            }
+            var tol = (typeof EXISTENCIA_TOLERANCIA === 'number') ? EXISTENCIA_TOLERANCIA : 0.001;
+            var r = _buscarFvs(datos);
+            var filas = r.items;
+            var lim = BusquedaUI.limite('fvs');
+            var html = '';
+
+            html += '<dl class="if-datos" style="margin-bottom:10px;">';
+            html += '<div class="if-dato"><dt>Comparación</dt><dd>' + datos.contados + ' contados · '
+                 +  datos.pendientes + ' pendientes de ' + datos.totalProductos + '</dd></div>';
+            var netoColor = datos.totalNeto < 0 ? '#ef4444' : (datos.totalNeto > 0 ? '#16a34a' : 'var(--txt-primary)');
+            html += '<div class="if-dato"><dt>Neto en dinero</dt><dd style="color:' + netoColor + ';font-weight:700;">'
+                 +  _fvsMoneda(datos.totalNeto) + '</dd></div>';
+            html += '</dl>';
+
+            if (datos.sinInicial > 0) {
+                html += '<div class="pm-paso pm-paso--aviso" role="status" style="margin-bottom:10px;">'
+                     +  '<div class="pm-paso__txt">ℹ️ ' + datos.sinInicial + ' producto(s) todavía comparan contra el '
+                     +  'stock operativo: no hay inicial contabilizado para ellos esta semana. Al cerrar y contabilizar '
+                     +  'este inventario, "Sistema" pasa a ser inicial + compras − consumo teórico para ellos.</div></div>';
+            }
+
+            if (filas.length === 0) {
+                return { html: html + BusquedaUI.vacio('fvs', 'productos'), coincidencias: 0, total: r.total };
+            }
+
+            html += BusquedaUI.resumen('fvs', r.coincidencias, r.total, 'producto', 'productos');
+            html += '<div style="margin-top:8px;">';
+            filas.slice(0, lim).forEach(function(f) {
+                html += '<div data-sbx-item style="padding:10px 12px;border:1px solid var(--border-soft);border-radius:var(--r-md);margin-bottom:8px;">';
+                html += '<div style="font-weight:700;font-size:.82rem;">' + resaltarBusqueda(f.nombre, _fvsSearchTerm) + '</div>';
+                if (f.estado === 'pendiente') {
+                    html += '<div style="font-size:.74rem;color:var(--txt-muted);margin-top:2px;">⏳ Sin contar todavía · '
+                         +  'Sistema: ' + _fvsNum(f.sistema) + '</div>';
+                } else {
+                    var color = f.diferencia < -tol ? '#ef4444' : (f.diferencia > tol ? '#16a34a' : 'var(--txt-muted)');
+                    var etiqueta = f.diferencia < -tol ? 'Faltante' : (f.diferencia > tol ? 'Sobrante' : 'Coincide');
+                    html += '<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:.76rem;color:var(--txt-muted);margin-top:2px;">'
+                         +  '<span>Físico: <b style="color:var(--txt-primary);">' + _fvsNum(f.fisico) + '</b></span>'
+                         +  '<span>Sistema: <b style="color:var(--txt-primary);">' + _fvsNum(f.sistema) + '</b></span>'
+                         +  '<span style="color:' + color + ';font-weight:700;">' + etiqueta + ': '
+                         +  (f.diferencia > 0 ? '+' : '') + _fvsNum(f.diferencia) + '</span>'
+                         +  '<span style="color:' + color + ';">' + _fvsMoneda(f.neto) + '</span>'
+                         +  '</div>';
+                }
+                html += '</div>';
+            });
+            html += '</div>';
+            html += BusquedaUI.centinela('fvs', filas.length - lim);
+            return { html: html, coincidencias: r.coincidencias, total: r.total };
+        }
+
+        function renderFisicoVsSistema() {
+            if (!hasPermission('inventory.viewAll')) {
+                return '<div class="audit-screen"><div class="if-card"><p class="pm-nota" style="margin:0;">'
+                     +  'No tienes permiso para ver esta comparación.</p></div></div>';
+            }
+            var html = '<div class="audit-screen"><div class="if-card">';
+            html += '<div class="flex items-center justify-between mb-3">';
+            html += '<p class="audit-header-title">📊 Físico vs Sistema</p>';
+            html += '<button onclick="auditoriaView=\'selection\'; _fvsSearchTerm=\'\'; renderTab();" '
+                 +  'style="padding:5px 10px;border-radius:var(--r-md);background:var(--bg-soft);font-size:0.7rem;font-weight:600;cursor:pointer;">'
+                 +  '← Volver</button>';
+            html += '</div>';
+            html += '<p class="pm-nota" style="margin:0 0 10px;">Suma lo contado en todas las áreas del inventario '
+                 +  'abierto y lo compara, producto por producto, contra lo que el sistema cree que hay.</p>';
+            html += BusquedaUI.barra('fvs', {
+                placeholder: 'Buscar producto o código…',
+                etiqueta: 'Buscar en Físico vs Sistema',
+                sticky: true
+            });
+            html += BusquedaUI.chips('fvs', _chipsFvs());
+            html += BusquedaUI.region('fvs', _renderFvsResultados().html);
             html += '</div></div>';
             return html;
         }
@@ -412,11 +565,18 @@
             // adivinar, y aquí las tres razones posibles son muy distintas
             // entre sí.
             if (meta.estado === 'CONTABILIZADO') {
-                html += '<div style="padding:9px 12px;border-radius:var(--r-md);background:#eff6ff;'
-                     +  'border-left:3px solid #2563eb;margin-bottom:10px;">'
-                     +  '<p style="font-size:0.75rem;font-weight:700;color:#1d4ed8;margin:0;">📘 Contabilizado</p>'
+                // FASE 13 — un domingo-fin-de-mes deja los dos destinos
+                // escritos en la cabecera (semanaDestino y mesDestino); se
+                // muestran los que de verdad existan, en vez de asumir que
+                // siempre hay una semana.
+                var _destPartes = [];
+                if (meta.semanaDestino) _destPartes.push('el stock inicial de la semana ' + escapeHtml(meta.semanaDestino));
+                if (meta.mesDestino)    _destPartes.push('el corte contable del mes ' + escapeHtml(meta.mesDestino));
+                html += '<div style="padding:9px 12px;border-radius:var(--r-md);background:var(--accent-dim);'
+                     +  'border-left:3px solid var(--accent);margin-bottom:10px;">'
+                     +  '<p style="font-size:0.75rem;font-weight:700;color:var(--accent);margin:0;">📘 Contabilizado</p>'
                      +  '<p style="font-size:0.7rem;color:var(--txt-muted);margin:2px 0 0;">'
-                     +  'Su resultado es el stock inicial de la semana ' + escapeHtml(meta.semanaDestino || '—')
+                     +  'Su resultado es ' + (_destPartes.length ? _destPartes.join(' y ') : '—')
                      +  (meta.contabilizadoEn ? ' · ' + new Date(meta.contabilizadoEn).toLocaleDateString('es-MX') : '')
                      +  '</p></div>';
             } else if (hasPermission('inventory.post')) {
@@ -431,7 +591,7 @@
                          +  '📘 No se puede contabilizar. ' + escapeHtml(_motivo) + '</p></div>';
                 } else {
                     html += '<button onclick="contabilizarInventario(\'' + _detalleInventarioCerradoId + '\', ' + meta.numero + ')" '
-                         +  'style="padding:7px 14px;border-radius:var(--r-md);background:#2563eb;color:#fff;'
+                         +  'style="padding:7px 14px;border-radius:var(--r-md);background:var(--accent);color:#fff;'
                          +  'font-size:0.75rem;font-weight:700;cursor:pointer;margin-bottom:10px;margin-left:6px;">'
                          +  '📘 Contabilizar</button>';
                 }
@@ -528,15 +688,15 @@
                     if (hasPermission('inventory.reopenArea')) {
                         accionArea = '<button type="button" class="bt bt--secundario" onclick="reabrirArea(\'' + area + '\')">↩ Reabrir ' + escapeHtml(areasAuditoria[area]) + '</button>';
                     } else if (tieneUnlock) {
-                        html += ' · <span style="color:var(--amber);font-weight:700;">🔓 Corrección habilitada</span>';
+                        html += ' · <span style="color:var(--amber);font-weight:700;"><i class="fa-solid fa-unlock" aria-hidden="true"></i> Corrección habilitada</span>';
                     } else {
-                        html += ' · <span style="color:var(--green);font-weight:700;">🔒 Bloqueada</span>';
+                        html += ' · <span style="color:var(--green);font-weight:700;"><i class="fa-solid fa-lock" aria-hidden="true"></i> Bloqueada</span>';
                     }
                     html += '</div>';
                 } else if (hasPermission('inventory.closeOther')) {
                     // FASE 2A — cerrar el área para TODAS las personas es una
                     // acción visible y propia, no un efecto de "finalizar".
-                    accionArea = '<button type="button" class="bt bt--secundario" onclick="auditoriaCerrarArea(\'' + area + '\')">🔒 Cerrar área para todos</button>';
+                    accionArea = '<button type="button" class="bt bt--secundario" onclick="auditoriaCerrarArea(\'' + area + '\')"><i class="fa-solid fa-lock" aria-hidden="true"></i> Cerrar área para todos</button>';
                 }
                 html += '</div>';
                 html += '<svg class="audit-area-arrow" width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 18l6-6-6-6"/></svg>';
@@ -628,7 +788,7 @@
 
             // ── Cabecera del panel con indicador EN VIVO ────────────────────
             html += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:10px;">';
-            html += '<p style="font-size:0.75rem;font-weight:700;color:var(--txt-primary);margin:0;">👥 Conteos por usuario</p>';
+            html += '<p style="font-size:0.75rem;font-weight:700;color:var(--txt-primary);margin:0;"><i class="fa-solid fa-users" aria-hidden="true"></i> Conteos por usuario</p>';
             if (hayAlguienContando) {
                 html += '<span style="display:inline-flex;align-items:center;gap:5px;font-size:0.62rem;font-weight:700;color:#22c55e;">'
                       + '<span class="audit-live-dot"></span>EN VIVO</span>';
@@ -652,7 +812,7 @@
                 // Cabecera del usuario
                 html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:4px;">';
                 html += '<div style="display:flex;flex-direction:column;gap:1px;">';
-                html += '<span style="font-size:0.72rem;font-weight:600;color:var(--accent);">👤 ' + escapeHtml(u.email) + '</span>';
+                html += '<span style="font-size:0.72rem;font-weight:600;color:var(--accent);"><i class="fa-solid fa-user" aria-hidden="true"></i> ' + escapeHtml(u.email) + '</span>';
                 if (relTime) {
                     html += '<span class="audit-timestamp">⏱ ' + relTime + '</span>';
                 }
@@ -693,7 +853,7 @@
                               + '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>'
                               + ' Finalizado</span>';
                     } else if (hayDatosEnCurso) {
-                        html += '<span class="audit-counting-badge">⬤ CONTANDO…</span>';
+                        html += '<span class="audit-counting-badge"><span class="audit-counting-badge__punto" aria-hidden="true"></span>CONTANDO…</span>';
                     } else {
                         html += '<span style="font-size:0.62rem;color:var(--txt-muted);">Sin iniciar</span>';
                     }
@@ -821,12 +981,31 @@
                           + ' role="button" tabindex="0" aria-label="Contar ' + escapeHtml(product.name) + '" style="animation-delay:' + delay + 'ms">';
                     html += '<div class="inv-card__ripple"></div>';
 
+                    // ══════════════════════════════════════════════════════
+                    //  REDISEÑO R4 — la cabecera de la tarjeta de conteo
+                    //  ────────────────────────────────────────────────────
+                    //  Mismo contenido, mismo onclick, misma tarjeta: lo que
+                    //  cambia es qué se ve primero.
+                    //    · Monograma a la izquierda, el MISMO que en Inicio:
+                    //      un producto debe verse igual en toda la app.
+                    //    · El total pasa de una cajita de 0.6875rem a la
+                    //      cifra grande de la tarjeta, en mono tabular. Es lo
+                    //      que el jefe de barra mira para saber si un
+                    //      producto ya está contado y en cuánto.
+                    //    · El conflicto lo pinta UI.badge(), no una píldora
+                    //      propia de esta pantalla.
+                    // ══════════════════════════════════════════════════════
                     html += '<div class="inv-card__header">';
+                    html += (typeof UI !== 'undefined' && UI.mono) ? UI.mono(product.name, product.group) : '';
                     html += '<div style="min-width:0;flex:1">';
                     html += '<div class="inv-card__name">' + resaltarBusqueda(product.name, _conteoSearchTerm) + '</div>';
                     html += '<span class="inv-card__group-badge">' + escapeHtml(product.group || 'General') + '</span>';
                     if (areaData._hayConflicto) {
-                        html += '<div class="inv-card__conflict-badge"><i class="fa-solid fa-triangle-exclamation"></i> Conflicto de conteo</div>';
+                        html += '<div class="inv-card__conflict-badge">'
+                              + ((typeof UI !== 'undefined' && UI.badge)
+                                 ? UI.badge('conflicto', { texto: 'Conflicto de conteo' })
+                                 : '<i class="fa-solid fa-triangle-exclamation"></i> Conflicto de conteo')
+                              + '</div>';
                     }
                     html += '</div>';
                     // HOTFIX: en modo cantidad (KGS/LTS/PZA) el conteo admite hasta
@@ -834,7 +1013,14 @@
                     // redondeaba la vista a 2 y ocultaba, por ejemplo, 1.245 -> "1.25".
                     // El dato guardado siempre fue exacto: esto solo corrige la vista.
                     const totalFinalTexto = usaConversion ? totalFinal.toFixed(2) : String(Math.round(totalFinal * 1000) / 1000);
-                    html += '<span class="inv-card__code" title="Total (enteras + fracciones de abiertas)">' + totalFinalTexto + ' u</span>';
+                    // Sin contar y contado en cero NO son lo mismo: el primero sale
+                    // apagado, el segundo con la cifra en firme. En un inventario esa
+                    // diferencia decide si hay que volver a pasar por el producto.
+                    html += '<div class="inv-card__total' + (hasData ? '' : ' inv-card__total--vacio') + '"'
+                          + ' title="Total (enteras + fracciones de abiertas)">'
+                          + '<span class="num bi-cifra inv-card__total-n">' + totalFinalTexto + '</span>'
+                          + '<span class="inv-card__total-u">u</span>'
+                          + '</div>';
                     html += '</div>';
 
                     html += '<div class="inv-card__chips">';
@@ -843,9 +1029,22 @@
                     html += '<span class="inv-chip__label">Entera</span>';
                     html += '</div>';
 
+                    /**
+                     * R4 — EL MISMO NÚMERO, DOS VALORES EN LA MISMA TARJETA.
+                     *
+                     * El HOTFIX de decimales (ver claude/hotfix-decimales-conteo-fisico)
+                     * arregló el TOTAL: en modo cantidad el conteo admite 3 decimales y
+                     * toFixed(2) redondeaba 1.245 a "1.25". Pero el chip se quedó con
+                     * toFixed(2), así que una aceituna contada en 1.245 salía con el
+                     * total en 1.245 y el chip en 1.25, uno al lado del otro.
+                     *
+                     * Se aplica aquí el mismo redondeo que al total. Solo afecta a la
+                     * VISTA: el dato guardado siempre fue exacto.
+                     */
+                    const _chipCantidad = (v) => String(Math.round((v || 0) * 1000) / 1000);
                     const pt1 = puntosAbiertas.length > 0 ? puntosAbiertas[0] : 0;
                     const ab1Raw = abiertas.length > 0 ? abiertas[0] : 0;
-                    const ab1Label = usaConversion ? (pt1 * 100).toFixed(0) + '%' : pt1.toFixed(2);
+                    const ab1Label = usaConversion ? (pt1 * 100).toFixed(0) + '%' : _chipCantidad(pt1);
                     html += '<div class="inv-chip abierta' + (pt1 === 0 ? ' empty' : '') + '">';
                     html += '<span class="inv-chip__val">' + ab1Label + '</span>';
                     html += '<span class="inv-chip__label">' + (usaConversion ? ab1Raw.toFixed(1) + ' oz' : 'Abierta 1') + '</span>';
@@ -859,7 +1058,7 @@
                         html += '<div class="inv-card__extra' + (isExpanded ? ' open' : '') + '" id="card-extra-' + escapeHtml(product.id) + '">';
                         puntosAbiertas.slice(1).forEach((pt, i) => {
                             const rawOz = abiertas[i + 1] || 0;
-                            const chipLabel = usaConversion ? (pt * 100).toFixed(0) + '%' : pt.toFixed(2);
+                            const chipLabel = usaConversion ? (pt * 100).toFixed(0) + '%' : _chipCantidad(pt);
                             html += '<div class="inv-chip abierta' + (pt === 0 ? ' empty' : '') + '">';
                             html += '<span class="inv-chip__val">' + chipLabel + '</span>';
                             html += '<span class="inv-chip__label">' + (usaConversion ? rawOz.toFixed(1) + ' oz' : 'Abierta ' + (i + 2)) + '</span>';
@@ -914,12 +1113,12 @@
             html += '<i class="fa-solid fa-chevron-left"></i> Áreas';
             html += '</button>';
             html += '<div>';
-            html += '<div class="audit-count-area-badge">' + areasAuditoriaIcons[area] + ' &nbsp;' + nombreArea + '</div>';
+            html += '<div class="audit-count-area-badge"><i class="' + (areasAuditoriaFA[area] || 'fa-solid fa-location-dot') + '" aria-hidden="true"></i>&nbsp;' + nombreArea + '</div>';
             if (soloLectura) {
                 // FIX #4 — Mensaje claro de que el área está bloqueada para el bartender
-                html += '<div style="font-size:0.62rem;color:var(--amber);margin-top:4px;font-weight:600;">🔒 Área completada — solicita al administrador reabrir para corregir</div>';
+                html += '<div style="font-size:0.62rem;color:var(--amber);margin-top:4px;font-weight:600;"><i class="fa-solid fa-lock" aria-hidden="true"></i> Área completada — solicita al administrador reabrir para corregir</div>';
             } else if (estaCompleta && isAdmin()) {
-                html += '<div style="font-size:0.62rem;color:var(--green);margin-top:4px;font-weight:600;">✓ Área completada — editando como administrador</div>';
+                html += '<div style="font-size:0.62rem;color:var(--green);margin-top:4px;font-weight:600;"><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Área completada — editando como administrador</div>';
             }
             html += '</div>';
             html += '</div>';
@@ -935,7 +1134,7 @@
             // FIX #4: Si soloLectura, mostrar vista de resumen en lugar del formulario
             if (soloLectura) {
                 html += '<div style="margin:16px 0;padding:20px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);text-align:center;">';
-                html += '<div style="font-size:2rem;margin-bottom:8px;">🔒</div>';
+                html += '<i class="fa-solid fa-lock inicio-vacio__ico" aria-hidden="true"></i>';
                 html += '<p style="font-size:0.85rem;font-weight:600;color:var(--txt-primary);margin-bottom:6px;">Tu conteo de "' + nombreArea + '" está registrado</p>';
                 html += '<p style="font-size:0.75rem;color:var(--txt-muted);">Si necesitas hacer correcciones, pide al administrador que reabra esta área.</p>';
                 html += '<div style="margin-top:16px;padding:12px;background:var(--bg);border-radius:var(--r-md);">';
@@ -952,7 +1151,7 @@
                         const key = p.id + '__' + area;
                         const hasUnlock = myAuditoriaUnlocks[key] && !myAuditoriaUnlocks[key].used;
                         html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border);font-size:0.72rem;">';
-                        html += '<span style="color:var(--txt-primary);">' + escapeHtml(p.name) + (hasUnlock ? ' <span style="color:var(--amber);">🔓</span>' : '') + '</span>';
+                        html += '<span style="color:var(--txt-primary);">' + escapeHtml(p.name) + (hasUnlock ? ' <i class="fa-solid fa-unlock" style="color:var(--amber);" title="Corrección habilitada"></i>' : '') + '</span>';
                         html += '<span style="color:var(--accent);font-weight:600;">' + (d.enteras || 0) + ' ent · ' + (d.abiertas || []).length + ' ab</span>';
                         html += '</div>';
                     });
@@ -1697,15 +1896,43 @@
             return _buscarCatalogo().items;
         }
 
-        function addToCart(productId) {
+        // FASE 11B (parte 2) — `cantidad` es opcional y SOLO lo pasa
+        // agregarPedidoSugerido(): el botón normal 🛒 de toda la app sigue
+        // incrementando de uno en uno, sin cambiar nada de su comportamiento
+        // de siempre. Cuando sí viene una cantidad (el pedido sugerido), se
+        // FIJA ese valor en vez de sumarlo — así tocar "Agregar sugerido" dos
+        // veces no duplica la sugerencia, es idempotente.
+        function addToCart(productId, cantidad) {
             const product = products.find(p => p.id === productId);
             if (!product || !product.id) return;
+            const esSugerido = typeof cantidad === 'number' && cantidad > 0;
             const existingItem = cart.find(item => item.id === productId);
-            if (existingItem) existingItem.quantity++;
-            else cart.push({ id: product.id, name: product.name, unit: product.unit || '', group: product.group || 'General', quantity: 1 });
+            if (existingItem) {
+                if (esSugerido) existingItem.quantity = cantidad;
+                else existingItem.quantity++;
+            } else {
+                cart.push({ id: product.id, name: product.name, unit: product.unit || '', group: product.group || 'General', quantity: esSugerido ? cantidad : 1 });
+            }
             saveToLocalStorage();
-            showNotification(product.name + ' agregado al carrito');
+            showNotification(product.name + (esSugerido ? ' agregado al carrito (sugerido: ' + cantidad + ')' : ' agregado al carrito'));
             updateHeaderActions();
+        }
+
+        // FASE 11B (parte 2) — "Cuando seleccione, agregar carrito, se agregue
+        // la cantidad sugerida en generar pedido" (Eduardo, 1-oct-2026).
+        // Recalcula la cantidad en el momento del clic (no la que se pintó al
+        // render original) para no agregar un número desactualizado si el
+        // conteo cambió mientras la tarjeta estaba en pantalla.
+        function agregarPedidoSugerido(productId) {
+            const product = products.find(p => p.id === productId);
+            if (!product) return;
+            const cantidad = (typeof pedidoSugeridoProducto === 'function') ? pedidoSugeridoProducto(product) : null;
+            if (typeof cantidad !== 'number' || cantidad <= 0) {
+                showNotification('Ya no hay pedido sugerido para ' + (product.name || productId));
+                if (typeof renderTab === 'function') renderTab();
+                return;
+            }
+            addToCart(productId, cantidad);
         }
 
         function openOrderModal() {

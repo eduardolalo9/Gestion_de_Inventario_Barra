@@ -151,16 +151,36 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <!-- FIX #11: Tailwind CDN (Play CDN, ~358 KB sin purgar) es solo apto para desarrollo.
-         Para producción, usa el CLI de Tailwind para generar un CSS purgeado (~5-15 KB).
-         Ver: https://tailwindcss.com/docs/installation — mientras tanto el CDN funciona. -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- ══════════════════════════════════════════════════════════
+         REDISEÑO R1 (v5.0) — TAILWIND Y FONT AWESOME YA NO VIENEN DE UN CDN
+         ──────────────────────────────────────────────────────────
+         Las utilidades que la app usa de verdad (inventariadas una por
+         una del código) y los 23 iconos que aparecen en pantalla viven
+         ahora en css/utilidades.css: local, versionado y precargado por
+         el Service Worker como el resto.
+
+         Tres razones, en orden de importancia:
+          1. Esto es una PWA offline-first que se usa en una barra. Los
+             estilos de TODOS los modales y formularios dependían de un
+             dominio externo: sin red, se veían sin estilo.
+          2. El Play CDN de Tailwind es el compilador JIT completo
+             corriendo en el navegador, y Font Awesome descargaba ~1 MB
+             para usar 23 iconos. En un teléfono modesto dentro de una
+             barra, eso es batería y datos móviles.
+          3. Las clases de paleta clara de Tailwind (bg-white,
+             text-gray-900…) pintaban los formularios de blanco sobre
+             una app oscura. Ahora esas mismas clases apuntan a los
+             tokens del tema, así que el HTML existente se ve correcto
+             sin tocarlo.
+
+         SheetJS (abajo) sí sigue viniendo de un CDN a propósito: solo
+         se necesita al exportar o importar Excel, que es una acción
+         deliberada del usuario y se hace con conexión.
+         ══════════════════════════════════════════════════════════ -->
     <!-- FIX #10: defer en SheetJS — solo se necesita al exportar/importar (acción del usuario),
          nunca durante el arranque. Firebase SDK no puede diferirse porque initFirebase()
          está en un bloque inline inmediato que depende de window.firebase. -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-    <!-- FontAwesome 6 — iconos corporativos en la UI de auditoría -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
 
     <!-- ══════════════════════════════════════════════════════════
          FIREBASE SDK  —  compat v10 (módulos globales window.firebase)
@@ -627,7 +647,11 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
             }
         })();
     </script>
-    <link rel="stylesheet" href="css/estilos.css?v=4.20">
+    <!-- Utilidades locales (sustituyen a Tailwind CDN) + iconos locales
+         (sustituyen a Font Awesome CDN). Va ANTES de estilos.css para que
+         las reglas propias de la app sigan teniendo la última palabra. -->
+    <link rel="stylesheet" href="css/utilidades.css?v=5.3">
+    <link rel="stylesheet" href="css/estilos.css?v=5.3">
 </head>
 <body class="min-h-screen">
 
@@ -851,18 +875,13 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
         </div>
     </div>
 
-    <!-- Tabs ocultos (necesarios para switchTab) -->
-    <div class="bg-white shadow-sm sticky" style="display:none!important" aria-hidden="true">
-        <div class="max-w-7xl mx-auto px-2 sm:px-4 md:px-6 flex-shrink-0">
-            <div class="flex gap-1 sm:gap-2 md:gap-8 overflow-x-auto" id="tabs">
-                <button type="button" onclick="switchTab('inicio')"    data-tab="inicio"     class="tab-btn relative whitespace-nowrap text-gray-900">Inicio<div class="tab-indicator absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 to-orange-500 rounded-t-full animate-slideIn"></div></button>
-                <button type="button" onclick="switchTab('productos')" data-tab="productos"  class="tab-btn relative whitespace-nowrap text-gray-600">Productos</button>
-                <button type="button" onclick="switchTab('pedidos')"   data-tab="pedidos"    class="tab-btn relative whitespace-nowrap text-gray-600">Pedidos</button>
-                <button type="button" onclick="switchTab('inventario')"data-tab="inventario" class="tab-btn relative whitespace-nowrap text-gray-600">Inventario</button>
-                <button type="button" onclick="switchTab('historia')"  data-tab="historia"   class="tab-btn relative whitespace-nowrap text-gray-600">Historia</button>
-            </div>
-        </div>
-    </div>
+    <!-- REDISEÑO R2 — aquí vivía una barra horizontal de pestañas con
+         display:none !important desde varias versiones ("Tabs ocultos
+         (necesarios para switchTab)"). Era código muerto que seguía en pie
+         solo porque switchTab() pintaba un indicador dentro de botones
+         invisibles en cada cambio de pestaña. Se retiró junto con ese
+         bucle: la navegación primaria es #bottomTabBar y el panel lateral
+         es la hoja "Más". -->
 
     <!-- FIX #8: elemento <main> semántico — permite a lectores de pantalla saltar al contenido principal -->
     <main id="mainContent" aria-label="Contenido principal">
@@ -1233,89 +1252,107 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
     </div>
 
     <!-- Modal Inventario -->
-    <div id="inventarioModal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[300] animate-fadeIn hidden" style="padding:12px;" role="dialog" aria-modal="true" aria-labelledby="inventarioModalTitle">
-        <div class="modal-box bg-white shadow-2xl max-w-sm w-full p-4 animate-slideUp" style="border-radius:18px;max-height:calc(100dvh - 56px - 24px);overflow-y:auto;">
-            <div class="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-4"></div>
-            <h2 class="text-xl font-bold text-gray-900 mb-1" id="inventarioModalTitle">Contar botellas</h2>
-            <p class="text-sm text-gray-500 mb-2" id="inventarioModalSubtitle"></p>
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         MODAL DE CAPTURA DEL CONTEO — REDISEÑO R4
+         ───────────────────────────────────────────────────────────────────────
+         EL FLUJO NO CAMBIA, por decisión de Eduardo: se sigue tocando la
+         tarjeta y se sigue capturando aquí. Todos los id y los onclick son los
+         mismos; lo único que cambia es cómo se ve.
+
+         Qué se arregló, y por qué importa en esta pantalla más que en ninguna:
+          · Los campos numéricos pasan a mono tabular y a 1.375rem. Es la cifra
+            que el bartender escribe y relee cientos de veces en un turno; en
+            Plex Sans los dígitos bailaban de ancho.
+          · El botón "Agregar" era azul brillante (el último resto grande de la
+            paleta anterior) y además pisaba la etiqueta de al lado cuando el
+            texto crecía. Ahora es neutro y va en su propia línea: añadir otra
+            botella abierta es una acción secundaria. El único latón del modal
+            es Guardar — el latón se gana.
+          · Los emoji de las etiquetas pasan a iconos locales.
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <div id="inventarioModal" class="fixed inset-0 flex items-center justify-center z-[300] animate-fadeIn hidden" style="padding:12px;background:var(--scrim);" role="dialog" aria-modal="true" aria-labelledby="inventarioModalTitle">
+        <div class="modal-box max-w-sm w-full animate-slideUp inv-modal" style="max-height:calc(100dvh - 56px - 24px);overflow-y:auto;">
+            <div class="inv-modal__grabber" aria-hidden="true"></div>
+            <h2 class="inv-modal__titulo" id="inventarioModalTitle">Contar botellas</h2>
+            <p class="inv-modal__sub" id="inventarioModalSubtitle"></p>
             <!-- R1 (regla 14) — MODO BOTELLA: enteras + abiertas en oz.
                  Solo visible cuando el producto tiene habilitado el conteo en oz. -->
             <div id="inv_bloqueBotella">
-            <div class="mb-4">
-                <label for="inv_enteras" class="block text-sm font-semibold text-gray-700 mb-2">🍾 Botellas Enteras</label>
-                <input type="text" id="inv_enteras" inputmode="numeric" value="0" oninput="_sanearEntradaEntero(this)" class="w-full px-4 py-2 bg-white text-gray-900 border-2 border-blue-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center text-base font-bold">
+            <div class="inv-modal__campo">
+                <label for="inv_enteras" class="inv-modal__etq"><i class="fa-solid fa-bottle" aria-hidden="true"></i> Botellas enteras</label>
+                <input type="text" id="inv_enteras" inputmode="numeric" value="0" oninput="_sanearEntradaEntero(this)" class="inv-modal__num">
             </div>
-            <div class="mb-4">
-                <div class="flex items-center justify-between mb-2">
-                    <!-- FIX #7: <label> requiere atributo "for" para asociarse al input. Se usa
-                         aria-labelledby en el contenedor dinámico ya que los inputs de abiertas
-                         se crean en JS. La etiqueta describe el grupo visualmente. -->
-                    <label id="inv_abiertasLabel" class="block text-sm font-semibold text-gray-700">🍷 Botellas Abiertas <span id="inv_abiertasUnidadHint" class="text-xs font-normal text-orange-500"></span></label>
-                    <button type="button" onclick="addAbiertaInModal()" class="flex items-center gap-1 text-xs bg-blue-700 text-white px-3 py-1.5 rounded hover:bg-blue-800 transition-all font-medium">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path></svg>
-                        Agregar
-                    </button>
-                </div>
+            <div class="inv-modal__campo">
+                <!-- FIX #7: <label> requiere atributo "for" para asociarse al input. Se usa
+                     aria-labelledby en el contenedor dinámico ya que los inputs de abiertas
+                     se crean en JS. La etiqueta describe el grupo visualmente. -->
+                <label id="inv_abiertasLabel" class="inv-modal__etq"><i class="fa-solid fa-wine-glass" aria-hidden="true"></i> Botellas abiertas <span id="inv_abiertasUnidadHint" class="inv-modal__pista"></span></label>
                 <div id="inv_abiertasContainer" class="space-y-2"></div>
+                <button type="button" onclick="addAbiertaInModal()" class="inv-modal__agregar">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path></svg>
+                    Agregar otra abierta
+                </button>
             </div>
             </div><!-- /inv_bloqueBotella -->
 
             <!-- R1 (regla 14) — MODO CANTIDAD: un solo campo, con decimales.
                  Para productos que no se cuentan por botella: aceitunas 1.5 PZ,
                  golos 0.490 KG, refresco 4.5 LTS. -->
-            <div id="inv_bloqueCantidad" class="mb-4" style="display:none;">
-                <label for="inv_cantidadTotal" class="block text-sm font-semibold text-gray-700 mb-2">
-                    📦 Cantidad total <span id="inv_cantidadUnidad" class="text-xs font-normal text-gray-500"></span>
+            <div id="inv_bloqueCantidad" class="inv-modal__campo" style="display:none;">
+                <label for="inv_cantidadTotal" class="inv-modal__etq">
+                    <i class="fa-solid fa-box" aria-hidden="true"></i> Cantidad total <span id="inv_cantidadUnidad" class="inv-modal__pista"></span>
                 </label>
                 <input type="text" id="inv_cantidadTotal" min="0" step="0.001" inputmode="decimal" value="0"
                     oninput="_sanearEntradaDecimal(this)"
-                    class="w-full px-4 py-2 bg-white text-gray-900 border-2 border-blue-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center text-base font-bold">
-                <p class="text-xs text-gray-400 mt-2">Admite decimales, con punto o coma. Ejemplos: 8.65 · 4,5 · 1.245</p>
+                    class="inv-modal__num">
+                <p class="inv-modal__ayuda">Admite decimales, con punto o coma. Ejemplos: 8.65 · 4,5 · 1.245</p>
             </div>
 
             <!-- R1 (regla 16) — El selector "Motivo del cambio" se eliminó por completo.
                  El historial sigue registrando cada cambio, pero no se le pide al
                  bartender que justifique un conteo: frenaba la captura sin aportar. -->
-            <div class="flex gap-3 pt-2" style="position:sticky;bottom:0;background:var(--modal-bg,#fff);padding-bottom:4px;z-index:1;">
-                <button type="button" onclick="closeInventarioModal()" style="flex:1;height:40px;border-radius:9999px;border:none;background:transparent;color:var(--txt-secondary);font-family:'IBM Plex Sans',sans-serif;font-size:.875rem;font-weight:500;cursor:pointer;" >Cancelar</button>
-                <button type="button" onclick="saveInventarioModal()" style="flex:1;height:40px;border-radius:9999px;border:none;background:var(--accent);color:var(--accent-on,#003063);font-family:'IBM Plex Sans',sans-serif;font-size:.875rem;font-weight:500;cursor:pointer;box-shadow:var(--shadow-card);">Guardar</button>
+            <div class="inv-modal__acciones">
+                <button type="button" onclick="closeInventarioModal()" class="inv-modal__btn inv-modal__btn--fantasma">Cancelar</button>
+                <button type="button" onclick="saveInventarioModal()" class="inv-modal__btn inv-modal__btn--primario">Guardar</button>
             </div>
         </div>
     </div>
 
-        <script src="js/00-nucleo.js?v=4.20"></script>
-    <script src="js/05-busqueda-motor.js?v=4.20"></script>
-    <script src="js/06-busqueda-ui.js?v=4.20"></script>
-    <script src="js/10-multiusuario.js?v=4.20"></script>
-    <script src="js/15-ciclo-semanal.js?v=4.20"></script>
-    <script src="js/18-areas-config.js?v=4.20"></script>
-    <script src="js/20-persistencia.js?v=4.20"></script>
-    <script src="js/30-indexeddb.js?v=4.20"></script>
-    <script src="js/40-firestore.js?v=4.20"></script>
-    <script src="js/45-inventario-datos.js?v=4.20"></script>
-    <script src="js/47-existencia.js?v=4.20"></script>
-    <script src="js/48-consumo-teorico.js?v=4.20"></script>
-    <script src="js/50-roles-permisos.js?v=4.20"></script>
-    <script src="js/60-arranque.js?v=4.20"></script>
-    <script src="js/70-conversion-render.js?v=4.20"></script>
-    <script src="js/75-auditoria-flujo.js?v=4.20"></script>
-    <script src="js/80-buscador.js?v=4.20"></script>
-    <script src="js/83-panel.js?v=4.20"></script>
-    <script src="js/85-ui-inventario-fisico.js?v=4.20"></script>
-    <script src="js/87-reconteo.js?v=4.20"></script>
-    <script src="js/88-compras.js?v=4.20"></script>
-    <script src="js/90-ciclo-admin.js?v=4.20"></script>
-    <script src="js/91-recetario.js?v=4.20"></script>
-    <script src="js/92-recetario-importar.js?v=4.20"></script>
-    <script src="js/93-ventas.js?v=4.20"></script>
-    <script src="js/95-exportacion.js?v=4.20"></script>
-    <script src="js/99-window-arranque.js?v=4.20"></script>
+        <script src="js/00-nucleo.js?v=5.3"></script>
+    <script src="js/03-ui-kit.js?v=5.3"></script><!-- BI UI KIT (rediseño R1) -->
+    <script src="js/05-busqueda-motor.js?v=5.3"></script>
+    <script src="js/06-busqueda-ui.js?v=5.3"></script>
+    <script src="js/10-multiusuario.js?v=5.3"></script>
+    <script src="js/15-ciclo-semanal.js?v=5.3"></script>
+    <script src="js/18-areas-config.js?v=5.3"></script>
+    <script src="js/20-persistencia.js?v=5.3"></script>
+    <script src="js/30-indexeddb.js?v=5.3"></script>
+    <script src="js/40-firestore.js?v=5.3"></script>
+    <script src="js/45-inventario-datos.js?v=5.3"></script>
+    <script src="js/47-existencia.js?v=5.3"></script>
+    <script src="js/48-consumo-teorico.js?v=5.3"></script>
+    <script src="js/49-fisico-vs-sistema.js?v=5.3"></script>
+    <script src="js/50-roles-permisos.js?v=5.3"></script>
+    <script src="js/60-arranque.js?v=5.3"></script>
+    <script src="js/70-conversion-render.js?v=5.3"></script>
+    <script src="js/75-auditoria-flujo.js?v=5.3"></script>
+    <script src="js/80-buscador.js?v=5.3"></script>
+    <script src="js/83-panel.js?v=5.3"></script>
+    <script src="js/85-ui-inventario-fisico.js?v=5.3"></script>
+    <script src="js/87-reconteo.js?v=5.3"></script>
+    <script src="js/88-compras.js?v=5.3"></script>
+    <script src="js/90-ciclo-admin.js?v=5.3"></script>
+    <script src="js/91-recetario.js?v=5.3"></script>
+    <script src="js/92-recetario-importar.js?v=5.3"></script>
+    <script src="js/93-ventas.js?v=5.3"></script>
+    <script src="js/95-exportacion.js?v=5.3"></script>
+    <script src="js/99-window-arranque.js?v=5.3"></script>
 
     </div><!-- /#appWrapper -->
 
     <!-- ══════════════════════════════════════════════════════
          AUTH — Lógica de autenticación Firebase
          ══════════════════════════════════════════════════════ -->
-        <script src="js/auth.js?v=4.20"></script>
+        <script src="js/auth.js?v=5.3"></script>
 </body>
 </html>
