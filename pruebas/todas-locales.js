@@ -69,6 +69,7 @@ const PRUEBAS = [
     'prueba-redis-r7.js',             // REDISEÑO R7 — Recetario y los modales pendientes
     'prueba-recetario-buscador-unificado.js', // Recetario — mismo buscador que Inicio (motor unificado, v5.8)
     'prueba-redis-r7b.js',             // REDISEÑO R7b — Compras (y Pedidos, revisado)
+    'prueba-conteo-compacto.js',       // v5.11 — vista compacta de las tarjetas de área del Conteo
 ];
 
 let fallaron = [];

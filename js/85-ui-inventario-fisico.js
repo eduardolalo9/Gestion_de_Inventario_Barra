@@ -652,7 +652,7 @@
             // para todos" salen de la tarjeta como botón propio: antes eran
             // enlaces de 10 px DENTRO de la zona que entra al área.
             html += '<p class="if-seccion">Áreas</p>';
-            html += '<div class="if-areas">';
+            html += '<div class="if-areas if-areas--compacto">';
             AREAS_CONTEO.forEach(area => {
                 const isCompleta = statusRef[area] === 'completada';
                 const tieneUnlock = !isAdmin() && Object.keys(myAuditoriaUnlocks)
@@ -662,7 +662,7 @@
                       + ' onclick="auditoriaEntrarArea(\'' + area + '\')"'
                       + ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();auditoriaEntrarArea(\'' + area + '\');}"'
                       + ' role="button" tabindex="0" aria-label="Entrar a ' + areasAuditoria[area] + '">';
-                html += '<div class="audit-area-icon"><i class="' + areasAuditoriaFA[area] + '" style="font-size:1.3rem;color:' + (isCompleta ? 'var(--green)' : 'var(--accent)') + ';"></i></div>';
+                html += '<div class="audit-area-icon"><i class="' + areasAuditoriaFA[area] + '" style="font-size:1.05rem;color:' + (isCompleta ? 'var(--green)' : 'var(--accent)') + ';"></i></div>';
                 html += '<div class="audit-area-info">';
                 html += '<div class="audit-area-name">' + areasAuditoria[area] + '</div>';
                 html += '<div class="audit-area-status ' + (isCompleta ? 'completada' : 'pendiente') + '">';
@@ -677,11 +677,11 @@
                     const conteoRef = puedeVerConteosAjenos() ? auditoriaConteo : myAuditoriaConteo;
                     const totalProductos = products.filter(p => conteoRef[p.id] && conteoRef[p.id][area] &&
                         (conteoRef[p.id][area].enteras > 0 || (conteoRef[p.id][area].abiertas || []).some(a => a > 0))).length;
-                    html += '<div class="if-area__detalle">' + totalProductos + ' producto(s) con cantidad';
+                    html += '<div class="if-area__detalle">' + totalProductos + ' con cantidad';
                     // D — según el permiso, no según isAdmin(): el mismo
                     // criterio que aplica reabrirArea().
                     if (hasPermission('inventory.reopenArea')) {
-                        accionArea = '<button type="button" class="bt bt--secundario" onclick="reabrirArea(\'' + area + '\')"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Reabrir ' + escapeHtml(areasAuditoria[area]) + '</button>';
+                        accionArea = '<button type="button" class="bt bt--secundario" onclick="reabrirArea(\'' + area + '\')" aria-label="Reabrir ' + escapeHtml(areasAuditoria[area]) + '"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Reabrir</button>';
                     } else if (tieneUnlock) {
                         html += ' · <span style="color:var(--amber);font-weight:700;"><i class="fa-solid fa-unlock" aria-hidden="true"></i> Corrección habilitada</span>';
                     } else {
@@ -694,7 +694,7 @@
                     accionArea = '<button type="button" class="bt bt--secundario" onclick="auditoriaCerrarArea(\'' + area + '\')"><i class="fa-solid fa-lock" aria-hidden="true"></i> Cerrar área para todos</button>';
                 }
                 html += '</div>';
-                html += '<svg class="audit-area-arrow" width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 18l6-6-6-6"/></svg>';
+                html += '<svg class="audit-area-arrow" width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 18l6-6-6-6"/></svg>';
                 html += '</div>';
                 html += accionArea;
                 html += '</div>';

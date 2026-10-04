@@ -3251,11 +3251,17 @@ html[data-theme="light"] .vt-dia--ok { color: #fff; }
    administración (reabrir, cerrar para todos) van FUERA de la tarjeta, como
    botón propio. Antes eran enlaces de 10 px dentro de la zona que ya entra
    al área: un toque desviado hacía lo que no querías. */
-.if-area { display: flex; flex-direction: column; gap: 8px; }
-.if-area .audit-area-card { min-height: 76px; padding: 16px; margin: 0; }
-.if-area .audit-area-name { font-size: 1.05rem; }
-.if-area .audit-area-status { font-size: .86rem; }
-.if-area__detalle { font-size: .86rem; color: var(--txt-secondary); margin-top: 4px; }
+.if-area { display: flex; flex-direction: column; gap: 6px; }
+/* Vista compacta (v5.11): se compacta lo que NO tiene piso de ergonomía —
+   separación entre tarjetas, caja del icono, tipografía secundaria, flecha.
+   Se respetan los pisos de FASE 10B ("para el pulgar", barra con manos
+   mojadas): tarjeta de área >= 72 px, botones >= 48 px y texto >= 14 px. */
+.if-area .audit-area-card { min-height: 72px; padding: 10px 12px; margin: 0; gap: 10px; }
+.if-area .audit-area-icon { width: 36px; height: 36px; }
+.if-area .audit-area-info { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; row-gap: 2px; }
+.if-area .audit-area-name { font-size: .96rem; flex-basis: 100%; }
+.if-area .audit-area-status { font-size: .74rem; padding: 1px 6px; margin-top: 0; }
+.if-area__detalle { font-size: .8rem; color: var(--txt-secondary); margin-top: 0; }
 .if-area .bt { min-height: 48px; font-size: .95rem; }
 
 /* ── Modal "Nuevo Inventario Físico": hoja inferior en el celular ──────── */
@@ -3284,8 +3290,12 @@ html[data-theme="light"] .vt-dia--ok { color: #fff; }
 .if-pantalla .audit-user-row { padding: 14px; margin-bottom: 12px; }
 .if-pantalla .audit-timestamp { font-size: .78rem; }
 /* El botón de un área queda agrupado con SU tarjeta, no con la siguiente. */
-.if-area:has(> .bt) { padding: 8px; border-radius: 20px; background: var(--surface); border: 1px solid var(--border-mid); }
+.if-area:has(> .bt) { padding: 6px; border-radius: var(--r-lg); background: var(--surface); border: 1px solid var(--border-mid); }
 .if-areas { display: flex; flex-direction: column; gap: 16px; }
+/* Vista compacta empresarial — solo la sección "Áreas" de Auditoría Física;
+   .if-areas (arriba) sigue en 16px porque también la usa el Historial
+   (renderHistorialInventarios(), otra pantalla con otra tarjeta). */
+.if-areas--compacto { gap: 8px; }
 /* Panel "Dispositivo actual" dentro de Inventario Físico: el botón baja a su
    propia fila y crece; el formulario de renombrar queda en columna. */
 .if-pantalla .audit-user-panel { flex-wrap: wrap; gap: 12px; }

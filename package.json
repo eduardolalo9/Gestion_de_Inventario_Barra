@@ -56,6 +56,8 @@
     "test:recbuscadornav": "node pruebas/prueba-recetario-buscador-unificado-navegador.js",
     "test:r7bredis": "node pruebas/prueba-redis-r7b.js",
     "test:r7bnav": "node pruebas/prueba-redis-r7b-navegador.js",
+    "test:compacto": "node pruebas/prueba-conteo-compacto.js",
+    "test:compactonav": "node pruebas/prueba-conteo-compacto-navegador.js",
     "test:folio": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-folio-integracion.js && node pruebas/prueba-arranque-integracion.js && node pruebas/prueba-ciclo-completo-integracion.js && node pruebas/prueba-reinicio-integracion.js\"",
     "test:arranque": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-arranque-integracion.js && node pruebas/prueba-ciclo-completo-integracion.js && node pruebas/prueba-reinicio-integracion.js\"",
     "test:ciclo": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-ciclo-completo-integracion.js && node pruebas/prueba-reinicio-integracion.js\"",
