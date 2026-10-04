@@ -1,0 +1,125 @@
+name: Pruebas
+
+# Rescatado del PR #1 (security/audit-hardening) y ampliado.
+# El original solo cubría main y security/**, así que ninguna rama fase/*
+# —donde ocurre todo el trabajo— pasaba jamás por aquí.
+#
+# Qué corre: `npm test`, que hoy son las comprobaciones de integridad de la
+# partición (M2) y las pruebas de firestore.rules contra el emulador oficial.
+
+on:
+  push:
+    branches:
+      - main
+      - produccion
+      - 'fase/**'
+      - 'ci/**'
+  pull_request:
+    branches:
+      - main
+      - produccion
+  workflow_dispatch:        # permite lanzarlo a mano desde la pestaña Actions
+
+# Si se empujan dos commits seguidos a la misma rama, cancela el anterior:
+# lo que importa es el resultado del último, no gastar minutos en el previo.
+concurrency:
+  group: pruebas-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pruebas:
+    name: Integridad + reglas de Firestore
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      # El emulador de Firestore es un JAR: sin Java no arranca. Los runners
+      # de ubuntu-latest suelen traerlo, pero depender de la imagen del runner
+      # es frágil — el día que la cambien, las pruebas fallarían por algo que
+      # no tiene que ver con el código.
+      #
+      # LA VERSIÓN NO ES LIBRE: firebase-tools 15 rechaza cualquier Java
+      # anterior al 21 y aborta con
+      #   "no longer supports Java versions before 21"
+      # La primera versión de este workflow fijaba 17 y ese fue justamente el
+      # motivo de que fallara. No bajar de 21.
+      - name: Preparar Java 21 (lo exige firebase-tools 15)
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Preparar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'   # la misma que corre Eduardo en su maquina
+          cache: npm
+
+      # Cachear el emulador evita volver a bajar 136 MB en cada ejecución.
+      - name: Caché del emulador de Firestore
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: emulador-firestore-${{ runner.os }}
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Ejecutar las pruebas
+        run: npm test
+
+      # AÑADIDO (auditoría 26/09): hasta aquí CI solo corría las locales y las
+      # de reglas. Las 201 comprobaciones de integración —las que montan el
+      # código REAL contra Firestore de verdad— solo se ejecutaban a mano. Los
+      # dos fallos críticos de la semana del 25/09 (CONTABILIZADO tomado por
+      # abierto; inventario no re-suscrito al reabrir, que dejaba "Crear"
+      # borrando los conteos de todos) los caza esta suite, no las otras.
+      - name: Pruebas de integración contra Firestore real
+        run: npm run test:integracion
+
+      # Si algo falla, el log del emulador suele decir por qué. Se sube como
+      # artefacto para poder mirarlo sin tener que reproducir el fallo.
+      - name: Guardar el log del emulador si algo falló
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: firestore-debug-log
+          path: firestore-debug.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # ════════════════════════════════════════════════════════════════════════
+  #  Job aparte: las pruebas de navegador necesitan Chromium (~120 MB) y un
+  #  servidor estático, pero NO el emulador. Separarlas deja que las de
+  #  reglas e integración den resultado sin esperar a la descarga de
+  #  Playwright, y que un fallo de navegador se distinga de un fallo de datos.
+  # ════════════════════════════════════════════════════════════════════════
+  navegador:
+    name: Pruebas en navegador real (Chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Preparar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Instalar Chromium para Playwright
+        run: npx playwright install --with-deps chromium
+
+      # todas-navegador.js levanta y apaga su propio http-server.
+      # prueba-p0.js baja SheetJS de cdnjs: si la red del runner lo bloquea,
+      # el fallo dirá "XLSX is not defined" y no es un fallo del código.
+      - name: Ejecutar las pruebas de navegador
+        run: npm run test:navegador
