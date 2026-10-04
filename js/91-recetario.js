@@ -239,16 +239,15 @@
         }
         window._recetarioVolverALista = _recetarioVolverALista;
 
-        function updateRecetarioSearch(val) {
-            _recetarioSearchTerm = val || '';
-            renderTab();
-        }
+        // REDISEÑO — el Recetario ahora comparte el buscador unificado (ver
+        // js/80-buscador.js, registro 'recetario'). Estas dos funciones ya no
+        // las llama la interfaz (la barra las reemplaza por BusquedaUI), pero
+        // se conservan delegando en ella por si algo externo —consola, una
+        // prueba— todavía las invoca por su nombre anterior.
+        function updateRecetarioSearch(val) { BusquedaUI.establecer('recetario', val); }
         window.updateRecetarioSearch = updateRecetarioSearch;
 
-        function clearRecetarioSearch() {
-            _recetarioSearchTerm = '';
-            renderTab();
-        }
+        function clearRecetarioSearch() { BusquedaUI.limpiar('recetario'); }
         window.clearRecetarioSearch = clearRecetarioSearch;
 
         // ── Editor (modal) ───────────────────────────────────────────────────
@@ -516,47 +515,66 @@
         }
         window.renderRecetarioTab = renderRecetarioTab;
 
+        // REDISEÑO — la lista del Recetario ahora usa la misma barra de
+        // búsqueda que Inicio (ver js/80-buscador.js, registro 'recetario'):
+        // antes tenía su propio <input> con comparación de subcadena a mano
+        // (sin tildes, sin puntaje por relevancia, sin paginación ni atajos
+        // de teclado). La región de resultados se arma aparte en
+        // _renderRecetarioResultados() para que BusquedaUI pueda refrescarla
+        // sola en cada tecleo, sin repintar la barra entera.
         function _renderRecetarioLista() {
+            var html = BusquedaUI.barra('recetario', {
+                placeholder: 'Buscar receta por nombre, código o categoría…',
+                etiqueta: 'Buscar recetas',
+                sticky: true
+            });
+            html += BusquedaUI.region('recetario', _renderRecetarioResultados().html);
+            return html;
+        }
+
+        function _renderRecetarioResultados() {
             var puedeEditar = hasPermission('recipe.edit');
-            var q = (_recetarioSearchTerm || '').trim().toLowerCase();
-            var lista = recetas.filter(function(r) {
-                if (!q) return true;
-                return (r.nombre || '').toLowerCase().indexOf(q) !== -1 ||
-                       (r.categoria || '').toLowerCase().indexOf(q) !== -1;
-            }).sort(function(a, b) { return (a.nombre || '').localeCompare(b.nombre || ''); });
 
-            var html = '<div style="margin-bottom:16px;">';
-            html += '<input type="text" value="' + escapeHtml(_recetarioSearchTerm) + '" oninput="updateRecetarioSearch(this.value)" ' +
-                    'placeholder="Buscar receta por nombre o categoría…" ' +
-                    'class="w-full px-4 py-2.5 bg-white text-gray-900 border border-gray-200 rounded-full text-sm">';
-            html += '</div>';
-
-            if (lista.length === 0) {
-                html += '<div style="text-align:center;padding:50px 20px;color:var(--txt-secondary);">';
-                if (recetas.length === 0) {
-                    html += '<p><i class="fa-solid fa-book" aria-hidden="true"></i> Aún no hay recetas. ' +
-                            (puedeEditar ? 'Agrega la primera con el botón de arriba.' : 'El administrador todavía no publica el recetario.') +
-                            '</p>';
-                } else {
-                    html += '<p>Sin resultados para "' + escapeHtml(_recetarioSearchTerm) + '".</p>';
-                }
-                html += '</div>';
-                return html;
+            if (recetas.length === 0) {
+                return {
+                    html: '<div style="text-align:center;padding:50px 20px;color:var(--txt-secondary);">' +
+                          '<p><i class="fa-solid fa-book" aria-hidden="true"></i> Aún no hay recetas. ' +
+                          (puedeEditar ? 'Agrega la primera con el botón de arriba.' : 'El administrador todavía no publica el recetario.') +
+                          '</p></div>',
+                    coincidencias: 0, total: 0
+                };
             }
 
+            var res = _buscarRecetario();
+            var lista = res.items;
+            if (!(_recetarioSearchTerm || '').trim()) {
+                // Sin búsqueda activa: alfabético, igual que mostraba siempre
+                // esta pantalla. El motor compartido no reordena una lista sin
+                // consulta (ver buscar() en 05-busqueda-motor.js — devuelve la
+                // lista en su orden original); el alfabetizado es una decisión
+                // de esta pantalla, no del buscador en sí.
+                lista = lista.slice().sort(function(a, b) { return (a.nombre || '').localeCompare(b.nombre || ''); });
+            }
+            var lim = BusquedaUI.limite('recetario');
+
+            if (lista.length === 0) {
+                return { html: BusquedaUI.vacio('recetario', 'recetas'), coincidencias: 0, total: res.total };
+            }
+
+            var html = BusquedaUI.resumen('recetario', res.coincidencias, res.total, 'receta', 'recetas');
             html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;">';
-            lista.forEach(function(r) {
-                var cr = costoReceta(r);
+            lista.slice(0, lim).forEach(function(receta) {
+                var cr = costoReceta(receta);
                 var costoTxt = cr.incompleto ? 'Costo incompleto' : ('$' + cr.costo.toFixed(2));
-                html += '<div onclick="_recetarioAbrirFicha(\'' + r.id + '\')" ' +
+                html += '<div data-sbx-item onclick="_recetarioAbrirFicha(\'' + receta.id + '\')" ' +
                         'style="cursor:pointer;background:var(--card);border:1px solid var(--border-mid);border-radius:14px;padding:14px 16px;">';
                 html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">';
-                html += '<p style="font-weight:700;color:var(--txt-primary);margin:0;">' + escapeHtml(r.nombre || '(sin nombre)') + '</p>';
-                if (!r.activa) html += '<span style="font-size:.68rem;background:var(--card-high);color:var(--txt-muted);padding:2px 8px;border-radius:999px;white-space:nowrap;">Inactiva</span>';
+                html += '<p style="font-weight:700;color:var(--txt-primary);margin:0;">' + resaltarBusqueda(receta.nombre || '(sin nombre)', _recetarioSearchTerm) + '</p>';
+                if (!receta.activa) html += '<span style="font-size:.68rem;background:var(--card-high);color:var(--txt-muted);padding:2px 8px;border-radius:999px;white-space:nowrap;">Inactiva</span>';
                 html += '</div>';
-                if (r.categoria) html += '<p style="font-size:.78rem;color:var(--txt-secondary);margin:4px 0 0;">' + escapeHtml(r.categoria) + '</p>';
+                if (receta.categoria) html += '<p style="font-size:.78rem;color:var(--txt-secondary);margin:4px 0 0;">' + resaltarBusqueda(receta.categoria, _recetarioSearchTerm) + '</p>';
                 html += '<p style="font-size:.78rem;color:var(--txt-secondary);margin:6px 0 0;">' +
-                        r.ingredientes.length + ' insumo' + (r.ingredientes.length === 1 ? '' : 's') + '</p>';
+                        receta.ingredientes.length + ' insumo' + (receta.ingredientes.length === 1 ? '' : 's') + '</p>';
                 if (puedeEditar) {
                     html += '<p style="font-size:.85rem;font-weight:600;margin:8px 0 0;color:' +
                             (cr.incompleto ? 'var(--warn)' : 'var(--accent)') + ';">' + costoTxt + '</p>';
@@ -564,7 +582,8 @@
                 html += '</div>';
             });
             html += '</div>';
-            return html;
+            html += BusquedaUI.centinela('recetario', lista.length - lim);
+            return { html: html, coincidencias: res.coincidencias, total: res.total };
         }
 
         function _renderRecetaFicha(id) {

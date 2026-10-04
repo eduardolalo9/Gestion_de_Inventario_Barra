@@ -158,7 +158,12 @@ chk('fa-triangle-exclamation y fa-xmark están definidos en utilidades.css',
 
 // ═══ 6 · LA PESTAÑA RECETARIO (LISTA + FICHA) ══════════════════════════════
 const fTab    = funcion(recJs, 'renderRecetarioTab');
-const fLista  = funcion(recJs, '_renderRecetarioLista');
+// NOTA (buscador unificado, posterior a R7): el pintado de la tarjeta —el
+// aviso de vacío, el badge "Inactiva", el color de "Costo incompleto" y el
+// uso de costoReceta()— se movió de _renderRecetarioLista() (que ahora solo
+// pinta la barra compartida) a _renderRecetarioResultados(). Las violaciones
+// que R7 corrigió siguen corregidas; solo cambió qué función las contiene.
+const fLista  = funcion(recJs, '_renderRecetarioResultados') || funcion(recJs, '_renderRecetarioLista');
 const fFicha  = funcion(recJs, '_renderRecetaFicha');
 chk('★ Sin acceso al recetario: candado como icono del kit, no emoji 🔒',
     /fa-solid fa-lock" aria-hidden="true"><\/i> No tienes acceso al recetario/.test(fTab));
@@ -184,7 +189,7 @@ chk('Ningún color hex a mano queda en js/91-recetario.js',
 chk('saveRecetaModal() conserva su validación y su permiso recipe.edit',
     /hasPermission\('recipe\.edit'\)/.test(funcion(recJs, 'saveRecetaModal')));
 chk('costoReceta/costoLineaReceta no cambiaron de firma (siguen usándose igual en la ficha)',
-    /costoReceta\(r\)/.test(fLista) && /costoLineaReceta\(ing, producto\)/.test(fFicha));
+    /costoReceta\((r|receta)\)/.test(fLista) && /costoLineaReceta\(ing, producto\)/.test(fFicha));
 chk('createOrder() y renderOrderTable() conservan su lógica (el carrito no cambió)',
     /cart\.reduce\(\(sum, item\) => sum \+ item\.quantity, 0\)/.test(funcion(invJs, 'createOrder')) &&
     /orderTotal\.textContent = 'Total: ' \+ total\.toFixed\(2\)/.test(funcion(invJs, 'renderOrderTable')));

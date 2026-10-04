@@ -59,6 +59,20 @@
             ]
         });
 
+        // REDISEÑO — Recetario. El nombre manda igual que en el catálogo; el
+        // PV (código único, solo existe si la receta vino de una importación
+        // — ver RECETARIO-2) se trata como código exacto; la categoría pesa
+        // como el grupo del catálogo. Antes el Recetario tenía su propio
+        // <input> con una comparación de subcadena a mano (sin tildes, sin
+        // puntaje, sin paginación) — ver claude/rediseno-r7b... (este cambio).
+        var _motorRecetas = crearMotorBusqueda({
+            claves: [
+                { nombre: 'nombre',    peso: 3 },
+                { nombre: 'pv',        peso: 2, codigo: true },
+                { nombre: 'categoria', peso: 1 }
+            ]
+        });
+
         // ── Catálogo (Inicio + Productos comparten estado) ──────────────────
 
         function _bajoMinimo(p) {
@@ -206,6 +220,12 @@
             });
         }
 
+        // ── Recetario ────────────────────────────────────────────────────────
+
+        function _buscarRecetario() {
+            return _motorRecetas.buscar(recetas, _recetarioSearchTerm);
+        }
+
         // ── Compatibilidad con los nombres anteriores ───────────────────────
         // Siguen existiendo por si algún botón, script de consola o prueba las
         // llama. Todas delegan en el buscador unificado.
@@ -279,4 +299,16 @@
                 if (d) _motorFvs.indexar(d.filas);
             },
             paso: 40
+        });
+
+        // REDISEÑO — Recetario comparte el mismo buscador que Inicio: misma
+        // barra, mismo motor difuso, mismo resaltado, misma paginación por
+        // tandas y navegación con teclado. _renderRecetarioResultados() vive
+        // en js/91-recetario.js, junto al resto del módulo.
+        BusquedaUI.registrar('recetario', {
+            obtenerConsulta: function() { return _recetarioSearchTerm; },
+            alAplicar:  function(v) { _recetarioSearchTerm = v; },
+            refrescar:  function() { return _pintarRegionBusqueda('recetario', _renderRecetarioResultados()); },
+            precalentar: function() { _motorRecetas.indexar(recetas); },
+            paso: 60
         });

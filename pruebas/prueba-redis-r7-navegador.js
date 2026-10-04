@@ -60,7 +60,10 @@ const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
     const re = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
     const cont = document.getElementById('tabContent');
     const tarjetas = [...cont.querySelectorAll('div[onclick^="_recetarioAbrirFicha"]')];
-    const inactivaBadge = cont.querySelector('span');
+    // Tras el buscador unificado (posterior a R7), el resumen "N de M" de la
+    // barra compartida (BusquedaUI.resumen) también pinta <span> antes que el
+    // badge — se busca por texto, no por "el primer <span>".
+    const inactivaBadge = [...cont.querySelectorAll('span')].find(function(s) { return s.textContent === 'Inactiva'; });
     return {
       numTarjetas: tarjetas.length,
       emoji: (cont.innerText.match(re) || []).join(' '),
