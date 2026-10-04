@@ -55,6 +55,7 @@ const PRUEBAS = [
     'prueba-redis-r6-navegador.js',     // REDISEÑO R6 — la ficha de producto (#productModal) en pantalla
     'prueba-redis-r7-navegador.js',     // REDISEÑO R7 — Recetario y los modales pendientes, en pantalla
     'prueba-recetario-buscador-unificado-navegador.js', // Recetario — mismo buscador que Inicio: typos, tildes, PV, paginación, teclado
+    'prueba-redis-r7b-navegador.js',    // REDISEÑO R7b — Compras (y Pedidos, revisado), en pantalla
 ];
 
 function esperarServidor(intentos) {

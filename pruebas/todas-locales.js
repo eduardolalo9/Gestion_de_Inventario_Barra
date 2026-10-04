@@ -68,6 +68,7 @@ const PRUEBAS = [
     'prueba-redis-r6.js',             // REDISEÑO R6 — Catálogo y ficha: la ficha de producto (#productModal)
     'prueba-redis-r7.js',             // REDISEÑO R7 — Recetario y los modales pendientes
     'prueba-recetario-buscador-unificado.js', // Recetario — mismo buscador que Inicio (motor unificado, v5.8)
+    'prueba-redis-r7b.js',             // REDISEÑO R7b — Compras (y Pedidos, revisado)
 ];
 
 let fallaron = [];
