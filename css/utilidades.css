@@ -1,0 +1,412 @@
+/* =================================================================
+   UTILIDADES LOCALES — sustituyen a Tailwind por CDN
+   REDISEÑO R1 (v5.0) · BarInventory
+   =================================================================
+
+   ── POR QUÉ EXISTE ESTE ARCHIVO ──────────────────────────────────
+   Hasta la 4.24 la app cargaba Tailwind desde cdn.tailwindcss.com y
+   Font Awesome desde cdnjs. Eso tenía tres problemas, y los tres se
+   arreglan aquí:
+
+   1. OFFLINE-FIRST ROTO. BarInventory es una PWA que se usa en una
+      barra, donde la señal se cae. Los estilos de TODOS los modales
+      y formularios dependían de un dominio externo: sin red y sin
+      caché del Service Worker, los formularios se veían sin estilo.
+      Un inventario a medias con los formularios roto es el peor
+      momento para descubrir una dependencia de CDN.
+
+   2. PESO. El CDN de Tailwind es el compilador JIT completo
+      ejecutándose en el navegador, y Font Awesome descarga ~1 MB de
+      iconos para usar 23. En un teléfono modesto dentro de una barra
+      eso es batería y datos móviles.
+
+   3. MODO OSCURO ROTO. Las 162 clases de paleta clara incrustadas en
+      el HTML (bg-white, text-gray-900, border-gray-200…) pintaban
+      los modales de blanco con texto gris sobre una app oscura. Era
+      la causa visual número uno de que la aplicación pareciera "una
+      página web con formularios".
+
+   ── CÓMO LO RESUELVE ─────────────────────────────────────────────
+   En vez de reescribir ~1 000 atributos `class` repartidos por 27 000
+   líneas (cambio enorme y con mucho margen de error), este archivo
+   DEFINE localmente las utilidades que la app usa de verdad —se
+   inventariaron una por una del código— y, al hacerlo, REDIRIGE las
+   de color a los tokens del sistema. Resultado:
+
+     · el HTML existente no se toca y sigue funcionando igual;
+     · `bg-white` ya no es blanco: es la superficie de tarjeta del
+       tema activo, así que los modales entran al modo oscuro solos y
+       siguen bien en el tema claro;
+     · se puede borrar la etiqueta del CDN sin que nada se descuadre.
+
+   REGLA PARA EL FUTURO: el código NUEVO usa las clases .bi-* del kit
+   (ver el final de estilos.css) o estilos propios con tokens. Estas
+   utilidades son una capa de compatibilidad con el HTML que ya
+   existía, no un sistema para seguir creciendo.
+   ================================================================= */
+
+/* ── Normalización que aportaba el preflight de Tailwind ──────────
+   Tailwind pone a cero los márgenes de títulos, párrafos y listas.
+   Muchísimos layouts de la app cuentan con eso (usan gap/space-y
+   para separar). Si se quita el CDN sin replicarlo, cada h2 y cada p
+   recupera el margen del navegador y las pantallas se descuadran. */
+h1, h2, h3, h4, h5, h6, p, figure, blockquote, dl, dd { margin: 0; }
+ul, ol { margin: 0; padding: 0; }
+ul[class], ol[class] { list-style: none; }
+img, svg, video, canvas { display: block; max-width: 100%; }
+button, input, select, textarea { font: inherit; color: inherit; }
+hr { border: 0; border-top: 1px solid var(--border-mid); }
+table { border-collapse: collapse; }
+
+/* ── Display y posición ──────────────────────────────────────────── */
+.block { display: block; }
+.inline-block { display: inline-block; }
+.flex { display: flex; }
+.inline-flex { display: inline-flex; }
+.grid { display: grid; }
+.hidden { display: none; }
+.relative { position: relative; }
+.absolute { position: absolute; }
+.fixed { position: fixed; }
+.sticky { position: sticky; }
+.inset-0 { top: 0; right: 0; bottom: 0; left: 0; }
+.top-0 { top: 0; }
+.bottom-0 { bottom: 0; }
+.left-0 { left: 0; }
+.right-0 { right: 0; }
+.left-1\/2 { left: 50%; }
+.z-50 { z-index: 50; }
+.z-\[300\] { z-index: 300; }
+.z-\[400\] { z-index: 400; }
+.overflow-hidden { overflow: hidden; }
+.overflow-x-auto { overflow-x: auto; }
+.overflow-y-auto { overflow-y: auto; }
+.min-h-screen { min-height: 100vh; }
+
+/* ── Flex y grid ─────────────────────────────────────────────────── */
+.flex-col { flex-direction: column; }
+.flex-wrap { flex-wrap: wrap; }
+.flex-1 { flex: 1 1 0%; }
+.flex-grow { flex-grow: 1; }
+.flex-shrink-0 { flex-shrink: 0; }
+.items-center { align-items: center; }
+.items-start { align-items: flex-start; }
+.items-end { align-items: flex-end; }
+.items-stretch { align-items: stretch; }
+.justify-between { justify-content: space-between; }
+.justify-center { justify-content: center; }
+.justify-end { justify-content: flex-end; }
+.self-start { align-self: flex-start; }
+.gap-1 { gap: 0.25rem; }
+.gap-2 { gap: 0.5rem; }
+.gap-3 { gap: 0.75rem; }
+.gap-4 { gap: 1rem; }
+.gap-6 { gap: 1.5rem; }
+.grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+.grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.space-y-2 > * + * { margin-top: 0.5rem; }
+.space-y-4 > * + * { margin-top: 1rem; }
+.divide-y > * + * { border-top: 1px solid var(--border-mid); }
+.divide-gray-200 > * + * { border-top-color: var(--border-mid); }
+
+/* ── Espaciado ───────────────────────────────────────────────────── */
+.p-2 { padding: 0.5rem; }
+.p-2\.5 { padding: 0.625rem; }
+.p-3 { padding: 0.75rem; }
+.p-4 { padding: 1rem; }
+.p-5 { padding: 1.25rem; }
+.p-6 { padding: 1.5rem; }
+.p-12 { padding: 3rem; }
+.px-1 { padding-left: 0.25rem; padding-right: 0.25rem; }
+.px-2 { padding-left: 0.5rem; padding-right: 0.5rem; }
+.px-3 { padding-left: 0.75rem; padding-right: 0.75rem; }
+.px-4 { padding-left: 1rem; padding-right: 1rem; }
+.px-6 { padding-left: 1.5rem; padding-right: 1.5rem; }
+.py-1 { padding-top: 0.25rem; padding-bottom: 0.25rem; }
+.py-1\.5 { padding-top: 0.375rem; padding-bottom: 0.375rem; }
+.py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+.py-2\.5 { padding-top: 0.625rem; padding-bottom: 0.625rem; }
+.py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+.py-4 { padding-top: 1rem; padding-bottom: 1rem; }
+.py-8 { padding-top: 2rem; padding-bottom: 2rem; }
+.pt-2 { padding-top: 0.5rem; }
+.pt-4 { padding-top: 1rem; }
+.pb-2 { padding-bottom: 0.5rem; }
+.pb-4 { padding-bottom: 1rem; }
+.mt-1 { margin-top: 0.25rem; }
+.mt-2 { margin-top: 0.5rem; }
+.mt-3 { margin-top: 0.75rem; }
+.mt-4 { margin-top: 1rem; }
+.mt-6 { margin-top: 1.5rem; }
+.mb-1 { margin-bottom: 0.25rem; }
+.mb-2 { margin-bottom: 0.5rem; }
+.mb-3 { margin-bottom: 0.75rem; }
+.mb-4 { margin-bottom: 1rem; }
+.mb-6 { margin-bottom: 1.5rem; }
+.ml-1 { margin-left: 0.25rem; }
+.ml-2 { margin-left: 0.5rem; }
+.mr-2 { margin-right: 0.5rem; }
+.mx-auto { margin-left: auto; margin-right: auto; }
+.my-2 { margin-top: 0.5rem; margin-bottom: 0.5rem; }
+
+/* ── Tamaños ─────────────────────────────────────────────────────── */
+.w-2 { width: 0.5rem; }
+.w-4 { width: 1rem; }
+.w-5 { width: 1.25rem; }
+.w-8 { width: 2rem; }
+.w-12 { width: 3rem; }
+.w-20 { width: 5rem; }
+.w-full { width: 100%; }
+.h-1 { height: 0.25rem; }
+.h-1\.5 { height: 0.375rem; }
+.h-2 { height: 0.5rem; }
+.h-4 { height: 1rem; }
+.h-5 { height: 1.25rem; }
+.h-12 { height: 3rem; }
+.h-full { height: 100%; }
+.max-w-sm { max-width: 24rem; }
+.max-w-md { max-width: 28rem; }
+.max-w-lg { max-width: 32rem; }
+.max-w-2xl { max-width: 42rem; }
+.max-w-4xl { max-width: 56rem; }
+.max-w-7xl { max-width: 80rem; }
+
+/* ── Tipografía ──────────────────────────────────────────────────── */
+.text-xs { font-size: 0.72rem; line-height: 1.45; }
+.text-sm { font-size: 0.82rem; line-height: 1.5; }
+.text-base { font-size: 0.94rem; line-height: 1.55; }
+.text-lg { font-size: 1.05rem; line-height: 1.45; }
+.text-xl { font-size: 1.18rem; line-height: 1.4; }
+.text-2xl { font-size: 1.4rem; line-height: 1.3; letter-spacing: -0.01em; }
+.font-normal { font-weight: 400; }
+.font-medium { font-weight: 500; }
+.font-semibold { font-weight: 600; }
+.font-bold { font-weight: 700; }
+.text-left { text-align: left; }
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+.uppercase { text-transform: uppercase; }
+.whitespace-nowrap { white-space: nowrap; }
+.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.antialiased { -webkit-font-smoothing: antialiased; }
+/* Cifras: regla 2 del sistema. Cualquier cantidad con esta clase sale
+   en mono tabular, de modo que una columna de números se lea como una
+   hoja de inventario. */
+.num { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
+/* ── Color: AQUÍ ESTÁ EL ARREGLO ─────────────────────────────────
+   Estas eran las clases que pintaban los modales de blanco. Ahora
+   apuntan a los tokens del tema activo, así que el mismo HTML se ve
+   correcto en oscuro y en claro sin tocarlo.
+   `text-white` se deja en blanco literal a propósito: hoy lo usan
+   botones con fondo de color saturado, donde el blanco sí contrasta.
+   Se irá sustituyendo por .bi-btn (con --brass-on) pantalla por
+   pantalla en las fases R3-R7, no de golpe. */
+.bg-white { background-color: var(--card); }
+.bg-gray-50 { background-color: var(--surface); }
+.bg-gray-100 { background-color: var(--surface); }
+.bg-gray-300 { background-color: var(--border-strong); }
+.text-gray-900 { color: var(--txt-primary); }
+.text-gray-700 { color: var(--txt-secondary); }
+.text-gray-600 { color: var(--txt-secondary); }
+.text-gray-500 { color: var(--txt-muted); }
+.text-gray-400 { color: var(--txt-muted); }
+.text-white { color: #fff; }
+.border-gray-200 { border-color: var(--border-mid); }
+/* El velo del modal: un solo token en vez de negro al 60 % */
+.bg-black { background-color: var(--scrim); }
+.bg-opacity-60 { /* el valor ya va dentro de --scrim */ }
+
+/* Colores que venían de la paleta de Tailwind y ahora entran al
+   sistema semántico: morado → estado contable, naranja/ámbar →
+   atención, azul → información, rojo → error. */
+.text-purple-700, .text-purple-600 { color: var(--book); }
+.bg-purple-50, .bg-purple-100 { background-color: var(--book-dim); }
+.bg-purple-600 { background-color: var(--book); }
+.text-orange-600, .text-orange-500 { color: var(--warn); }
+.border-orange-200 { border-color: var(--warn-dim); }
+.text-red-400 { color: var(--danger); }
+.bg-blue-700 { background-color: var(--info); }
+.border-blue-300 { border-color: var(--info-dim); }
+
+/* ── Bordes y radios ────────────────────────────────────────────── */
+.border { border-width: 1px; border-style: solid; border-color: var(--border-mid); }
+.border-2 { border-width: 2px; border-style: solid; border-color: var(--border-mid); }
+.border-t { border-top-width: 1px; border-top-style: solid; border-top-color: var(--border-mid); }
+.border-b { border-bottom-width: 1px; border-bottom-style: solid; border-bottom-color: var(--border-mid); }
+.rounded { border-radius: var(--r-sm); }
+.rounded-lg { border-radius: var(--r-md); }
+.rounded-xl { border-radius: var(--r-lg); }
+.rounded-2xl { border-radius: 18px; }
+.rounded-full { border-radius: var(--r-full); }
+.rounded-t-full { border-radius: var(--r-full) var(--r-full) 0 0; }
+
+/* ── Sombras ────────────────────────────────────────────────────── */
+.shadow-sm { box-shadow: var(--shadow-xs); }
+.shadow-md { box-shadow: var(--shadow-card); }
+.shadow-lg { box-shadow: var(--shadow-elev2); }
+.shadow-xl { box-shadow: var(--shadow-elev3); }
+.shadow-2xl { box-shadow: var(--shadow-modal); }
+
+/* ── Interacción y movimiento ───────────────────────────────────── */
+.cursor-pointer { cursor: pointer; }
+.transition-all { transition: all 0.18s var(--ease-out); }
+.transition-colors { transition: color 0.18s var(--ease-out), background-color 0.18s var(--ease-out), border-color 0.18s var(--ease-out); }
+.transition-transform { transition: transform 0.18s var(--ease-out); }
+.hover\:scale-105:hover { transform: scale(1.03); }
+.hover\:shadow-lg:hover { box-shadow: var(--shadow-elev2); }
+.hover\:shadow-xl:hover { box-shadow: var(--shadow-elev3); }
+.hover\:bg-gray-50:hover { background-color: var(--card-high); }
+.hover\:bg-red-50:hover { background-color: var(--danger-dim); }
+.hover\:text-red-600:hover { color: var(--danger); }
+.hover\:bg-blue-800:hover { background-color: var(--info); filter: brightness(0.92); }
+
+/* Degradados: se conservan como gradiente de latón hacia su tono
+   claro, para que los botones que ya los usaban sigan teniendo
+   volumen sin salirse de la identidad. */
+.bg-gradient-to-r { background-image: linear-gradient(to right, var(--brass), var(--brass-hover)); }
+.bg-gradient-to-br { background-image: linear-gradient(to bottom right, var(--brass), var(--brass-hover)); }
+
+/* ── Foco visible (accesibilidad) ───────────────────────────────── */
+.focus\:ring-2:focus,
+.focus\:ring-blue-500:focus,
+.focus\:ring-purple-500:focus,
+.focus\:ring-orange-400:focus { outline: 2px solid var(--brass); outline-offset: 1px; }
+.focus\:border-transparent:focus { border-color: transparent; }
+
+/* ── Responsive (el único corte que la app usa) ─────────────────── */
+@media (min-width: 768px) {
+    .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .md\:gap-8 { gap: 2rem; }
+    .md\:col-span-2 { grid-column: span 2 / span 2; }
+    .md\:px-6 { padding-left: 1.5rem; padding-right: 1.5rem; }
+}
+
+/* =================================================================
+   ICONOS LOCALES — sustituyen a Font Awesome por CDN
+   =================================================================
+   Los 42 usos de <i class="fa-solid fa-xxx"></i> repartidos por la
+   app siguen funcionando tal cual: en vez de una fuente de iconos de
+   ~1 MB, cada icono es una máscara SVG de unos pocos bytes. Al ser
+   máscara y no imagen, hereda `currentColor`, así que un icono dentro
+   de un badge verde sale verde sin tocar nada.
+
+   Son formas geométricas propias (trazo de 2 px, caja de 24): no se
+   copia ningún set de iconos.
+   ================================================================= */
+.fa-solid, .fa-regular, .fas, .far {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    vertical-align: -0.125em;
+    background-color: currentColor;
+    -webkit-mask-position: center;
+            mask-position: center;
+    -webkit-mask-repeat: no-repeat;
+            mask-repeat: no-repeat;
+    -webkit-mask-size: contain;
+            mask-size: contain;
+    -webkit-mask-image: var(--bi-icono);
+            mask-image: var(--bi-icono);
+}
+.fa-fw { width: 1.25em; }
+.fa-spin { animation: spin 1.1s linear infinite; }
+
+.fa-arrow-left        { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 12H5M11 6l-6 6 6 6'/%3E%3C/svg%3E"); }
+.fa-chevron-left      { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 6l-6 6 6 6'/%3E%3C/svg%3E"); }
+.fa-arrows-rotate     { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 12a9 9 0 01-9 9 9 9 0 01-7.5-4M3 12a9 9 0 019-9 9 9 0 017.5 4'/%3E%3Cpath d='M3 17v-5h5M21 7v5h-5'/%3E%3C/svg%3E"); }
+.fa-rotate-left       { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 12a9 9 0 109-9 9 9 0 00-7.5 4'/%3E%3Cpath d='M3 3v5h5'/%3E%3C/svg%3E"); }
+.fa-circle-check      { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M8 12.5l2.8 2.8L16 10'/%3E%3C/svg%3E"); }
+.fa-triangle-exclamation { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3.5L2.5 20h19L12 3.5z'/%3E%3Cpath d='M12 9.5v5M12 17.5v.01'/%3E%3C/svg%3E"); }
+.fa-cloud-arrow-up    { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6.5 18a4.5 4.5 0 01-.3-9 6 6 0 0111.6-1.2A4 4 0 0118 18h-2'/%3E%3Cpath d='M12 21v-8M9 15.5l3-3 3 3'/%3E%3C/svg%3E"); }
+.fa-download          { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3v12M7.5 11l4.5 4.5L16.5 11'/%3E%3Cpath d='M4 19h16'/%3E%3C/svg%3E"); }
+.fa-file-arrow-up     { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8l-5-5z'/%3E%3Cpath d='M14 3v5h5'/%3E%3Cpath d='M12 18v-6M9.5 14l2.5-2.5L14.5 14'/%3E%3C/svg%3E"); }
+.fa-file-excel        { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8l-5-5z'/%3E%3Cpath d='M14 3v5h5'/%3E%3Cpath d='M9 12l5 6M14 12l-5 6'/%3E%3C/svg%3E"); }
+.fa-file-chart-column { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8l-5-5z'/%3E%3Cpath d='M14 3v5h5'/%3E%3Cpath d='M9 17v-3M12 17v-5M15 17v-2'/%3E%3C/svg%3E"); }
+.fa-floppy-disk       { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 3h11l3 3v15H5z'/%3E%3Cpath d='M8 3v6h8V3M8 14h8v7H8z'/%3E%3C/svg%3E"); }
+.fa-list-check        { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 6l2 2 3-3M3 13l2 2 3-3M3 20l2 2 3-3'/%3E%3Cpath d='M12 6h9M12 13h9M12 20h9'/%3E%3C/svg%3E"); }
+.fa-location-dot      { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 21s6.5-6 6.5-11a6.5 6.5 0 10-13 0C5.5 15 12 21 12 21z'/%3E%3Ccircle cx='12' cy='10' r='2.3'/%3E%3C/svg%3E"); }
+.fa-martini-glass     { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 4h16l-8 8-8-8z'/%3E%3Cpath d='M12 12v7M8 20h8'/%3E%3C/svg%3E"); }
+.fa-paper-plane       { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 3L3 10.5l6.5 2.5L12 21l9-18z'/%3E%3Cpath d='M9.5 13L21 3'/%3E%3C/svg%3E"); }
+.fa-pen               { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16.5 3.5l4 4L8 20H4v-4L16.5 3.5z'/%3E%3C/svg%3E"); }
+.fa-unlock            { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='4' y='11' width='16' height='10' rx='2'/%3E%3Cpath d='M8 11V7a4 4 0 017.5-2'/%3E%3C/svg%3E"); }
+.fa-user-shield       { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='9' cy='7.5' r='3.5'/%3E%3Cpath d='M3 20c0-3.3 2.7-5.5 6-5.5 1 0 2 .2 2.8.6'/%3E%3Cpath d='M18 12l3 1.3v3c0 2.2-1.4 3.9-3 4.7-1.6-.8-3-2.5-3-4.7v-3L18 12z'/%3E%3C/svg%3E"); }
+.fa-users             { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='8.5' cy='8' r='3.2'/%3E%3Cpath d='M2.5 20c0-3.1 2.7-5.2 6-5.2s6 2.1 6 5.2'/%3E%3Cpath d='M16 5.3a3.2 3.2 0 010 6M18 14.9c2.1.5 3.5 2 3.5 4.1'/%3E%3C/svg%3E"); }
+.fa-utensils          { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 3v6a2.5 2.5 0 005 0V3M8.5 11v10'/%3E%3Cpath d='M16 3c2 0 3 1.5 3 4s-1 3.5-2 3.8V21'/%3E%3C/svg%3E"); }
+.fa-warehouse         { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 20V9l9-5 9 5v11'/%3E%3Cpath d='M7 20v-7h10v7M7 16h10'/%3E%3C/svg%3E"); }
+.fa-code-branch       { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='7' cy='5' r='2.2'/%3E%3Ccircle cx='7' cy='19' r='2.2'/%3E%3Ccircle cx='17' cy='9' r='2.2'/%3E%3Cpath d='M7 7.2v9.6M17 11.2c0 3-3 3.8-6 4.2'/%3E%3C/svg%3E"); }
+
+/* ── Lo que faltaba: recogido por la prueba de cobertura ─────────
+   La primera versión de este archivo se escribió inventariando las
+   clases a mano, y se me escaparon el breakpoint `sm:`, los colores
+   de degradado (`from-*`/`to-*`) y tres utilidades de transformación.
+   La prueba pruebas/prueba-redis-r1.js las encontró antes de que
+   llegaran a producción: compara TODAS las clases que el código usa
+   contra las que este archivo define, y falla si alguna queda
+   huérfana. Si mañana alguien añade una clase de Tailwind al HTML sin
+   definirla aquí, esa prueba lo dirá. */
+
+@media (min-width: 640px) {
+    .sm\:hidden { display: none; }
+    .sm\:inline { display: inline; }
+    .sm\:gap-2 { gap: 0.5rem; }
+    .sm\:gap-3 { gap: 0.75rem; }
+    .sm\:p-5 { padding: 1.25rem; }
+    .sm\:p-6 { padding: 1.5rem; }
+    .sm\:px-4 { padding-left: 1rem; padding-right: 1rem; }
+    .sm\:px-5 { padding-left: 1.25rem; padding-right: 1.25rem; }
+    .sm\:px-6 { padding-left: 1.5rem; padding-right: 1.5rem; }
+    .sm\:py-2\.5 { padding-top: 0.625rem; padding-bottom: 0.625rem; }
+    .sm\:py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+    .sm\:py-6 { padding-top: 1.5rem; padding-bottom: 1.5rem; }
+    .sm\:text-base { font-size: 0.94rem; line-height: 1.55; }
+    .sm\:w-5 { width: 1.25rem; }
+    .sm\:h-5 { height: 1.25rem; }
+}
+
+/* Degradados. En Tailwind, `from-*`/`to-*` fijan las paradas de color
+   del gradiente; aquí cada pareja se reconduce al tono del sistema que
+   le corresponde por significado, para que no queden nueve colores de
+   la paleta de Tailwind flotando fuera del tema. Las parejas con
+   morado/azul (acciones principales) van a latón, que es la identidad;
+   rojo/naranja se queda en peligro; verde en correcto. */
+.from-purple-500, .from-purple-600, .from-blue-500 { --bi-g1: var(--brass); }
+.to-orange-500, .to-blue-600 { --bi-g2: var(--brass-hover); }
+.from-red-500 { --bi-g1: var(--danger); }
+.to-orange-600 { --bi-g2: var(--warn); }
+.from-green-500 { --bi-g1: var(--ok); }
+.to-emerald-500 { --bi-g2: var(--ok); }
+.bg-gradient-to-r { background-image: linear-gradient(to right, var(--bi-g1, var(--brass)), var(--bi-g2, var(--brass-hover))); }
+.bg-gradient-to-br { background-image: linear-gradient(to bottom right, var(--bi-g1, var(--brass)), var(--bi-g2, var(--brass-hover))); }
+
+/* Transformaciones sueltas */
+.transform { transform: translateZ(0); }
+.-translate-x-1\/2 { transform: translateX(-50%); }
+.active\:scale-95:active { transform: scale(0.96); }
+.duration-200 { transition-duration: 0.2s; }
+
+/* ── Iconos añadidos en R3 (panel de Inicio y ficha de producto) ──
+   El panel usaba emoji como iconografía (📦 ⛔ ✅ 💰 🧾 🛒 📋 🔍 ✏️). Cada
+   teléfono los dibuja a su manera, no se pueden colorear con un token y son
+   lo que más delata "hecho a mano" frente a un producto. Estos los
+   sustituyen, con el mismo trazo que los demás. */
+.fa-boxes-stacked  { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='13' width='8' height='8' rx='1'/%3E%3Crect x='13' y='13' width='8' height='8' rx='1'/%3E%3Crect x='8' y='3' width='8' height='8' rx='1'/%3E%3C/svg%3E"); }
+.fa-coins          { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cellipse cx='9' cy='6.5' rx='6' ry='3'/%3E%3Cpath d='M3 6.5v4c0 1.7 2.7 3 6 3s6-1.3 6-3v-4'/%3E%3Cpath d='M9 13.5v4c0 1.7 2.7 3 6 3s6-1.3 6-3v-6'/%3E%3C/svg%3E"); }
+.fa-receipt        { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 3h14v18l-3.5-2-3.5 2-3.5-2L5 21V3z'/%3E%3Cpath d='M9 8h6M9 12h6'/%3E%3C/svg%3E"); }
+.fa-cart-shopping  { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 4h2l2.5 11h10L20 7H6.5'/%3E%3Ccircle cx='9' cy='19' r='1.5'/%3E%3Ccircle cx='17' cy='19' r='1.5'/%3E%3C/svg%3E"); }
+.fa-clipboard-list { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 4H7a2 2 0 00-2 2v13a2 2 0 002 2h10a2 2 0 002-2V6a2 2 0 00-2-2h-2'/%3E%3Crect x='9' y='2.5' width='6' height='3.5' rx='1'/%3E%3Cpath d='M9 11h6M9 15h4'/%3E%3C/svg%3E"); }
+.fa-magnifying-glass { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='10.5' cy='10.5' r='6.5'/%3E%3Cpath d='M15.5 15.5L21 21'/%3E%3C/svg%3E"); }
+.fa-box            { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 7l9-4 9 4v10l-9 4-9-4V7z'/%3E%3Cpath d='M3 7l9 4 9-4M12 11v10'/%3E%3C/svg%3E"); }
+.fa-pen-to-square  { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 13v6a2 2 0 01-2 2H6a2 2 0 01-2-2V9a2 2 0 012-2h6'/%3E%3Cpath d='M16.5 3.5l4 4L12 16H8v-4l8.5-8.5z'/%3E%3C/svg%3E"); }
+.fa-hourglass      { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 3h10M7 21h10'/%3E%3Cpath d='M8 3v3.5L12 11l4-4.5V3M8 21v-3.5L12 13l4 4.5V21'/%3E%3C/svg%3E"); }
+
+/* REDISEÑO R3 — iconos añadidos para el panel de Inicio */
+.fa-xmark          { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 6l12 12M18 6L6 18'/%3E%3C/svg%3E"); }
+.fa-circle-exclamation { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 7.5v5.5M12 16.5v.01'/%3E%3C/svg%3E"); }
+
+/* REDISEÑO R4 — iconos del modal de captura del conteo */
+.fa-bottle         { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 2h4v4.2c0 .9.3 1.7.9 2.4l.8.9c.8.9 1.3 2.1 1.3 3.3V20a2 2 0 01-2 2H9a2 2 0 01-2-2v-7.2c0-1.2.5-2.4 1.3-3.3l.8-.9c.6-.7.9-1.5.9-2.4V2z'/%3E%3Cpath d='M7 14h10'/%3E%3C/svg%3E"); }
+.fa-wine-glass     { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 3h10l-.7 6.2A4.4 4.4 0 0112 13a4.4 4.4 0 01-4.3-3.8L7 3z'/%3E%3Cpath d='M12 13v7M8.5 20h7'/%3E%3C/svg%3E"); }
+.fa-lock           { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='4' y='10.5' width='16' height='10.5' rx='2'/%3E%3Cpath d='M8 10.5V7a4 4 0 018 0v3.5'/%3E%3C/svg%3E"); }
+.fa-user           { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='8' r='3.6'/%3E%3Cpath d='M4.5 20c0-3.6 3.4-6 7.5-6s7.5 2.4 7.5 6'/%3E%3C/svg%3E"); }

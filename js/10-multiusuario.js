@@ -7,6 +7,11 @@
         let myAuditoriaConteo  = {};   // conteo propio (aislado)
         let myAuditoriaStatus  = estadoAreasVacio('pendiente');
         let myAuditoriaUnlocks = {};   // { 'prodId__area': { unlockedBy, unlockedAt, used } }
+        // D — rastro de finalización de área: { area: { uid, nombre, ts, rol } }.
+        // myAuditoriaStatus solo guarda la palabra 'completada', que no dice
+        // quién la cerró ni cuándo. Esto lo acompaña sin sustituirlo, para no
+        // tocar a los diez sitios que ya leen ese estado.
+        let myAuditoriaFinalizadas = {};
         let allUsersAuditoria  = {};   // admin: { uid: { email, status, conteo, updatedAt } }
         let _auditoriaSessionId = null;
 
@@ -19,6 +24,27 @@
         let _inventarioActivo    = null;  // { numero, estado, fechaCreacion, creadoPorNombre, creadoPorRol, ... } | null
         let _unsubInventarioActivo = null;
         let _inventarioActivoId    = null; // qué inventoryId está siendo escuchado ahora mismo
+
+        // ── Ciclo de vida de un Inventario Físico ──────────────────────────
+        //   SINCRONIZADO → CERRADO → CONTABILIZADO
+        //   (abierto: se     (congelado)  (su resultado ya es el inicial
+        //    cuenta)                       de la semana siguiente)
+        //
+        // Hasta ahora la app preguntaba "¿está CERRADO?" para decidir si se
+        // podía contar, cerrar o crear otro. Cuando FASE 3 añadió
+        // CONTABILIZADO, esa pregunta empezó a contestar mal: un inventario
+        // contabilizado NO es 'CERRADO', así que la app lo tomaba por
+        // ABIERTO — dejaba entrar a contar, ofrecía "Cerrar" y, sobre todo,
+        // BLOQUEABA crear el inventario de la semana siguiente. Las reglas de
+        // Firestore sí lo protegían; la interfaz no.
+        //
+        // La pregunta correcta es la inversa: solo hay UN estado en el que
+        // se cuenta. Cualquier otro —incluido uno que se añada en el futuro—
+        // es de solo lectura. Si alguna vez falla, falla cerrando, no abriendo.
+        function inventarioAbierto(inv) {
+            return !!(inv && inv.estado === 'SINCRONIZADO');
+        }
+
         let _unsubMyAuditoria  = null;
         let _unsubAllUsers     = null;
 
@@ -337,13 +363,17 @@
          * para garantizar la independencia del conteo ciego.
          */
         function renderAuditTrailForProduct(productId, area) {
-            // BUG-H8 FIX: usar myAuditoriaStatus para usuarios (estado propio del bartender),
-            // no auditoriaStatus que es el estado global del admin.
-            // Un bartender que finalizó su área debe ver el trail aunque el admin no la haya cerrado globalmente.
-            const areaCompletada = isAdmin()
-                ? (auditoriaStatus[area] === 'completada')
-                : (myAuditoriaStatus[area] === 'completada');
-            if (!isAdmin() && !areaCompletada) return '';
+            // ══════════════════════════════════════════════════════════════
+            //  FASE 2B — CONTEO CIEGO
+            //  Este bloque desglosa NOMBRE y cantidades persona por persona.
+            //  Hasta ahora se le destapaba al bartender en cuanto marcaba su
+            //  área como completada: un conteo ciego "hasta que termino", no
+            //  ciego durante el inventario, que es lo que se exige.
+            //
+            //  Ahora depende únicamente del permiso, no del avance del
+            //  conteo. Quien no puede ver conteos ajenos no lo ve nunca.
+            // ══════════════════════════════════════════════════════════════
+            if (!puedeVerConteosAjenos()) return '';
 
             const stats = calcAuditStats(productId, area); // FIX-07
             if (!stats || stats.count === 0) return '';
@@ -414,10 +444,10 @@
             html += '<input id="auditRenameInput" class="audit-rename-input" type="text" maxlength="32"'
                   + ' placeholder="Tu nombre..."'
                   + ' onkeydown="if(event.key===\"Enter\"){event.preventDefault();auditSaveName();}">';
-            html += '<button onclick="auditSaveName()"'
-                  + ' style="padding:6px 12px;background:var(--accent);color:#fff;border-radius:var(--r-sm);font-size:.75rem;font-weight:600;cursor:pointer;min-height:auto;">Guardar</button>';
-            html += '<button onclick="toggleAuditRename()"'
-                  + ' style="padding:6px 10px;background:var(--surface);border:1px solid var(--border-mid);border-radius:var(--r-sm);color:var(--txt-secondary);font-size:.75rem;cursor:pointer;min-height:auto;">Cancelar</button>';
+            // FASE 10B — antes: texto blanco sobre azul claro (1.72:1) y
+            // botones de 12 px con min-height:auto. Ahora los del pulgar.
+            html += '<button type="button" class="bt bt--primario" onclick="auditSaveName()">Guardar</button>';
+            html += '<button type="button" class="bt bt--secundario" onclick="toggleAuditRename()">Cancelar</button>';
             html += '</div>';
             html += '</div>'; // #auditRenameInline
 
@@ -447,6 +477,13 @@
          * Solo se renderiza si hay al menos un conteo registrado.
          */
         function renderAuditComparePanel() {
+            // FASE 2B (D4) — el panel es de solo agregados (cuántos conteos y
+            // cuántas diferencias, sin nombres ni cantidades), pero se
+            // alimenta de conteoMultiUsuario, que deja de estar disponible
+            // para un no-admin. Decisión del propietario: la supervisión es
+            // función de administración, y un bartender no debe recibir NADA
+            // derivado del conteo de otros durante la captura, ni agregado.
+            if (!puedeVerConteosAjenos()) return '';
             const areasList = AREAS_CONTEO; // FIX-07
             const areaInfo  = areasList.map(function(area) {
                 const userIds   = new Set();
@@ -487,7 +524,7 @@
 
                 html += '<div class="audit-compare-area-row">';
                 html += '<span class="audit-compare-area-name">'
-                      + areasAuditoriaIcons[info.area] + ' '
+                      + '<i class="' + (areasAuditoriaFA[info.area] || 'fa-solid fa-location-dot') + '" aria-hidden="true"></i> '
                       + escapeHtml(areasAuditoria[info.area]) + '</span>';
                 html += '<span class="audit-compare-users">'
                       + info.userCount + ' conteo' + (info.userCount !== 1 ? 's' : '')
@@ -516,7 +553,26 @@
         async function syncConteoPorUsuarioToFirestore(area) {
             if (!_db || !navigator.onLine || !auditCurrentUser) return;
             const cu      = auditCurrentUser; // FIX-07
-            const safeId  = cu.userId.replace(/[^a-zA-Z0-9]/g, '_');
+            // ── D · La clave del bloque pasa a ser el uid de Firebase ────────
+            // Antes era `cu.userId`, que NO es el uid: es un identificador que
+            // el propio dispositivo se inventa y guarda en localStorage
+            // ('usr-<fecha>-<azar>', ver initAuditUser). Como el servidor no
+            // podía relacionarlo con nadie, la regla de Firestore no tenía
+            // forma de comprobar que un usuario solo tocara su propio bloque,
+            // y por eso este documento estaba abierto de par en par: cualquier
+            // bartender podía vaciar el conteo de todos sus compañeros.
+            //
+            // Con el uid como clave, la regla exige que una escritura afecte
+            // únicamente al bloque de quien la hace.
+            //
+            // Esto no rompe los datos anteriores: quien lee
+            // (loadConteoPorUsuarioFromFirestore) indexa por el `userId` de
+            // DENTRO del bloque, no por la clave, así que los bloques viejos
+            // se siguen leyendo igual y la misma persona no aparece dos veces.
+            // El uid de Firebase ya es alfanumérico; se usa tal cual porque la
+            // regla lo compara literalmente con request.auth.uid. Solo se
+            // sanea el identificador de respaldo, que sí lleva guiones.
+            const safeId  = currentUserUid || cu.userId.replace(/[^a-zA-Z0-9]/g, '_');
             const areaRef = _db
                 .collection('inventarioApp')
                 .doc(FIRESTORE_DOC_ID)
@@ -549,6 +605,10 @@
                 payload[safeId] = {
                     userId:   cu.userId,
                     userName: cu.userName,
+                    // D — autoría verificable: es el uid que la regla compara
+                    // contra request.auth.uid. `userId` se conserva porque es
+                    // lo que usa el lector y lo que llevan los datos viejos.
+                    uid:      currentUserUid || null,
                     ts:       Date.now(),
                     productos: productos
                 };
@@ -571,4 +631,4 @@
          * Estrategia de fusión: por cada (producto, área, usuario) gana el conteo
          * con timestamp más alto — "último-gana por usuario".
          * Nunca elimina conteos de otros usuarios.
-         */
+         */

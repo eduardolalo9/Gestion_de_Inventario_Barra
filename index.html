@@ -151,16 +151,36 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <!-- FIX #11: Tailwind CDN (Play CDN, ~358 KB sin purgar) es solo apto para desarrollo.
-         Para producción, usa el CLI de Tailwind para generar un CSS purgeado (~5-15 KB).
-         Ver: https://tailwindcss.com/docs/installation — mientras tanto el CDN funciona. -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- ══════════════════════════════════════════════════════════
+         REDISEÑO R1 (v5.0) — TAILWIND Y FONT AWESOME YA NO VIENEN DE UN CDN
+         ──────────────────────────────────────────────────────────
+         Las utilidades que la app usa de verdad (inventariadas una por
+         una del código) y los 23 iconos que aparecen en pantalla viven
+         ahora en css/utilidades.css: local, versionado y precargado por
+         el Service Worker como el resto.
+
+         Tres razones, en orden de importancia:
+          1. Esto es una PWA offline-first que se usa en una barra. Los
+             estilos de TODOS los modales y formularios dependían de un
+             dominio externo: sin red, se veían sin estilo.
+          2. El Play CDN de Tailwind es el compilador JIT completo
+             corriendo en el navegador, y Font Awesome descargaba ~1 MB
+             para usar 23 iconos. En un teléfono modesto dentro de una
+             barra, eso es batería y datos móviles.
+          3. Las clases de paleta clara de Tailwind (bg-white,
+             text-gray-900…) pintaban los formularios de blanco sobre
+             una app oscura. Ahora esas mismas clases apuntan a los
+             tokens del tema, así que el HTML existente se ve correcto
+             sin tocarlo.
+
+         SheetJS (abajo) sí sigue viniendo de un CDN a propósito: solo
+         se necesita al exportar o importar Excel, que es una acción
+         deliberada del usuario y se hace con conexión.
+         ══════════════════════════════════════════════════════════ -->
     <!-- FIX #10: defer en SheetJS — solo se necesita al exportar/importar (acción del usuario),
          nunca durante el arranque. Firebase SDK no puede diferirse porque initFirebase()
          está en un bloque inline inmediato que depende de window.firebase. -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
-    <!-- FontAwesome 6 — iconos corporativos en la UI de auditoría -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
 
     <!-- ══════════════════════════════════════════════════════════
          FIREBASE SDK  —  compat v10 (módulos globales window.firebase)
@@ -183,7 +203,23 @@
         // usuario que abra el código fuente. Asegúrate de restringir la API Key
         // en https://console.cloud.google.com → Credenciales → Restricciones de clave.
         // (dominio HTTP Referrer + solo Firestore API)
-const firebaseConfig = {
+// ══════════════════════════════════════════════════════════════════════════
+//  R3 — DOS ENTORNOS, ELEGIDOS POR EL DOMINIO
+//  ────────────────────────────────────────────────────────────────────────
+//  Hasta aquí había una sola configuración. Eso significaba que abrir la app
+//  en localhost para probar cualquier cosa escribía en la base REAL del bar:
+//  el mismo Firestore que usan los bartenders durante el servicio.
+//
+//  Ahora el entorno lo decide el dominio, no una decisión humana que se puede
+//  olvidar a las dos de la mañana:
+//      · eduardolalo9.github.io  → PRODUCCIÓN, la base del bar
+//      · localhost / 127.0.0.1   → PRUEBAS
+//
+//  Y si el de pruebas todavía no está configurado, la app NO cae a producción:
+//  se queda en modo local con localStorage. Fallar cerrado. Un descuido aquí
+//  no borra un inventario.
+// ══════════════════════════════════════════════════════════════════════════
+const FIREBASE_PRODUCCION = {
   apiKey: "AIzaSyDaMcyv_o0YYv9XRDG1A-V3IrboLFK53-o",
   authDomain: "gestor-de-inventarios-76c19.firebaseapp.com",
   projectId: "gestor-de-inventarios-76c19",
@@ -191,6 +227,51 @@ const firebaseConfig = {
   messagingSenderId: "520575498448",
   appId: "1:520575498448:web:3a83c2e4fcaedfc9d386d5"
 };
+
+// Proyecto barinventory-staging, creado el 12/09/2026.
+// Faltan DOS valores, que salen de Firebase Console → ⚙ Configuración del
+// proyecto → Tus apps → App web. Los otros cuatro ya están puestos: el
+// messagingSenderId es el número de proyecto (575323446273).
+// Mientras apiKey y appId sigan vacíos, en local la app funciona sin nube y
+// NO se conecta a la base del bar.
+const FIREBASE_PRUEBAS = {
+  apiKey: "",                                                  // ← PEGAR
+  authDomain: "barinventory-staging.firebaseapp.com",
+  projectId: "barinventory-staging",
+  storageBucket: "barinventory-staging.firebasestorage.app",
+  messagingSenderId: "575323446273",
+  appId: ""                                                    // ← PEGAR
+};
+
+function _esEntornoDePruebas() {
+    var h = (location.hostname || '').toLowerCase();
+    // Cadena vacía cubre file:// — abrir el index a doble clic tampoco puede
+    // acabar escribiendo en la base del bar.
+    return h === '' || h === 'localhost' || h === '127.0.0.1' ||
+           h === '::1' || h.endsWith('.local');
+}
+
+const ENTORNO         = _esEntornoDePruebas() ? 'pruebas' : 'produccion';
+const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PRODUCCION;
+
+        // R3 — Aviso permanente cuando NO estás en producción. Sin esto es
+        // demasiado fácil contar media barra creyendo que va a la base buena, o
+        // al revés: tocar producción creyendo que estabas probando.
+        if (ENTORNO === 'pruebas') {
+            document.addEventListener('DOMContentLoaded', function() {
+                var b = document.createElement('div');
+                b.id = 'bannerEntorno';
+                b.textContent = FIREBASE_PRUEBAS.projectId
+                    ? 'PRUEBAS · ' + FIREBASE_PRUEBAS.projectId
+                    : 'PRUEBAS · sin nube, solo este dispositivo';
+                b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;' +
+                    'background:#b45309;color:#fff;text-align:center;font:600 11px/20px ' +
+                    '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;' +
+                    'letter-spacing:.08em;text-transform:uppercase;pointer-events:none;' +
+                    'padding:env(safe-area-inset-top) 8px 0';
+                document.body.appendChild(b);
+            });
+        }
 
         // ID del documento Firestore que almacena el estado de ESTA instalación.
         // Cambia este valor si quieres múltiples instancias (ej. "barra-norte", "barra-sur").
@@ -516,9 +597,17 @@ const firebaseConfig = {
   typeof v === "string" && v.length > 0 && !v.includes("REEMPLAZA")
 );
             if (!configured) {
-                console.warn("[Firebase] Config incompleta — solo se usará localStorage.");
+                // R3: en local esto es lo NORMAL mientras no exista el proyecto de
+                // pruebas, y es deliberado. No se cae a producción.
+                console.warn(ENTORNO === 'pruebas'
+                    ? '[Firebase] Entorno de PRUEBAS sin configurar — la app funciona solo con ' +
+                      'localStorage. No se toca la base del bar. Para conectar el proyecto de ' +
+                      'pruebas, rellena FIREBASE_PRUEBAS arriba en index.html.'
+                    : '[Firebase] Config incompleta — solo se usará localStorage.');
                 return;
             }
+            console.info('[Firebase] Entorno: ' + ENTORNO.toUpperCase() +
+                         ' · proyecto: ' + firebaseConfig.projectId);
             try {
                 firebase.initializeApp(firebaseConfig);
                 _db   = firebase.firestore();
@@ -558,7 +647,11 @@ const firebaseConfig = {
             }
         })();
     </script>
-    <link rel="stylesheet" href="css/estilos.css?v=2.6">
+    <!-- Utilidades locales (sustituyen a Tailwind CDN) + iconos locales
+         (sustituyen a Font Awesome CDN). Va ANTES de estilos.css para que
+         las reglas propias de la app sigan teniendo la última palabra. -->
+    <link rel="stylesheet" href="css/utilidades.css?v=5.3">
+    <link rel="stylesheet" href="css/estilos.css?v=5.3">
 </head>
 <body class="min-h-screen">
 
@@ -627,6 +720,16 @@ const firebaseConfig = {
          ══════════════════════════════════════════════════════ -->
     <div id="appWrapper">
     <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" class="hidden">
+    <!-- FASE 4B — input propio para compras, deliberadamente separado de
+         #fileInput: un solo input compartido con un "modo" global es la
+         clase de estado que produce el bug de "importé compras y me borró
+         el catálogo" (ver diseño de FASE 4, punto de fricción). -->
+    <input type="file" id="fileInputCompras" accept=".xlsx,.xls" class="hidden">
+    <!-- RECETARIO-2 — mismo motivo que fileInputCompras: input propio, nunca
+         compartido con #fileInput/#fileInputCompras. -->
+    <input type="file" id="fileInputRecetario" accept=".xlsx,.xls,.xlsm" class="hidden">
+    <!-- FASE 10 — input propio para el reporte de ventas del POS. -->
+    <input type="file" id="fileInputVentas" accept=".xlsx,.xls,.xlsm,.csv" class="hidden">
     <!-- Input oculto para importar respaldo JSON -->
     <input type="file" id="importDataInput" accept=".json" class="hidden">
 
@@ -664,6 +767,15 @@ const firebaseConfig = {
             <button type="button" class="sb-item" data-sb-tab="compras" onclick="switchTab('compras'); sbClose()">
                 <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
                 Compras
+            </button>
+            <!-- RECETARIO-1 (2026-09-27) -->
+            <button type="button" class="sb-item" data-sb-tab="recetario" onclick="switchTab('recetario'); sbClose()">
+                <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+                Recetario
+            </button>
+            <button type="button" class="sb-item" data-sb-tab="ventas" onclick="switchTab('ventas'); sbClose()">
+                <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 17l6-6 4 4 8-8m0 0h-5m5 0v5"/></svg>
+                Ventas
             </button>
             <button type="button" class="sb-item" data-sb-tab="historia" onclick="switchTab('historia'); sbClose()">
                 <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -705,6 +817,7 @@ const firebaseConfig = {
             </button>
         </div>
         <div id="sbFoot">
+            <div id="sbVersion" class="sb-version" aria-label="Versión instalada"></div>
             <div style="display:flex;align-items:center;gap:5px;padding:0 10px 5px;overflow:hidden;">
                 <span id="sbUserEmail" style="font-size:.66rem;color:var(--txt-muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
                 <span id="sbRoleBadge" class="role-badge"></span>
@@ -762,18 +875,13 @@ const firebaseConfig = {
         </div>
     </div>
 
-    <!-- Tabs ocultos (necesarios para switchTab) -->
-    <div class="bg-white shadow-sm sticky" style="display:none!important" aria-hidden="true">
-        <div class="max-w-7xl mx-auto px-2 sm:px-4 md:px-6 flex-shrink-0">
-            <div class="flex gap-1 sm:gap-2 md:gap-8 overflow-x-auto" id="tabs">
-                <button type="button" onclick="switchTab('inicio')"    data-tab="inicio"     class="tab-btn relative whitespace-nowrap text-gray-900">Inicio<div class="tab-indicator absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 to-orange-500 rounded-t-full animate-slideIn"></div></button>
-                <button type="button" onclick="switchTab('productos')" data-tab="productos"  class="tab-btn relative whitespace-nowrap text-gray-600">Productos</button>
-                <button type="button" onclick="switchTab('pedidos')"   data-tab="pedidos"    class="tab-btn relative whitespace-nowrap text-gray-600">Pedidos</button>
-                <button type="button" onclick="switchTab('inventario')"data-tab="inventario" class="tab-btn relative whitespace-nowrap text-gray-600">Inventario</button>
-                <button type="button" onclick="switchTab('historia')"  data-tab="historia"   class="tab-btn relative whitespace-nowrap text-gray-600">Historia</button>
-            </div>
-        </div>
-    </div>
+    <!-- REDISEÑO R2 — aquí vivía una barra horizontal de pestañas con
+         display:none !important desde varias versiones ("Tabs ocultos
+         (necesarios para switchTab)"). Era código muerto que seguía en pie
+         solo porque switchTab() pintaba un indicador dentro de botones
+         invisibles en cada cambio de pestaña. Se retiró junto con ese
+         bucle: la navegación primaria es #bottomTabBar y el panel lateral
+         es la hoja "Más". -->
 
     <!-- FIX #8: elemento <main> semántico — permite a lectores de pantalla saltar al contenido principal -->
     <main id="mainContent" aria-label="Contenido principal">
@@ -805,11 +913,13 @@ const firebaseConfig = {
             </svg>
             <span>Pedidos</span>
         </button>
-        <button type="button" class="btab-item" data-btab="historia" onclick="switchTab('historia')" aria-label="Historia">
+        <!-- PREMIUM: Compras sube a la barra inferior (antes solo en "Más").
+             Historia sigue en el menú "Más". -->
+        <button type="button" class="btab-item" data-btab="compras" onclick="switchTab('compras')" aria-label="Compras">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
             </svg>
-            <span>Historia</span>
+            <span>Compras</span>
         </button>
         <button type="button" class="btab-item" onclick="sbOpen()" aria-label="Más opciones">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -855,22 +965,38 @@ const firebaseConfig = {
                 <div style="background:rgba(108,99,255,0.07);border:1px solid rgba(108,99,255,0.18);border-radius:14px;padding:14px 16px 10px;">
                     <!-- FIX #5: 'Syne' no está en el <link> de Google Fonts → el navegador cae a
                          sans-serif del sistema rompiendo la tipografía. Sustituido por IBM Plex Sans. -->
-                    <p style="font-family:'IBM Plex Sans',sans-serif;font-size:0.72rem;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:var(--accent);margin-bottom:10px;">⚗️ Conversión botellas abiertas (opcional)</p>
+                    <p style="font-family:'IBM Plex Sans',sans-serif;font-size:0.72rem;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:var(--accent);margin-bottom:10px;">⚗️ Conteo de botella en oz</p>
+
+                    <!-- R1 (regla 14) — La casilla decide COMO se cuenta el producto.
+                         Marcada:    botellas enteras + botella abierta pesada en oz.
+                         Sin marcar: una sola cantidad total, que admite decimales
+                                     (aceitunas 1.5 PZ, golos 0.490 KG).
+                         Un producto sin capacidad y peso no puede convertir oz, asi que
+                         la casilla se bloquea sola hasta que esos dos campos existan. -->
+                    <label for="productConteoOz" style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:12px;min-height:44px;padding:6px 0;">
+                        <input type="checkbox" id="productConteoOz" onchange="_sincronizarCasillaOz()"
+                            style="width:20px;height:20px;flex-shrink:0;margin-top:2px;accent-color:var(--accent);cursor:pointer;">
+                        <span>
+                            <span class="text-sm font-medium text-gray-700">Habilitar conteo de botella en oz</span>
+                            <span id="productConteoOzHint" class="block text-xs text-gray-400 mt-1">Requiere capacidad y peso lleno.</span>
+                        </span>
+                    </label>
+
                     <div class="flex gap-3">
                         <div style="flex:1">
                             <label for="productCapacidadMl" class="block text-sm font-medium text-gray-600 mb-2">Capacidad (ml)</label>
-                            <input type="number" id="productCapacidadMl" min="0" step="0.01"
+                            <input type="number" id="productCapacidadMl" min="0" step="0.01" oninput="_sincronizarCasillaOz()"
                                 class="w-full px-3 py-2 bg-white text-gray-900 border border-gray-200 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 placeholder="Ej: 750">
                         </div>
                         <div style="flex:1">
                             <label for="productPesoLlenaOz" class="block text-sm font-medium text-gray-600 mb-2">Peso llena (oz)</label>
-                            <input type="number" id="productPesoLlenaOz" min="0" step="0.01"
+                            <input type="number" id="productPesoLlenaOz" min="0" step="0.01" oninput="_sincronizarCasillaOz()"
                                 class="w-full px-3 py-2 bg-white text-gray-900 border border-gray-200 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                 placeholder="Ej: 44.65">
                         </div>
                     </div>
-                    <p class="text-xs text-gray-400 mt-2">Cuando se llenen, las botellas abiertas se ingresan en oz y se convierten automáticamente a fracciones de botella.</p>
+                    <p class="text-xs text-gray-400 mt-2">Con la casilla marcada, la botella abierta se ingresa en oz y se convierte sola a fracción: 8 enteras + una abierta de 0.65 dan 8.65. Sin marcar, el producto se cuenta con una sola cantidad y admite decimales.</p>
                 </div>
 
                 <!-- P0 — COMPRAS Y REPOSICION
@@ -903,9 +1029,80 @@ const firebaseConfig = {
                     </div>
                     <p class="text-xs text-gray-400 mt-2">El precio es el ultimo costo conocido; la importacion de compras avisa cuando cambia. El minimo en 0 significa que no se repone.</p>
                 </div>
+
+                <!-- R2 (reglas 2 y 8) — EL PV DE PARROT
+                     Es el product_id que genera Parrot para cada articulo de venta
+                     (PVA1001169). Es la llave con la que se cruzan las ventas: por
+                     eso no puede repetirse en dos productos y por eso NO se cruza
+                     por nombre, que cambia con cualquier cambio de carta.
+                     Va vacio en los insumos que no se venden tal cual: una botella
+                     de tequila que solo entra en cocteles llega por la receta. -->
+                <div class="mt-4 pt-4" style="border-top:1px solid var(--border-mid,#e5e7eb)">
+                    <p class="text-sm font-semibold text-gray-700 mb-3">Ventas</p>
+                    <label for="productPV" class="block text-sm font-medium text-gray-600 mb-2">PV de Parrot <span class="text-gray-400 font-normal">(SKU)</span></label>
+                    <input type="text" id="productPV" autocapitalize="characters" spellcheck="false"
+                        oninput="_normalizarPV(this)"
+                        class="w-full px-3 py-2 bg-white text-gray-900 border border-gray-200 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.02em"
+                        placeholder="Ej: PVA1001169">
+                    <p id="productPVAviso" class="text-xs mt-2" style="color:#9ca3af">Déjalo vacío si el producto no se vende tal cual en el punto de venta.</p>
+                </div>
                 <div class="flex gap-3 mt-6 pt-4" style="position:sticky;bottom:0;background:var(--modal-bg,#fff);padding-bottom:4px;z-index:1;">
                     <button type="button" onclick="closeProductModal()" style="flex:1;height:40px;border-radius:9999px;border:none;background:transparent;color:var(--txt-secondary);font-family:'IBM Plex Sans',sans-serif;font-size:.875rem;font-weight:500;cursor:pointer;transition:background .18s ease;" onmouseover="this.style.background='rgba(202,196,208,0.10)'" onmouseout="this.style.background='transparent'">Cancelar</button>
                     <button type="button" onclick="saveProduct()" style="flex:1;height:40px;border-radius:9999px;border:none;background:var(--accent);color:var(--accent-on,#003063);font-family:'IBM Plex Sans',sans-serif;font-size:.875rem;font-weight:500;cursor:pointer;box-shadow:var(--shadow-card);" >Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Receta (RECETARIO-1, 2026-09-27) -->
+    <div id="recetaModal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[300] animate-fadeIn hidden" style="padding:12px;" role="dialog" aria-modal="true" aria-labelledby="recetaModalTitle">
+        <div class="modal-box bg-white shadow-2xl max-w-lg w-full p-5 animate-slideUp" style="border-radius:18px;max-height:calc(100dvh - 56px - 24px);overflow-y:auto;">
+            <div class="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-6"></div>
+            <h2 class="text-2xl font-bold text-gray-900 mb-6" id="recetaModalTitle">Nueva receta</h2>
+            <div class="space-y-4">
+                <div>
+                    <label for="recetaNombre" class="block text-sm font-medium text-gray-600 mb-2">Nombre de la receta *</label>
+                    <input type="text" id="recetaNombre" class="w-full px-3 py-2 bg-white text-gray-900 border border-gray-200 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Ej: MARGARITA">
+                </div>
+                <div>
+                    <label for="recetaCategoria" class="block text-sm font-medium text-gray-600 mb-2">Categoría</label>
+                    <input type="text" id="recetaCategoria" class="w-full px-3 py-2 bg-white text-gray-900 border border-gray-200 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Ej: Cocteles">
+                </div>
+                <label for="recetaActiva" style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+                    <input type="checkbox" id="recetaActiva" checked style="width:20px;height:20px;accent-color:var(--accent);cursor:pointer;">
+                    <span class="text-sm font-medium text-gray-700">Activa (visible en el recetario)</span>
+                </label>
+
+                <div class="mt-2 pt-4" style="border-top:1px solid var(--border-mid,#e5e7eb)">
+                    <p class="text-sm font-semibold text-gray-700 mb-3">Ingredientes</p>
+                    <div id="recetaIngredientesLista"></div>
+                    <datalist id="recetaInsumosDatalist"></datalist>
+                    <button type="button" onclick="_recetaAgregarIngrediente()" style="padding:6px 14px;border-radius:999px;border:1px dashed var(--border-mid,#e5e7eb);background:transparent;color:var(--accent);font-size:.8rem;cursor:pointer;">+ Agregar ingrediente</button>
+                </div>
+
+                <div class="mt-2 pt-4" style="border-top:1px solid var(--border-mid,#e5e7eb)">
+                    <label for="recetaMetodo" class="block text-sm font-medium text-gray-600 mb-2">Método <span class="text-gray-400 font-normal">(opcional)</span></label>
+                    <textarea id="recetaMetodo" rows="3" class="w-full px-3 py-2 bg-white text-gray-900 border border-gray-200 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Pasos de preparación"></textarea>
+                </div>
+                <div class="grid grid-cols-3 gap-3">
+                    <div>
+                        <label for="recetaCristaleria" class="block text-sm font-medium text-gray-600 mb-2">Cristalería</label>
+                        <input type="text" id="recetaCristaleria" class="w-full px-3 py-2 bg-white text-gray-900 border border-gray-200 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    </div>
+                    <div>
+                        <label for="recetaHielo" class="block text-sm font-medium text-gray-600 mb-2">Hielo</label>
+                        <input type="text" id="recetaHielo" class="w-full px-3 py-2 bg-white text-gray-900 border border-gray-200 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    </div>
+                    <div>
+                        <label for="recetaDecoracion" class="block text-sm font-medium text-gray-600 mb-2">Decoración</label>
+                        <input type="text" id="recetaDecoracion" class="w-full px-3 py-2 bg-white text-gray-900 border border-gray-200 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    </div>
+                </div>
+
+                <div class="flex gap-3 mt-6 pt-4" style="position:sticky;bottom:0;background:var(--modal-bg,#fff);padding-bottom:4px;z-index:1;">
+                    <button type="button" onclick="closeRecetaModal()" style="flex:1;height:40px;border-radius:9999px;border:none;background:transparent;color:var(--txt-secondary);font-family:'IBM Plex Sans',sans-serif;font-size:.875rem;font-weight:500;cursor:pointer;">Cancelar</button>
+                    <button type="button" onclick="saveRecetaModal()" style="flex:1;height:40px;border-radius:9999px;border:none;background:var(--accent);color:var(--accent-on,#003063);font-family:'IBM Plex Sans',sans-serif;font-size:.875rem;font-weight:500;cursor:pointer;box-shadow:var(--shadow-card);">Guardar</button>
                 </div>
             </div>
         </div>
@@ -979,77 +1176,183 @@ const firebaseConfig = {
         </div>
     </div>
 
-    <!-- Modal Inventario -->
-    <div id="inventarioModal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[300] animate-fadeIn hidden" style="padding:12px;" role="dialog" aria-modal="true" aria-labelledby="inventarioModalTitle">
-        <div class="modal-box bg-white shadow-2xl max-w-sm w-full p-4 animate-slideUp" style="border-radius:18px;max-height:calc(100dvh - 56px - 24px);overflow-y:auto;">
-            <div class="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-4"></div>
-            <h2 class="text-xl font-bold text-gray-900 mb-1" id="inventarioModalTitle">Contar botellas</h2>
-            <p class="text-sm text-gray-500 mb-2" id="inventarioModalSubtitle"></p>
-            <div class="mb-4">
-                <label for="inv_enteras" class="block text-sm font-semibold text-gray-700 mb-2">🍾 Botellas Enteras</label>
-                <input type="number" id="inv_enteras" min="0" step="0.001" value="0" oninput="if(parseFloat(this.value)<0||isNaN(parseFloat(this.value)))this.value=0;" class="w-full px-4 py-2 bg-white text-gray-900 border-2 border-blue-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center text-base font-bold">
-            </div>
-            <div class="mb-4">
-                <div class="flex items-center justify-between mb-2">
-                    <!-- FIX #7: <label> requiere atributo "for" para asociarse al input. Se usa
-                         aria-labelledby en el contenedor dinámico ya que los inputs de abiertas
-                         se crean en JS. La etiqueta describe el grupo visualmente. -->
-                    <label id="inv_abiertasLabel" class="block text-sm font-semibold text-gray-700">🍷 Botellas Abiertas <span id="inv_abiertasUnidadHint" class="text-xs font-normal text-orange-500"></span></label>
-                    <button type="button" onclick="addAbiertaInModal()" class="flex items-center gap-1 text-xs bg-blue-700 text-white px-3 py-1.5 rounded hover:bg-blue-800 transition-all font-medium">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path></svg>
-                        Agregar
-                    </button>
+    <!-- ══════════════════════════════════════════════════════════════════
+         R7 — NUEVO INVENTARIO FÍSICO
+         El número no se escribe: lo asigna el servidor con una transacción,
+         que es lo que evita que dos administradores creando a la vez se
+         lleven el mismo.
+         ══════════════════════════════════════════════════════════════════ -->
+    <div id="nuevoInventarioModal" class="modal-hoja fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[300] hidden" style="padding:12px;" role="dialog" aria-modal="true" aria-labelledby="nuevoInvTitulo">
+        <div class="modal-box" style="background:var(--modal-bg,#fff);border-radius:18px;max-width:28rem;width:100%;padding:18px 18px 22px;max-height:calc(100dvh - 80px);overflow-y:auto;">
+            <div style="width:48px;height:5px;background:var(--border-mid,#d1d5db);border-radius:999px;margin:0 auto 16px;"></div>
+            <h2 id="nuevoInvTitulo" style="font-size:1.3rem;font-weight:800;color:var(--txt-primary);margin-bottom:4px;">Nuevo Inventario Físico</h2>
+            <p class="ni-ayuda" style="margin-bottom:18px;">El número se asigna solo al crearlo.</p>
+
+            <!-- FASE 10B — una sola columna, campos de 52 px y botones apilados
+                 a lo ancho, separados 12 px: nada que se toque por error. -->
+            <div class="ni-form">
+                <div class="ni-campo">
+                    <label for="nuevoInvNombre">Nombre</label>
+                    <input type="text" id="nuevoInvNombre" maxlength="60" value="BARRA INVENTARIO FÍSICO" autocomplete="off">
                 </div>
-                <div id="inv_abiertasContainer" class="space-y-2"></div>
-            </div>
-            <!-- CORRECCIÓN 4: Campo "motivo" obligatorio para auditoría de cambios -->
-            <!-- Solo se muestra cuando hay un valor previo que se va a modificar    -->
-            <div id="inv_motivoContainer" class="mb-4" style="display:none;">
-                <label for="inv_motivo" class="block text-sm font-semibold text-gray-700 mb-2">
-                    📝 Motivo del cambio <span class="text-red-500">*</span>
-                </label>
-                <select id="inv_motivo" class="w-full px-4 py-2 bg-white text-gray-900 border-2 border-orange-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm font-medium">
-                    <option value="">— Selecciona un motivo —</option>
-                    <option value="Conteo inicial">Conteo inicial</option>
-                    <option value="Reconteo">Reconteo</option>
-                    <option value="Corrección de error">Corrección de error</option>
-                    <option value="Entrada de mercancía">Entrada de mercancía</option>
-                    <option value="Merma / rotura">Merma / rotura</option>
-                    <option value="Consumo de turno">Consumo de turno</option>
-                    <option value="Ajuste de inventario">Ajuste de inventario</option>
-                    <option value="Otro">Otro</option>
-                </select>
-                <p id="inv_motivoError" class="text-xs text-red-500 mt-1 hidden">⚠️ El motivo es obligatorio cuando se modifica un valor existente.</p>
-            </div>
-            <div class="flex gap-3 pt-2" style="position:sticky;bottom:0;background:var(--modal-bg,#fff);padding-bottom:4px;z-index:1;">
-                <button type="button" onclick="closeInventarioModal()" style="flex:1;height:40px;border-radius:9999px;border:none;background:transparent;color:var(--txt-secondary);font-family:'IBM Plex Sans',sans-serif;font-size:.875rem;font-weight:500;cursor:pointer;" >Cancelar</button>
-                <button type="button" onclick="saveInventarioModal()" style="flex:1;height:40px;border-radius:9999px;border:none;background:var(--accent);color:var(--accent-on,#003063);font-family:'IBM Plex Sans',sans-serif;font-size:.875rem;font-weight:500;cursor:pointer;box-shadow:var(--shadow-card);">Guardar</button>
+
+                <div class="ni-campo">
+                    <label for="nuevoInvFecha">Fecha del recuento</label>
+                    <input type="date" id="nuevoInvFecha" onchange="_pintarAvisoFechaNuevoInv()">
+                    <p class="ni-ayuda">Solo domingo o fin de mes: son los únicos días que cierran semana y permiten contabilizar después.</p>
+                    <p id="nuevoInvAvisoFecha" style="font-size:.92rem;margin:0;line-height:1.5;font-weight:700;"></p>
+                </div>
+
+                <div class="ni-campo">
+                    <span class="ni-etiqueta">Creado por</span>
+                    <div id="nuevoInvCreadoPor" class="ni-valor"></div>
+                </div>
+
+                <div class="ni-campo" role="group" aria-labelledby="nuevoInvAreasTitulo">
+                    <span id="nuevoInvAreasTitulo" class="ni-etiqueta">Áreas de conteo</span>
+                    <div id="nuevoInvAreas" class="ni-areas"></div>
+                    <p class="ni-ayuda">Las áreas elegidas quedan fijadas en este inventario, aunque después cambies la configuración.</p>
+                </div>
+
+                <div class="ni-campo">
+                    <label for="nuevoInvComentario">Comentario <span style="font-weight:400;color:var(--txt-secondary);">(opcional)</span></label>
+                    <textarea id="nuevoInvComentario" rows="3" maxlength="300" placeholder="Ej: cierre de la semana 7-13 de septiembre"></textarea>
+                </div>
+
+                <div class="bt-pila" style="margin-top:4px;">
+                    <button type="button" id="nuevoInvBtnCrear" class="bt bt--primario" onclick="confirmarNuevoInventario()">➕ Crear inventario</button>
+                    <button type="button" class="bt bt--secundario" onclick="cerrarModalNuevoInventario()">Cancelar</button>
+                </div>
             </div>
         </div>
     </div>
 
-        <script src="js/00-nucleo.js?v=2.6"></script>
-    <script src="js/10-multiusuario.js?v=2.6"></script>
-    <script src="js/20-persistencia.js?v=2.6"></script>
-    <script src="js/30-indexeddb.js?v=2.6"></script>
-    <script src="js/40-firestore.js?v=2.6"></script>
-    <script src="js/45-inventario-datos.js?v=2.6"></script>
-    <script src="js/50-roles-permisos.js?v=2.6"></script>
-    <script src="js/60-arranque.js?v=2.6"></script>
-    <script src="js/70-conversion-render.js?v=2.6"></script>
-    <script src="js/75-auditoria-flujo.js?v=2.6"></script>
-    <script src="js/80-buscador.js?v=2.6"></script>
-    <script src="js/85-ui-inventario-fisico.js?v=2.6"></script>
-    <script src="js/88-compras.js?v=2.6"></script>
-    <script src="js/90-ciclo-admin.js?v=2.6"></script>
-    <script src="js/95-exportacion.js?v=2.6"></script>
-    <script src="js/99-window-arranque.js?v=2.6"></script>
+    <!-- ══════════════════════════════════════════════════════════════════
+         H-40 (hotfix 4.9): registrar la fecha de recuento en un inventario
+         ABIERTO creado antes de que ese campo existiera. Una sola vez —
+         una vez guardada, este modal ya no se ofrece para ese inventario.
+         ══════════════════════════════════════════════════════════════════ -->
+    <div id="regFechaRecuentoModal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[300] hidden" style="padding:12px;" role="dialog" aria-modal="true" aria-labelledby="regFechaRecuentoTitulo">
+        <div class="modal-box" style="background:var(--modal-bg,#fff);border-radius:18px;max-width:24rem;width:100%;padding:18px;">
+            <div style="width:48px;height:5px;background:var(--border-mid,#d1d5db);border-radius:999px;margin:0 auto 14px;"></div>
+            <h2 id="regFechaRecuentoTitulo" style="font-size:1.1rem;font-weight:700;color:var(--txt-primary);margin-bottom:2px;">Registrar fecha de recuento</h2>
+            <p style="font-size:.76rem;color:var(--txt-muted);margin-bottom:14px;">Este inventario se creó antes de que se guardara esta fecha. Sin ella no se va a poder contabilizar cuando lo cierres. Se registra una sola vez.</p>
+
+            <label for="regFechaRecuentoInput" style="display:block;font-size:.78rem;font-weight:600;color:var(--txt-secondary);margin-bottom:5px;">Fecha del recuento</label>
+            <input type="date" id="regFechaRecuentoInput" onchange="_pintarAvisoFechaRegistrar()"
+                style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border-mid);background:var(--surface);color:var(--txt-primary);font-family:inherit;font-size:.86rem;">
+            <p style="font-size:.7rem;color:var(--txt-muted);margin:5px 0 0;">Solo domingo o fin de mes.</p>
+            <p id="regFechaRecuentoAviso" style="font-size:.72rem;margin:6px 0 16px;line-height:1.5;font-weight:600;"></p>
+
+            <div style="display:flex;gap:10px;">
+                <button type="button" onclick="cerrarModalRegistrarFechaRecuento()" style="flex:1;min-height:44px;border-radius:9999px;border:1px solid var(--border-mid);background:transparent;color:var(--txt-secondary);font-family:inherit;font-size:.86rem;font-weight:500;cursor:pointer;">Cancelar</button>
+                <button type="button" id="regFechaRecuentoBtnGuardar" onclick="confirmarRegistrarFechaRecuento()" style="flex:1;min-height:44px;border-radius:9999px;border:none;background:var(--accent);color:var(--accent-on,#003063);font-family:inherit;font-size:.86rem;font-weight:600;cursor:pointer;">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Inventario -->
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         MODAL DE CAPTURA DEL CONTEO — REDISEÑO R4
+         ───────────────────────────────────────────────────────────────────────
+         EL FLUJO NO CAMBIA, por decisión de Eduardo: se sigue tocando la
+         tarjeta y se sigue capturando aquí. Todos los id y los onclick son los
+         mismos; lo único que cambia es cómo se ve.
+
+         Qué se arregló, y por qué importa en esta pantalla más que en ninguna:
+          · Los campos numéricos pasan a mono tabular y a 1.375rem. Es la cifra
+            que el bartender escribe y relee cientos de veces en un turno; en
+            Plex Sans los dígitos bailaban de ancho.
+          · El botón "Agregar" era azul brillante (el último resto grande de la
+            paleta anterior) y además pisaba la etiqueta de al lado cuando el
+            texto crecía. Ahora es neutro y va en su propia línea: añadir otra
+            botella abierta es una acción secundaria. El único latón del modal
+            es Guardar — el latón se gana.
+          · Los emoji de las etiquetas pasan a iconos locales.
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <div id="inventarioModal" class="fixed inset-0 flex items-center justify-center z-[300] animate-fadeIn hidden" style="padding:12px;background:var(--scrim);" role="dialog" aria-modal="true" aria-labelledby="inventarioModalTitle">
+        <div class="modal-box max-w-sm w-full animate-slideUp inv-modal" style="max-height:calc(100dvh - 56px - 24px);overflow-y:auto;">
+            <div class="inv-modal__grabber" aria-hidden="true"></div>
+            <h2 class="inv-modal__titulo" id="inventarioModalTitle">Contar botellas</h2>
+            <p class="inv-modal__sub" id="inventarioModalSubtitle"></p>
+            <!-- R1 (regla 14) — MODO BOTELLA: enteras + abiertas en oz.
+                 Solo visible cuando el producto tiene habilitado el conteo en oz. -->
+            <div id="inv_bloqueBotella">
+            <div class="inv-modal__campo">
+                <label for="inv_enteras" class="inv-modal__etq"><i class="fa-solid fa-bottle" aria-hidden="true"></i> Botellas enteras</label>
+                <input type="text" id="inv_enteras" inputmode="numeric" value="0" oninput="_sanearEntradaEntero(this)" class="inv-modal__num">
+            </div>
+            <div class="inv-modal__campo">
+                <!-- FIX #7: <label> requiere atributo "for" para asociarse al input. Se usa
+                     aria-labelledby en el contenedor dinámico ya que los inputs de abiertas
+                     se crean en JS. La etiqueta describe el grupo visualmente. -->
+                <label id="inv_abiertasLabel" class="inv-modal__etq"><i class="fa-solid fa-wine-glass" aria-hidden="true"></i> Botellas abiertas <span id="inv_abiertasUnidadHint" class="inv-modal__pista"></span></label>
+                <div id="inv_abiertasContainer" class="space-y-2"></div>
+                <button type="button" onclick="addAbiertaInModal()" class="inv-modal__agregar">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"></path></svg>
+                    Agregar otra abierta
+                </button>
+            </div>
+            </div><!-- /inv_bloqueBotella -->
+
+            <!-- R1 (regla 14) — MODO CANTIDAD: un solo campo, con decimales.
+                 Para productos que no se cuentan por botella: aceitunas 1.5 PZ,
+                 golos 0.490 KG, refresco 4.5 LTS. -->
+            <div id="inv_bloqueCantidad" class="inv-modal__campo" style="display:none;">
+                <label for="inv_cantidadTotal" class="inv-modal__etq">
+                    <i class="fa-solid fa-box" aria-hidden="true"></i> Cantidad total <span id="inv_cantidadUnidad" class="inv-modal__pista"></span>
+                </label>
+                <input type="text" id="inv_cantidadTotal" min="0" step="0.001" inputmode="decimal" value="0"
+                    oninput="_sanearEntradaDecimal(this)"
+                    class="inv-modal__num">
+                <p class="inv-modal__ayuda">Admite decimales, con punto o coma. Ejemplos: 8.65 · 4,5 · 1.245</p>
+            </div>
+
+            <!-- R1 (regla 16) — El selector "Motivo del cambio" se eliminó por completo.
+                 El historial sigue registrando cada cambio, pero no se le pide al
+                 bartender que justifique un conteo: frenaba la captura sin aportar. -->
+            <div class="inv-modal__acciones">
+                <button type="button" onclick="closeInventarioModal()" class="inv-modal__btn inv-modal__btn--fantasma">Cancelar</button>
+                <button type="button" onclick="saveInventarioModal()" class="inv-modal__btn inv-modal__btn--primario">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+        <script src="js/00-nucleo.js?v=5.3"></script>
+    <script src="js/03-ui-kit.js?v=5.3"></script><!-- BI UI KIT (rediseño R1) -->
+    <script src="js/05-busqueda-motor.js?v=5.3"></script>
+    <script src="js/06-busqueda-ui.js?v=5.3"></script>
+    <script src="js/10-multiusuario.js?v=5.3"></script>
+    <script src="js/15-ciclo-semanal.js?v=5.3"></script>
+    <script src="js/18-areas-config.js?v=5.3"></script>
+    <script src="js/20-persistencia.js?v=5.3"></script>
+    <script src="js/30-indexeddb.js?v=5.3"></script>
+    <script src="js/40-firestore.js?v=5.3"></script>
+    <script src="js/45-inventario-datos.js?v=5.3"></script>
+    <script src="js/47-existencia.js?v=5.3"></script>
+    <script src="js/48-consumo-teorico.js?v=5.3"></script>
+    <script src="js/49-fisico-vs-sistema.js?v=5.3"></script>
+    <script src="js/50-roles-permisos.js?v=5.3"></script>
+    <script src="js/60-arranque.js?v=5.3"></script>
+    <script src="js/70-conversion-render.js?v=5.3"></script>
+    <script src="js/75-auditoria-flujo.js?v=5.3"></script>
+    <script src="js/80-buscador.js?v=5.3"></script>
+    <script src="js/83-panel.js?v=5.3"></script>
+    <script src="js/85-ui-inventario-fisico.js?v=5.3"></script>
+    <script src="js/87-reconteo.js?v=5.3"></script>
+    <script src="js/88-compras.js?v=5.3"></script>
+    <script src="js/90-ciclo-admin.js?v=5.3"></script>
+    <script src="js/91-recetario.js?v=5.3"></script>
+    <script src="js/92-recetario-importar.js?v=5.3"></script>
+    <script src="js/93-ventas.js?v=5.3"></script>
+    <script src="js/95-exportacion.js?v=5.3"></script>
+    <script src="js/99-window-arranque.js?v=5.3"></script>
 
     </div><!-- /#appWrapper -->
 
     <!-- ══════════════════════════════════════════════════════
          AUTH — Lógica de autenticación Firebase
          ══════════════════════════════════════════════════════ -->
-        <script src="js/auth.js?v=2.6"></script>
+        <script src="js/auth.js?v=5.3"></script>
 </body>
 </html>

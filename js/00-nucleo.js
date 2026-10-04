@@ -68,9 +68,67 @@
         let inventories = [];
         // P1 — COMPRAS. Vacio hasta que se importe o capture la primera.
         // Se declara aqui, junto al resto del estado, para que renderTab() lo vea
-        // igual que a products u orders. Todavia NO se sincroniza a Firestore:
-        // eso es P4, y hasta entonces vive solo en este dispositivo.
+        // igual que a products u orders.
+        // FASE 4 — ya se persiste (localStorage + IndexedDB + Firestore, colección
+        // propia `compras/{compraId}`, ver js/40-firestore.js). Cada elemento es
+        // EL HECHO tal cual lo trajo el origen (Excel o captura manual): folio,
+        // proveedor, fecha, importe y sus líneas. Inmutable una vez guardado.
         let compras = [];
+        // FASE 4 — el libro de movimientos. Un asiento por línea de compra,
+        // id determinista `compra_{compraId}_{productoId}`. Es EL EFECTO, separado
+        // del hecho para que ventas y ajustes (fases futuras) sumen sobre una sola
+        // forma de documento. Ver claude/fase4-diseno-compras-2026-09-20.md §2.1-2.2.
+        let movimientos = [];
+        // FASE 4 — último costo conocido por producto, espejo local del documento
+        // único costos/ultimos de Firestore: { productoId: { costo, fecha, folio, compraId } }.
+        // NO reescribe product.precio (ver §2.5 del diseño): es solo la señal para
+        // el aviso de diferencia de costo en la importación.
+        let costosUltimos = {};
+        // FASE 4B — estado de la pantalla de importación de compras (js/88-compras.js).
+        // 'lista' | 'vista_previa' | 'incidencias' | 'incidencias_previa'.
+        let comprasImportView = 'lista';
+        // Resultado sin confirmar de _parsearExcelCompras(), pendiente de que el
+        // usuario revise la vista previa y confirme o cancele.
+        let _comprasImportPendiente = null;
+        // Resultado YA guardado (o con errores) de confirmarImportacionCompras(),
+        // para la pantalla de incidencias (D-4).
+        let _comprasImportResultado = null;
+        // RECETARIO-1 — bill of materials plano (sin sub-recetas, ver diseño
+        // 2026-09-26 y verificación contra Excel 2026-09-27). Mismo patrón que
+        // `products`: el admin edita este arreglo localmente y lo PUBLICA a
+        // `recetario/recetas` (documento único) — ver js/50-roles-permisos.js.
+        // Cada elemento: { id, nombre, pv, categoria, activa, ingredientes:[{productoId,
+        // cantidad, uom, descripcionExcel?}], metodo, cristaleria, hielo, decoracion,
+        // _v, creadoPor, creadoEn, actualizadoPor, actualizadoEn }. `pv` es el código
+        // único (ej. PVB1000001) — solo lo llena la importación (js/92-recetario-importar.js),
+        // nunca el editor manual (ver corrección de nomenclatura, RECETARIO-2).
+        let recetas = [];
+        // Estado de la pantalla de Recetario (js/91-recetario.js).
+        // 'lista' | 'ficha'. La búsqueda de texto vive en _recetarioSearchTerm.
+        let recetarioView = 'lista';
+        let recetarioFichaId = null;
+        let _recetarioSearchTerm = '';
+        // Estado de la importación de recetas desde Excel (RECETARIO-2,
+        // js/92-recetario-importar.js) — mismo patrón que comprasImportView.
+        let recetarioImportView = 'lista'; // 'lista' | 'vista_previa' | 'incidencias'
+        let _recetarioImportPendiente = null;
+        let _recetarioImportResultado = null;
+        // FASE 10 — VENTAS del POS (js/93-ventas.js). `ventas` son las líneas
+        // de UNA semana (la que indica ventasSemanaId), no un histórico: el
+        // histórico vive en Firestore. Cada línea:
+        // { sku, nombre, tipo, cantidad, ventaNeta }.
+        // FASE 10B — una semana puede tener VARIOS periodos (un día, varios
+        // días, la semana completa), un documento por periodo
+        // (inventarioApp/{docId}/ventas/{fechaInicio_fechaFin}). `ventas` es
+        // la SUMA por SKU de todos los periodos de la semana, y
+        // `ventasPeriodos` dice qué días cubren: { id, inicio, fin, totalSkus,
+        // totalUnidades, legado }.
+        let ventas = [];
+        let ventasSemanaId = null;
+        let ventasPeriodos = [];
+        let ventasImportView = 'lista'; // 'lista' | 'vista_previa' | 'incidencias'
+        let _ventasImportPendiente = null;
+        let _ventasImportResultado = null;
         let activeTab = 'inicio';
         let editingProductId = null;
         let searchTerm = '';

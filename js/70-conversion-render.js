@@ -1,6 +1,52 @@
         function getTotalStock(product) {
-            if (!product.stockByArea) return 0;
-            return (product.stockByArea.almacen || 0) + (product.stockByArea.barra1 || 0) + (product.stockByArea.barra2 || 0);
+            if (!product || !product.stockByArea) return 0;
+            // PREMIUM — suma las áreas CONFIGURADAS (R6). Antes eran tres fijas,
+            // así que un área nueva nunca contaba en el stock total ni en
+            // "bajo mínimo".
+            var areasStock = (typeof AREAS_CONTEO !== 'undefined' && AREAS_CONTEO.length)
+                ? AREAS_CONTEO : ['almacen', 'barra1', 'barra2'];
+            var t = 0;
+            areasStock.forEach(function(a) { t += (product.stockByArea[a] || 0); });
+            return Math.round(t * 1000) / 1000;
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  CAPTURA DE CANTIDADES — saneamiento de entrada decimal (HOTFIX)
+        //  ───────────────────────────────────────────────────────────────────
+        //  Los campos de cantidad (inv_cantidadTotal, inv_abierta_N) eran
+        //  <input type="number">, que por especificación SOLO acepta el punto
+        //  como separador decimal. En un teléfono con el idioma en español, el
+        //  teclado numérico decimal suele mostrar coma en vez de punto; al
+        //  escribirla, el navegador la descarta EN SILENCIO y los dígitos que
+        //  siguen se pegan a la parte entera: "0,850" queda guardado como 850
+        //  (un error de ×1000 que ningún aviso detecta, porque 850 sigue
+        //  pareciendo una cantidad razonable). Verificado de forma reproducible
+        //  con un navegador real antes de este cambio.
+        //
+        //  La solución no es "validar mejor" un <input type="number">: ese tipo
+        //  de campo nunca deja que la coma llegue al valor, sin importar qué se
+        //  haga después en JS. Por eso estos campos pasan a ser type="text" con
+        //  inputmode="decimal"/"numeric" (mismo teclado numérico en el móvil) y
+        //  esta función sanea cada tecla: coma → punto, se descarta cualquier
+        //  carácter que no sea dígito o punto, y solo se conserva el primer
+        //  punto si el usuario alcanza a teclear más de uno.
+        // ══════════════════════════════════════════════════════════════════════
+
+        function _sanearEntradaDecimal(el) {
+            if (!el) return;
+            var v = String(el.value == null ? '' : el.value).replace(/,/g, '.');
+            v = v.replace(/[^0-9.]/g, '');
+            var partes = v.split('.');
+            if (partes.length > 2) v = partes[0] + '.' + partes.slice(1).join('');
+            if (el.value !== v) el.value = v;
+        }
+
+        // Botellas enteras (regla 13): no admite fracción — la fracción va en
+        // "Abiertas". Basta con descartar cualquier carácter no numérico.
+        function _sanearEntradaEntero(el) {
+            if (!el) return;
+            var v = String(el.value == null ? '' : el.value).replace(/[^0-9]/g, '');
+            if (el.value !== v) el.value = v;
         }
 
         // ══════════════════════════════════════════════════════════════════════
@@ -42,13 +88,39 @@
         }
 
         /**
-         * tieneConversion(product)
-         * Devuelve true si el producto tiene los datos para convertir oz→puntos.
+         * tieneDatosConversion(product)
+         * Devuelve true si el producto tiene los NÚMEROS para convertir oz→puntos.
+         * No dice si el producto debe contarse así — eso lo decide la casilla.
+         */
+        function tieneDatosConversion(product) {
+            return !!(product &&
+                   typeof product.capacidadMl === 'number' && product.capacidadMl > 0 &&
+                   typeof product.pesoBotellaLlenaOz === 'number' && product.pesoBotellaLlenaOz > 0);
+        }
+
+        /**
+         * tieneConversion(product)   — R1, regla 14
+         * ─────────────────────────────────────────
+         * Decide si ESTE producto se cuenta como botella (enteras + abierta en oz)
+         * o como una sola cantidad con decimales.
+         *
+         * Son dos condiciones y las dos tienen que cumplirse:
+         *   1. la casilla "Habilitar conteo de botella en oz" está marcada, y
+         *   2. existen capacidadMl y pesoBotellaLlenaOz.
+         * Sin (2) la conversión daría NaN, así que la casilla sola no basta.
+         *
+         * RETROCOMPATIBILIDAD — esto es lo delicado:
+         * los productos creados antes de R1 no tienen el campo. Para ellos la regla
+         * anterior era "si hay datos, se cuenta en oz", y se conserva exactamente.
+         * Un producto ya capturado NO puede cambiar de modo de conteo porque se
+         * actualizó la app: eso reinterpretaría conteos guardados y movería el
+         * inventario sin que nadie lo tocara.
          */
         function tieneConversion(product) {
-            return product &&
-                   typeof product.capacidadMl === 'number' && product.capacidadMl > 0 &&
-                   typeof product.pesoBotellaLlenaOz === 'number' && product.pesoBotellaLlenaOz > 0;
+            if (!tieneDatosConversion(product)) return false;
+            var casilla = product.conteoOzHabilitado;
+            if (casilla === undefined || casilla === null) return true;  // producto anterior a R1
+            return casilla === true;
         }
 
         /**
@@ -123,32 +195,46 @@
             if (!anyModal) sbClose();
         });
 
+        // ══════════════════════════════════════════════════════════════════
+        //  REDISEÑO R2 — UNA SOLA NAVEGACIÓN
+        //  ────────────────────────────────────────────────────────────────
+        //  Había TRES juegos de botones de navegación en el HTML:
+        //    · la barra inferior (#bottomTabBar) — la que se usa;
+        //    · el panel lateral (.sb-item) — 11 módulos, se abre con "Más";
+        //    · una barra horizontal de pestañas (.tab-btn) que llevaba
+        //      `display:none !important` desde hacía varias versiones, con el
+        //      comentario "Tabs ocultos (necesarios para switchTab)".
+        //
+        //  Ese tercer juego era código muerto que seguía vivo solo porque
+        //  esta función lo tocaba: pintaba y quitaba un indicador dentro de
+        //  botones invisibles en cada cambio de pestaña. Se retiró del HTML y
+        //  de aquí. A cambio, switchTab() dice ahora en una sola lectura cuál
+        //  es la jerarquía real: la barra inferior es la navegación primaria y
+        //  el panel lateral es la hoja "Más", no una navegación paralela.
+        //
+        //  Los destinos NO cambian (Inicio · Conteo · Pedidos · Compras · Más):
+        //  el equipo ya los tiene aprendidos y esta fase no es el momento de
+        //  moverlos.
+        // ══════════════════════════════════════════════════════════════════
         function switchTab(tab) {
             activeTab = tab;
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-                const indicator = btn.querySelector('.tab-indicator');
-                if (btn.dataset.tab === tab) {
-                    btn.classList.remove('text-gray-600');
-                    btn.classList.add('text-gray-900');
-                    if (!indicator) {
-                        const div = document.createElement('div');
-                        div.className = 'tab-indicator absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 to-orange-500 rounded-t-full animate-slideIn';
-                        btn.appendChild(div);
-                    }
-                } else {
-                    btn.classList.remove('text-gray-900');
-                    btn.classList.add('text-gray-600');
-                    if (indicator) indicator.remove();
-                }
-            });
-            document.querySelectorAll('.sb-item').forEach(btn => {
-                if (btn.dataset.sbTab === tab) btn.classList.add('sb-active');
-                else btn.classList.remove('sb-active');
-            });
-            // Sincronizar bottom tab bar
+            // Navegación primaria: la barra inferior.
             document.querySelectorAll('#bottomTabBar .btab-item').forEach(btn => {
-                if (btn.dataset.btab === tab) btn.classList.add('btab-active');
-                else btn.classList.remove('btab-active');
+                const activo = btn.dataset.btab === tab;
+                btn.classList.toggle('btab-active', activo);
+                // `aria-current` es lo que un lector de pantalla anuncia como
+                // "página actual"; la clase sola solo cambia el color, y el
+                // color por sí solo no informa.
+                if (activo) btn.setAttribute('aria-current', 'page');
+                else        btn.removeAttribute('aria-current');
+            });
+            // Hoja "Más": refleja el destino activo para que al abrirla se vea
+            // dónde está uno, aunque el módulo no esté en la barra inferior.
+            document.querySelectorAll('.sb-item').forEach(btn => {
+                const activo = btn.dataset.sbTab === tab;
+                btn.classList.toggle('sb-active', activo);
+                if (activo) btn.setAttribute('aria-current', 'page');
+                else        btn.removeAttribute('aria-current');
             });
             saveToLocalStorage();
             renderTab();
@@ -240,23 +326,13 @@
             notificationTimeout = setTimeout(() => { notificationTimeout = null; }, 1000);
         }
 
-        // Debounce para búsqueda: evita re-renders y escrituras en localStorage en cada tecla
-        let _searchDebounceTimer = null;
+        // FASE 6 — El buscador del catálogo (Inicio y Productos) lo maneja
+        // BusquedaUI (js/06-busqueda-ui.js). Antes esta función, por cada
+        // tecla, guardaba TODO el estado en IndexedDB + localStorage y
+        // reconstruía la pestaña entera (incluido el input). Queda como puente
+        // por si algún botón o script la sigue llamando.
         function updateSearchTerm(value) {
-            searchTerm = value;
-            clearTimeout(_searchDebounceTimer);
-    _searchDebounceTimer = setTimeout(() => {
-        saveToLocalStorage();
-        renderTab();
-        // CORRECCIÓN BUG 1: restaurar foco y cursor al final del input de búsqueda
-        // tras el re-render que destruye y recrea el DOM
-        const searchInput = document.querySelector('#tabContent input[type="text"]');
-        if (searchInput) {
-            searchInput.focus();
-            const len = searchInput.value.length;
-            searchInput.setSelectionRange(len, len);
-        }
-    }, 300);
+            BusquedaUI.establecer('catalogo', value);
         }
 
         function updateSelectedGroup(value) {
@@ -303,10 +379,16 @@
                 case 'inventario':      content.innerHTML = renderInventarioTab(); break;
                 case 'historia':        content.innerHTML = renderHistoriaTab(); break;
                 case 'compras':         content.innerHTML = renderComprasTab(); break;
+                case 'recetario':       content.innerHTML = renderRecetarioTab(); break;
+                case 'ventas':          content.innerHTML = renderVentasTab(); break;
                 case 'ajustes':         content.innerHTML = renderAjustesTab(); break;
                 case 'notificaciones':  content.innerHTML = renderNotificacionesTab(); break;
                 case 'admin':           content.innerHTML = isAdmin() ? renderAdminTab() : renderInicioTab(); break;
             }
+
+            // FASE 6 — centinelas de carga incremental y altura del encabezado
+            // para la barra de búsqueda pegajosa.
+            if (typeof BusquedaUI !== 'undefined') BusquedaUI.trasRender();
 
             // FIX 4: restaurar scroll (en siguiente frame para no luchar con el layout)
             if (scrollY > 0) {
@@ -331,6 +413,24 @@
             }
         }
 
+        /**
+         * REDISEÑO R3 — el chip "Solo lectura" de la cabecera.
+         *
+         * Estaba escrito tres veces idéntico (Productos, Recetario, Ventas) con
+         * `rgba(255,255,255,.55)` a mano: en tema claro quedaba ilegible y no
+         * había forma de cambiarlo en un sitio. Ahora es una función y un badge
+         * del kit, igual que el resto de los estados de la app.
+         *
+         * Neutral a propósito: que tu rol no pueda escribir aquí no es un fallo
+         * ni un aviso. El rojo se reserva para lo que está mal.
+         */
+        function _chipSoloLectura() {
+            if (typeof UI !== 'undefined' && UI.badge) {
+                return UI.badge({ texto: 'Solo lectura', tono: 'neutral', vivo: false });
+            }
+            return '<span class="bi-badge bi-badge--neutral">Solo lectura</span>';
+        }
+
         function updateHeaderActions() {
             const headerActions = document.getElementById('headerActions');
             if (activeTab === 'inicio') {
@@ -338,12 +438,41 @@
                 headerActions.innerHTML = '';
             } else if (activeTab === 'inventario') {
                 // Conteo — botón Excel para exportar
-                headerActions.innerHTML = '<button onclick="exportarAuditoriaExcel()" style="display:flex;align-items:center;gap:6px;padding:7px 13px;border-radius:var(--r-md);background:#065f46;border:1px solid rgba(34,197,94,.28);color:#86efac;font-size:.75rem;font-weight:600;cursor:pointer;"><svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>Excel</button>';
+                headerActions.innerHTML = '<button onclick="exportarAuditoriaExcel()" style="display:flex;align-items:center;gap:6px;padding:7px 13px;border-radius:var(--r-md);background:var(--ok-dim);border:1px solid var(--ok-dim);color:var(--ok);font-size:.75rem;font-weight:600;cursor:pointer;"><svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>Excel</button>';
             } else if (activeTab === 'productos') {
                 if (isAdmin()) {
-                    headerActions.innerHTML = '<div class="flex gap-2 sm:gap-3 flex-wrap"><button onclick="openProductModal()" class="bg-gradient-to-r from-purple-500 to-orange-500 text-white px-3 sm:px-6 py-2 sm:py-3 rounded-full flex items-center gap-1 sm:gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs sm:text-base whitespace-nowrap"><svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg><span class="hidden sm:inline">Agregar</span><span class="sm:hidden">+</span></button><button onclick="document.getElementById(\'fileInput\').click()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:#1a4731;border:1px solid rgba(34,197,94,0.28);color:#86efac;"><i class="fa-solid fa-file-arrow-up"></i><span class="hidden sm:inline">Importar Excel</span><span class="sm:hidden">Importar</span></button><button onclick="publicarCatalogoFirestore()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:#1a3a5f;border:1px solid rgba(59,130,246,0.28);color:#93c5fd;"><i class="fa-solid fa-cloud-arrow-up"></i><span class="hidden sm:inline">Publicar catálogo</span><span class="sm:hidden">Publicar</span></button><button onclick="deleteAllProducts()" class="bg-gradient-to-r from-red-500 to-orange-600 text-white px-3 sm:px-6 py-2 sm:py-3 rounded-full flex items-center gap-1 sm:gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs sm:text-base whitespace-nowrap" title="Eliminar todos"><svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg><span class="hidden sm:inline">Eliminar Todos</span><span class="sm:hidden">Del</span></button></div>';
+                    headerActions.innerHTML = '<div class="flex gap-2 sm:gap-3 flex-wrap"><button onclick="openProductModal()" class="bg-gradient-to-r from-purple-500 to-orange-500 text-white px-3 sm:px-6 py-2 sm:py-3 rounded-full flex items-center gap-1 sm:gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs sm:text-base whitespace-nowrap"><svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg><span class="hidden sm:inline">Agregar</span><span class="sm:hidden">+</span></button><button onclick="document.getElementById(\'fileInput\').click()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:var(--ok-dim);border:1px solid var(--ok-dim);color:var(--ok);"><i class="fa-solid fa-file-arrow-up"></i><span class="hidden sm:inline">Importar Excel</span><span class="sm:hidden">Importar</span></button><button onclick="publicarCatalogoFirestore()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:var(--accent-dim);border:1px solid var(--accent-dim2);color:var(--brass);"><i class="fa-solid fa-cloud-arrow-up"></i><span class="hidden sm:inline">Publicar catálogo</span><span class="sm:hidden">Publicar</span></button><button onclick="deleteAllProducts()" class="bg-gradient-to-r from-red-500 to-orange-600 text-white px-3 sm:px-6 py-2 sm:py-3 rounded-full flex items-center gap-1 sm:gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs sm:text-base whitespace-nowrap" title="Eliminar todos"><svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg><span class="hidden sm:inline">Eliminar Todos</span><span class="sm:hidden">Del</span></button></div>';
                 } else {
-                    headerActions.innerHTML = '<span style="font-size:.72rem;color:rgba(255,255,255,.55);padding:6px 10px;background:rgba(255,255,255,.08);border-radius:6px;">📋 Solo lectura</span>';
+                    headerActions.innerHTML = _chipSoloLectura();
+                }
+            } else if (activeTab === 'recetario') {
+                // RECETARIO-1 — mismo criterio que Productos: sin recipe.edit
+                // no hay botones de escritura, solo la etiqueta de solo lectura.
+                if (hasPermission('recipe.edit')) {
+                    headerActions.innerHTML =
+                        '<div class="flex gap-2 sm:gap-3 flex-wrap">' +
+                        '<button onclick="openRecetaModal()" class="bg-gradient-to-r from-purple-500 to-orange-500 text-white px-3 sm:px-6 py-2 sm:py-3 rounded-full flex items-center gap-1 sm:gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs sm:text-base whitespace-nowrap">' +
+                        '<svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>' +
+                        '<span class="hidden sm:inline">Nueva receta</span><span class="sm:hidden">+</span></button>' +
+                        '<button onclick="recetarioImportarExcel()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:var(--ok-dim);border:1px solid var(--ok-dim);color:var(--ok);">' +
+                        '<i class="fa-solid fa-file-arrow-up"></i><span class="hidden sm:inline">Importar Excel</span><span class="sm:hidden">Importar</span></button>' +
+                        '<button onclick="publicarRecetarioFirestore()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:var(--accent-dim);border:1px solid var(--accent-dim2);color:var(--brass);">' +
+                        '<i class="fa-solid fa-cloud-arrow-up"></i><span class="hidden sm:inline">Publicar recetario</span><span class="sm:hidden">Publicar</span></button>' +
+                        '</div>';
+                } else {
+                    headerActions.innerHTML = _chipSoloLectura();
+                }
+            } else if (activeTab === 'ventas') {
+                // FASE 10 — mismo criterio: sin sales.import no hay botón de
+                // escritura, solo la etiqueta de solo lectura.
+                if (hasPermission('sales.import')) {
+                    headerActions.innerHTML =
+                        '<div class="flex gap-2 sm:gap-3 flex-wrap">' +
+                        '<button onclick="ventasImportarExcel()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:var(--ok-dim);border:1px solid var(--ok-dim);color:var(--ok);">' +
+                        '<i class="fa-solid fa-file-arrow-up"></i><span class="hidden sm:inline">Importar ventas</span><span class="sm:hidden">Importar</span></button>' +
+                        '</div>';
+                } else {
+                    headerActions.innerHTML = _chipSoloLectura();
                 }
             } else {
                 headerActions.innerHTML = '';
@@ -363,7 +492,10 @@
          */
         function _getAuditConteoParaProducto(prodId) {
             // Misma fuente de verdad que renderAuditoriaConteo
-            const conteoFuente = isAdmin() ? auditoriaConteo : myAuditoriaConteo;
+            // FASE 2B — el criterio deja de ser el rol y pasa a ser el
+            // permiso de privacidad: auditoriaConteo agrega el conteo de
+            // todas las personas, myAuditoriaConteo es solo el propio.
+            const conteoFuente = puedeVerConteosAjenos() ? auditoriaConteo : myAuditoriaConteo;
             const AREAS        = AREAS_CONTEO;
             var result         = { _hayDatos: false };
             // FIX: buscar el producto para aplicar conversión oz→puntos si corresponde.
@@ -403,47 +535,176 @@
             return result;
         }
 
+        // FASE 6 — región de resultados de Inicio. La llama renderInicioTab()
+        // y, sin reconstruir la pestaña, BusquedaUI al buscar o filtrar.
+        function _renderInicioResultados() {
+            const r   = _buscarCatalogo();
+            const filteredProducts = r.items;
+            const lim = BusquedaUI.limite('catalogo');
+            let html = '';
+            // ── Tarjetas de productos ─────────────────────────────────────────
+            if (products.length === 0) {
+                html += '<div class="inicio-vacio">'
+                      + '<i class="fa-solid fa-box inicio-vacio__ico" aria-hidden="true"></i>'
+                      + '<p class="inicio-vacio__txt">No hay productos en el catálogo</p></div>';
+            } else if (filteredProducts.length === 0) {
+                html += BusquedaUI.vacio('catalogo', 'productos');
+            } else {
+                html += BusquedaUI.resumen('catalogo', r.coincidencias, r.total, 'producto', 'productos');
+                filteredProducts.slice(0, lim).forEach((product, idx) => {
+                    // FIX: sba (stockByArea) eliminada — ya no se usa en los chips.
+                    // hasData ahora refleja si hay datos de auditoría, que es lo que
+                    // muestran los chips (antes usaba getTotalStock/stockByArea, inconsistente).
+                    //
+                    // FASE 11B (parte 2) — la línea "Total:" también dejó de usar
+                    // getTotalStock() (el caché stockByArea, que se queda rancio:
+                    // ver claude/analisis-stock-teorico-2026-09-18.md §6-9 y
+                    // claude/estado-y-premium-1-2026-09-22.md §4). Ahora usa
+                    // existenciaMostrada(), la MISMA cifra que ya decide "Bajo
+                    // mínimo", "Pedido sugerido" y los niveles de alerta — para
+                    // que la tarjeta nunca se contradiga a sí misma. Mientras no
+                    // se cierre/contabilice el inventario en curso, esa cifra
+                    // sigue siendo el respaldo operativo (idéntica a como se veía
+                    // antes); el día que se contabilice, las cuatro cifras
+                    // avanzan juntas sin tocar una sola línea de este archivo.
+                    const total   = existenciaMostrada(product);
+                    const adCheck = _getAuditConteoParaProducto(product.id);
+                    const hasData = adCheck._hayDatos || total > 0;
+                    const delay   = Math.min(idx * 30, 400);
+                    const nivel   = (typeof nivelAlertaProducto === 'function') ? nivelAlertaProducto(product) : null;
+                    const pedido  = (typeof pedidoSugeridoProducto === 'function') ? pedidoSugeridoProducto(product) : null;
+
+                    // ══════════════════════════════════════════════════════
+                    //  REDISEÑO R3 — la tarjeta de producto
+                    //  ────────────────────────────────────────────────────
+                    //  Misma información que antes, reordenada para que se
+                    //  lea de un vistazo en una lista de 431:
+                    //    · monograma a la izquierda (sustituye a cualquier
+                    //      imagen: tres letras y un tinte por grupo);
+                    //    · nombre y meta en el centro;
+                    //    · la EXISTENCIA a la derecha, en mono tabular, de
+                    //      modo que la columna de cifras se escanee en
+                    //      vertical sin leer los nombres;
+                    //    · los badges de nivel salen de UI.badge(), el mismo
+                    //      diccionario que usa el resto de la app, en vez de
+                    //      tres spans con emoji propios de esta pantalla.
+                    //  Se conservan intactos los atributos funcionales
+                    //  (data-sbx-item, data-sbx-principal, data-pm-ficha) y
+                    //  las clases que el buscador y las pruebas usan.
+                    // ══════════════════════════════════════════════════════
+                    var monograma = (typeof UI !== 'undefined' && UI.mono)
+                                    ? UI.mono(product.name, product.group) : '';
+                    html += '<div class="prd-card' + (hasData ? ' has-data' : '') + '" data-sbx-item style="animation-delay:' + delay + 'ms">';
+
+                    html += '<div class="prd-card__top">';
+                    html += monograma;
+                    html += '<div class="prd-card__ident">';
+                    // PREMIUM — el nombre abre la ficha del producto (existencia,
+                    // compras, costo, inicial de la semana). Delegado en 83-panel.js.
+                    html += '<button type="button" class="prd-card__name pm-nombre-btn" data-pm-ficha="' + escapeHtml(product.id) + '" title="Ver ficha del producto">' + resaltarBusqueda(product.name, searchTerm) + '</button>';
+                    html += '<div class="prd-card__meta">'
+                          + '<span class="prd-card__grupo">' + escapeHtml(product.group || 'General') + '</span>'
+                          + '<span class="prd-card__sep">·</span>' + escapeHtml(product.unit || '')
+                          + '<span class="prd-card__sep">·</span>' + resaltarBusqueda(product.id, searchTerm)
+                          + '</div>';
+                    html += '</div>';
+                    // La existencia, a la derecha y en mono. Es la MISMA cifra que
+                    // decide los badges y el pedido sugerido (existenciaMostrada),
+                    // así que la tarjeta no se puede contradecir a sí misma.
+                    html += '<div class="prd-card__cifra">'
+                          + '<span class="num bi-cifra' + (nivel === 'limitado' ? ' bi-cifra--danger' : (nivel === 'advertencia' ? ' bi-cifra--warn' : '')) + '">Total: ' + total.toFixed(2) + '</span>'
+                          + '</div>';
+                    html += '</div>';
+
+                    // FASE 11B (parte 2) — un solo badge, el nivel MÁS severo que
+                    // aplique (nivelAlertaProducto ya resuelve la jerarquía:
+                    // limitado ⊂ advertencia ⊂ bajo). _bajoMinimo() sigue siendo
+                    // el criterio de los chips/contadores — esto solo decide qué
+                    // etiqueta mostrar dentro de ese mismo conjunto.
+                    if (nivel) {
+                        var textoNivel = (nivel === 'bajo')
+                                         ? 'Bajo mínimo (' + product.stockMinimo + ')'
+                                         : (nivel === 'advertencia' ? 'Advertencia producto bajo' : 'Limitado');
+                        var tonoNivel  = (nivel === 'limitado') ? 'danger'
+                                       : (nivel === 'advertencia' ? 'warn' : 'neutral');
+                        html += '<div class="prd-card__estado">';
+                        html += (typeof UI !== 'undefined' && UI.badge)
+                                ? UI.badge({ texto: textoNivel, tono: tonoNivel, vivo: false })
+                                : '<span class="bi-badge bi-badge--' + tonoNivel + '">' + escapeHtml(textoNivel) + '</span>';
+                        html += '</div>';
+                    }
+
+                    // FASE 11B (parte 2) — pedido sugerido, solo cuando hay algo
+                    // honesto que mostrar: con cantidad (>0), o explícitamente
+                    // sin poder calcularla (falta `conversion`) para un producto
+                    // que sí está por debajo del mínimo. Nunca un número inventado.
+                    if (typeof pedido === 'number' && pedido > 0) {
+                        html += '<div class="prd-card__pedido">'
+                              + '<span class="prd-card__pedido-txt">Pedido sugerido <b class="num">' + pedido + '</b></span>'
+                              + '<button type="button" class="prd-card__pedido-btn" onclick="agregarPedidoSugerido(\'' + escapeHtml(product.id) + '\')" title="Agregar la cantidad sugerida al carrito">Al carrito</button>'
+                              + '</div>';
+                    } else if (pedido === null && nivel) {
+                        html += '<div class="prd-card__pedido prd-card__pedido--sin-datos">Sin dato de conversión para sugerir cantidad</div>';
+                    }
+
+                    // Chips por área — lo contado en el conteo operativo en vivo
+                    // (auditoriaConteo), que es distinto de la existencia de
+                    // arriba: ver claude/fase11b-parte2-pedido-sugerido §2.
+                    var ad          = adCheck;   // reutilizar el resultado ya calculado arriba
+                    var CHIP_LABELS = areas;     // R6: las etiquetas salen de la configuracion
+                    html += '<div class="prd-card__areas">';
+                    AREAS_CONTEO.forEach(function(area) {
+                        var d          = ad[area];
+                        var totalAudit = d ? (d.enteras + d.sumaAbiertas) : null;
+                        html += '<div class="prd-area-chip' + (totalAudit === null ? ' prd-area-chip--vacio' : '') + '">';
+                        html += '<span class="prd-area-chip__label">' + CHIP_LABELS[area] + '</span>';
+                        html += '<span class="prd-area-chip__val num">'
+                              + (totalAudit !== null ? totalAudit.toFixed(2) : '—')
+                              + '</span>';
+                        html += '</div>';
+                    });
+                    html += '</div>';
+
+                    // Acciones, al pie: así el nombre del producto se queda con
+                    // todo el ancho de arriba (los nombres reales son largos:
+                    // "ACEITUNA SIN HUESO", "LIMON CON SEMILLA").
+                    html += '<div class="prd-card__actions">';
+                    html += '<button class="prd-action-btn cart" data-sbx-principal onclick="addToCart(\'' + escapeHtml(product.id) + '\')" title="Agregar al carrito" aria-label="Agregar al carrito">'
+                          + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg></button>';
+                    if (isAdmin()) {
+                        html += '<button class="prd-action-btn edit" onclick="editProduct(\'' + escapeHtml(product.id) + '\')" title="Editar producto" aria-label="Editar producto">'
+                              + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button>';
+                        html += '<button class="prd-action-btn del" onclick="deleteProduct(\'' + escapeHtml(product.id) + '\')" title="Eliminar producto" aria-label="Eliminar producto">'
+                              + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>';
+                    }
+                    html += '</div>';
+
+                    html += '</div>';
+                });
+            }
+            html += BusquedaUI.centinela('catalogo', filteredProducts.length - lim);
+            return { html: html, coincidencias: r.coincidencias, total: r.total };
+        }
+
         function renderInicioTab() {
-            const filteredProducts = filterByGroup();
             const totalProducts    = products.length;
             const totalStockAll    = products.reduce((s, p) => s + getTotalStock(p), 0);
             const cartCount        = cart.reduce((s, c) => s + (c.quantity || 1), 0); // FIX: era c.qty (undefined), debe ser c.quantity
             const ordersCount      = orders.length;
             const syncOn           = typeof _syncEnabled !== 'undefined' ? _syncEnabled : true;
 
-            // ── Stats 2×2 ─────────────────────────────────────────────────────
-            let html = '<div class="stat-grid">';
-            html += '<div class="stat-card" onclick="void(0)">'
-                  + '<div class="stat-card__icon" style="background:rgba(59,130,246,0.12);">📦</div>'
-                  + '<div><div class="stat-card__val" style="color:#60a5fa;">' + totalProducts + '</div>'
-                  + '<div class="stat-card__label">Productos</div></div></div>';
-            html += '<div class="stat-card" onclick="void(0)">'
-                  + '<div class="stat-card__icon" style="background:rgba(34,197,94,0.12);">📊</div>'
-                  + '<div><div class="stat-card__val" style="color:#4ade80;">' + totalStockAll.toFixed(1) + '</div>'
-                  + '<div class="stat-card__label">Stock Total</div></div></div>';
-            html += '<div class="stat-card" style="cursor:pointer;" onclick="openOrderModal()">'
-                  + '<div class="stat-card__icon" style="background:rgba(245,158,11,0.12);">🛒</div>'
-                  + '<div><div class="stat-card__val" style="color:#fb923c;">' + cartCount + '</div>'
-                  + '<div class="stat-card__label">En Carrito</div></div></div>';
-            html += '<div class="stat-card" onclick="switchTab(\'pedidos\')"  style="cursor:pointer;">'
-                  + '<div class="stat-card__icon" style="background:rgba(59,130,246,0.12);">📋</div>'
-                  + '<div><div class="stat-card__val" style="color:#60a5fa;">' + ordersCount + '</div>'
-                  + '<div class="stat-card__label">Pedidos</div></div></div>';
-            html += '</div>';
+            // ── PREMIUM — panel de indicadores y gráficas (js/83-panel.js).
+            // Sustituye la rejilla 2×2: conserva Productos, Carrito y Pedidos
+            // (mismas acciones) y suma bajo mínimo, valor, compras de la
+            // semana, estado del inventario y existencia de la semana.
+            let html = (typeof renderPanelInicio === 'function') ? renderPanelInicio() : '';
 
-            // ── Búsqueda + filtro de grupo ─────────────────────────────────────
-             // Buscador inteligente con clear button y feedback visual
-    html += '<div class="csb-wrap' + (searchTerm ? ' csb-wrap--active' : '') + '">';
-    html += '<svg class="csb-icon" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">'
-        + '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>';
-    html += '<input id="inicio-search-input" type="search" class="csb-input"'
-        + ' placeholder="Buscar por nombre, código o grupo\u2026"'
-        + ' value="' + escapeHtml(searchTerm) + '"'
-        + ' oninput="updateSearchTerm(this.value)"'
-        + ' onkeydown="if(event.key===\'Escape\'){event.preventDefault();this.value=\'\';updateSearchTerm(\'\');}"'
-        + ' autocomplete="off" autocorrect="off" spellcheck="false">';
-    html += '<button class="csb-clear" onclick="document.getElementById(\'inicio-search-input\').value=\'\';updateSearchTerm(\'\');" title="Limpiar (Esc)" aria-label="Limpiar búsqueda">✕</button>';
-    html += '</div>';
+            // ── Búsqueda (FASE 6: barra unificada, comparte estado con Productos) ──
+            html += BusquedaUI.barra('catalogo', {
+                placeholder: 'Buscar por nombre, código, PV o grupo…',
+                etiqueta: 'Buscar productos del catálogo',
+                sticky: true
+            });
 
             // ── Pill-rail de grupos (horizontal, sin select) ───────────────────
             html += '<div class="grp-rail-wrap"><div class="grp-rail">';
@@ -455,6 +716,7 @@
                       + '</button>';
             });
             html += '</div></div>';
+            html += BusquedaUI.chips('catalogo', _chipsCatalogo(false));
 
             // ── Botones de acción (admin) ─────────────────────────────────────
             if (isAdmin()) {
@@ -468,63 +730,11 @@
                 html += '</div>';
             }
 
-            // ── Tarjetas de productos ─────────────────────────────────────────
-            if (filteredProducts.length === 0) {
-                html += '<div style="text-align:center;padding:40px 20px;color:var(--txt-muted);">'
-                      + '<div style="font-size:2.5rem;margin-bottom:12px;">📦</div>'
-                      + '<p style="font-size:.88rem;">No se encontraron productos</p></div>';
-            } else {
-                filteredProducts.forEach((product, idx) => {
-                    // FIX: sba (stockByArea) eliminada — ya no se usa en los chips.
-                    // hasData ahora refleja si hay datos de auditoría, que es lo que
-                    // muestran los chips (antes usaba getTotalStock/stockByArea, inconsistente).
-                    const total   = getTotalStock(product);   // sigue usándose en la línea meta
-                    const adCheck = _getAuditConteoParaProducto(product.id);
-                    const hasData = adCheck._hayDatos || total > 0;
-                    const delay   = Math.min(idx * 30, 400);
-
-                    html += '<div class="prd-card' + (hasData ? ' has-data' : '') + '" style="animation-delay:' + delay + 'ms">';
-                    // Top row: nombre + botones
-                    html += '<div class="prd-card__top">';
-                    html += '<div class="prd-card__name">' + escapeHtml(product.name) + '</div>';
-                    html += '<div class="prd-card__actions">';
-                    html += '<button class="prd-action-btn cart" onclick="addToCart(\'' + escapeHtml(product.id) + '\')" title="Agregar al carrito">'
-                          + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg></button>';
-                    if (isAdmin()) {
-                        html += '<button class="prd-action-btn edit" onclick="editProduct(\'' + escapeHtml(product.id) + '\')" title="Editar producto">'
-                              + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button>';
-                        html += '<button class="prd-action-btn del" onclick="deleteProduct(\'' + escapeHtml(product.id) + '\')" title="Eliminar producto">'
-                              + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>';
-                    }
-                    html += '</div></div>';
-                    // Group badge
-                    html += '<div class="prd-card__group-badge">' + escapeHtml(product.group || 'General') + '</div>';
-                    // Meta: ID · Unit · Total
-                    html += '<div class="prd-card__meta">' + escapeHtml(product.id) + ' · ' + escapeHtml(product.unit || '') + ' · Total: ' + total.toFixed(2) + '</div>';
-                    // Area chips — total contado de auditoría por área
-                    var ad           = adCheck;   // reutilizar el resultado ya calculado arriba
-                    var CHIP_LABELS  = { almacen: 'Almacén', barra1: 'Barra 1', barra2: 'Barra 2' };
-                    html += '<div class="prd-card__areas">';
-                    AREAS_CONTEO.forEach(function(area) {
-                        var d          = ad[area];
-                        var totalAudit = d ? (d.enteras + d.sumaAbiertas) : null;
-                        html += '<div class="prd-area-chip">';
-                        html += '<span class="prd-area-chip__label">' + CHIP_LABELS[area] + '</span>';
-                        if (totalAudit !== null) {
-                            html += '<span class="prd-area-chip__val">' + totalAudit.toFixed(2) + '</span>';
-                        } else {
-                            html += '<span class="prd-area-chip__val" style="color:var(--txt-muted);font-size:0.78rem;font-weight:500;">—</span>';
-                        }
-                        html += '</div>';
-                    });
-                    html += '</div>';
-
-                    html += '</div>';
-                });
-            }
+            // ── Tarjetas de productos (región que refresca la búsqueda) ──────
+            html += BusquedaUI.region('catalogo', _renderInicioResultados().html);
 
             // ── Zona admin: eliminar todos ─────────────────────────────────────
-            if (isAdmin() && filteredProducts.length > 0) {
+            if (isAdmin() && products.length > 0) {
                 html += '<button class="inicio-btn danger" onclick="deleteAllProducts()" style="margin-top:10px;">'
                       + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:15px;height:15px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>'
                       + 'Eliminar todos los productos</button>';
@@ -532,9 +742,13 @@
 
             // ── Sincronización ─────────────────────────────────────────────────
             html += '<div class="sync-card" style="margin-top:14px;">';
-            html += '<h3><span>⚙️</span> Sincronización</h3>';
+            html += '<h3><i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i> Sincronización</h3>';
             html += '<div class="sync-card__row">';
-            html += '<div><div class="sync-status-text">☁️ ' + (syncOn ? 'Activa' : 'Pausada') + '</div>'
+            html += '<div><div class="sync-status-text">'
+                  + (typeof UI !== 'undefined' && UI.badge
+                     ? UI.badge(syncOn ? 'sincronizado' : 'pendiente', { texto: syncOn ? 'Activa' : 'Pausada' })
+                     : (syncOn ? 'Activa' : 'Pausada'))
+                  + '</div>'
                   + '<div class="sync-status-sub">' + (syncOn ? 'Datos subiéndose automáticamente a la nube.' : 'Sincronización en pausa.') + '</div></div>';
             html += '<button class="sync-pause-btn" onclick="toggleSyncEnabled(); renderTab();">'
                   + '<svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="' + (syncOn ? 'M10 9v6m4-6v6' : 'M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z') + 'M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>'
@@ -544,7 +758,7 @@
             // ── Reportes publicados (solo admin) ──────────────────────────────
             if (isAdmin()) {
                 html += '<div class="sync-card">';
-                html += '<h3><span>📊</span> Reportes Publicados</h3>';
+                html += '<h3><i class="fa-solid fa-file-chart-column" aria-hidden="true"></i> Reportes Publicados</h3>';
                 html += '<button class="inicio-btn success" style="width:100%;justify-content:center;" onclick="generarYPublicarReporte()">'
                       + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:15px;height:15px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>'
                       + 'Generar y publicar reporte final</button>';
@@ -574,9 +788,36 @@
             return html;
         }
 
+        // ══════════════════════════════════════════════════════════════════════
+        //  CATÁLOGO DE PRODUCTOS — R5
+        //  ────────────────────────────────────────────────────────────────────
+        //  Antes esta pantalla mostraba tres columnas: nombre, grupo y unidad.
+        //  El catálogo guarda mucho más —precio, mínimo, proveedor, PV, modo de
+        //  conteo— y no había forma de verlo sin abrir producto por producto.
+        //
+        //  Se usan los tokens del tema (var(--surface), var(--txt-primary)…) en
+        //  vez de colores fijos: la tabla anterior forzaba fondo blanco y en
+        //  modo oscuro quedaba ilegible.
+        // ══════════════════════════════════════════════════════════════════════
+
+        function _celdaNum(v, sufijo) {
+            if (typeof v !== 'number' || !isFinite(v)) return '<span style="color:var(--txt-muted)">—</span>';
+            return escapeHtml(v.toLocaleString('es-MX', { maximumFractionDigits: 3 })) + (sufijo || '');
+        }
+
         function renderProductosTab() {
-            const filteredProducts = filterByGroup();
+            const admin = isAdmin();
             let html = '';
+
+            // ── Buscador ──────────────────────────────────────────────────────
+            // Mismo buscador y mismo estado que Inicio (clave 'catalogo'): filtrar
+            // aquí y allá no puede dar resultados distintos.
+            html += BusquedaUI.barra('catalogo', {
+                placeholder: 'Buscar por nombre, código, PV o proveedor…',
+                etiqueta: 'Buscar en el catálogo de productos',
+                sticky: true
+            });
+
             // ── Pill-rail de grupos ───────────────────────────────────────────
             html += '<div class="grp-rail-wrap"><div class="grp-rail">';
             getAvailableGroups().forEach(function(group) {
@@ -587,63 +828,212 @@
                       + '</button>';
             });
             html += '</div></div>';
-            if (!isAdmin()) {
-                html += '<div style="background:var(--accent-dim);border:1px solid var(--accent-dim2);border-radius:var(--r-md);padding:8px 12px;margin-bottom:12px;font-size:.78rem;color:var(--accent);">📋 Catálogo de solo lectura — solo el administrador puede modificar productos</div>';
+
+            html += BusquedaUI.chips('catalogo', _chipsCatalogo(admin));
+
+            if (!admin) {
+                html += '<div style="background:var(--accent-dim);border:1px solid var(--accent-dim2);border-radius:var(--r-md);padding:8px 12px;margin-bottom:12px;font-size:.78rem;color:var(--accent);"><i class="fa-solid fa-clipboard-list" aria-hidden="true"></i> Catálogo de solo lectura — solo el administrador puede modificar productos</div>';
             }
-            html += '<div class="bg-white rounded-xl sm:rounded-2xl shadow-md overflow-hidden"><div class="overflow-x-auto"><table class="w-full text-sm sm:text-base"><thead class="bg-gradient-to-r from-purple-600 to-blue-600"><tr><th class="px-2 sm:px-4 lg:px-6 py-2 sm:py-3 lg:py-4 text-left text-xs sm:text-sm font-semibold text-white">Nombre del Producto</th><th class="px-2 sm:px-4 lg:px-6 py-2 sm:py-3 lg:py-4 text-left text-xs sm:text-sm font-semibold text-white hidden md:table-cell">Grupo</th><th class="px-2 sm:px-4 lg:px-6 py-2 sm:py-3 lg:py-4 text-left text-xs sm:text-sm font-semibold text-white">Unidad</th>';
-            if (isAdmin()) html += '<th class="px-2 sm:px-4 lg:px-6 py-2 sm:py-3 lg:py-4 text-center text-xs sm:text-sm font-semibold text-white">Acc</th>';
-            html += '</tr></thead><tbody class="divide-y divide-gray-200">';
-            filteredProducts.forEach((product, idx) => {
-                const delay = Math.min(idx * 35, 350);
-                html += '<tr class="hover:bg-purple-50 transition-colors" style="animation: rowIn 0.25s ease-out both; animation-delay:' + delay + 'ms">';
-                html += '<td class="px-2 sm:px-4 lg:px-6 py-2 sm:py-3 lg:py-4 font-medium text-gray-900 text-xs sm:text-sm">' + escapeHtml(product.name) + '</td>';
-                html += '<td class="px-2 sm:px-4 lg:px-6 py-2 sm:py-3 lg:py-4 text-gray-600 hidden md:table-cell text-xs sm:text-sm">' + escapeHtml(product.group || 'General') + '</td>';
-                html += '<td class="px-2 sm:px-4 lg:px-6 py-2 sm:py-3 lg:py-4 text-gray-600 text-xs sm:text-sm">' + escapeHtml((product.unit || '').substring(0, 8)) + '</td>';
-                if (isAdmin()) {
-                    html += '<td class="px-2 sm:px-4 lg:px-6 py-2 sm:py-3 lg:py-4"><div class="flex items-center justify-center gap-1">';
-                    html += '<button onclick="editProduct(\'' + escapeHtml(product.id) + '\')" class="p-1.5 sm:p-2.5 bg-gradient-to-br from-blue-500 to-purple-500 text-white rounded-lg sm:rounded-xl hover:shadow-lg transition-all transform active:scale-95 min-w-[36px] sm:min-w-[48px] min-h-[36px] sm:min-h-[48px] flex items-center justify-center"><svg class="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg></button>';
-                    html += '<button onclick="deleteProduct(\'' + escapeHtml(product.id) + '\')" class="p-1.5 sm:p-2.5 bg-gradient-to-br from-red-500 to-orange-500 text-white rounded-lg sm:rounded-xl hover:shadow-lg transition-all transform active:scale-95 min-w-[36px] sm:min-w-[48px] min-h-[36px] sm:min-h-[48px] flex items-center justify-center"><svg class="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>';
+
+            // ── Catálogo vacío ────────────────────────────────────────────────
+            if (products.length === 0) {
+                html += '<div style="text-align:center;padding:42px 18px;background:var(--surface);'
+                     + 'border:1px solid var(--border-mid);border-radius:12px">'
+                     + '<i class="fa-solid fa-box inicio-vacio__ico" aria-hidden="true"></i>'
+                     + '<div style="font-weight:600;margin-bottom:6px">El catálogo está vacío</div>'
+                     + '<div style="color:var(--txt-secondary);font-size:.88rem;max-width:420px;margin:0 auto;line-height:1.55">'
+                     + (admin
+                        ? 'Importa el Excel del catálogo con el botón de arriba, o agrega un producto a mano. '
+                          + 'Al reimportar, los productos que ya existan se actualizan en vez de duplicarse.'
+                        : 'Todavía no hay productos cargados. El administrador los importa desde Excel.')
+                     + '</div></div>';
+                return html;
+            }
+
+            // ── Resultados (región que refresca la búsqueda) ─────────────────
+            html += BusquedaUI.region('catalogo', _renderProductosResultados(admin).html);
+            return html;
+        }
+
+        // FASE 6 — región de resultados del catálogo. Queda entre
+        // renderProductosTab y renderPedidosTab a propósito: es parte de la
+        // misma pantalla y así la aísla pruebas/prueba-r5.js.
+        function _renderProductosResultados(admin) {
+            if (typeof admin === 'undefined') admin = isAdmin();
+            const r   = _buscarCatalogo();
+            const filteredProducts = r.items;
+            const lim = BusquedaUI.limite('catalogo');
+            let html = '';
+
+            // ── Resumen ───────────────────────────────────────────────────────
+            // Los dos contadores de la derecha no son decoración: un producto sin
+            // precio no se puede costear y uno sin PV no cruza con las ventas de
+            // Parrot. Verlos aquí evita descubrirlo al final, cuando ya estorba.
+            var sinPrecio = 0, sinPV = 0;
+            products.forEach(function(p) {
+                if (typeof p.precio !== 'number') sinPrecio++;
+                if (!p.pv) sinPV++;
+            });
+            html += '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:baseline;margin:4px 0 12px">';
+            html += '<span style="font-weight:700;font-size:1.05rem">' + filteredProducts.length + '</span>';
+            html += '<span style="color:var(--txt-secondary);font-size:.85rem">'
+                 + (filteredProducts.length === products.length
+                    ? 'producto' + (products.length === 1 ? '' : 's') + ' en el catálogo'
+                    : 'de ' + products.length + ' productos') + '</span>';
+            if (sinPrecio) {
+                html += '<span style="margin-left:auto;font-size:.75rem;color:var(--txt-muted)">'
+                     + sinPrecio + ' sin precio</span>';
+            }
+            if (sinPV) {
+                html += '<span style="font-size:.75rem;color:var(--txt-muted)'
+                     + (sinPrecio ? '' : ';margin-left:auto') + '">' + sinPV + ' sin PV</span>';
+            }
+            html += '</div>';
+
+            // ── Filtro sin resultados ─────────────────────────────────────────
+            if (filteredProducts.length === 0) {
+                // Ningún producto coincide: estado vacío común, con botones
+                // para limpiar la búsqueda o quitar filtros.
+                html += BusquedaUI.vacio('catalogo', 'productos');
+                return { html: html, coincidencias: 0, total: r.total };
+            }
+
+            // ── Tabla ─────────────────────────────────────────────────────────
+            // Las columnas secundarias se ocultan en móvil con .cat-col-sec y
+            // siguen alcanzables con el scroll lateral del contenedor.
+            var th = 'padding:9px 10px;text-align:left;font-size:.68rem;font-weight:700;'
+                   + 'text-transform:uppercase;letter-spacing:.05em;color:var(--txt-secondary);'
+                   + 'white-space:nowrap;border-bottom:1px solid var(--border-mid)';
+            var thNum = th + ';text-align:right';
+            var td = 'padding:9px 10px;font-size:.84rem;border-bottom:1px solid var(--border-soft,var(--border-mid))';
+            var tdNum = td + ';text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap';
+
+            html += '<div style="background:var(--surface);border:1px solid var(--border-mid);'
+                 + 'border-radius:12px;overflow:hidden"><div style="overflow-x:auto;-webkit-overflow-scrolling:touch">';
+            html += '<table style="width:100%;border-collapse:collapse;min-width:520px">';
+            html += '<thead><tr>';
+            html += '<th style="' + th + '">Producto</th>';
+            html += '<th style="' + th + '" class="cat-col-sec">Grupo</th>';
+            html += '<th style="' + th + '">Unidad</th>';
+            html += '<th style="' + thNum + '">Stock</th>';
+            html += '<th style="' + thNum + '" class="cat-col-sec">Precio</th>';
+            html += '<th style="' + thNum + '" class="cat-col-sec">Mínimo</th>';
+            html += '<th style="' + th + '" class="cat-col-sec">PV</th>';
+            html += '<th style="' + th + '" class="cat-col-sec">Proveedor</th>';
+            if (admin) html += '<th style="' + th + ';text-align:center">Acciones</th>';
+            html += '</tr></thead><tbody>';
+
+            filteredProducts.slice(0, lim).forEach(function(product) {
+                // FASE 8 — misma cifra que el resto de la app (ver 47-existencia).
+                var total    = (typeof existenciaMostrada === 'function') ? existenciaMostrada(product)
+                             : ((typeof getTotalStock === 'function') ? getTotalStock(product) : null);
+                var bajoMin  = (typeof product.stockMinimo === 'number' && product.stockMinimo > 0 &&
+                                typeof total === 'number' && total < product.stockMinimo);
+                var usaOz    = tieneConversion(product);
+
+                html += '<tr data-sbx-item>';
+
+                // Producto: el ID va debajo del nombre, en pequeño. Es lo que
+                // identifica la fila al importar, así que tiene que verse.
+                html += '<td style="' + td + '">'
+                     + '<div style="font-weight:600;color:var(--txt-primary);line-height:1.3">'
+                     + (product.name ? resaltarBusqueda(product.name, searchTerm) : '(sin nombre)') + '</div>'
+                     + '<div style="font-size:.7rem;color:var(--txt-muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;margin-top:2px">'
+                     + escapeHtml(product.id)
+                     + (usaOz ? ' · <span style="color:var(--accent)">oz</span>' : '')
+                     + '</div></td>';
+
+                html += '<td style="' + td + ';color:var(--txt-secondary)" class="cat-col-sec">'
+                     + escapeHtml(product.group || 'General') + '</td>';
+                html += '<td style="' + td + ';color:var(--txt-secondary)">'
+                     + escapeHtml(product.unit || '—') + '</td>';
+
+                // Stock bajo el mínimo se marca. Es la señal que dispara una compra.
+                html += '<td style="' + tdNum + (bajoMin ? ';color:#f87171;font-weight:700' : '') + '">'
+                     + _celdaNum(total) + '</td>';
+
+                html += '<td style="' + tdNum + '" class="cat-col-sec">'
+                     + (typeof product.precio === 'number'
+                        ? '$' + escapeHtml(product.precio.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+                        : '<span style="color:var(--txt-muted)">—</span>') + '</td>';
+                html += '<td style="' + tdNum + '" class="cat-col-sec">'
+                     + _celdaNum(product.stockMinimo) + '</td>';
+
+                html += '<td style="' + td + ';font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.76rem" class="cat-col-sec">'
+                     + (product.pv ? escapeHtml(product.pv) : '<span style="color:var(--txt-muted)">—</span>') + '</td>';
+                html += '<td style="' + td + ';color:var(--txt-secondary);font-size:.78rem" class="cat-col-sec">'
+                     + (product.proveedor ? escapeHtml(product.proveedor) : '<span style="color:var(--txt-muted)">—</span>') + '</td>';
+
+                if (admin) {
+                    html += '<td style="' + td + '"><div style="display:flex;gap:6px;justify-content:center">';
+                    html += '<button type="button" data-sbx-principal onclick="editProduct(\'' + escapeHtml(product.id) + '\')" '
+                         + 'title="Editar" aria-label="Editar ' + escapeHtml(product.name || product.id) + '" '
+                         + 'style="min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;'
+                         + 'border-radius:10px;border:1px solid var(--border-mid);background:var(--surface);'
+                         + 'color:var(--txt-primary);cursor:pointer">'
+                         + '<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button>';
+                    html += '<button type="button" onclick="deleteProduct(\'' + escapeHtml(product.id) + '\')" '
+                         + 'title="Eliminar" aria-label="Eliminar ' + escapeHtml(product.name || product.id) + '" '
+                         + 'style="min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;'
+                         + 'border-radius:10px;border:1px solid rgba(248,113,113,.3);background:rgba(248,113,113,.08);'
+                         + 'color:#f87171;cursor:pointer">'
+                         + '<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>';
                     html += '</div></td>';
                 }
                 html += '</tr>';
             });
+
             html += '</tbody></table></div></div>';
-            return html;
+            html += BusquedaUI.centinela('catalogo', filteredProducts.length - lim);
+            return { html: html, coincidencias: r.coincidencias, total: r.total };
         }
 
         function renderPedidosTab() {
             let headerHtml = '<div style="margin-bottom:14px;"><h2 style="font-size:1.05rem;font-weight:700;color:var(--txt-primary);">Pedidos WhatsApp</h2><p style="font-size:.75rem;color:var(--txt-muted);">Solo en este dispositivo</p></div>';
             if (orders.length === 0) {
-                return headerHtml + '<div class="bg-white rounded-2xl shadow-md" style="padding:50px 20px;text-align:center;"><div style="font-size:3rem;margin-bottom:12px;">🛒</div><p style="font-size:.95rem;font-weight:600;color:var(--txt-secondary);margin-bottom:6px;">No hay pedidos todavía</p><p style="font-size:.78rem;color:var(--txt-muted);">Ve a Inicio, agrega productos con 🛒 y genera un pedido</p></div>';
+                // REDISEÑO R3 — el vacío de Pedidos cae dentro de R7, pero su
+                // emoji vivía en este archivo y la prueba de R3 vigila el
+                // archivo entero, no una región: dejarlo como excepción habría
+                // sido abrir la puerta a que volvieran los demás. Es el mismo
+                // estado vacío de Inicio, con el icono del carrito.
+                return headerHtml
+                     + '<div class="bi-card inicio-vacio" style="padding:50px 20px;">'
+                     + '<i class="fa-solid fa-cart-shopping inicio-vacio__ico" aria-hidden="true"></i>'
+                     + '<p style="font-size:.95rem;font-weight:600;color:var(--txt-secondary);margin-bottom:6px;">No hay pedidos todavía</p>'
+                     + '<p style="font-size:.78rem;color:var(--txt-muted);">Ve a Inicio, agrega productos al pedido y genera uno</p></div>';
             }
-            // FIX-BUSCADOR-PEDIDOS (BarInventario): buscador fuzzy — mismo motor
-            // que Inicio (_csBigrams) — sobre folio, proveedor, nota y productos.
+            // FASE 6 — barra unificada sobre folio, proveedor, nota y productos.
             let html = headerHtml;
-            html += '<div class="csb-wrap' + (_pedidosSearchTerm ? ' csb-wrap--active' : '') + '" id="pedidos-csb-wrap">'
-                + '<svg class="csb-icon" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">'
-                + '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>'
-                + '<input id="pedidos-search-input" type="search" class="csb-input"'
-                + ' placeholder="Buscar por folio, proveedor o producto\u2026"'
-                + ' value="' + escapeHtml(_pedidosSearchTerm) + '"'
-                + ' oninput="updatePedidosSearch(this.value)"'
-                + ' onkeydown="if(event.key===\'Escape\'){event.preventDefault();clearPedidosSearch();}"'
-                + ' autocomplete="off" autocorrect="off" spellcheck="false">'
-                + '<button class="csb-clear" onclick="clearPedidosSearch()" title="Limpiar (Esc)" aria-label="Limpiar búsqueda">✕</button>'
-                + '</div>';
+            html += BusquedaUI.barra('pedidos', {
+                placeholder: 'Buscar por folio, proveedor o producto…',
+                etiqueta: 'Buscar pedidos',
+                sticky: true
+            });
             html += '<div class="mb-6">';
             if (isAdmin()) {
             html += '<button onclick="deleteAllOrders()" class="bg-gradient-to-r from-red-500 to-orange-600 text-white px-6 py-3 rounded-xl flex items-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200" title="Eliminar todos los pedidos"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg><span class="font-medium">Eliminar todos los pedidos</span></button>';
             }
-            html += '</div><div class="space-y-4">';
-            const filteredOrders = _filtrarPedidos();
-            if (_pedidosSearchTerm && filteredOrders.length === 0) {
-                html += '<div class="bg-white rounded-2xl shadow-md" style="padding:40px 20px;text-align:center;"><p style="font-size:.85rem;color:var(--txt-muted);">Sin resultados para "' + escapeHtml(_pedidosSearchTerm) + '"</p></div>';
+            html += '</div>';
+            html += BusquedaUI.region('pedidos', _renderPedidosResultados().html);
+            return html;
+        }
+
+        // FASE 6 — región de resultados de Pedidos.
+        function _renderPedidosResultados() {
+            const r = _buscarPedidos();
+            const filteredOrders = r.items;
+            const lim = BusquedaUI.limite('pedidos');
+            let html = '';
+            if (filteredOrders.length === 0) {
+                return { html: BusquedaUI.vacio('pedidos', 'pedidos'), coincidencias: 0, total: r.total };
             }
-            filteredOrders.forEach((order, idx) => {
+            html += BusquedaUI.resumen('pedidos', r.coincidencias, r.total, 'pedido', 'pedidos');
+            html += '<div class="space-y-4">';
+            filteredOrders.slice(0, lim).forEach((order, idx) => {
                 const delay = Math.min(idx * 50, 400);
-                html += '<div class="bg-white rounded-2xl p-6 shadow-md" style="animation: tabContentIn 0.3s ease-out both; animation-delay:' + delay + 'ms"><div class="flex justify-between items-start mb-4"><div><h3 class="text-xl font-bold text-gray-900">' + escapeHtml(order.id) + '</h3><p class="text-gray-600">Proveedor: ' + escapeHtml(order.supplier) + '</p><p class="text-sm text-gray-600">Fecha: ' + escapeHtml(order.date) + '</p>';
+                html += '<div class="bg-white rounded-2xl p-6 shadow-md" data-sbx-item style="animation: tabContentIn 0.3s ease-out both; animation-delay:' + delay + 'ms"><div class="flex justify-between items-start mb-4"><div><h3 class="text-xl font-bold text-gray-900">' + resaltarBusqueda(order.id, _pedidosSearchTerm) + '</h3><p class="text-gray-600">Proveedor: ' + resaltarBusqueda(order.supplier, _pedidosSearchTerm) + '</p><p class="text-sm text-gray-600">Fecha: ' + escapeHtml(order.date) + '</p>';
                 if (order.deliveryDate) html += '<p class="text-sm text-gray-600">Entrega: ' + escapeHtml(order.deliveryDate) + '</p>';
-                html += '</div><div class="flex gap-2"><button onclick="shareOrderWhatsApp(\'' + escapeHtml(order.id) + '\')" class="p-2.5 bg-gradient-to-br from-green-500 to-emerald-500 text-white rounded-xl hover:shadow-lg transition-all transform active:scale-95"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg></button><button onclick="deleteOrder(\'' + escapeHtml(order.id) + '\')" class="p-2.5 bg-gradient-to-br from-red-500 to-orange-500 text-white rounded-xl hover:shadow-lg transition-all transform active:scale-95"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button></div></div><div class="overflow-x-auto"><table class="w-full"><thead class="bg-gradient-to-r from-purple-600 to-blue-600"><tr><th class="px-4 py-3 text-left text-sm font-semibold text-white">Nombre de Producto</th><th class="px-4 py-3 text-center text-sm font-semibold text-white">Unidad de Medida</th><th class="px-4 py-3 text-center text-sm font-semibold text-white">Cantidad</th></tr></thead><tbody class="divide-y divide-gray-200">';
+                html += '</div><div class="flex gap-2"><button data-sbx-principal onclick="shareOrderWhatsApp(\'' + escapeHtml(order.id) + '\')" class="p-2.5 bg-gradient-to-br from-green-500 to-emerald-500 text-white rounded-xl hover:shadow-lg transition-all transform active:scale-95"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg></button><button onclick="deleteOrder(\'' + escapeHtml(order.id) + '\')" class="p-2.5 bg-gradient-to-br from-red-500 to-orange-500 text-white rounded-xl hover:shadow-lg transition-all transform active:scale-95"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button></div></div><div class="overflow-x-auto"><table class="w-full"><thead class="bg-gradient-to-r from-purple-600 to-blue-600"><tr><th class="px-4 py-3 text-left text-sm font-semibold text-white">Nombre de Producto</th><th class="px-4 py-3 text-center text-sm font-semibold text-white">Unidad de Medida</th><th class="px-4 py-3 text-center text-sm font-semibold text-white">Cantidad</th></tr></thead><tbody class="divide-y divide-gray-200">';
                 order.products.forEach(p => {
                     html += '<tr><td class="px-4 py-3 text-gray-900">' + escapeHtml(p.name) + '</td><td class="px-4 py-3 text-center text-gray-600">' + escapeHtml(p.unit) + '</td><td class="px-4 py-3 text-center font-semibold text-gray-900">' + p.quantity + '</td></tr>';
                 });
@@ -652,7 +1042,8 @@
                 html += '</div></div>';
             });
             html += '</div>';
-            return html;
+            html += BusquedaUI.centinela('pedidos', filteredOrders.length - lim);
+            return { html: html, coincidencias: r.coincidencias, total: r.total };
         }
 
         // Bug #11 fix: modal de confirmación propio — reemplaza confirm() nativo que
@@ -716,14 +1107,23 @@ document.body.appendChild(overlay);
             });
         }
 
-        function openInventarioModal(productId) {
+        function openInventarioModal(productId, opciones) {
             const product = products.find(p => p.id === productId);
             if (!product) return;
             inventarioModalProductId = productId;
+            // RECONTEO — el modal es el mismo; solo cambia de dónde sale el
+            // valor inicial y a dónde va al guardar (ver saveInventarioModal).
+            const _rc = (opciones && opciones.reconteo) ? opciones.reconteo : null;
+            _reconteoEdicion = _rc ? { prodId: productId, area: _rc.area } : null;
 
             // ── Seleccionar fuente de datos (auditoría o conteo regular) ──
             let areaKey, areaLabel, conteoSource;
-            if (isAuditoriaMode && auditoriaAreaActiva) {
+            if (_rc) {
+                areaKey      = _rc.area;
+                areaLabel    = ((typeof areasAuditoria !== 'undefined' && areasAuditoria[areaKey]) || areas[areaKey] || areaKey) + ' · Reconteo';
+                conteoSource = { enteras: (_rc.valor && _rc.valor.enteras) || 0,
+                                 abiertas: (_rc.valor && Array.isArray(_rc.valor.abiertas)) ? _rc.valor.abiertas.slice() : [] };
+            } else if (isAuditoriaMode && auditoriaAreaActiva) {
                 areaKey   = auditoriaAreaActiva;
                 areaLabel = areasAuditoria[areaKey] || areaKey;
                 if (!myAuditoriaConteo[productId]) myAuditoriaConteo[productId] = {};
@@ -767,35 +1167,35 @@ document.body.appendChild(overlay);
                 hintEl.textContent = tieneConversion(product) ? '— ingresa el peso en oz' : '';
             }
 
-            document.getElementById('inv_enteras').value = conteoSource.enteras || 0;
-            const container = document.getElementById('inv_abiertasContainer');
-            container.innerHTML = '';
-            const abiertas = (conteoSource.abiertas && conteoSource.abiertas.length > 0) ? conteoSource.abiertas : [0];
-            // Pasar si usa oz para el placeholder del input
-            abiertas.forEach((val, idx) => renderAbiertaInput(val, idx, tieneConversion(product)));
+            // ── R1 (regla 14): elegir el modo de captura ──────────────────────
+            // El modo lo decide el producto, no el usuario. Mostrar los dos bloques
+            // a la vez permitiría capturar la misma cantidad por dos caminos.
+            const usaBotella   = tieneConversion(product);
+            const bloqueBot    = document.getElementById('inv_bloqueBotella');
+            const bloqueCant   = document.getElementById('inv_bloqueCantidad');
+            if (bloqueBot)  bloqueBot.style.display  = usaBotella ? '' : 'none';
+            if (bloqueCant) bloqueCant.style.display = usaBotella ? 'none' : '';
 
-            // ── CORRECCIÓN 4: Motivo obligatorio cuando hay valor previo ──────
-            // Si ya existe un conteo para este producto/área, mostrar el selector de motivo.
-            // Para un primer conteo (sin valor previo), se auto-selecciona "Conteo inicial".
-            const motivoContainer = document.getElementById('inv_motivoContainer');
-            const motivoSelect    = document.getElementById('inv_motivo');
-            const prevEnteras     = conteoSource.enteras || 0;
-            const hasPrevData     = prevEnteras > 0 ||
-                                    (conteoSource.abiertas && conteoSource.abiertas.some(function(v) { return v > 0; }));
-            if (motivoContainer && motivoSelect) {
-                if (hasPrevData) {
-                    // Hay valor previo → mostrar selector y exigir elección
-                    motivoContainer.style.display = '';
-                    motivoSelect.value = '';
-                } else {
-                    // Primer conteo → ocultar selector, pre-seleccionar "Conteo inicial"
-                    motivoContainer.style.display = 'none';
-                    motivoSelect.value = 'Conteo inicial';
-                }
-                // Limpiar error previo
-                const errEl = document.getElementById('inv_motivoError');
-                if (errEl) errEl.classList.add('hidden');
+            if (usaBotella) {
+                document.getElementById('inv_enteras').value = conteoSource.enteras || 0;
+                const container = document.getElementById('inv_abiertasContainer');
+                container.innerHTML = '';
+                const abiertas = (conteoSource.abiertas && conteoSource.abiertas.length > 0) ? conteoSource.abiertas : [0];
+                abiertas.forEach((val, idx) => renderAbiertaInput(val, idx, true));
+            } else {
+                // Modo cantidad: un solo número. Si el producto venía con abiertas
+                // (porque el administrador acaba de desmarcar la casilla), se muestra
+                // el total ya convertido en vez de perder la fracción.
+                let total = conteoSource.enteras || 0;
+                (conteoSource.abiertas || []).forEach(function(v) { total += (v || 0); });
+                const inputCant = document.getElementById('inv_cantidadTotal');
+                if (inputCant) inputCant.value = Math.round(total * 1000) / 1000;
+                const unidadEl = document.getElementById('inv_cantidadUnidad');
+                if (unidadEl) unidadEl.textContent = product.unit ? '(' + product.unit + ')' : '';
             }
+
+            // R1 (regla 16): ya no hay selector de motivo. El historial lo registra
+            // solo; al bartender no se le pide que justifique un conteo.
 
             isInventarioModalOpen = true;
             disableAreaButtons(true);
@@ -819,16 +1219,22 @@ document.body.appendChild(overlay);
         function renderAbiertaInput(val, idx, usaOz) {
             const container = document.getElementById('inv_abiertasContainer');
             const div = document.createElement('div');
-            div.className = 'flex items-center gap-2';
+            // REDISEÑO R4 — la fila de una botella abierta. Mismos id, mismo
+            // oninput, mismo onclick de quitar: solo cambia el aspecto. El campo
+            // pasa a mono tabular (es un peso que se escribe y se relee) y el
+            // borde naranja de la paleta anterior pasa a token.
+            div.className = 'inv-abierta';
             div.id = 'abierta_row_' + idx;
             const unidadLabel = usaOz ? ' (oz)' : '';
-            const placeholder = usaOz ? 'ej: 33.45 oz' : '0.0';
-            div.innerHTML = '<span class="text-xs font-medium text-gray-500 w-20 flex-shrink-0">Abierta ' + (idx + 1) + unidadLabel + '</span>' +
-                '<input type="number" id="inv_abierta_' + idx + '" min="0" step="0.01" value="' + val + '" ' +
-                'oninput="if(parseFloat(this.value)<0||isNaN(parseFloat(this.value)))this.value=0;" ' +
-                'class="flex-1 px-3 py-2 bg-white text-gray-900 border-2 border-orange-200 rounded-xl focus:ring-2 focus:ring-orange-400 focus:border-transparent text-center font-bold" ' +
+            const placeholder = usaOz ? 'ej: 33.45' : '0.0';
+            div.innerHTML = '<span class="inv-abierta__etq">Abierta ' + (idx + 1) + unidadLabel + '</span>' +
+                '<input type="text" id="inv_abierta_' + idx + '" inputmode="decimal" min="0" step="0.01" value="' + val + '" ' +
+                'oninput="_sanearEntradaDecimal(this)" ' +
+                'class="inv-modal__num inv-abierta__num" ' +
                 'placeholder="' + placeholder + '">' +
-                (idx > 0 ? '<button onclick="removeAbiertaInModal(' + idx + ')" class="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>' : '<div class="w-8"></div>');
+                (idx > 0
+                    ? '<button type="button" onclick="removeAbiertaInModal(' + idx + ')" class="inv-abierta__quitar" aria-label="Quitar abierta ' + (idx + 1) + '" title="Quitar esta botella abierta"><svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>'
+                    : '<span class="inv-abierta__hueco" aria-hidden="true"></span>');
             container.appendChild(div);
         }
 
@@ -864,6 +1270,7 @@ document.body.appendChild(overlay);
             document.body.classList.remove('modal-open');
             inventarioModalProductId = null;
             isInventarioModalOpen = false;
+            _reconteoEdicion = null;
             disableAreaButtons(false);
         }
 
@@ -873,62 +1280,104 @@ document.body.appendChild(overlay);
             // ── CICLO CERRADO: bloquear cualquier modificación ───────────────
             // El administrador cierra el ciclo cuando el inventario está listo;
             // después de eso nadie puede modificar conteos hasta que se reabra.
+            // D6 — el mensaje decía "el inventario está CERRADO", lo que hacía
+            // pensar en el Inventario Físico de Firestore. No es eso: es el
+            // candado LOCAL de captura de este dispositivo, un mecanismo de una
+            // etapa anterior del producto que vive en localStorage. Confundir
+            // los dos llevaba a buscar la solución donde no estaba.
             if (isCicloBloqueado()) {
-                showNotification('🔒 El inventario está CERRADO. Solo el administrador puede reabrir el ciclo.');
+                showNotification('🔒 La captura está bloqueada en ESTE dispositivo '
+                    + '(candado local). Un administrador puede desbloquearla desde '
+                    + 'Administración → Candado local de captura.');
                 closeInventarioModal();
                 return;
             }
 
-            // Validación: solo números positivos
-            const enterasRaw = parseFloat(document.getElementById('inv_enteras').value);
-            if (isNaN(enterasRaw) || enterasRaw < 0) {
-                showNotification('⚠️ Las botellas enteras deben ser un número mayor o igual a 0');
-                document.getElementById('inv_enteras').focus();
-                return;
-            }
-            // Bug #7 fix: enteras debe ser entero — fracciones van en la sección Abiertas
-            if (!Number.isInteger(enterasRaw)) {
-                showNotification('⚠️ Las botellas enteras deben ser número entero. Usa la sección "Abiertas" para fracciones.');
-                document.getElementById('inv_enteras').focus();
-                return;
-            }
-            // ── CORRECCIÓN 4: Validar motivo obligatorio ─────────────────────
-            const motivoSelect = document.getElementById('inv_motivo');
-            const motivoVal    = motivoSelect ? motivoSelect.value.trim() : 'Conteo inicial';
-            const motivoContainer = document.getElementById('inv_motivoContainer');
-            const isMotivVisible  = motivoContainer && motivoContainer.style.display !== 'none';
-            if (isMotivVisible && !motivoVal) {
-                const errEl = document.getElementById('inv_motivoError');
-                if (errEl) errEl.classList.remove('hidden');
-                motivoSelect.focus();
-                showNotification('⚠️ Debes seleccionar un motivo para modificar el conteo.');
-                return;
-            }
-            const motivoFinal = motivoVal || 'Conteo inicial';
+            // R1 (regla 16): el motivo del cambio ya no se le pide al usuario.
+            // El historial de auditoría lo sigue registrando con una etiqueta
+            // automática, para no perder la trazabilidad que ya existía.
+            const motivoFinal = 'Conteo';
 
-            // FIX-UPPER-BOUND: límite máximo razonable para evitar errores de tipeo (ej. 99 → 9999)
-            if (enterasRaw > 9999) {
-                showNotification('⚠️ Cantidad muy alta (' + enterasRaw + '). Verifica el valor antes de guardar.');
-                document.getElementById('inv_enteras').focus();
-                return;
-            }
-            const enteras = Math.max(0, enterasRaw);
-            const container = document.getElementById('inv_abiertasContainer');
+            // ── R1 (regla 14): el producto decide cómo se leyó el conteo ──────
+            const _prodModal = products.find(p => p.id === inventarioModalProductId);
+            const usaBotella = tieneConversion(_prodModal);
+
+            let enteras;
             const abiertas = [];
-            let invalidAbierta = false;
-            for (let i = 0; i < container.children.length; i++) {
-                const input = document.getElementById('inv_abierta_' + i);
-                if (input) {
-                    const raw = input.value.trim();
-                    // FIX-SCIENTIFIC: rechazar notación científica que parseFloat acepta (ej. 1e5 = 100000)
-                    if (/e/i.test(raw)) { invalidAbierta = true; break; }
-                    const v = parseFloat(raw);
-                    if (isNaN(v) || v < 0 || v > 9999) { invalidAbierta = true; break; }
-                    abiertas.push(v);
+
+            if (!usaBotella) {
+                // ── MODO CANTIDAD (regla 13): un solo número, con decimales ───
+                const inputCant = document.getElementById('inv_cantidadTotal');
+                const rawCant   = inputCant ? inputCant.value.trim().replace(/,/g, '.') : '';
+                // Rechazar notación científica, que parseFloat acepta (1e5 = 100000)
+                if (/e/i.test(rawCant)) {
+                    showNotification('⚠️ Cantidad no válida. Escribe el número completo, por ejemplo 1.245');
+                    if (inputCant) inputCant.focus();
+                    return;
+                }
+                const cant = parseFloat(rawCant);
+                if (isNaN(cant) || cant < 0) {
+                    showNotification('⚠️ La cantidad debe ser un número mayor o igual a 0');
+                    if (inputCant) inputCant.focus();
+                    return;
+                }
+                if (cant > 9999) {
+                    showNotification('⚠️ Cantidad muy alta (' + cant + '). Verifica el valor antes de guardar.');
+                    if (inputCant) inputCant.focus();
+                    return;
+                }
+                // 3 decimales: es lo que pide la operación (golos 0.490 KG) y evita
+                // que un 0.1 + 0.2 de punto flotante se guarde como 0.30000000000000004.
+                enteras = Math.round(cant * 1000) / 1000;
+            } else {
+                // ── MODO BOTELLA: enteras (entero) + abiertas en oz ───────────
+                const enterasRaw = parseFloat(document.getElementById('inv_enteras').value);
+                if (isNaN(enterasRaw) || enterasRaw < 0) {
+                    showNotification('⚠️ Las botellas enteras deben ser un número mayor o igual a 0');
+                    document.getElementById('inv_enteras').focus();
+                    return;
+                }
+                // Las enteras son botellas cerradas: no existe media botella cerrada.
+                // La fracción va en "Abiertas", que es lo que la báscula mide.
+                if (!Number.isInteger(enterasRaw)) {
+                    showNotification('⚠️ Las botellas enteras deben ser número entero. Usa la sección "Abiertas" para fracciones.');
+                    document.getElementById('inv_enteras').focus();
+                    return;
+                }
+                // FIX-UPPER-BOUND: límite razonable para atrapar errores de tipeo (99 → 9999)
+                if (enterasRaw > 9999) {
+                    showNotification('⚠️ Cantidad muy alta (' + enterasRaw + '). Verifica el valor antes de guardar.');
+                    document.getElementById('inv_enteras').focus();
+                    return;
+                }
+                enteras = Math.max(0, enterasRaw);
+
+                const container = document.getElementById('inv_abiertasContainer');
+                let invalidAbierta = false;
+                for (let i = 0; i < container.children.length; i++) {
+                    const input = document.getElementById('inv_abierta_' + i);
+                    if (input) {
+                        const raw = input.value.trim().replace(/,/g, '.');
+                        // FIX-SCIENTIFIC: rechazar notación científica (ej. 1e5 = 100000)
+                        if (/e/i.test(raw)) { invalidAbierta = true; break; }
+                        const v = parseFloat(raw);
+                        if (isNaN(v) || v < 0 || v > 9999) { invalidAbierta = true; break; }
+                        abiertas.push(v);
+                    }
+                }
+                if (invalidAbierta) {
+                    showNotification('⚠️ Los valores de botellas abiertas deben ser números positivos (máx. 9999)');
+                    return;
                 }
             }
-            if (invalidAbierta) {
-                showNotification('⚠️ Los valores de botellas abiertas deben ser números positivos (máx. 9999)');
+
+            // ── RECONTEO — la corrección se ANOTA en el borrador del reconteo;
+            // no toca el conteo hasta "Finalizar reconteo". Los valores ya
+            // pasaron exactamente la misma validación que un conteo normal.
+            if (_reconteoEdicion) {
+                const _ctxRc = _reconteoEdicion;
+                closeInventarioModal();
+                _rcAplicarEdicion(_ctxRc.prodId, _ctxRc.area, enteras, abiertas);
                 return;
             }
 
@@ -1089,6 +1538,13 @@ document.body.appendChild(overlay);
                     const clave = pid + '|' + area;
                     clearTimeout(_conteoProductoSyncTimers[clave]);
                     _conteoProductoSyncTimers[clave] = setTimeout(function() {
+                        // D — la clave se borra al dispararse. Antes se
+                        // quedaba para siempre, así que al cerrar la pestaña
+                        // se marcaba como pendiente TODO lo tocado en la
+                        // sesión, ya subido o no, y al arrancar se reenviaba
+                        // entero: versiones incrementadas sobre valores que
+                        // podían ser más nuevos de otro aparato.
+                        delete _conteoProductoSyncTimers[clave];
                         // C1: el resultado ya NO se descarta.
                         updateCloudSyncBadge('syncing');
                         syncConteoProductoAtomico(pid, area, ent, abi)
@@ -1108,4 +1564,4 @@ document.body.appendChild(overlay);
         }
 
 
-        // Toggle expansión de tarjeta de inventario (botellas abiertas adicionales)
+        // Toggle expansión de tarjeta de inventario (botellas abiertas adicionales)

@@ -1,6 +1,24 @@
         function handleFileImport(event) {
             const file = event.target.files[0];
             if (!file) return;
+
+            // ── R5: el permiso se comprueba AQUÍ, no solo ocultando el botón ──
+            // Hasta ahora la única defensa era que el botón no se dibujaba para
+            // los no-admin. Ocultar un botón no es un permiso: cualquiera que
+            // abra la consola podía llamar a esta función y reescribir su copia
+            // local del catálogo. Firestore frenaría la sincronización después,
+            // pero el bartender se quedaría trabajando sobre un catálogo
+            // corrompido y sin entender por qué.
+            // FASE 2A — la barrera deja de ser "eres admin" y pasa a ser un
+            // permiso concreto y delegable. Para un ADMIN no cambia nada:
+            // hasPermission() resuelve el comodín '*' antes que cualquier otra
+            // regla. Lo que sí cambia es que ahora un Subjefe puede recibir
+            // esta capacidad desde la pantalla de permisos, sin tocar código.
+            if (!hasPermission('catalog.publish')) {
+                showNotification('⚠️ No tienes permiso para importar el catálogo');
+                event.target.value = '';
+                return;
+            }
             // ═══ FIX #3: Verificar que XLSX esté cargado (tiene defer) ═══
             // El script de SheetJS usa defer → puede no estar listo si el usuario
             // intenta importar muy rápido tras cargar la página.
@@ -44,6 +62,16 @@
                         // para respetar exactamente los nombres del Excel exportado
                         capacidadMl:        ['CapacidadML', 'capacidadMl', 'CapacidadMl', 'Capacidad_ML', 'CapML'],
                         pesoBotellaLlenaOz: ['PesoBotellaOz', 'pesoBotellaOz', 'PesoLlenaOz', 'PesoBotella_Oz', 'PesoOz'],
+
+                        // R1 (regla 14) — columna OPCIONAL. Si el Excel no la trae,
+                        // el modo se deduce de tener capacidad y peso, que es como se
+                        // ha comportado la app hasta ahora.
+                        conteoOz: ['ConteoOz', 'Conteo oz', 'ConteoBotellaOz', 'ContarEnOz', 'Habilitar conteo oz'],
+
+                        // R2 (reglas 2 y 8) — el product_id de Parrot. En la hoja
+                        // "Venta" la columna se llama SKU, asi que se aceptan los
+                        // dos nombres: son el mismo dato.
+                        pv: ['PV', 'SKU', 'PV de venta', 'PVVenta', 'ProductId', 'product_id'],
 
                         // ── P0: cuatro columnas que el Excel del catalogo YA trae ──
                         // Estaban en Productos_Barra15.xlsx desde siempre y la importacion
@@ -103,6 +131,16 @@
                         return undefined;
                     }
 
+                    // ── R5: índice de lo que YA existe, por ID ────────────────
+                    // Hasta aquí, una fila cuyo ID ya existía NO actualizaba nada:
+                    // se le inventaba un ID nuevo (PRD-NNN) y se creaba un producto
+                    // clonado. Reimportar el catálogo de 424 productos generaba 424
+                    // productos más, con los nombres repetidos y los conteos
+                    // repartidos entre los dos. Ahora el ID manda: si existe, se
+                    // actualiza; si no, se da de alta.
+                    const _indicePorId = {};
+                    products.forEach(function(p, i) { _indicePorId[String(p.id)] = i; });
+
                     const existingIds = new Set(products.map(p => p.id));
                     let maxNum = 0;
                     products.forEach(p => { const m = p.id.match(/^PRD-(\d+)$/); if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10)); });
@@ -122,12 +160,14 @@
                         const rawId = findCol(row, columnMap.id);
                         let id = rawId !== undefined ? String(rawId).trim() : '';
                         if (!id) {
+                            // Sin ID en el Excel no hay forma de saber a qué producto
+                            // se refiere la fila: es un alta y se le genera uno.
                             do { id = 'PRD-' + String(nextNum++).padStart(3, '0'); } while (existingIds.has(id) || usedInBatch.has(id));
-                        } else {
-                            if (existingIds.has(id) || usedInBatch.has(id)) {
-                                do { id = 'PRD-' + String(nextNum++).padStart(3, '0'); } while (existingIds.has(id) || usedInBatch.has(id));
-                            }
                         }
+                        // Si el ID ya existe —en el catálogo o repetido dentro del
+                        // propio Excel— NO se inventa otro: la fila actualiza a ese
+                        // producto. Es lo que pidió Lalo y lo que espera cualquiera
+                        // que vuelva a importar su catálogo.
                         usedInBatch.add(id);
 
                         // ── Unidad ────────────────────────────────────────────
@@ -196,30 +236,149 @@
                         const product = {
                             id,
                             name,
-                            stockByArea: { almacen: stock, barra1: 0, barra2: 0 },
+                            stockByArea: _stockInicialPorArea(stock),
                             unit,
                             group
                         };
                         // Solo añadir si tienen valor real (no null)
                         if (capacidadMl !== null)       product.capacidadMl       = capacidadMl;
                         if (pesoBotellaLlenaOz !== null) product.pesoBotellaLlenaOz = pesoBotellaLlenaOz;
+
+                        // ── R1 (regla 14) · F1 — modo de conteo ───────────────
+                        // La decision NO se toma aqui. Aqui solo se guarda el valor
+                        // crudo de la columna; el modo se resuelve mas abajo, en el
+                        // merge, que es el unico punto donde se sabe si el producto
+                        // YA EXISTE en el catalogo y con que capacidad y peso.
+                        //
+                        // Por que: antes esta decision solo miraba el Excel. Un Excel
+                        // sin las columnas de capacidad y peso escribia
+                        // conteoOzHabilitado = false, y el merge lo copiaba sobre un
+                        // producto que SI tenia esos datos. El producto conservaba
+                        // capacidad y peso pero dejaba de convertir onzas, asi que un
+                        // conteo ya guardado de 2 enteras + 33.45 oz pasaba de valer
+                        // 2.86 botellas a valer 35.45 sin que nadie tocara un digito.
+                        product._ozCrudo = findCol(row, columnMap.conteoOz);
+
                         // P0 — solo se guardan si traen valor real, igual que los de arriba.
                         if (precio      !== null) product.precio      = precio;
                         if (conversion  !== null) product.conversion  = conversion;
                         if (stockMinimo !== null) product.stockMinimo = stockMinimo;
                         if (proveedor)            product.proveedor   = proveedor;
 
+                        // ── R2: PV de Parrot ──────────────────────────────────
+                        // Mayusculas y sin espacios, igual que en la captura manual:
+                        // un PV copiado de un Excel trae espacios al final mas veces
+                        // de las que parece, y ' PVA1001169' no cruza con 'PVA1001169'.
+                        var _pvRaw = findCol(row, columnMap.pv);
+                        var _pv = (_pvRaw !== undefined && _pvRaw !== null)
+                                  ? String(_pvRaw).toUpperCase().replace(/\s+/g, '') : '';
+                        if (_pv) product.pv = _pv;
+
                         toImport.push(product);
                     });
 
-                    products = products.concat(toImport);
-                    showNotification(toImport.length + ' productos importados.'
+                    // F1 — DEFECTO CRITICO 2
+        // Decide si un producto se cuenta en onzas, mirando el Excel Y el
+        // catalogo actual. `delExcel` es la fila ya construida (capacidadMl y
+        // pesoBotellaLlenaOz solo estan presentes si la columna venia);
+        // `existente` es el producto que ya esta en el catalogo, o null si es
+        // un alta.
+        function _resolverConteoOz(delExcel, existente) {
+            function _num(v) { return (typeof v === 'number' && isFinite(v) && v > 0) ? v : null; }
+
+            // Capacidad y peso EFECTIVOS: manda el Excel cuando trae el dato;
+            // si no lo trae, sigue valiendo lo que el producto ya tenia. Esta
+            // es la linea que faltaba.
+            var cap  = _num(delExcel.capacidadMl);
+            if (cap === null && existente)  cap  = _num(existente.capacidadMl);
+            var peso = _num(delExcel.pesoBotellaLlenaOz);
+            if (peso === null && existente) peso = _num(existente.pesoBotellaLlenaOz);
+
+            // Sin los dos datos no hay conversion posible: se cuenta por cantidad.
+            if (cap === null || peso === null) return false;
+
+            // Si el Excel trae la columna, manda la columna.
+            var crudo = delExcel._ozCrudo;
+            if (crudo !== undefined && crudo !== null && String(crudo).trim() !== '') {
+                var txt = String(crudo).trim().toLowerCase();
+                return ['1', 'si', 'sí', 'true', 'x', 'y', 'yes', 'verdadero'].indexOf(txt) !== -1;
+            }
+
+            // Sin columna: un producto que YA EXISTE conserva su modo. Es la
+            // diferencia entre "el Excel no dice nada" y "el Excel dice que no".
+            if (existente && typeof existente.conteoOzHabilitado === 'boolean') {
+                return existente.conteoOzHabilitado;
+            }
+
+            // Alta nueva con capacidad y peso: true, como siempre se comporto la app.
+            return true;
+        }
+
+        // ── R5: alta o actualización, producto por producto ───────
+                    // Reglas del merge, y son deliberadas:
+                    //
+                    //   · Solo se tocan los campos que el Excel TRAE. Una columna
+                    //     ausente no borra el dato que ya había: importar un Excel
+                    //     sin la columna Proveedor no puede dejar 424 productos sin
+                    //     proveedor.
+                    //   · stockByArea NO se toca nunca en una actualización. Es el
+                    //     conteo, no es dato de catálogo. Pisarlo con la columna
+                    //     Stock del Excel borraría lo contado en barra1 y barra2.
+                    //   · F1: conteoOzHabilitado se calcula con la capacidad y el
+                    //     peso EFECTIVOS (los del Excel si vienen; si no, los que el
+                    //     producto ya tenia), y un producto que ya existe CONSERVA su
+                    //     modo cuando el Excel no trae la columna. Importar el
+                    //     catalogo no puede reinterpretar lo ya contado.
+                    var _nuevos = 0, _actualizados = 0;
+                    toImport.forEach(function(prod) {
+                        var idx    = _indicePorId[prod.id];
+                        var actual = (idx === undefined) ? null : products[idx];
+
+                        prod.conteoOzHabilitado = _resolverConteoOz(prod, actual);
+                        delete prod._ozCrudo;   // dato de trabajo, nunca se guarda
+
+                        if (actual === null) {
+                            products.push(prod);
+                            _indicePorId[prod.id] = products.length - 1;
+                            _nuevos++;
+                            return;
+                        }
+                        Object.keys(prod).forEach(function(campo) {
+                            if (campo === 'stockByArea') return;   // el conteo es intocable
+                            actual[campo] = prod[campo];
+                        });
+                        _actualizados++;
+                    });
+
+                    // ── R2: avisar de PV repetidos ────────────────────────────
+                    // Un PV duplicado no da ningun error visible: reparte mal las
+                    // ventas y la desviacion sale torcida en los dos productos a la
+                    // vez. Es de los fallos que se descubren un mes despues, cuando
+                    // ya no se sabe de donde salio. Aqui no se borra nada —el
+                    // administrador decide cual esta mal— pero se dice cuales son.
+                    var _pvVistos = {}, _pvRepes = [];
+                    products.forEach(function(p) {
+                        if (!p.pv) return;
+                        var k = String(p.pv).toUpperCase();
+                        if (_pvVistos[k]) {
+                            if (_pvRepes.indexOf(k) === -1) _pvRepes.push(k);
+                        } else {
+                            _pvVistos[k] = true;
+                        }
+                    });
+                    if (_pvRepes.length) {
+                        console.warn('[R2] PV repetidos tras importar:', _pvRepes.join(', '));
+                    }
+
+                    showNotification(_nuevos + ' nuevos, ' + _actualizados + ' actualizados.'
                         + (skipped ? ' ' + skipped + ' filas omitidas por falta de nombre.' : '')
-                        + (valoresCorregidos ? ' ⚠️ ' + valoresCorregidos + ' valor(es) no físico(s) (negativo/cero) descartado(s).' : ''));
+                        + (valoresCorregidos ? ' ⚠️ ' + valoresCorregidos + ' valor(es) no físico(s) (negativo/cero) descartado(s).' : '')
+                        + (_pvRepes.length ? ' ⚠️ ' + _pvRepes.length + ' PV repetido(s): ' + _pvRepes.slice(0, 3).join(', ')
+                           + (_pvRepes.length > 3 ? '…' : '') + '. Las ventas no cruzarán bien hasta corregirlos.' : ''));
                     activeTab = 'inicio';
                     selectedGroup = 'Todos';
                     searchTerm = '';
-                    selectedArea = 'almacen';
+                    selectedArea = AREAS_CONTEO[0] || 'almacen';   // R6
                     saveToLocalStorage();
                     renderTab();
                     fileInput.value = '';
@@ -237,7 +396,7 @@
         // ══════════════════════════════════════════════════════════════════════
 
         function iniciarCapturaInventario() {
-            if (!isAdmin()) { showNotification('⚠️ Solo el administrador puede iniciar la captura'); return; }
+            if (!hasPermission('settings.update')) { showNotification('⚠️ No tienes permiso para iniciar la captura'); return; }
             if (inventarioCicloEstado === 'EN_CAPTURA') { showNotification('ℹ️ La captura ya está en progreso'); return; }
             if (inventarioCicloEstado === 'CERRADO') { showNotification('🔒 El inventario está cerrado. Reabre el ciclo primero.'); return; }
             showConfirm('¿Iniciar captura de inventario?\n\nTodos los usuarios podrán registrar conteos.', function() {
@@ -246,7 +405,7 @@
         }
 
         function finalizarCapturaInventario() {
-            if (!isAdmin()) { showNotification('⚠️ Solo el administrador puede finalizar la captura'); return; }
+            if (!hasPermission('settings.update')) { showNotification('⚠️ No tienes permiso para finalizar la captura'); return; }
             if (inventarioCicloEstado !== 'EN_CAPTURA') { showNotification('ℹ️ La captura no está activa'); return; }
             showConfirm('¿Finalizar la captura?\n\nPodrás revisar los resultados antes de cerrar el ciclo.', function() {
                 setCicloEstado('FINALIZADO');
@@ -254,7 +413,7 @@
         }
 
         function cerrarCicloInventario() {
-            if (!isAdmin()) { showNotification('⚠️ Solo el administrador puede cerrar el ciclo'); return; }
+            if (!hasPermission('settings.update')) { showNotification('⚠️ No tienes permiso para cerrar el ciclo'); return; }
             if (inventarioCicloEstado !== 'FINALIZADO') { showNotification('ℹ️ El ciclo debe estar FINALIZADO para cerrarlo'); return; }
             showConfirm(
                 '🔒 ¿CERRAR el ciclo de inventario?\n\nSe bloqueará cualquier modificación.\nSolo el administrador podrá reabrir.\nSe exportará un respaldo automático.',
@@ -267,7 +426,7 @@
         }
 
         function reabrirCicloInventario() {
-            if (!isAdmin()) { showNotification('⚠️ Solo el administrador puede reabrir el ciclo'); return; }
+            if (!hasPermission('settings.update')) { showNotification('⚠️ No tienes permiso para reabrir el ciclo'); return; }
             if (inventarioCicloEstado !== 'CERRADO') { showNotification('ℹ️ El ciclo debe estar CERRADO para reabrir'); return; }
             showConfirm(
                 '🔓 ¿Reabrir el ciclo de inventario?\n\nSe iniciará un nuevo ciclo (v' + ((inventarioCicloInfo.version || 1) + 1) + ').\nLos datos anteriores se conservan en los respaldos.',
@@ -278,6 +437,81 @@
             );
         }
 
+        // ══════════════════════════════════════════════════════════════════════
+        //  D6 — CANDADO LOCAL DE CAPTURA
+        //  ────────────────────────────────────────────────────────────────────
+        //  QUÉ ES. 'inventarioCicloEstado' NO es el estado del Inventario
+        //  Físico. Es un candado de escritura de una etapa anterior del
+        //  producto que vive SOLO en este dispositivo (localStorage +
+        //  IndexedDB) y que, cuando vale 'CERRADO', impide guardar conteos
+        //  desde el modal (js/70-conversion-render.js, isCicloBloqueado()).
+        //
+        //  POR QUÉ HACE FALTA ESTO. La investigación de FASE 2 refutó la
+        //  conclusión de auditorías anteriores: no es código muerto, tiene tres
+        //  consumidores reales en producción. Pero NO existe ninguna interfaz
+        //  para moverlo — las cuatro funciones de ciclo solo estaban expuestas
+        //  en window, sin un solo botón. Un dispositivo que quedara en
+        //  'CERRADO' no podía guardar conteos y nadie podía desbloquearlo desde
+        //  la aplicación: un modo de fallo silencioso en plena noche de
+        //  servicio.
+        //
+        //  LO QUE ESTA OPERACIÓN NO HACE, y es lo importante:
+        //   · NO toca inventories/{id}.estado ni ningún dato de Firestore.
+        //   · NO reabre un inventario cerrado ni lo hace editable.
+        //   · NO es inventory.reopenArea: eso devuelve un ÁREA del Inventario
+        //     Físico a captura para uno o varios usuarios, en la nube, y tiene
+        //     su propio permiso. Esto solo levanta un candado local.
+        //  Por eso se protege con settings.update (configuración del
+        //  dispositivo) y no con ningún permiso de inventario: confundirlos
+        //  sería exactamente el error que este bloque viene a evitar.
+        // ══════════════════════════════════════════════════════════════════════
+        function estadoCandadoLocal() {
+            return {
+                estado:     inventarioCicloEstado,
+                bloqueado:  isCicloBloqueado(),
+                cerradoPor: inventarioCicloInfo ? inventarioCicloInfo.cerradoPor : null,
+                cerradoTs:  inventarioCicloInfo ? inventarioCicloInfo.cerradoTs  : null,
+                version:    inventarioCicloInfo ? inventarioCicloInfo.version    : null
+            };
+        }
+
+        function desbloquearCandadoLocal() {
+            if (!hasPermission('settings.update')) {
+                showNotification('⚠️ No tienes permiso para desbloquear la captura');
+                return;
+            }
+            if (!isCicloBloqueado()) {
+                showNotification('ℹ️ La captura ya está desbloqueada en este dispositivo');
+                return;
+            }
+            const info = estadoCandadoLocal();
+            showConfirm(
+                '🔓 ¿Desbloquear la captura en ESTE dispositivo?\n\n' +
+                'Esto levanta el candado local que impide guardar conteos aquí.\n\n' +
+                'NO reabre ningún inventario cerrado, NO modifica el histórico y ' +
+                'NO afecta a otros dispositivos: cada aparato tiene su propio candado.\n\n' +
+                (info.cerradoTs ? 'Bloqueado desde: ' + new Date(info.cerradoTs).toLocaleString() + '\n\n' : '') +
+                '¿Continuar?',
+                function() {
+                    // Reutiliza la transición existente; no se inventa otra ruta
+                    // para mover el mismo estado.
+                    setCicloEstado('ABIERTO');
+                    _registrarEnSyncQueue({
+                        tipo:    'candado_local',
+                        detalle: 'Desbloqueo del candado local de captura',
+                        accion:  'desbloqueo',
+                        estadoAnterior: 'CERRADO',
+                        estadoNuevo:    'ABIERTO',
+                        deviceId: (typeof _deviceId !== 'undefined') ? _deviceId : null
+                    });
+                    showNotification('🔓 Captura desbloqueada en este dispositivo');
+                    renderTab();
+                }
+            );
+        }
+
+        window.estadoCandadoLocal         = estadoCandadoLocal;
+        window.desbloquearCandadoLocal    = desbloquearCandadoLocal;
         window.iniciarCapturaInventario   = iniciarCapturaInventario;
         window.finalizarCapturaInventario = finalizarCapturaInventario;
         window.cerrarCicloInventario      = cerrarCicloInventario;
@@ -347,4 +581,4 @@
             showNotification('✅ Log de ' + log.length + ' cambios exportado: ' + fileName);
         }
         // Exponer en window para acceso desde consola de debugging
-        window.exportChangeLogExcel = exportChangeLogExcel;
+        window.exportChangeLogExcel = exportChangeLogExcel;

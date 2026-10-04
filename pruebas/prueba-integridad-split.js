@@ -160,7 +160,16 @@ if (mWarm && mPre) {
 // propósito. Si aparece uno grande, alguien volvió a meter código al HTML.
 const enLinea = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)]
     .map(x => x[1].split('\n').length);
-const grandes = enLinea.filter(n => n > 400);
+// El umbral subió de 400 a 480 en R3: la configuración pasó a declarar DOS
+// entornos (producción y pruebas), y eso son unas 40 líneas más. Lo que hace
+// grande a ese bloque no es código de la app —son la config de Firebase, que
+// tiene que cargarse antes que todo, y un comentario largo con una copia de
+// las reglas de Firestore.
+//
+// DEUDA CONOCIDA: esa copia duplica firestore.rules. Dos copias del mismo
+// texto acaban divergiendo, y la que manda es el archivo. Conviene borrar el
+// comentario, pero no dentro de una fase que toca la conexión a la base.
+const grandes = enLinea.filter(n => n > 480);
 chk('No hay bloques de script en línea gigantes en index.html',
     grandes.length === 0,
     'bloques de ' + enLinea.join('/') + ' líneas');

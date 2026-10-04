@@ -43,6 +43,9 @@
                 if (user) {
                     console.info('[Auth] Usuario autenticado:', user.email);
                     showApp(user);
+                    // FASE 7 (S5) — pedir que el navegador no borre los datos
+                    // sin sincronizar bajo presión de espacio. No bloquea.
+                    if (typeof _pedirAlmacenamientoPersistente === 'function') _pedirAlmacenamientoPersistente();
                     // Cargar rol — usar window.loadUserRole para garantizar acceso cross-script
                     var _loadRole = window.loadUserRole || loadUserRole;
                     if (typeof _loadRole === 'function') {
@@ -75,6 +78,7 @@
                     if (typeof _unsubInventarioActivo === 'function') { _unsubInventarioActivo(); _unsubInventarioActivo = null; }
                     _inventarioActivoId = null;
                     _inventarioActivo   = null;
+                    if (typeof _inventarioActivoCarga !== 'undefined') _inventarioActivoCarga = 'sin_sesion';
                     allUsersAuditoria = {};
                     _ajustes = [];
                     // MICROFASE P0.2: sin este reset, si el siguiente usuario

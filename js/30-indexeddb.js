@@ -376,6 +376,20 @@ function _idbPruneSyncedQueue() {
                     store.put(inventarioCicloEstado,     'cicloEstado');
                     store.put(inventarioCicloInfo,       'cicloInfo');
                     store.put(_syncQueue,                'syncQueue');
+                    // FASE 4 — compras (el hecho) y movimientos (el efecto).
+                    // Aditivo: si estos campos no llegaran a existir en una
+                    // versión anterior de este mismo objeto, el resto de la
+                    // transacción no se ve afectado.
+                    store.put((typeof compras !== 'undefined') ? compras : [],           'compras');
+                    store.put((typeof movimientos !== 'undefined') ? movimientos : [],   'movimientos');
+                    store.put((typeof costosUltimos !== 'undefined') ? costosUltimos : {}, 'costosUltimos');
+                    // RECETARIO-1
+                    store.put((typeof recetas !== 'undefined') ? recetas : [],           'recetas');
+                    // FASE 10 — ventas de la semana cargada (no el histórico)
+                    store.put((typeof ventas !== 'undefined') ? ventas : [],             'ventas');
+                    store.put((typeof ventasSemanaId !== 'undefined') ? ventasSemanaId : null, 'ventasSemanaId');
+                    // FASE 10B — qué días de esa semana tienen ventas cargadas
+                    store.put((typeof ventasPeriodos !== 'undefined') ? ventasPeriodos : [], 'ventasPeriodos');
                     // TIER 3 — Estado UI
                     store.put(cart,                      'cart');
                     store.put(activeTab,                 'activeTab');
@@ -450,7 +464,9 @@ function _idbPruneSyncedQueue() {
                     idbAuditoriaConteo, idbAuditoriaConteoPorUsuario,
                     idbAuditoriaStatus, idbMyAuditoriaStatus, idbMyAuditoriaUnlocks,
                     idbSessionId, idbCicloEstado, idbCicloInfo,
-                    idbSyncQueue, idbCart, idbActiveTab, idbSelectedArea, idbSelectedGroup
+                    idbSyncQueue, idbCart, idbActiveTab, idbSelectedArea, idbSelectedGroup,
+                    idbCompras, idbMovimientos, idbCostosUltimos, idbRecetas,
+                    idbVentas, idbVentasSemanaId, idbVentasPeriodos
                 ] = await Promise.all([
                     _idbGet('products'),              _idbGet('inventarioConteo'),
                     _idbGet('myAuditoriaConteo'),     _idbGet('auditoriaConteo'),
@@ -459,7 +475,11 @@ function _idbPruneSyncedQueue() {
                     _idbGet('auditoriaSessionId'),    _idbGet('cicloEstado'),
                     _idbGet('cicloInfo'),             _idbGet('syncQueue'),
                     _idbGet('cart'),                  _idbGet('activeTab'),
-                    _idbGet('selectedArea'),          _idbGet('selectedGroup')
+                    _idbGet('selectedArea'),          _idbGet('selectedGroup'),
+                    _idbGet('compras'),               _idbGet('movimientos'),
+                    _idbGet('costosUltimos'),         _idbGet('recetas'),
+                    _idbGet('ventas'),                _idbGet('ventasSemanaId'),
+                    _idbGet('ventasPeriodos')
                 ]);
                 return {
                     products:                  idbProducts,
@@ -478,6 +498,13 @@ function _idbPruneSyncedQueue() {
                     activeTab:                 idbActiveTab,
                     selectedArea:              idbSelectedArea,
                     selectedGroup:             idbSelectedGroup,
+                    compras:                   idbCompras,
+                    movimientos:               idbMovimientos,
+                    costosUltimos:             idbCostosUltimos,
+                    recetas:                   idbRecetas,
+                    ventas:                    idbVentas,
+                    ventasSemanaId:            idbVentasSemanaId,
+                    ventasPeriodos:            idbVentasPeriodos,
                     _savedAt:                  savedAt
                 };
             } catch(e) {
@@ -523,6 +550,28 @@ function _idbPruneSyncedQueue() {
             if (idbData.activeTab)  activeTab   = idbData.activeTab;
             if (idbData.selectedArea) selectedArea = idbData.selectedArea;
             if (idbData.selectedGroup) selectedGroup = idbData.selectedGroup;
+            // FASE 4 — compras y movimientos. Solo se aplican si IDB trae algo
+            // (un array vacío es un estado válido, pero no debe pisar datos ya
+            // cargados por otra vía si IDB simplemente nunca los tuvo — mismo
+            // criterio que products arriba).
+            if (Array.isArray(idbData.compras))
+                compras = idbData.compras;
+            if (Array.isArray(idbData.movimientos))
+                movimientos = idbData.movimientos;
+            if (idbData.costosUltimos && typeof idbData.costosUltimos === 'object')
+                costosUltimos = idbData.costosUltimos;
+            // RECETARIO-1 — mismo criterio que compras/movimientos arriba.
+            if (Array.isArray(idbData.recetas)) {
+                recetas = idbData.recetas;
+                // Hotfix 4.14 — mismo saneo que en loadFromLocalStorage.
+                if (typeof _migrarRecetasNomenclatura === 'function') _migrarRecetasNomenclatura(recetas);
+            }
+            if (Array.isArray(idbData.ventas))
+                ventas = idbData.ventas;
+            if (typeof idbData.ventasSemanaId === 'string')
+                ventasSemanaId = idbData.ventasSemanaId;
+            if (Array.isArray(idbData.ventasPeriodos))
+                ventasPeriodos = idbData.ventasPeriodos;
             isAuditoriaMode = (auditoriaView === 'counting' && !!auditoriaAreaActiva);
             console.info('[IDB] Estado restaurado desde IndexedDB (' +
                 new Date(idbData._savedAt).toLocaleString('es-MX') + ') — ' +
@@ -626,6 +675,60 @@ function _idbPruneSyncedQueue() {
             return total;
         }
 
+        // HOTFIX 4.22 — qué claves son las que de verdad pesan. El aviso de
+        // cuota solía decir "exporta y limpia historiales" sin decir CUÁL:
+        // apuntaba al botón de Historial de Inventarios, que HOTFIX 4.20 ya
+        // había dejado en cero, mientras la clave real (compras/movimientos,
+        // ver _movimientosRecortar más abajo) seguía creciendo sin que nadie
+        // lo supiera. Ahora el aviso nombra la clave, con su peso real.
+        function _topStorageKeys(n) {
+            var items = [];
+            try {
+                for (var i = 0; i < localStorage.length; i++) {
+                    var key = localStorage.key(i);
+                    if (key.indexOf('inventarioApp_') !== 0) continue; // solo lo propio de esta app
+                    var val = localStorage.getItem(key) || '';
+                    items.push({ nombre: key.slice('inventarioApp_'.length), bytes: (key.length + val.length) * 2 });
+                }
+            } catch (_) {}
+            items.sort(function(a, b) { return b.bytes - a.bytes; });
+            return items.slice(0, n);
+        }
+
+        // HOTFIX 4.22 — movimientos es una caché DERIVADA, no una fuente de
+        // verdad: _asientosDesdeCompra() (js/88-compras.js) la reconstruye por
+        // completo desde `compras` en cualquier momento, y
+        // existenciaEntradasSemana() (js/47-existencia.js) solo lee la semana
+        // en curso. Una entrada de una semana ya cerrada no la vuelve a usar
+        // nadie — es peso muerto que, sin este recorte, creció sin límite
+        // desde FASE 4 (a diferencia de `inventories`/`orders`, que sí tienen
+        // su botón de "Eliminar historial"). Esto —no el historial de
+        // inventarios, que HOTFIX 4.20 ya dejó en cero— es lo que de verdad
+        // llenaba el ~5 MB de localStorage.
+        //
+        // Se conservan la semana en curso y la anterior (margen para relojes
+        // de dispositivos ligeramente desincronizados). `compras`, la fuente
+        // de verdad real, nunca se toca aquí — de ahí se puede reconstruir
+        // `movimientos` completo si algún día hiciera falta.
+        function _movimientosRecortar() {
+            if (typeof movimientos === 'undefined' || !Array.isArray(movimientos) || !movimientos.length) return;
+            if (typeof semanaId !== 'function') return; // defensivo: sin esta función no hay corte seguro
+            var hoy = semanaId(new Date());
+            if (!hoy) return;
+            var corte = (typeof semanaAnterior === 'function') ? semanaAnterior(hoy) : hoy;
+            if (!corte) corte = hoy;
+            var antes = movimientos.length;
+            movimientos = movimientos.filter(function(m) {
+                // Defensivo: una entrada sin semanaId reconocible nunca se descarta
+                // (mejor conservar de más que perder algo que no sabemos fechar).
+                return !m || !m.semanaId || m.semanaId >= corte;
+            });
+            if (movimientos.length !== antes) {
+                console.info('[LS] movimientos recortado: ' + antes + ' → ' + movimientos.length +
+                             ' (se conservan semana en curso y anterior; `compras` queda intacto).');
+            }
+        }
+
         // Guard de reentrada para _applyCloudData — previene que dos snapshots simultáneos
         // la ejecuten en paralelo y dejen el estado inconsistente (FIX 7).
         // BUG-H9 FIX: el guard se resetea en finally para no quedar bloqueado ante excepciones.
@@ -639,6 +742,12 @@ function _idbPruneSyncedQueue() {
          *   cloud → _applyCloudData → saveToLocalStorage → syncToCloud → cloud… (FIX 8)
          */
         function saveToLocalStorage(opts) {
+            // HOTFIX 4.22 — se recorta ANTES de guardar, para que tanto IDB
+            // como localStorage reciban ya la versión liviana (ver
+            // _movimientosRecortar más arriba: es una caché derivada, segura
+            // de recortar, nunca la fuente de verdad).
+            _movimientosRecortar();
+
             // ══════════════════════════════════════════════════════════════════
             // CORRECCIÓN 1: IDB como almacenamiento PRINCIPAL.
             // _idbSaveAll() se dispara PRIMERO (asíncrono, no bloquea).
@@ -666,8 +775,30 @@ function _idbPruneSyncedQueue() {
                 ['inventarioApp_products',                 JSON.stringify(products)],
                 ['inventarioApp_auditoriaStatus',          JSON.stringify(auditoriaStatus)],
                 ['inventarioApp_myAuditoriaStatus',        JSON.stringify(myAuditoriaStatus)],
+                // D — quién finalizó cada área y cuándo (acompaña al estado)
+                ['inventarioApp_myAuditoriaFinalizadas',   JSON.stringify(
+                    (typeof myAuditoriaFinalizadas !== 'undefined' && myAuditoriaFinalizadas)
+                        ? myAuditoriaFinalizadas : {})],
                 ['inventarioApp_myAuditoriaUnlocks',       JSON.stringify(myAuditoriaUnlocks)],
                 ['inventarioApp_auditoriaSessionId',       _auditoriaSessionId || ''],
+                // FASE 4 — compras y movimientos. Van en TIER 2: no son el conteo
+                // activo, pero sí son documentos ya confirmados por el servidor
+                // (compras/{compraId} es inmutable) que no deben perderse entre
+                // sesiones si el dispositivo se queda sin red antes de recargar.
+                ['inventarioApp_compras',                  JSON.stringify(compras)],
+                ['inventarioApp_movimientos',              JSON.stringify(movimientos)],
+                ['inventarioApp_costosUltimos',            JSON.stringify(costosUltimos)],
+                // RECETARIO-1 — respaldo local del bill of materials, mismo
+                // TIER que products (catálogo): no es el conteo activo, pero
+                // sí datos ya publicados que no deben perderse entre sesiones.
+                ['inventarioApp_recetas',                  JSON.stringify(
+                    (typeof recetas !== 'undefined') ? recetas : [])],
+                ['inventarioApp_ventas',                   JSON.stringify(
+                    (typeof ventas !== 'undefined') ? ventas : [])],
+                ['inventarioApp_ventasSemanaId',           JSON.stringify(
+                    (typeof ventasSemanaId !== 'undefined') ? ventasSemanaId : null)],
+                ['inventarioApp_ventasPeriodos',           JSON.stringify(
+                    (typeof ventasPeriodos !== 'undefined') ? ventasPeriodos : [])],
                 // ── TIER 3: Estado de UI ─────────────────────────────────────────────────
                 ['inventarioApp_cart',                     JSON.stringify(cart)],
                 ['inventarioApp_activeTab',                activeTab],
@@ -694,11 +825,23 @@ function _idbPruneSyncedQueue() {
             entries.push(['inventarioApp_lastModified', String(nowMs)]);
 
             // Advertir si nos acercamos al límite (solo una vez por sesión)
+            //
+            // HOTFIX 4.22 — antes decía "Exporta y limpia historiales" sin
+            // decir cuál: mandaba al botón de Historial de Inventarios aunque
+            // la clave pesada fuera otra (ver _movimientosRecortar). Ahora
+            // nombra la(s) clave(s) real(es) y su peso, y aclara que no hay
+            // riesgo de pérdida porque esto es solo el respaldo local
+            // secundario — lo que de verdad importa ya está en IDB y la nube.
             if (!_lsQuotaWarned) {
                 const used = estimateStorageUsed();
                 if (used > LS_WARN_BYTES) {
                     _lsQuotaWarned = true;
-                    showNotification('⚠️ Almacenamiento al ' + Math.round(used / (5*1024*1024) * 100) + '%. Exporta y limpia historiales.');
+                    const top = _topStorageKeys(2)
+                        .map(function(x) { return x.nombre + ': ' + Math.round(x.bytes / 1024) + ' KB'; })
+                        .join(', ');
+                    showNotification('⚠️ Almacenamiento local al ' + Math.round(used / (5*1024*1024) * 100) + '%'
+                        + (top ? ' (' + top + ')' : '') + '. Tus datos están a salvo (nube + respaldo interno);'
+                        + ' avisa para liberar espacio pronto.');
                 }
             }
 

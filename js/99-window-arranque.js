@@ -56,9 +56,9 @@
                         if (data._auditoriaSessionId) _auditoriaSessionId = data._auditoriaSessionId;
 
                         activeTab = data.activeTab || 'inicio';
-                        searchTerm = data.searchTerm || '';
+                        searchTerm = '';   // FASE 6: un respaldo no trae la búsqueda aplicada
                         selectedGroup = data.selectedGroup || 'Todos';
-                        selectedArea = data.selectedArea || 'almacen';
+                        selectedArea = data.selectedArea || AREAS_CONTEO[0] || 'almacen';   // R6
                         expandedInventories = new Set(data.expandedInventories || []);
 
                         saveToLocalStorage();
@@ -103,8 +103,20 @@
             // --- Listeners de archivos ---
             document.getElementById('fileInput').addEventListener('change', function(e) { window.handleFileImport(e); });
             document.getElementById('importDataInput').addEventListener('change', function(e) { window.importFullData(e); });
+            // FASE 4B — input propio de compras (nunca comparte #fileInput con el catálogo).
+            const fileInputCompras = document.getElementById('fileInputCompras');
+            if (fileInputCompras) fileInputCompras.addEventListener('change', function(e) { window.handleFileImportCompras(e); });
+            // RECETARIO-2 — mismo criterio: input propio, nunca comparte #fileInput.
+            const fileInputRecetario = document.getElementById('fileInputRecetario');
+            if (fileInputRecetario) fileInputRecetario.addEventListener('change', function(e) { window.handleFileImportRecetario(e); });
+            // FASE 10 — input propio del reporte de ventas del POS.
+            const fileInputVentas = document.getElementById('fileInputVentas');
+            if (fileInputVentas) fileInputVentas.addEventListener('change', function(e) { window.handleFileImportVentas(e); });
 
             // --- App principal ---
+            // R6: la configuracion de areas se carga antes que nada. Si se
+            // cargara despues, el primer render usaria las tres por defecto.
+            if (typeof cargarAreasLocal === 'function') cargarAreasLocal();
             initializeApp();
 
             // --- Patch de seguridad: guardar referencia a exportToExcel DESPUÉS de que initializeApp la defina ---

@@ -3,7 +3,7 @@ const { chromium, devices } = require('playwright');
 const C=[]; const chk=(n,ok,d)=>C.push({n,ok,d});
 
 (async()=>{
-  const nav=await chromium.launch({executablePath:'/opt/pw-browsers/chromium'});
+  const nav=await chromium.launch(require('./_lanzar-navegador')());
   const ctx=await nav.newContext({...devices['Pixel 5'],viewport:{width:390,height:844}});
   const p=await ctx.newPage();
   const errs=[]; p.on('pageerror',e=>errs.push(String(e).slice(0,150)));
@@ -20,6 +20,16 @@ const C=[]; const chk=(n,ok,d)=>C.push({n,ok,d});
   await p.waitForTimeout(2000);
   chk('La página carga sin errores de JavaScript', errs.length===0, errs.join(' | '));
   chk('XLSX disponible', await p.evaluate(()=>typeof XLSX!=='undefined'), '');
+
+  // El catálogo real (catalogo.xlsx) no está en el repositorio: contiene los
+  // datos del bar. Sin él esta prueba no tiene qué importar; se OMITE con
+  // aviso claro en vez de fallar con "total=0". Para correrla, copia tu
+  // catálogo exportado a la raíz del repo como catalogo.xlsx.
+  const hayCatalogo = await p.evaluate(async()=>{ try { return (await fetch('catalogo.xlsx',{method:'HEAD'})).ok; } catch(_) { return false; } });
+  if (!hayCatalogo) {
+    console.log('\n  ⏭️  P0 omitida: falta catalogo.xlsx en la raíz del repo (no se versiona: son datos del bar).\n');
+    await nav.close(); process.exit(0);
+  }
 
   // ── Importar el catálogo REAL por el camino real de la app ──
   const imp = await p.evaluate(async()=>{

@@ -7,3 +7,17 @@ ui-debug.log
 dist/
 .DS_Store
 *.local
+
+
+# Instalación
+*.bundle
+aplicar-*.sh
+
+# Respaldos y credenciales — ESTE REPOSITORIO ES PÚBLICO.
+# Un respaldo lleva el inventario completo del negocio, y una clave de
+# cuenta de servicio da acceso total a Firestore. Ninguno de los dos se
+# commitea jamás, ni por accidente al correr `npm run respaldo`.
+respaldos/
+*.json.gpg
+serviceAccount*.json
+*-firebase-adminsdk-*.json
