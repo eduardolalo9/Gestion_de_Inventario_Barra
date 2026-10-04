@@ -51,6 +51,11 @@ const PRUEBAS = [
     'prueba-redis-r2-navegador.js',     // REDISEÑO R2 — una sola navegación en pantalla, activo en latón
     'prueba-redis-r3-navegador.js',     // REDISEÑO R3 — Inicio en pantalla: tarjetas, cifras y panel del kit
     'prueba-redis-r4-navegador.js',     // REDISEÑO R4 — el modal de captura y la tarjeta de conteo, con el kit
+    'prueba-redis-r5-navegador.js',     // REDISEÑO R5 — Historial y detalle cerrado en pantalla, con el kit
+    'prueba-redis-r6-navegador.js',     // REDISEÑO R6 — la ficha de producto (#productModal) en pantalla
+    'prueba-redis-r7-navegador.js',     // REDISEÑO R7 — Recetario y los modales pendientes, en pantalla
+    'prueba-recetario-buscador-unificado-navegador.js', // Recetario — mismo buscador que Inicio: typos, tildes, PV, paginación, teclado
+    'prueba-redis-r7b-navegador.js',    // REDISEÑO R7b — Compras (y Pedidos, revisado), en pantalla
 ];
 
 function esperarServidor(intentos) {

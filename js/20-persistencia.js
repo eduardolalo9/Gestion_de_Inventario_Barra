@@ -355,14 +355,60 @@
         }
 
         // ══════════════════════════════════════════════════════════════════════
-        //  SISTEMA DE RESPALDOS NOMBRADOS — Hasta 10 respaldos rotativos
+        //  SISTEMA DE RESPALDOS NOMBRADOS — rotación por antigüedad real y por peso
         // ══════════════════════════════════════════════════════════════════════
         const MAX_BACKUPS = 10;
+        // HOTFIX 4.25 — cada respaldo lleva el catálogo completo de productos
+        // (necesario: `restaurarBackup()` lo usa para deshacer una importación o
+        // un borrado total). Diez respaldos sin tope de peso, con 431+ productos
+        // creciendo, es lo que de verdad llenaba localStorage junto a `recetas`
+        // (ver _topStorageKeys). Este tope no cambia qué se guarda — products
+        // sigue yendo completo cuando el respaldo lo necesita — solo acota
+        // cuántos respaldos viejos se conservan en paralelo.
+        const MAX_BACKUPS_BYTES = 1.5 * 1024 * 1024; // 1.5 MB para todo el lote de respaldos
+
+        /**
+         * _rotarRespaldos(maxCantidad, maxBytes)
+         * Aplica dos topes a inventarioApp_backup_* — el que se alcance primero
+         * gana — eliminando siempre los más viejos primero, por el `ts` real
+         * guardado DENTRO del propio respaldo, no por el nombre de la clave
+         * (que mezcla fechas, epoch-ms e ids de producto y por eso no se puede
+         * ordenar como texto; ver HOTFIX 4.25).
+         * @returns {{vivos:number, descartados:number, bytes:number}}
+         */
+        function _rotarRespaldos(maxCantidad, maxBytes) {
+            const allKeys = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                if (!k || k.indexOf('inventarioApp_backup_') !== 0) continue;
+                const val = localStorage.getItem(k) || '';
+                let ts = 0;
+                try { ts = JSON.parse(val).ts || 0; } catch (_) { ts = 0; } // corrupto → tratar como el más viejo
+                allKeys.push({ key: k, ts: ts, bytes: (k.length + val.length) * 2 });
+            }
+            allKeys.sort(function(a, b) { return b.ts - a.ts; }); // más reciente primero
+
+            let vivos = allKeys.slice(0, maxCantidad);
+            let descartados = allKeys.slice(maxCantidad);
+
+            let acumulado = 0;
+            for (let i = 0; i < vivos.length; i++) {
+                if (acumulado + vivos[i].bytes > maxBytes) {
+                    descartados = descartados.concat(vivos.slice(i));
+                    vivos = vivos.slice(0, i);
+                    break;
+                }
+                acumulado += vivos[i].bytes;
+            }
+
+            descartados.forEach(function(item) { localStorage.removeItem(item.key); });
+            return { vivos: vivos.length, descartados: descartados.length, bytes: acumulado };
+        }
 
         /**
          * _crearBackupNombrado(etiqueta)
-         * Crea un snapshot nombrado de los datos críticos.
-         * Los respaldos rotan: si hay más de MAX_BACKUPS, el más viejo se elimina.
+         * Crea un snapshot nombrado de los datos críticos y rota los viejos
+         * con _rotarRespaldos(MAX_BACKUPS, MAX_BACKUPS_BYTES).
          * @param {string} etiqueta — nombre descriptivo (ej. 'antes_importacion')
          */
         function _crearBackupNombrado(etiqueta) {
@@ -382,24 +428,36 @@
                 };
                 localStorage.setItem(key, JSON.stringify(snapshot));
 
-                // Rotar: mantener solo los últimos MAX_BACKUPS
-                const allKeys = [];
-                for (let i = 0; i < localStorage.length; i++) {
-                    const k = localStorage.key(i);
-                    if (k && k.startsWith('inventarioApp_backup_')) allKeys.push(k);
-                }
-                if (allKeys.length > MAX_BACKUPS) {
-                    // Ordenar por timestamp de la key (el más viejo primero)
-                    allKeys.sort();
-                    for (let i = 0; i < allKeys.length - MAX_BACKUPS; i++) {
-                        localStorage.removeItem(allKeys[i]);
-                    }
-                }
-                console.info('[Backup] Respaldo creado:', key, '(' + allKeys.length + ' total)');
+                const r = _rotarRespaldos(MAX_BACKUPS, MAX_BACKUPS_BYTES);
+                console.info('[Backup] Respaldo creado:', key,
+                    '(' + r.vivos + ' vigentes, ' + r.descartados + ' rotados, '
+                    + Math.round(r.bytes / 1024) + ' KB en total)');
                 return key;
             } catch (e) {
                 console.warn('[Backup] No se pudo crear respaldo:', e);
                 return null;
+            }
+        }
+
+        // HOTFIX 4.25 — liberación de emergencia: cuando el aviso de cuota
+        // detecta que ya se cruzó LS_WARN_BYTES, aprieta de inmediato el tope
+        // de respaldos (de 10/1.5 MB a 3/500 KB) ANTES de mostrar el aviso. La
+        // mayoría de las veces esto por sí solo baja el uso bajo el umbral y
+        // el aviso ni hace falta — ver su uso en _guardarEnLocalStorage.
+        const EMERGENCIA_MAX_BACKUPS = 3;
+        const EMERGENCIA_MAX_BYTES = 500 * 1024;
+        function _liberarEspacioEmergencia() {
+            try {
+                const r = _rotarRespaldos(EMERGENCIA_MAX_BACKUPS, EMERGENCIA_MAX_BYTES);
+                if (r.descartados > 0) {
+                    console.info('[Backup] Liberación de emergencia: ' + r.descartados
+                        + ' respaldo(s) viejo(s) eliminado(s), quedan ' + r.vivos
+                        + ' (' + Math.round(r.bytes / 1024) + ' KB).');
+                }
+                return r.descartados;
+            } catch (e) {
+                console.warn('[Backup] Liberación de emergencia falló:', e);
+                return 0;
             }
         }
 

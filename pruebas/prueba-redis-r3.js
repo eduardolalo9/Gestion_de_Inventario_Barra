@@ -184,7 +184,10 @@ const vHtml = (html.match(/\?v=(\d+\.\d+)/) || [])[1];
 const vSw   = (sw.match(/APP_VERSION\s*=\s*'(\d+\.\d+)'/) || [])[1];
 chk('La versión de index.html y sw.js coincide', vHtml && vHtml === vSw,
     'index=' + vHtml + ' sw=' + vSw);
-chk('La versión avanzó respecto a R2 (≥ 5.2)', parseFloat(vSw) >= 5.2, 'es ' + vSw);
+// Comparación por minor, no parseFloat: '5.10' como float da 5.1 (el cero
+// a la derecha se pierde) y parecería MENOR que 5.2 — rompía al cruzar a un
+// minor de dos cifras por primera vez (corrección 4-oct-2026).
+chk('La versión avanzó respecto a R2 (≥ 5.2)', Number((vSw || '').split('.')[1]) >= 2, 'es ' + vSw);
 
 // ═══ Resultado ═════════════════════════════════════════════════════════════
 const ancho = Math.max.apply(null, casos.map(c => c.nombre.length));

@@ -104,7 +104,9 @@
         // nunca el editor manual (ver corrección de nomenclatura, RECETARIO-2).
         let recetas = [];
         // Estado de la pantalla de Recetario (js/91-recetario.js).
-        // 'lista' | 'ficha'. La búsqueda de texto vive en _recetarioSearchTerm.
+        // 'lista' | 'ficha'. La búsqueda de texto vive en _recetarioSearchTerm
+        // — REDISEÑO: ahora la gestiona BusquedaUI (js/80-buscador.js, registro
+        // 'recetario'), igual que searchTerm/_pedidosSearchTerm/_historiaSearchTerm.
         let recetarioView = 'lista';
         let recetarioFichaId = null;
         let _recetarioSearchTerm = '';

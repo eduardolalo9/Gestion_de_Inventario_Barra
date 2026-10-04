@@ -1162,9 +1162,9 @@ html[data-theme="light"] .inv-card__group-badge { background: #f8fafc; border-co
     border-radius: var(--r-xs);
 }
 .audit-area-status.pendiente {
-    background: rgba(245,158,11,0.10);
+    background: var(--warn-dim);
     color: var(--amber);
-    border: 1px solid rgba(245,158,11,0.22);
+    border: 1px solid var(--warn-dim);
 }
 .audit-area-status.completada {
     background: var(--green-dim);
@@ -1259,9 +1259,17 @@ html[data-theme="light"] .audit-area-status.completada { color: #166534; }
     color: var(--txt-secondary);
     font-size: 0.75rem; font-weight: 500;
     cursor: pointer;
+    white-space: nowrap;
+    /* REDISEÑO R5 — sin esto, cuando comparte fila con un título largo que
+       envuelve a dos líneas (p. ej. "Historial de Inventarios Físicos"), el
+       icono se quedaba sin mínimo propio y el layout flex lo encogía hasta
+       0 px: el botón se veía sin flecha. flex-shrink:0 aquí y en el icono
+       protege ambos de que el título los exprima. */
+    flex-shrink: 0;
     transition: border-color 0.12s ease, color 0.12s ease, background 0.12s ease;
 }
 .audit-back-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+.audit-back-btn i { flex-shrink: 0; }
 
 html[data-theme="light"] .audit-area-card { box-shadow: 0 1px 3px rgba(0,0,0,0.07); }
 html[data-theme="light"] .audit-area-icon { background: var(--accent-dim); border-color: var(--accent-dim2); }
@@ -1282,7 +1290,7 @@ html[data-theme="light"] .audit-count-area-badge { background: var(--accent-dim)
     display: inline-block;
     width: 7px; height: 7px;
     border-radius: 50%;
-    background: #22c55e;
+    background: var(--ok);
     animation: livePulse 1.6s ease-in-out infinite;
     flex-shrink: 0;
 }
@@ -3039,7 +3047,7 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: var(--txt-secondary)
 .rc-area { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; border-radius: var(--r-md); border: 1px solid var(--border); background: var(--surface, transparent); color: var(--txt-primary); text-align: center; min-width: 0; font: inherit; }
 button.rc-area { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 button.rc-area:hover, button.rc-area:focus-visible { border-color: var(--accent); outline: none; }
-.rc-area--corregida { border-color: var(--amber); background: rgba(245, 158, 11, .08); }
+.rc-area--corregida { border-color: var(--amber); background: var(--warn-dim); }
 .rc-area__nombre { font-size: 0.64rem; font-weight: 700; color: var(--txt-secondary); text-transform: uppercase; letter-spacing: .03em; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rc-area__valor { font-family: 'IBM Plex Mono', monospace; font-size: 0.95rem; font-weight: 700; }
 .rc-area__valor s, .rc-card__total s { color: var(--txt-muted); font-weight: 500; }
@@ -3062,7 +3070,7 @@ button.rc-area:hover, button.rc-area:focus-visible { border-color: var(--accent)
 .rc-hist__dato { font-size: 0.74rem; color: var(--txt-secondary); line-height: 1.5; }
 .rc-estado { padding: 2px 9px; border-radius: var(--r-full, 999px); font-size: 0.64rem; font-weight: 700; background: var(--border); color: var(--txt-secondary); }
 .rc-estado--ok { background: var(--green-dim); color: var(--green-text, var(--green)); }
-.rc-estado--abierto { background: rgba(245, 158, 11, .15); color: var(--amber); }
+.rc-estado--abierto { background: var(--warn-dim); color: var(--amber); }
 html[data-theme="light"] .rc-area { background: #f8fafc; border-color: #e2e8f0; }
 html[data-theme="light"] .rc-area--corregida { background: #fffbeb; border-color: #f59e0b; }
 html[data-theme="light"] .rc-pie { box-shadow: 0 -2px 10px rgba(0,0,0,.08); }

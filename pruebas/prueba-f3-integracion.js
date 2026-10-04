@@ -17,7 +17,7 @@
  *   F5   Dos inventarios distintos no pueden ocupar la misma semana.
  *   F7   La conversión usa los datos CONGELADOS, no el catálogo actual.
  *   F8   Un recuento que no cae en domingo no se contabiliza.
- *   F12  Un producto sin contar entra como cero explícito.
+ *   F12  Un producto sin contar NO entra al inicial (corrección 4-oct-2026).
  *
  * ── CÓMO EJECUTAR ──
  *   npx firebase emulators:exec --only firestore --project demo-barinventory \
@@ -191,7 +191,8 @@ async function main() {
     const R = 'inventarioApp/' + DOC_ID;
 
     // Conteo repartido en las tres áreas, con botellas abiertas en oz.
-    // PRD-003 se deja SIN contar a propósito (prueba F12).
+    // PRD-003 se deja SIN contar a propósito (prueba F12): desde el
+    // 4-oct-2026 esto significa que NO debe entrar al inicial con un cero.
     function conteoDemo() {
         return {
             'PRD-001': {
@@ -318,11 +319,13 @@ async function main() {
             'esperado ' + r3(p1) + '/' + r3(p2) + ' · recibido ' +
             inicial.saldos['PRD-001'] + '/' + inicial.saldos['PRD-002']);
 
-        chk('F12 · un producto sin contar entra como CERO explícito, no ausente',
-            inicial.saldos['PRD-003'] === 0 && ('PRD-003' in inicial.saldos),
-            'una fila en cero es información; una fila ausente es un hueco');
-        chk('F12 · el inicial reporta cuántos productos quedaron en cero',
-            inicial.productosEnCero === 1, 'recibido ' + inicial.productosEnCero);
+        chk('F12 · ★ un producto sin contar NO entra al inicial (corrección 4-oct-2026, pedido real de Eduardo)',
+            !('PRD-003' in inicial.saldos),
+            'antes entraba como cero explícito; ahora existenciaOficial() cae sola al stock operativo de PRD-003 — sin inventarle un cero que infle el pedido sugerido');
+        chk('F12 · el inicial reporta cuántos productos quedaron fuera por no contarse',
+            inicial.productosNoContados === 1, 'recibido ' + inicial.productosNoContados);
+        chk('F12 · productosEnCero ya NO mezcla "no contado" con "contado y dio cero" (aquí nadie contó en cero de verdad)',
+            inicial.productosEnCero === 0, 'recibido ' + inicial.productosEnCero);
 
         chk('P17 · el inicial conserva la referencia a su inventario de origen',
             inicial.origen && inicial.origen.inventoryId === 'inv-1' &&

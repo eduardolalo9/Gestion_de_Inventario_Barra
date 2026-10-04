@@ -56,7 +56,7 @@ const PUERTO = process.env.PUERTO || '8080';
   chk('★ Mensual puro: "Siguiente paso: contabilizar" aparece (antes de FASE 13 se bloqueaba)',
       /Siguiente paso: contabilizar/.test(a.txt), a.txt.slice(0, 300));
   chk('★ El botón dice "Contabilizar cierre de mes", no el genérico ni el combinado',
-      /📅 Contabilizar cierre de mes/.test(a.txtBtnContab || ''), JSON.stringify(a.txtBtnContab));
+      /Contabilizar cierre de mes/.test(a.txtBtnContab || ''), JSON.stringify(a.txtBtnContab));
   chk('★ El texto habla del corte contable del mes, NO de una semana destino',
       /corte contable del mes 2026-09/.test(a.txt) && !/stock inicial de la semana/.test(a.txt),
       a.txt.slice(0, 400));
@@ -67,7 +67,7 @@ const PUERTO = process.env.PUERTO || '8080';
     numero: 301, estado: 'CERRADO', fechaRecuento: '2026-05-31', semanaId: '2026-05-25'
   }), ['*']), base);
   chk('★ D1 · Domingo-fin-de-mes: el botón dice "Contabilizar (semana + mes)"',
-      /📘 Contabilizar \(semana \+ mes\)/.test(b.txtBtnContab || ''), JSON.stringify(b.txtBtnContab));
+      /Contabilizar \(semana \+ mes\)/.test(b.txtBtnContab || ''), JSON.stringify(b.txtBtnContab));
   chk('★ El texto menciona el stock inicial de la semana Y el corte del mes, a la vez',
       /stock inicial de la semana/.test(b.txt) && /corte contable del mes 2026-05/.test(b.txt),
       b.txt.slice(0, 500));
@@ -77,7 +77,7 @@ const PUERTO = process.env.PUERTO || '8080';
     numero: 12, estado: 'CERRADO', fechaRecuento: '2026-09-20', semanaId: '2026-09-14'
   }), ['*']), base);
   chk('El botón semanal puro sigue diciendo solo "Contabilizar" (sin regresión)',
-      c.txtBtnContab && /^📘 Contabilizar$/.test(c.txtBtnContab.trim()), JSON.stringify(c.txtBtnContab));
+      c.txtBtnContab && /^Contabilizar$/.test(c.txtBtnContab.trim()), JSON.stringify(c.txtBtnContab));
   chk('…y el texto sigue mencionando la semana destino, sin hablar de ningún mes',
       /stock inicial de la/.test(c.txt) && !/corte contable del mes/.test(c.txt));
 

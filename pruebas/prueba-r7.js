@@ -177,7 +177,7 @@ chk('El botón abre el formulario, ya no crea directo',
 chk('Ya no hay un botón que llame a auditoriaResetear',
     !/onclick="auditoriaResetear\(\)"/.test(uiInv));
 chk('El estado vacío invita a crear (botón directo) y deja ver el historial',
-    /➕ Crear Inventario Físico/.test(uiInv) && /📜 Historial de inventarios/.test(uiInv));
+    /Crear Inventario Físico/.test(uiInv) && /Historial de inventarios/.test(uiInv));
 chk('Y dice algo distinto a un bartender',
     /todavía no ha abierto el inventario de esta semana/.test(uiInv),
     'no se ofrece un botón que no puede pulsar');
@@ -215,7 +215,7 @@ chk('La fecha se valida con la misma regla que "Nuevo Inventario" (domingo o fin
 chk('El encabezado ofrece el botón solo mientras el inventario sigue abierto',
     /!esCerrado && isAdmin\(\) && hasPermission\('inventory\.create'\)\)[\s\S]{0,200}abrirModalRegistrarFechaRecuento/.test(uiInv));
 chk('Sin fechaRecuento, el encabezado avisa en vez de mostrar una línea vacía',
-    /dato\('Recuento', '⚠️ No registrado \(inventario creado antes de esta regla\)', 'if-dato--aviso'\)/.test(uiInv));
+    /dato\('Recuento', '[^']*No registrado \(inventario creado antes de esta regla\)', 'if-dato--aviso'\)/.test(uiInv));
 
 // ═══ 10 · Caché ═════════════════════════════════════════════════════════
 const vTags = [...new Set([...html.matchAll(/<script\s+src="js\/[^"?]+\.js\?v=([^"]*)"/g)].map(m => m[1]))];

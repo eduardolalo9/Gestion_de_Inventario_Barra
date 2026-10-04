@@ -64,11 +64,11 @@
             if (!_inventarioActivo && _inventarioActivoSinResolver()) {
                 var hCarga = '<div class="pm-paso' + (_inventarioActivoCarga === 'error' ? ' pm-paso--aviso' : '') + '" role="status">';
                 if (_inventarioActivoCarga === 'error') {
-                    hCarga += '<div class="pm-paso__titulo">⚠️ No se pudo leer el Inventario Físico activo</div>'
+                    hCarga += '<div class="pm-paso__titulo"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> No se pudo leer el Inventario Físico activo</div>'
                            +  '<div class="pm-paso__txt">Revisa la conexión. Mientras tanto no se ofrece crear otro: '
                            +  'podría haber uno abierto con conteos.</div>';
                 } else {
-                    hCarga += '<div class="pm-paso__titulo">⏳ Cargando el Inventario Físico activo…</div>';
+                    hCarga += '<div class="pm-paso__titulo"><i class="fa-solid fa-hourglass" aria-hidden="true"></i> Cargando el Inventario Físico activo…</div>';
                 }
                 hCarga += '</div>';
                 return '<div class="if-card">' + hCarga + '</div>';
@@ -84,13 +84,13 @@
                 }
                 hAcc += '<div class="bt-pila">';
                 if (isAdmin() && hasPermission('inventory.create')) {
-                    hAcc += _ifBtn('bt--primario', '➕ Crear Inventario Físico', 'onclick="abrirModalNuevoInventario()"');
+                    hAcc += _ifBtn('bt--primario', '<i class="fa-solid fa-plus" aria-hidden="true"></i> Crear Inventario Físico', 'onclick="abrirModalNuevoInventario()"');
                 }
                 if (hasPermission('inventory.history')) {
-                    hAcc += _ifBtn('bt--secundario', '📜 Historial de inventarios', _IF_ABRIR_HISTORIAL);
+                    hAcc += _ifBtn('bt--secundario', '<i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i> Historial de inventarios', _IF_ABRIR_HISTORIAL);
                 }
                 if (isAdmin()) {
-                    hAcc += _ifBtn('bt--secundario', '📋 Reconteos', 'data-rc-accion="historial"');
+                    hAcc += _ifBtn('bt--secundario', '<i class="fa-solid fa-clipboard-list" aria-hidden="true"></i> Reconteos', 'data-rc-accion="historial"');
                 }
                 hAcc += '</div></div>';
                 return hAcc;
@@ -102,10 +102,10 @@
             const esCerrado = !inventarioAbierto(inv);
             const esContab  = inv.estado === 'CONTABILIZADO';
             const badge = !esCerrado
-                ? '<span class="pm-estado pm-estado--abierto pm-estado--cab">🟢 INVENTARIO BARRA SINCRONIZADO</span>'
+                ? '<span class="pm-estado pm-estado--abierto pm-estado--cab"><span class="audit-live-dot" aria-hidden="true"></span> INVENTARIO BARRA SINCRONIZADO</span>'
                 : (esContab
-                    ? '<span class="pm-estado pm-estado--contab pm-estado--cab">📘 INVENTARIO BARRA CONTABILIZADO</span>'
-                    : '<span class="pm-estado pm-estado--cerrado pm-estado--cab">🔒 INVENTARIO BARRA CERRADO</span>');
+                    ? '<span class="pm-estado pm-estado--contab pm-estado--cab"><i class="fa-solid fa-book" aria-hidden="true"></i> INVENTARIO BARRA CONTABILIZADO</span>'
+                    : '<span class="pm-estado pm-estado--cerrado pm-estado--cab"><i class="fa-solid fa-lock" aria-hidden="true"></i> INVENTARIO BARRA CERRADO</span>');
 
             // Artículos contados = productos con al menos una entrada de conteo
             // de ALGÚN usuario (unión, no suma) — dato ya en memoria.
@@ -145,7 +145,7 @@
                 // H-40 (hotfix 4.9): inventarios anteriores a R7/FASE 3 no tienen
                 // fechaRecuento y, tal cual, nunca se podrán contabilizar.
                 // Mientras siga abierto, el admin puede registrarla una vez.
-                html += dato('Recuento', '⚠️ No registrado (inventario creado antes de esta regla)', 'if-dato--aviso');
+                html += dato('Recuento', '<i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> No registrado (inventario creado antes de esta regla)', 'if-dato--aviso');
             }
             html += dato('Creado', escapeHtml(new Date(inv.fechaCreacion).toLocaleDateString('es-MX')) + ' · '
                          + escapeHtml(inv.creadoPorNombre || '—') + (inv.creadoPorRol ? ' (' + escapeHtml(inv.creadoPorRol) + ')' : ''));
@@ -169,7 +169,7 @@
             }
 
             if (_esInventarioHuerfano()) {
-                html += '<div class="pm-paso pm-paso--aviso" role="status"><div class="pm-paso__titulo">🗂️ Inventario abandonado</div>'
+                html += '<div class="pm-paso pm-paso--aviso" role="status"><div class="pm-paso__titulo"><i class="fa-solid fa-folder-open" aria-hidden="true"></i> Inventario abandonado</div>'
                      +  '<div class="pm-paso__txt">Este inventario quedó abierto de una versión anterior y no pertenece a la sesión actual: '
                      +  'sus conteos ya no existen. Ciérralo con el botón del final ("Cerrar inventario abandonado") y después crea el nuevo.</div></div>';
             }
@@ -177,24 +177,24 @@
             // ── 3. Acciones de consulta, apiladas a lo ancho ────────────────
             var acc = '';
             if (!inv.fechaRecuento && !esCerrado && isAdmin() && hasPermission('inventory.create')) {
-                acc += _ifBtn('bt--secundario', '🗓️ Registrar fecha de recuento', 'onclick="abrirModalRegistrarFechaRecuento()"');
+                acc += _ifBtn('bt--secundario', '<i class="fa-solid fa-calendar-days" aria-hidden="true"></i> Registrar fecha de recuento', 'onclick="abrirModalRegistrarFechaRecuento()"');
             }
             // RECONTEO — solo admin, mientras el inventario esté abierto.
             if (isAdmin() && !esCerrado && !_esInventarioHuerfano()) {
-                acc += _ifBtn('bt--primario', '🔁 Reconteo', 'data-rc-accion="iniciar"');
+                acc += _ifBtn('bt--primario', '<i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i> Reconteo', 'data-rc-accion="iniciar"');
             }
             if (isAdmin()) {
-                acc += _ifBtn('bt--secundario', '📋 Reconteos', 'data-rc-accion="historial"');
+                acc += _ifBtn('bt--secundario', '<i class="fa-solid fa-clipboard-list" aria-hidden="true"></i> Reconteos', 'data-rc-accion="historial"');
             }
             if (hasPermission('inventory.history')) {
-                acc += _ifBtn('bt--secundario', '📜 Historial', _IF_ABRIR_HISTORIAL);
+                acc += _ifBtn('bt--secundario', '<i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i> Historial', _IF_ABRIR_HISTORIAL);
             }
             // FASE 11B — rompe el conteo ciego (muestra el consolidado de
             // todos los que están contando), así que usa el mismo permiso
             // que ya protege "ver todos los conteos". Solo mientras el
             // inventario sigue SINCRONIZADO: cerrado, es cosa del Historial.
             if (hasPermission('inventory.viewAll') && !esCerrado) {
-                acc += _ifBtn('bt--secundario', '📊 Físico vs Sistema',
+                acc += _ifBtn('bt--secundario', '<i class="fa-solid fa-file-chart-column" aria-hidden="true"></i> Físico vs Sistema',
                     'onclick="auditoriaView=\'fisico_vs_sistema\'; renderTab();"');
             }
             if (acc) html += '<div class="bt-pila">' + acc + '</div>';
@@ -222,12 +222,12 @@
             if (!(isAdmin() && hasPermission('inventory.closeGlobal'))) return '';
             if (_esInventarioHuerfano()) {
                 return '<div class="bt-zona-peligro">'
-                     + '<button type="button" onclick="cerrarInventarioHuerfano(_inventarioActivoId)" class="bt bt--peligro">🗂️ Cerrar inventario abandonado #' + (inv.numero || '—') + '</button>'
+                     + '<button type="button" onclick="cerrarInventarioHuerfano(_inventarioActivoId)" class="bt bt--peligro"><i class="fa-solid fa-folder-open" aria-hidden="true"></i> Cerrar inventario abandonado #' + (inv.numero || '—') + '</button>'
                      + '<p class="bt-nota">Quedó abierto de una versión anterior y ya no tiene conteos. Se cierra sin contabilizar.</p>'
                      + '</div>';
             }
             return '<div class="bt-zona-peligro">'
-                 + '<button type="button" onclick="cerrarInventarioFisico()" class="bt bt--peligro">🔒 Cerrar Inventario Físico</button>'
+                 + '<button type="button" onclick="cerrarInventarioFisico()" class="bt bt--peligro"><i class="fa-solid fa-lock" aria-hidden="true"></i> Cerrar Inventario Físico</button>'
                  + '<p class="bt-nota">Congela los conteos de todas las áreas. No se puede deshacer.</p>'
                  + '</div>';
         }
@@ -254,7 +254,7 @@
             };
             var btnCrear = function(principal) {
                 return puedeCrear
-                    ? '<button type="button" class="bt ' + (principal ? 'bt--primario' : 'bt--secundario') + '" onclick="abrirModalNuevoInventario()">➕ Crear el siguiente inventario</button>'
+                    ? '<button type="button" class="bt ' + (principal ? 'bt--primario' : 'bt--secundario') + '" onclick="abrirModalNuevoInventario()"><i class="fa-solid fa-plus" aria-hidden="true"></i> Crear el siguiente inventario</button>'
                     : '';
             };
             // FASE 13 — un domingo-fin-de-mes genera dos destinos a la vez;
@@ -271,7 +271,7 @@
 
             if (ev.hecho) {
                 h += '<div class="pm-paso pm-paso--hecho" role="status">'
-                   + '<div class="pm-paso__titulo">📘 Contabilizado</div>'
+                   + '<div class="pm-paso__titulo"><i class="fa-solid fa-book" aria-hidden="true"></i> Contabilizado</div>'
                    + '<div class="pm-paso__txt">Su resultado ya es ' + destinos(ev.semanaDestino, ev.mesDestino)
                    + (inv.contabilizadoEn ? ' · ' + escapeHtml(new Date(inv.contabilizadoEn).toLocaleDateString('es-MX')) : '')
                    + '. Queda de solo lectura.</div>';
@@ -282,7 +282,7 @@
 
             if (ev.puede) {
                 h += '<div class="pm-paso pm-paso--pendiente">'
-                   + '<div class="pm-paso__titulo">📘 Siguiente paso: contabilizar</div>'
+                   + '<div class="pm-paso__titulo"><i class="fa-solid fa-book" aria-hidden="true"></i> Siguiente paso: contabilizar</div>'
                    + '<div class="pm-paso__txt">'
                    + (puedeContab
                         ? 'El resultado físico de este inventario pasará a ser ' + destinos(ev.semanaDestino, ev.mesId)
@@ -291,8 +291,8 @@
                    + '</div>';
                 var acc = '';
                 if (puedeContab) {
-                    var etiquetaBtn = (ev.haceSemanal && ev.haceMensual) ? '📘 Contabilizar (semana + mes)'
-                                     : (ev.haceMensual ? '📅 Contabilizar cierre de mes' : '📘 Contabilizar');
+                    var etiquetaBtn = (ev.haceSemanal && ev.haceMensual) ? '<i class="fa-solid fa-book" aria-hidden="true"></i> Contabilizar (semana + mes)'
+                                     : (ev.haceMensual ? '<i class="fa-solid fa-calendar-days" aria-hidden="true"></i> Contabilizar cierre de mes' : '<i class="fa-solid fa-book" aria-hidden="true"></i> Contabilizar');
                     acc += '<button type="button" class="bt bt--primario" data-inv-accion="contabilizar">' + etiquetaBtn + '</button>';
                 }
                 acc += btnCrear(false);
@@ -305,9 +305,9 @@
             // o inventario anterior a que se guardara la semana). Se dice por
             // qué, con el mismo texto que usa el Historial.
             h += '<div class="pm-paso pm-paso--aviso">'
-               + '<div class="pm-paso__titulo">🔒 Inventario cerrado</div>'
+               + '<div class="pm-paso__titulo"><i class="fa-solid fa-lock" aria-hidden="true"></i> Inventario cerrado</div>'
                + '<div class="pm-paso__txt">'
-               + (puedeContab ? '📘 No se puede contabilizar. ' + escapeHtml(ev.motivo) : 'Queda de solo lectura.')
+               + (puedeContab ? '<i class="fa-solid fa-book" aria-hidden="true"></i> No se puede contabilizar. ' + escapeHtml(ev.motivo) : 'Queda de solo lectura.')
                + '</div>';
             if (puedeCrear) h += '<div class="pm-paso__acc">' + btnCrear(true) + '</div>';
             h += '</div>';
@@ -338,15 +338,14 @@
         // participó (filtrado por participantesUids, ya viene en el doc — sin
         // leer snapshots para armar la lista).
         function renderHistorialInventarios() {
-            let html = '<div class="audit-screen">';
-            html += '<div class="bg-white rounded-xl p-4 sm:p-5 mb-4 shadow-md">';
-            html += '<div class="flex items-center justify-between mb-3">';
-            html += '<p class="audit-header-title">📜 Historial de Inventarios Físicos</p>';
-            html += '<button onclick="auditoriaView=\'selection\'; renderTab();" style="padding:5px 10px;border-radius:var(--r-md);background:var(--bg-soft);font-size:0.7rem;font-weight:600;cursor:pointer;">← Volver</button>';
+            let html = '<div class="audit-screen"><div class="if-card">';
+            html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">';
+            html += '<p class="if-card__titulo" style="margin:0;"><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i> Historial de Inventarios Físicos</p>';
+            html += '<button type="button" class="audit-back-btn" onclick="auditoriaView=\'selection\'; renderTab();"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i> Volver</button>';
             html += '</div>';
 
             if (_historialInventarios === null) {
-                html += '<p style="font-size:0.8rem;color:var(--txt-muted);">⏳ Cargando historial…</p></div></div>';
+                html += '<p class="pm-nota" style="margin:0;"><i class="fa-solid fa-hourglass" aria-hidden="true"></i> Cargando historial…</p></div></div>';
                 if (typeof _asegurarHistorialCargado === 'function') _asegurarHistorialCargado();
                 return html;
             }
@@ -359,35 +358,36 @@
             }
 
             if (lista.length === 0) {
-                html += '<p style="font-size:0.8rem;color:var(--txt-muted);">' + (isAdmin() ? 'Todavía no hay inventarios cerrados ni contabilizados.' : 'Todavía no participaste en ningún inventario cerrado.') + '</p>';
+                html += '<p class="pm-nota" style="margin:0;">' + (isAdmin() ? 'Todavía no hay inventarios cerrados ni contabilizados.' : 'Todavía no participaste en ningún inventario cerrado.') + '</p>';
             } else {
+                html += '<div class="if-areas">';
                 lista.forEach(function(inv) {
-                    html += '<div onclick="_detalleInventarioCerradoId=\'' + inv.inventoryId + '\'; _detalleInventarioCerradoData=null; auditoriaView=\'detalle_cerrado\'; renderTab();" style="cursor:pointer;padding:10px 12px;border:1px solid var(--border-soft);border-radius:var(--r-md);margin-bottom:8px;">';
-                    html += '<div class="flex items-center justify-between">';
-                    html += '<span style="font-weight:700;font-size:0.82rem;">#' + inv.numero + ' | Inventario Barra</span>';
+                    html += '<div class="rc-hist" onclick="_detalleInventarioCerradoId=\'' + inv.inventoryId + '\'; _detalleInventarioCerradoData=null; auditoriaView=\'detalle_cerrado\'; renderTab();">';
+                    html += '<div class="rc-hist__fila"><span class="rc-hist__titulo">#' + inv.numero + ' · Inventario Barra</span>';
                     // FASE 3 — un inventario contabilizado ya no es solo
                     // "cerrado": su resultado pasó a ser el inicial de la
                     // semana siguiente, y eso se ve de un vistazo.
                     var _contab = (inv.estado === 'CONTABILIZADO');
-                    html += '<span style="font-size:0.68rem;font-weight:700;color:'
-                         +  (_contab ? 'var(--accent)' : '#16a34a') + ';">'
-                         +  (_contab ? 'CONTABILIZADO' : (inv.cierreTipo === 'abandonado' ? 'CERRADO · ABANDONADO' : 'CERRADO')) + '</span>';
+                    html += UI.badge(_contab ? 'contabilizado' : 'cerrado', {
+                        texto: _contab ? 'Contabilizado' : (inv.cierreTipo === 'abandonado' ? 'Cerrado · abandonado' : 'Cerrado')
+                    });
                     html += '</div>';
-                    html += '<p style="font-size:0.72rem;color:var(--txt-muted);">Fecha: ' + new Date(inv.fechaCreacion).toLocaleDateString('es-MX') + ' &nbsp;·&nbsp; Artículos: ' + (inv.totalProductos || '—') + '</p>';
+                    html += '<div class="rc-hist__dato">Fecha: ' + new Date(inv.fechaCreacion).toLocaleDateString('es-MX') + ' &nbsp;·&nbsp; Artículos: ' + (inv.totalProductos || '—') + '</div>';
                     if (_contab && inv.semanaDestino) {
-                        html += '<p style="font-size:0.7rem;color:var(--accent);font-weight:600;">📘 Inicial de la semana '
-                             +  escapeHtml(inv.semanaDestino) + '</p>';
+                        html += '<div class="rc-hist__dato" style="color:var(--accent);font-weight:600;"><i class="fa-solid fa-book" aria-hidden="true"></i> Inicial de la semana '
+                             +  escapeHtml(inv.semanaDestino) + '</div>';
                     }
                     // FASE 13 — el corte mensual es un segundo destino,
                     // independiente del semanal: se muestra aparte para que
                     // un domingo-fin-de-mes no esconda que también generó un
                     // corte contable.
                     if (_contab && inv.mesDestino) {
-                        html += '<p style="font-size:0.7rem;color:var(--book);font-weight:600;">📅 Corte mensual '
-                             +  escapeHtml(inv.mesDestino) + '</p>';
+                        html += '<div class="rc-hist__dato" style="color:var(--book);font-weight:600;"><i class="fa-solid fa-calendar-days" aria-hidden="true"></i> Corte mensual '
+                             +  escapeHtml(inv.mesDestino) + '</div>';
                     }
                     html += '</div>';
                 });
+                html += '</div>';
                 if (typeof _historialHayMas !== 'undefined' && _historialHayMas) {
                     html += '<button type="button" class="bt bt--secundario" onclick="historialVerMas()">Ver inventarios más antiguos</button>';
                 }
@@ -447,14 +447,14 @@
             html += '<dl class="if-datos" style="margin-bottom:10px;">';
             html += '<div class="if-dato"><dt>Comparación</dt><dd>' + datos.contados + ' contados · '
                  +  datos.pendientes + ' pendientes de ' + datos.totalProductos + '</dd></div>';
-            var netoColor = datos.totalNeto < 0 ? '#ef4444' : (datos.totalNeto > 0 ? '#16a34a' : 'var(--txt-primary)');
-            html += '<div class="if-dato"><dt>Neto en dinero</dt><dd style="color:' + netoColor + ';font-weight:700;">'
+            var netoColor = datos.totalNeto < 0 ? 'var(--danger)' : (datos.totalNeto > 0 ? 'var(--ok)' : 'var(--txt-primary)');
+            html += '<div class="if-dato"><dt>Neto en dinero</dt><dd class="num" style="font-family:\'IBM Plex Mono\',monospace;font-variant-numeric:tabular-nums;color:' + netoColor + ';font-weight:700;">'
                  +  _fvsMoneda(datos.totalNeto) + '</dd></div>';
             html += '</dl>';
 
             if (datos.sinInicial > 0) {
                 html += '<div class="pm-paso pm-paso--aviso" role="status" style="margin-bottom:10px;">'
-                     +  '<div class="pm-paso__txt">ℹ️ ' + datos.sinInicial + ' producto(s) todavía comparan contra el '
+                     +  '<div class="pm-paso__txt"><i class="fa-solid fa-circle-info" aria-hidden="true"></i> ' + datos.sinInicial + ' producto(s) todavía comparan contra el '
                      +  'stock operativo: no hay inicial contabilizado para ellos esta semana. Al cerrar y contabilizar '
                      +  'este inventario, "Sistema" pasa a ser inicial + compras − consumo teórico para ellos.</div></div>';
             }
@@ -469,12 +469,12 @@
                 html += '<div data-sbx-item style="padding:10px 12px;border:1px solid var(--border-soft);border-radius:var(--r-md);margin-bottom:8px;">';
                 html += '<div style="font-weight:700;font-size:.82rem;">' + resaltarBusqueda(f.nombre, _fvsSearchTerm) + '</div>';
                 if (f.estado === 'pendiente') {
-                    html += '<div style="font-size:.74rem;color:var(--txt-muted);margin-top:2px;">⏳ Sin contar todavía · '
+                    html += '<div style="font-size:.74rem;color:var(--txt-muted);margin-top:2px;"><i class="fa-solid fa-hourglass" aria-hidden="true"></i> Sin contar todavía · '
                          +  'Sistema: ' + _fvsNum(f.sistema) + '</div>';
                 } else {
-                    var color = f.diferencia < -tol ? '#ef4444' : (f.diferencia > tol ? '#16a34a' : 'var(--txt-muted)');
+                    var color = f.diferencia < -tol ? 'var(--danger)' : (f.diferencia > tol ? 'var(--ok)' : 'var(--txt-muted)');
                     var etiqueta = f.diferencia < -tol ? 'Faltante' : (f.diferencia > tol ? 'Sobrante' : 'Coincide');
-                    html += '<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:.76rem;color:var(--txt-muted);margin-top:2px;">'
+                    html += '<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:.76rem;color:var(--txt-muted);margin-top:2px;font-family:\'IBM Plex Mono\',monospace;font-variant-numeric:tabular-nums;">'
                          +  '<span>Físico: <b style="color:var(--txt-primary);">' + _fvsNum(f.fisico) + '</b></span>'
                          +  '<span>Sistema: <b style="color:var(--txt-primary);">' + _fvsNum(f.sistema) + '</b></span>'
                          +  '<span style="color:' + color + ';font-weight:700;">' + etiqueta + ': '
@@ -495,11 +495,10 @@
                      +  'No tienes permiso para ver esta comparación.</p></div></div>';
             }
             var html = '<div class="audit-screen"><div class="if-card">';
-            html += '<div class="flex items-center justify-between mb-3">';
-            html += '<p class="audit-header-title">📊 Físico vs Sistema</p>';
-            html += '<button onclick="auditoriaView=\'selection\'; _fvsSearchTerm=\'\'; renderTab();" '
-                 +  'style="padding:5px 10px;border-radius:var(--r-md);background:var(--bg-soft);font-size:0.7rem;font-weight:600;cursor:pointer;">'
-                 +  '← Volver</button>';
+            html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">';
+            html += '<p class="if-card__titulo" style="margin:0;"><i class="fa-solid fa-file-chart-column" aria-hidden="true"></i> Físico vs Sistema</p>';
+            html += '<button type="button" class="audit-back-btn" onclick="auditoriaView=\'selection\'; _fvsSearchTerm=\'\'; renderTab();">'
+                 +  '<i class="fa-solid fa-chevron-left" aria-hidden="true"></i> Volver</button>';
             html += '</div>';
             html += '<p class="pm-nota" style="margin:0 0 10px;">Suma lo contado en todas las áreas del inventario '
                  +  'abierto y lo compara, producto por producto, contra lo que el sistema cree que hay.</p>';
@@ -518,14 +517,14 @@
         // (bajo demanda, la primera vez que se abre) y ofrece exportar.
         function renderDetalleInventarioCerrado() {
             let html = '<div class="audit-screen">';
-            html += '<div class="bg-white rounded-xl p-4 sm:p-5 mb-4 shadow-md">';
-            html += '<div class="flex items-center justify-between mb-3">';
-            html += '<p class="audit-header-title">🔒 Inventario Físico (solo lectura)</p>';
-            html += '<button onclick="auditoriaView=\'historial\'; renderTab();" style="padding:5px 10px;border-radius:var(--r-md);background:var(--bg-soft);font-size:0.7rem;font-weight:600;cursor:pointer;">← Volver al historial</button>';
+            html += '<div class="if-card">';
+            html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">';
+            html += '<p class="if-card__titulo" style="margin:0;"><i class="fa-solid fa-lock" aria-hidden="true"></i> Inventario Físico (solo lectura)</p>';
+            html += '<button type="button" class="audit-back-btn" onclick="auditoriaView=\'historial\'; renderTab();"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i> Volver al historial</button>';
             html += '</div>';
 
             if (_detalleInventarioCerradoData === null) {
-                html += '<p style="font-size:0.8rem;color:var(--txt-muted);">⏳ Cargando snapshot…</p></div></div>';
+                html += '<p class="pm-nota" style="margin:0;"><i class="fa-solid fa-hourglass" aria-hidden="true"></i> Cargando snapshot…</p></div></div>';
                 const invRef = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID).collection('inventories').doc(_detalleInventarioCerradoId);
                 Promise.all([invRef.get(), _readChunkedSubcollection(invRef, 'snapshotChunks')]).then(function(res) {
                     const invSnap = res[0];
@@ -542,21 +541,21 @@
             const meta = _detalleInventarioCerradoData.meta;
             const registros = _detalleInventarioCerradoData.registros;
             if (!meta) {
-                html += '<p style="font-size:0.8rem;color:var(--red-text);">No se pudo cargar este inventario.</p></div></div>';
+                html += '<p class="pm-nota" style="color:var(--danger);margin:0;">No se pudo cargar este inventario.</p></div></div>';
                 return html;
             }
             const usuarios = registros.filter(function(r) { return r.tipo === 'usuario'; });
             const productosSnap = registros.filter(function(r) { return r.tipo === 'producto'; });
 
-            html += '<p style="font-size:0.9rem;font-weight:800;">#' + meta.numero + ' · Inventario Barra</p>';
-            html += '<p style="font-size:0.72rem;color:var(--txt-muted);margin-bottom:10px;">';
-            html += 'Creado: ' + new Date(meta.fechaCreacion).toLocaleDateString('es-MX') + ' por ' + escapeHtml(meta.creadoPorNombre || '—') + '<br>';
-            html += 'Cerrado: ' + new Date(meta.fechaCierre).toLocaleDateString('es-MX') + ' por ' + escapeHtml(meta.cerradoPorNombre || '—') + '<br>';
-            html += 'Productos: ' + (meta.totalProductos || productosSnap.length) + ' &nbsp;·&nbsp; Participantes: ' + usuarios.length;
-            html += '</p>';
+            html += '<dl class="if-datos">';
+            html += '<div class="if-dato"><dt>Inventario</dt><dd>#' + meta.numero + ' · Inventario Barra</dd></div>';
+            html += '<div class="if-dato"><dt>Creado</dt><dd>' + new Date(meta.fechaCreacion).toLocaleDateString('es-MX') + ' por ' + escapeHtml(meta.creadoPorNombre || '—') + '</dd></div>';
+            html += '<div class="if-dato"><dt>Cerrado</dt><dd>' + new Date(meta.fechaCierre).toLocaleDateString('es-MX') + ' por ' + escapeHtml(meta.cerradoPorNombre || '—') + '</dd></div>';
+            html += '<div class="if-dato"><dt>Productos / participantes</dt><dd>' + (meta.totalProductos || productosSnap.length) + ' &nbsp;·&nbsp; ' + usuarios.length + '</dd></div>';
+            html += '</dl>';
 
             if (hasPermission('inventory.export')) {
-                html += '<button onclick="exportarInventarioCerrado(\'' + _detalleInventarioCerradoId + '\', ' + meta.numero + ')" style="padding:7px 14px;border-radius:var(--r-md);background:var(--accent);color:#fff;font-size:0.75rem;font-weight:700;cursor:pointer;margin-bottom:10px;">📥 Exportar Excel</button>';
+                html += '<button type="button" class="bt bt--secundario" onclick="exportarInventarioCerrado(\'' + _detalleInventarioCerradoId + '\', ' + meta.numero + ')"><i class="fa-solid fa-download" aria-hidden="true"></i> Exportar Excel</button>';
             }
 
             // ── FASE 3 · CONTABILIZAR ────────────────────────────────────────
@@ -572,35 +571,31 @@
                 var _destPartes = [];
                 if (meta.semanaDestino) _destPartes.push('el stock inicial de la semana ' + escapeHtml(meta.semanaDestino));
                 if (meta.mesDestino)    _destPartes.push('el corte contable del mes ' + escapeHtml(meta.mesDestino));
-                html += '<div style="padding:9px 12px;border-radius:var(--r-md);background:var(--accent-dim);'
-                     +  'border-left:3px solid var(--accent);margin-bottom:10px;">'
-                     +  '<p style="font-size:0.75rem;font-weight:700;color:var(--accent);margin:0;">📘 Contabilizado</p>'
-                     +  '<p style="font-size:0.7rem;color:var(--txt-muted);margin:2px 0 0;">'
+                html += '<div class="pm-paso pm-paso--hecho" role="status">'
+                     +  '<div class="pm-paso__titulo"><i class="fa-solid fa-book" aria-hidden="true"></i> Contabilizado</div>'
+                     +  '<div class="pm-paso__txt">'
                      +  'Su resultado es ' + (_destPartes.length ? _destPartes.join(' y ') : '—')
                      +  (meta.contabilizadoEn ? ' · ' + new Date(meta.contabilizadoEn).toLocaleDateString('es-MX') : '')
-                     +  '</p></div>';
+                     +  '</div></div>';
             } else if (hasPermission('inventory.post')) {
                 // Misma regla que el encabezado de Conteo y que la propia
                 // contabilización (evaluarContabilizable, 75-auditoria-flujo).
                 var _ev = evaluarContabilizable(meta);
                 var _motivo = _ev.puede ? null : _ev.motivo;
                 if (_motivo) {
-                    html += '<div style="padding:9px 12px;border-radius:var(--r-md);background:var(--bg-soft);'
-                         +  'border-left:3px solid var(--amber,#f59e0b);margin-bottom:10px;">'
-                         +  '<p style="font-size:0.72rem;color:var(--txt-muted);margin:0;">'
-                         +  '📘 No se puede contabilizar. ' + escapeHtml(_motivo) + '</p></div>';
+                    html += '<div class="pm-paso pm-paso--aviso">'
+                         +  '<div class="pm-paso__txt"><i class="fa-solid fa-book" aria-hidden="true"></i> No se puede contabilizar. ' + escapeHtml(_motivo) + '</div></div>';
                 } else {
-                    html += '<button onclick="contabilizarInventario(\'' + _detalleInventarioCerradoId + '\', ' + meta.numero + ')" '
-                         +  'style="padding:7px 14px;border-radius:var(--r-md);background:var(--accent);color:#fff;'
-                         +  'font-size:0.75rem;font-weight:700;cursor:pointer;margin-bottom:10px;margin-left:6px;">'
-                         +  '📘 Contabilizar</button>';
+                    html += '<button type="button" class="bt bt--primario" onclick="contabilizarInventario(\'' + _detalleInventarioCerradoId + '\', ' + meta.numero + ')">'
+                         +  '<i class="fa-solid fa-book" aria-hidden="true"></i> Contabilizar</button>';
                 }
             }
 
-            html += '<div style="max-height:320px;overflow-y:auto;border-top:1px solid var(--border-soft);padding-top:8px;">';
+            html += '<p class="if-seccion">Participantes</p>';
+            html += '<div style="max-height:320px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">';
             usuarios.forEach(function(u) {
                 const completas = AREAS_CONTEO.filter(function(a) { return u.status && u.status[a] === 'completada'; }).length;
-                html += '<p style="font-size:0.75rem;margin-bottom:3px;"><b>' + escapeHtml(u.email) + '</b> — ' + completas + '/' + AREAS_CONTEO.length + ' áreas completadas' + (u.isAdmin ? ' (admin)' : '') + '</p>';
+                html += '<div class="rc-hist__dato"><i class="fa-solid fa-user" aria-hidden="true"></i> <b>' + escapeHtml(u.email) + '</b> — ' + completas + '/' + AREAS_CONTEO.length + ' áreas completadas' + (u.isAdmin ? ' (admin)' : '') + '</div>';
             });
             html += '</div>';
 
@@ -686,7 +681,7 @@
                     // D — según el permiso, no según isAdmin(): el mismo
                     // criterio que aplica reabrirArea().
                     if (hasPermission('inventory.reopenArea')) {
-                        accionArea = '<button type="button" class="bt bt--secundario" onclick="reabrirArea(\'' + area + '\')">↩ Reabrir ' + escapeHtml(areasAuditoria[area]) + '</button>';
+                        accionArea = '<button type="button" class="bt bt--secundario" onclick="reabrirArea(\'' + area + '\')"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Reabrir ' + escapeHtml(areasAuditoria[area]) + '</button>';
                     } else if (tieneUnlock) {
                         html += ' · <span style="color:var(--amber);font-weight:700;"><i class="fa-solid fa-unlock" aria-hidden="true"></i> Corrección habilitada</span>';
                     } else {
@@ -784,13 +779,13 @@
                 )
             );
 
-            let html = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px;margin-bottom:16px;">';
+            let html = '<div class="if-card">';
 
             // ── Cabecera del panel con indicador EN VIVO ────────────────────
-            html += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:10px;">';
+            html += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">';
             html += '<p style="font-size:0.75rem;font-weight:700;color:var(--txt-primary);margin:0;"><i class="fa-solid fa-users" aria-hidden="true"></i> Conteos por usuario</p>';
             if (hayAlguienContando) {
-                html += '<span style="display:inline-flex;align-items:center;gap:5px;font-size:0.62rem;font-weight:700;color:#22c55e;">'
+                html += '<span style="display:inline-flex;align-items:center;gap:5px;font-size:0.62rem;font-weight:700;color:var(--ok);">'
                       + '<span class="audit-live-dot"></span>EN VIVO</span>';
             }
             html += '</div>';
@@ -814,7 +809,7 @@
                 html += '<div style="display:flex;flex-direction:column;gap:1px;">';
                 html += '<span style="font-size:0.72rem;font-weight:600;color:var(--accent);"><i class="fa-solid fa-user" aria-hidden="true"></i> ' + escapeHtml(u.email) + '</span>';
                 if (relTime) {
-                    html += '<span class="audit-timestamp">⏱ ' + relTime + '</span>';
+                    html += '<span class="audit-timestamp"><i class="fa-solid fa-clock" aria-hidden="true"></i> ' + relTime + '</span>';
                 }
                 html += '</div>';
                 html += '<span style="font-size:0.65rem;color:var(--txt-muted);">' + totalAreas + '/' + AREAS_CONTEO.length + ' áreas</span>';
@@ -877,15 +872,15 @@
                     if (completada) {
                         html += '<div class="if-acc-usuario">';
                         html += '<button type="button" class="bt bt--secundario" onclick="adminVerConteoUsuario(\'' + escapeHtml(u.uid) + '\',\'' + area + '\')">'
-                              + '👁 Ver</button>';
+                              + '<i class="fa-solid fa-eye" aria-hidden="true"></i> Ver</button>';
                         html += '<button type="button" class="bt bt--secundario" onclick="adminUnlockAreaUsuario(\'' + escapeHtml(u.uid) + '\',\'' + area + '\')">'
-                              + '🔓 Habilitar</button>';
+                              + '<i class="fa-solid fa-unlock" aria-hidden="true"></i> Habilitar</button>';
                         // ETAPA 15: reapertura completa del almacén (distinto del
                         // desbloqueo por producto de arriba) — solo mientras el
                         // Inventario Físico esté SINCRONIZADO, solo con permiso.
                         if (hasPermission('inventory.reopenArea') && _inventarioActivo && _inventarioActivo.estado === 'SINCRONIZADO') {
                             html += '<button type="button" class="bt bt--secundario" onclick="reabrirAlmacenAdmin(\'' + escapeHtml(u.uid) + '\',\'' + area + '\')">'
-                                  + '🔄 Reabrir</button>';
+                                  + '<i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i> Reabrir</button>';
                         }
                         html += '</div>';
                     }
@@ -1489,10 +1484,10 @@
             var choque = _buscarPVDuplicado(pv);
             if (choque) {
                 aviso.textContent = 'Ese PV ya lo usa ' + (choque.name || choque.id) + '.';
-                aviso.style.color = '#dc2626';
+                aviso.style.color = 'var(--danger)';
             } else {
                 aviso.textContent = 'Déjalo vacío si el producto no se vende tal cual en el punto de venta.';
-                aviso.style.color = '#9ca3af';
+                aviso.style.color = 'var(--txt-muted)';
             }
         }
 

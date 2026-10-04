@@ -122,7 +122,8 @@ const PUERTO = process.env.PUERTO || '8080';
   });
   chk('★ Un inventario abierto sin fechaRecuento lo dice en vez de no mostrar nada',
       // FASE 10B: el dato va en su fila, etiqueta arriba (en mayúsculas por CSS) y valor abajo.
-      /Recuento\s*⚠️ No registrado/i.test(legado.txt), legado.txt.slice(0, 300));
+      // REDISEÑO R5: el aviso lleva un icono (sin texto) delante de la palabra, no el emoji ⚠️.
+      /Recuento\s*No registrado/i.test(legado.txt), legado.txt.slice(0, 300));
   chk('★ …y ofrece registrarla, mientras siga abierto', legado.hayBtn);
 
   const modal = await p.evaluate(() => {

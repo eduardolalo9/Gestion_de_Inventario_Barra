@@ -182,9 +182,10 @@ async function main() {
 
     const R = 'inventarioApp/' + DOC_ID;
 
-    // PRD-003 (sin precio) se deja SIN contar a propósito: su saldo en cero
-    // tiene que seguir contando como "sin precio", no fundirse con "cero
-    // porque no tiene precio".
+    // PRD-003 (sin precio) se deja SIN contar a propósito. Desde el
+    // 4-oct-2026, "no contado" ya no entra al corte con un saldo de cero
+    // inventado (antes se fundía, sin querer, con "cero porque no tiene
+    // precio") — se excluye de saldos igual que ya se excluía del valorTotal.
     function conteoDemo() {
         return {
             'PRD-001': {
@@ -315,16 +316,16 @@ async function main() {
         chk('Q3 · ★ el valor se calcula solo con los productos que tienen precio',
             corte1.valorTotal === Math.round((r3(p1) * 500 + r3(p2) * 350) * 100) / 100,
             'esperado ' + (r3(p1) * 500 + r3(p2) * 350) + ' · recibido ' + corte1.valorTotal);
-        chk('Q3 · ★ PRD-003 (sin precio) se cuenta aparte, no se le inventa un valor',
-            corte1.productosSinPrecio === 1 && corte1.productosConPrecio === 2 &&
-            'PRD-003' in corte1.saldos,
-            JSON.stringify({ sinPrecio: corte1.productosSinPrecio, conPrecio: corte1.productosConPrecio }));
+        chk('Q3 · ★ PRD-003 (sin contar) ya NO entra a saldos — ni inventado en cero ni confundido con "sin precio" (corrección 4-oct-2026)',
+            corte1.productosConPrecio === 2 && corte1.productosSinPrecio === 0 &&
+            corte1.productosNoContados === 1 && !('PRD-003' in corte1.saldos),
+            JSON.stringify({ sinPrecio: corte1.productosSinPrecio, conPrecio: corte1.productosConPrecio, noContados: corte1.productosNoContados }));
         chk('El corte conserva la trazabilidad a su inventario de origen',
             corte1.origen && corte1.origen.inventoryId === 'inv-mes-1' && corte1.origen.numero === 201);
     } else {
         chk('Q1 · los saldos del corte suman las tres áreas, igual que el inicial semanal', false, 'no se creó el corte');
         chk('Q3 · ★ el valor se calcula solo con los productos que tienen precio', false, 'no se creó el corte');
-        chk('Q3 · ★ PRD-003 (sin precio) se cuenta aparte, no se le inventa un valor', false, 'no se creó el corte');
+        chk('Q3 · ★ PRD-003 (sin contar) ya NO entra a saldos — ni inventado en cero ni confundido con "sin precio" (corrección 4-oct-2026)', false, 'no se creó el corte');
         chk('El corte conserva la trazabilidad a su inventario de origen', false, 'no se creó el corte');
     }
 

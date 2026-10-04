@@ -109,12 +109,28 @@ const PUERTO = process.env.PUERTO || '8080';
   await p.evaluate(() => toggleRecetaActiva(recetas[0].id));
 
   // ── Búsqueda en la lista ────────────────────────────────────────────────
+  // REDISEÑO — el Recetario ahora comparte la barra y el motor de Inicio
+  // (ver js/80-buscador.js, registro 'recetario'); por eso se escribe en el
+  // input real, con el mismo debounce, y el vacío ya no dice "Sin
+  // resultados" sino el mismo estado profesional que usan Inicio/Pedidos/
+  // Historia ("No se encontró… / Limpiar búsqueda" — ver prueba-fase6-navegador.js).
   await p.evaluate(() => _recetarioVolverALista());
-  await p.evaluate(() => updateRecetarioSearch('no existe'));
-  await p.waitForTimeout(80);
-  chk('Buscar algo que no existe muestra "Sin resultados"',
-      /Sin resultados/.test(await p.evaluate(() => document.getElementById('tabContent').innerText)), '');
-  await p.evaluate(() => clearRecetarioSearch());
+  await p.fill('#sbx-input-recetario', 'no existe');
+  await p.waitForTimeout(320);
+  const vacioBusqueda = await p.evaluate(() => document.getElementById('sbx-res-recetario').innerText);
+  chk('Buscar algo que no existe muestra el estado vacío compartido, con botón para limpiar',
+      /No se encontró/.test(vacioBusqueda) && /Limpiar búsqueda/.test(vacioBusqueda), vacioBusqueda.slice(0, 150));
+  await p.fill('#sbx-input-recetario', 'margarta'); // typo deliberado
+  await p.waitForTimeout(320);
+  const porTypo = await p.evaluate(() => document.getElementById('sbx-res-recetario').innerText);
+  chk('El mismo motor difuso de Inicio tolera un typo en el nombre de la receta',
+      /MARGARITA/.test(porTypo), porTypo.slice(0, 150));
+  // El botón ✕ de la barra (siempre presente) en vez del de vacio(): "margarta"
+  // SÍ encuentra algo por el respaldo difuso, así que no hay estado vacío aquí.
+  await p.click('#sbx-recetario [data-sbx-accion="limpiar"]');
+  await p.waitForTimeout(150);
+  chk('El botón ✕ de la barra limpia la búsqueda también en el Recetario',
+      await p.evaluate(() => _recetarioSearchTerm === ''), '');
 
   // ── Sin recipe.edit: solo lectura, sin costo, sin botones de escritura ──
   await p.evaluate(() => {

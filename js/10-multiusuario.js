@@ -387,8 +387,8 @@
             if (stats.count >= 2) {
                 const badgeCls = stats.hasConflict ? 'error' : 'ok'; // FIX-07
                 const badgeLbl = stats.hasConflict
-                    ? '⚠️ DIFERENCIA (' + stats.diff.toFixed(2) + ')'
-                    : '✓ OK';
+                    ? '<i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> DIFERENCIA (' + stats.diff.toFixed(2) + ')'
+                    : '<i class="fa-solid fa-circle-check" aria-hidden="true"></i> OK';
                 html += '<span class="audit-status-badge ' + badgeCls + '">' + badgeLbl + '</span>';
             }
             html += '</div>';
@@ -515,11 +515,11 @@
                           + info.userCount + ' usuario — necesita 1 más</span>';
                 } else if (info.conflicts > 0) {
                     badge = '<span class="audit-compare-badge warn">'
-                          + '⚠️ ' + info.conflicts + ' diferencia'
+                          + '<i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> ' + info.conflicts + ' diferencia'
                           + (info.conflicts > 1 ? 's' : '') + '</span>';
                 } else {
                     badge = '<span class="audit-compare-badge ok">'
-                          + '✓ ' + info.userCount + ' usuarios — OK</span>';
+                          + '<i class="fa-solid fa-circle-check" aria-hidden="true"></i> ' + info.userCount + ' usuarios — OK</span>';
                 }
 
                 html += '<div class="audit-compare-area-row">';

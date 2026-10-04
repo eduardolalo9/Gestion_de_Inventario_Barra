@@ -56,7 +56,7 @@ const C = []; const chk = (n, ok, d) => { C.push({ n, ok, d }); };
     return renderHistorialInventarios();
   });
   chk('El inventario contabilizado se marca distinto del cerrado',
-      /CONTABILIZADO/.test(hist) && /CERRADO/.test(hist), '');
+      /contabilizado/i.test(hist) && /cerrado/i.test(hist), '');
   chk('Dice de qué semana quedó como inicial',
       /Inicial de la semana 2026-09-14/.test(hist));
 
@@ -124,7 +124,7 @@ const C = []; const chk = (n, ok, d) => { C.push({ n, ok, d }); };
     _inventarioActivo = null; _inventarioActivoId = null;
     return { aviso: /Inventario abandonado/.test(cab), reconteo: /data-rc-accion="iniciar"/.test(cab),
              boton: /cerrarInventarioHuerfano\(_inventarioActivoId\)/.test(zona) && /abandonado #102/.test(zona),
-             normal: /cerrarInventarioFisico\(\)/.test(zona), hist: /CERRADO · ABANDONADO/.test(hist) };
+             normal: /cerrarInventarioFisico\(\)/.test(zona), hist: /cerrado · abandonado/i.test(hist) };
   });
   chk('4.20 · Un huérfano se anuncia como abandonado, con su propio botón para cerrarlo',
       huer.aviso && huer.boton && !huer.normal && !huer.reconteo, JSON.stringify(huer));

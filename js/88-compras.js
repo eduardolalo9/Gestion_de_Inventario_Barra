@@ -639,20 +639,20 @@
                       + '<div style="color:var(--txt-secondary);font-size:.86rem;line-height:1.5">'
                       + parsed.grupos.length + ' entrada(s) para la barra'
                       + (parsed.fueraDeAlcance ? ' · ' + parsed.fueraDeAlcance + ' fila(s) de otro almacén (descartadas)' : '')
-                      + (totalIncidencias ? ' · <b style="color:#fbbf24">' + totalIncidencias + ' incidencia(s)</b>' : '')
+                      + (totalIncidencias ? ' · <b style="color:var(--warn)">' + totalIncidencias + ' incidencia(s)</b>' : '')
                       + '</div></div>';
 
             html += '<div style="padding:10px 12px;margin-bottom:14px;border-radius:10px;'
-                  + 'background:rgba(251,191,36,.10);border:1px solid rgba(251,191,36,.28);'
-                  + 'color:#fbbf24;font-size:.82rem;line-height:1.5">'
-                  + '⚠️ El costo que trae este archivo es precio de <b>lista</b>, sin descuento ni IVA — '
+                  + 'background:var(--warn-dim);border:1px solid var(--warn-dim);'
+                  + 'color:var(--warn);font-size:.82rem;line-height:1.5">'
+                  + '<i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> El costo que trae este archivo es precio de <b>lista</b>, sin descuento ni IVA — '
                   + 'no es necesariamente el monto que se pagó. Se importa así, tal cual lo declara SAP, '
                   + 'y el catálogo NO se actualiza automáticamente con él.</div>';
 
             if (conFechaInvalida > 0) {
                 html += '<div style="padding:10px 12px;margin-bottom:14px;border-radius:10px;'
-                      + 'background:rgba(239,68,68,.10);border:1px solid rgba(239,68,68,.28);color:#f87171;font-size:.82rem">'
-                      + '🛑 ' + conFechaInvalida + ' entrada(s) no tienen una fecha reconocible y no se pueden guardar '
+                      + 'background:var(--danger-dim);border:1px solid var(--danger-dim);color:var(--danger);font-size:.82rem">'
+                      + '<i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i> ' + conFechaInvalida + ' entrada(s) no tienen una fecha reconocible y no se pueden guardar '
                       + '(no se les puede asignar semana). Corrige el archivo y vuelve a intentar.</div>';
             }
 
@@ -674,14 +674,14 @@
                       + ' · <b>' + _dineroMX(g.importe) + '</b> (precio de lista)</div>';
 
                 if (g.incidencias.length) {
-                    html += '<div style="margin-top:8px;font-size:.8rem;color:#fbbf24">'
-                          + '⚠️ ' + g.incidencias.length + ' incidencia(s) — '
+                    html += '<div style="margin-top:8px;font-size:.8rem;color:var(--warn)">'
+                          + '<i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> ' + g.incidencias.length + ' incidencia(s) — '
                           + '<a href="javascript:void(0)" onclick="_comprasVerIncidenciasGrupo(\'' + escapeHtml(g.compraId) + '\')" '
-                          + 'style="color:#fbbf24;text-decoration:underline">ver detalle</a></div>';
+                          + 'style="color:var(--warn);text-decoration:underline">ver detalle</a></div>';
                 }
                 if (diferencias.length) {
                     html += '<div style="margin-top:6px;font-size:.8rem;color:var(--txt-secondary)">'
-                          + '💲 ' + diferencias.length + ' producto(s) con costo distinto al del catálogo (≥1%)</div>';
+                          + '<i class="fa-solid fa-coins" aria-hidden="true"></i> ' + diferencias.length + ' producto(s) con costo distinto al del catálogo (≥1%)</div>';
                 }
                 html += '</div>';
             });
@@ -690,8 +690,8 @@
             html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">';
             if (hayGuardables) {
                 html += '<button type="button" onclick="confirmarImportacionCompras()" '
-                      + 'style="padding:9px 15px;border-radius:var(--r-md);background:#065f46;'
-                      + 'border:1px solid rgba(34,197,94,.28);color:#86efac;font-weight:600;cursor:pointer">'
+                      + 'style="padding:9px 15px;border-radius:var(--r-md);background:var(--ok-dim);'
+                      + 'border:1px solid var(--ok-dim);color:var(--ok);font-weight:600;cursor:pointer">'
                       + 'Confirmar e importar</button>';
             }
             html += '<button type="button" onclick="cancelarImportacionCompras()" '
@@ -708,12 +708,12 @@
                      + '<div style="color:var(--txt-secondary);font-size:.86rem">'
                      + resultado.creadas + ' entrada(s) guardada(s)'
                      + (resultado.yaExistian ? ' · ' + resultado.yaExistian + ' ya existía(n) (sin duplicar)' : '')
-                     + (resultado.fallidas.length ? ' · <b style="color:#f87171">' + resultado.fallidas.length + ' no se pudieron guardar</b>' : '')
+                     + (resultado.fallidas.length ? ' · <b style="color:var(--danger)">' + resultado.fallidas.length + ' no se pudieron guardar</b>' : '')
                      + '</div></div>';
 
             if (resultado.fallidas.length) {
                 html += '<div style="padding:10px 12px;margin-bottom:14px;border-radius:10px;'
-                      + 'background:rgba(239,68,68,.10);border:1px solid rgba(239,68,68,.28);color:#f87171;font-size:.84rem">';
+                      + 'background:var(--danger-dim);border:1px solid var(--danger-dim);color:var(--danger);font-size:.84rem">';
                 resultado.fallidas.forEach(function(f) {
                     html += '<div style="margin-bottom:4px">Folio ' + escapeHtml(f.folio || f.compraId) + ': ' + escapeHtml(f.motivo) + '</div>';
                 });
@@ -908,8 +908,8 @@
             if (hasPermission('purchases.import')) {
                 html += '<button type="button" onclick="comprasImportarExcel()" '
                       + 'style="display:flex;align-items:center;gap:7px;padding:9px 15px;'
-                      + 'border-radius:var(--r-md);background:#065f46;'
-                      + 'border:1px solid rgba(34,197,94,.28);color:#86efac;font-weight:600;'
+                      + 'border-radius:var(--r-md);background:var(--ok-dim);'
+                      + 'border:1px solid var(--ok-dim);color:var(--ok);font-weight:600;'
                       + 'cursor:pointer">Importar entrada de mercancía</button>';
             }
             if (hasPermission('purchases.create')) {
@@ -927,7 +927,7 @@
                 html += '<div style="text-align:center;padding:42px 18px;'
                       + 'background:var(--surface);border:1px solid var(--border-mid);'
                       + 'border-radius:12px">'
-                      + '<div style="font-size:2.2rem;margin-bottom:10px">📦</div>'
+                      + '<div style="font-size:2.2rem;margin-bottom:10px;color:var(--txt-muted);opacity:.55"><i class="fa-solid fa-receipt" aria-hidden="true"></i></div>'
                       + '<div style="font-weight:600;margin-bottom:6px">Todavía no hay compras registradas</div>'
                       + '<div style="color:var(--txt-secondary);font-size:.88rem;max-width:420px;'
                       + 'margin:0 auto;line-height:1.55">'

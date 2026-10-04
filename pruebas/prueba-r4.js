@@ -182,6 +182,26 @@ eq('Un total no numérico se guarda como 0, no como NaN', raros.saldos.A, 0,
 eq('Un producto sin total cuenta como 0',   raros.saldos.B, 0);
 eq('Las filas sin id se descartan',         raros.totalProductos, 2);
 
+// Corrección 4-oct-2026 (pedido real de Eduardo): un producto con
+// contado:false NO entra a saldos — ni ausente por accidente, ni cero
+// inventado. existenciaOficial() cae sola, para ese producto, al stock
+// operativo (ver 47-existencia.js). Un producto sin el campo `contado`
+// (los fixtures de arriba, anteriores a esta fecha) se sigue tratando
+// como contado — el cambio es compatible con todo lo que ya pasaba.
+const conNoContado = A.inicialDesdeCierre({ fecha: '2026-09-13', inventoryId: 'INV-999',
+    productos: [ { id: 'SI-CONTADO', total: 4, contado: true },
+                 { id: 'NO-CONTADO', total: 0, contado: false },
+                 { id: 'SIN-CAMPO',  total: 2 } ] });
+chk('★ Un producto con contado:false no entra a saldos — ni ausente por accidente, ni cero inventado',
+    !('NO-CONTADO' in conNoContado.saldos) && conNoContado.saldos['SI-CONTADO'] === 4,
+    JSON.stringify(conNoContado.saldos));
+eq('Sin el campo `contado` (compatibilidad con cierres anteriores a esta fecha), se sigue contando',
+    conNoContado.saldos['SIN-CAMPO'], 2);
+eq('totalProductos ya no incluye al que no se contó',
+    conNoContado.totalProductos, 2);
+eq('Se reporta cuántos quedaron fuera por no contarse',
+    conNoContado.productosNoContados, 1);
+
 // ═══ 8 · Etiqueta legible ═════════════════════════════════════════════════
 eq('Semana dentro de un mes',  A.etiquetaSemana('2026-09-13'),
    'semana del 7 al 13 de septiembre de 2026');

@@ -152,6 +152,13 @@ if (saldos) {
         !/saldosPorArea/.test(saldos));
     chk('Cuenta los productos que quedaron en cero',
         /enCero/.test(saldos));
+    chk('★ Distingue "nadie lo contó" de "se contó y dio cero" (corrección 4-oct-2026)',
+        /tocados\[id\] = true/.test(saldos) && /contado = !!tocados\[p\.id\]/.test(saldos) &&
+        /noContados\+\+/.test(saldos),
+        'mismo criterio que fvsConteoFisicoProducto() en 49-fisico-vs-sistema.js — null/no-incluido, nunca un cero inventado');
+    chk('El "tocado" se calcula ANTES del relleno denso del consolidado (sobre el conteo crudo)',
+        /usuarios\.forEach\(function\(u\) \{\s*Object\.keys\(u\.conteo \|\| \{\}\)\.forEach/.test(saldos),
+        'si se calculara sobre el consolidado, todo saldría "tocado" — ese relleno existe para el Excel, no para esto');
     chk('Un snapshot sin productos se rechaza',
         /snapshot_sin_productos/.test(saldos));
 }
@@ -164,15 +171,18 @@ if (verif) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  inicialDesdeCierre() se reutiliza SIN modificar
+//  inicialDesdeCierre() — reutilizada, con un único ajuste (4-oct-2026)
 // ═══════════════════════════════════════════════════════════════════════════
 chk('★ inicialDesdeCierre() por fin tiene un llamador real',
     /inicialDesdeCierre\(\{/.test(flujo),
     'llevaba desde su creación sin conectarse a nada');
-chk('inicialDesdeCierre() NO se modificó',
+chk('Conserva su guarda original (D-1 sigue sin desglose por área)',
     /function inicialDesdeCierre\(cierre\) \{[\s\S]{0,200}?if \(!cierre \|\| !cierre\.fecha\) return null;/.test(ciclo) &&
     !/saldosPorArea/.test(ciclo),
     'D-1 hizo innecesario el desglose por área que se había propuesto');
+chk('★ Único cambio permitido: un producto con contado===false no entra a saldos (corrección 4-oct-2026)',
+    /if \(p\.contado === false\) \{ noContados\+\+; return; \}/.test(ciclo),
+    'antes entraba siempre con cero explícito (F12/R11) — Eduardo pidió que el pedido sugerido no se infle con productos sin contar');
 chk('Sus pruebas siguen existiendo',
     /inicialDesdeCierre/.test(leer('pruebas/prueba-r4.js')));
 
@@ -285,6 +295,9 @@ chk('La versión de caché subió por encima de la del paso previo',
         return v.length === 1 && parseFloat(v[0]) > 3.7;
     })(),
     'reglas nuevas con código viejo en caché es la peor combinación posible');
+chk('La versión avanzó respecto a R7b (≥ 5.10) — corrección "no contado ≠ cero" del 4-oct-2026',
+    Number((leer('sw.js').match(/APP_VERSION\s*=\s*'(\d+\.\d+)'/) || [])[1]?.split('.')[1]) >= 10,
+    'si usara parseFloat, "5.10" se leería como 5.1 y parecería un retroceso');
 
 // ── Resumen ───────────────────────────────────────────────────────────────
 const ancho = Math.max(...casos.map(c => c.nombre.length));

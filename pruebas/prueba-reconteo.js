@@ -50,7 +50,7 @@ chk('renderInventarioTab enruta las tres vistas del reconteo',
 // 4.20: además, no se ofrece sobre un inventario huérfano (el reconteo
 // escribe en la sesión vigente, no en el huérfano que se está viendo).
 chk('El botón de reconteo solo aparece al admin con el inventario abierto',
-    /if \(isAdmin\(\) && !esCerrado && !_esInventarioHuerfano\(\)\) \{\s*acc \+= _ifBtn\('bt--primario', '🔁 Reconteo', 'data-rc-accion="iniciar"'\)/.test(ui));
+    /if \(isAdmin\(\) && !esCerrado && !_esInventarioHuerfano\(\)\) \{\s*acc \+= _ifBtn\('bt--primario', '[^']*Reconteo', 'data-rc-accion="iniciar"'\)/.test(ui));
 ['renderReconteo', 'renderReconteoHistorial', 'renderReconteoDetalle'].forEach(f => {
     chk(f + ' devuelve a la selección si no es admin',
         /if \(!_rcPuede\(\)\) \{ auditoriaView = 'selection'; return renderAuditoriaSeleccion\(\); \}/.test(cuerpo(rc, 'function ' + f + '(')));

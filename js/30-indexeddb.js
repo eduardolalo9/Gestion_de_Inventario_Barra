@@ -833,18 +833,42 @@ function _idbPruneSyncedQueue() {
             // riesgo de pérdida porque esto es solo el respaldo local
             // secundario — lo que de verdad importa ya está en IDB y la nube.
             if (!_lsQuotaWarned) {
-                const used = estimateStorageUsed();
+                let used = estimateStorageUsed();
                 if (used > LS_WARN_BYTES) {
-                    _lsQuotaWarned = true;
-                    const top = _topStorageKeys(2)
-                        .map(function(x) { return x.nombre + ': ' + Math.round(x.bytes / 1024) + ' KB'; })
-                        .join(', ');
-                    showNotification('⚠️ Almacenamiento local al ' + Math.round(used / (5*1024*1024) * 100) + '%'
-                        + (top ? ' (' + top + ')' : '') + '. Tus datos están a salvo (nube + respaldo interno);'
-                        + ' avisa para liberar espacio pronto.');
+                    // HOTFIX 4.25 — antes esto era solo un aviso de texto. Ahora,
+                    // antes de mostrarlo, aprieta de inmediato el tope de
+                    // respaldos rotativos (la causa más grande y más fácil de
+                    // liberar sin perder nada: ver _liberarEspacioEmergencia).
+                    // La mayoría de las veces esto solo ya baja el uso bajo el
+                    // umbral — por eso se recalcula `used` después.
+                    const liberados = typeof _liberarEspacioEmergencia === 'function'
+                        ? _liberarEspacioEmergencia() : 0;
+                    if (liberados > 0) used = estimateStorageUsed();
+
+                    if (used > LS_WARN_BYTES) {
+                        _lsQuotaWarned = true;
+                        const top = _topStorageKeys(2)
+                            .map(function(x) { return x.nombre + ': ' + Math.round(x.bytes / 1024) + ' KB'; })
+                            .join(', ');
+                        showNotification('⚠️ Almacenamiento local al ' + Math.round(used / (5*1024*1024) * 100) + '%'
+                            + (top ? ' (' + top + ')' : '') + '. Tus datos están a salvo (nube + respaldo interno);'
+                            + ' avisa para liberar espacio pronto.');
+                    }
                 }
             }
 
+            // HOTFIX 4.25 — antes, un fallo de cuota en CUALQUIER clave que no
+            // fuera inventories/orders/inventarioConteo/myAuditoriaConteo hacía
+            // `break`: cortaba el resto del guardado, incluyendo claves que van
+            // DESPUÉS en este mismo array y que sí importan —
+            // inventarioApp_cicloEstado / inventarioApp_cicloInfo (si hay un
+            // inventario abierto) y todo TIER 4. Cada clave es una entrada
+            // independiente de localStorage (no hay atomicidad entre ellas que
+            // proteger deteniéndose), así que seguir probando las siguientes —
+            // más chicas, más prioritarias — nunca puede perder más de lo que
+            // ya se perdió con la que falló. "Cero pérdida de datos" pide
+            // `continue`, no `break`.
+            let _avisoGenericoMostrado = false;
             for (const [key, value] of entries) {
                 try {
                     localStorage.setItem(key, value);
@@ -877,10 +901,14 @@ function _idbPruneSyncedQueue() {
                     if (!recovered) {
                         if (key === 'inventarioApp_inventarioConteo' || key === 'inventarioApp_myAuditoriaConteo') {
                             showNotification('🚨 CRÍTICO: El conteo activo no pudo guardarse. Exporta datos INMEDIATAMENTE.');
-                        } else {
+                        } else if (!_avisoGenericoMostrado) {
+                            // Un solo aviso genérico por ciclo de guardado, aunque fallen
+                            // varias claves — evita una cascada de notificaciones repetidas.
+                            _avisoGenericoMostrado = true;
                             showNotification('⚠️ Error al guardar datos. Exporta un respaldo inmediatamente.');
                         }
-                        break; // detener para no corromper estado parcial
+                        // HOTFIX 4.25: antes era `break` — ver comentario arriba del for.
+                        continue;
                     }
                 }
             }
