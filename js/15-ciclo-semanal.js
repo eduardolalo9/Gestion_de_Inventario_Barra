@@ -208,7 +208,20 @@
          * miércoles no arrastra) — para que la decisión no dependa de que quien
          * llame se acuerde de comprobarlo.
          *
-         * @param {object} cierre  { fecha, inventoryId, numero, productos: [{id, total}] }
+         * Decisión de Eduardo (4-oct-2026): un producto que nadie contó
+         * (p.contado === false, lo calcula _saldosDesdeSnapshot) NO entra a
+         * saldos. No es lo mismo "se contó y dio cero" que "nadie lo tocó" —
+         * forzar un cero aquí fue la causa de que "Total" y el pedido sugerido
+         * contradijeran a las tres áreas operativas para los productos que se
+         * quedaron sin contar. Al no escribir su saldo, existenciaOficial()
+         * (47-existencia.js) cae sola, para ESE producto, al stock operativo
+         * (suma de almacén+barra1+barra2) — el mismo respaldo que ya usa para
+         * cualquier producto sin inicial contabilizado. Un caller que no pase
+         * `contado` (p.contado === undefined, como los cierres de FASE 3/R4
+         * anteriores a esta fecha) se sigue tratando como contado: solo
+         * `contado === false` excluye.
+         *
+         * @param {object} cierre  { fecha, inventoryId, numero, productos: [{id, total, contado?}] }
          */
         function inicialDesdeCierre(cierre) {
             if (!cierre || !cierre.fecha) return null;
@@ -216,8 +229,10 @@
             if (!clase || !clase.cierraSemana) return null;
 
             var saldos = {};
+            var noContados = 0;
             (cierre.productos || []).forEach(function(p) {
                 if (!p || !p.id) return;
+                if (p.contado === false) { noContados++; return; }
                 var t = Number(p.total);
                 if (!isFinite(t)) t = 0;
                 // Se redondea a 3 decimales, igual que el conteo: si no, sumar
@@ -237,7 +252,8 @@
                     fechaCierre:  clase.fecha,
                     semanaCerrada: clase.semanaId
                 },
-                saldos:       saldos,
-                totalProductos: Object.keys(saldos).length
+                saldos:          saldos,
+                totalProductos:  Object.keys(saldos).length,
+                productosNoContados: noContados
             };
         }

@@ -693,7 +693,21 @@
 
             const conteo = _consolidarConteoCongelado(usuarios, areas, productosCongelados);
 
-            let enCero = 0;
+            // Decisión de Eduardo (4-oct-2026, corrige R11/F12 de FASE 3):
+            // "nadie lo contó" y "se contó y dio cero" ya NO se tratan igual
+            // aquí — mismo criterio que fvsConteoFisicoProducto()
+            // (49-fisico-vs-sistema.js), que ya distingue las dos cosas desde
+            // FASE 11B. _consolidarConteoCongelado() rellena cada área con
+            // {enteras:0, abiertas:[]} cuando nadie la tocó (es lo correcto
+            // para el Excel del cierre: una fila en cero ahí sigue siendo
+            // información). Por eso "tocado" se calcula ANTES de ese relleno,
+            // mirando el conteo crudo de cada usuario, no el consolidado.
+            const tocados = {};
+            usuarios.forEach(function(u) {
+                Object.keys(u.conteo || {}).forEach(function(id) { tocados[id] = true; });
+            });
+
+            let enCero = 0, noContados = 0;
             const productos = productosCongelados.map(function(p) {
                 let total = 0;
                 areas.forEach(function(area) {
@@ -711,14 +725,17 @@
                     }
                     total += suma;
                 });
-                if (total === 0) enCero++;
+                const contado = !!tocados[p.id];
+                if (!contado) { noContados++; }
+                else if (total === 0) { enCero++; }
                 // FASE 13 — se arrastra también el precio CONGELADO (el que
                 // tenía el producto el día del cierre, no el del catálogo de
                 // hoy): lo necesita cierreMensualDesdeSnapshot() para
                 // valorizar el corte sin recalcular nada con datos de otra
-                // fecha. id/total siguen siendo los únicos campos que arma el
-                // inicial semanal, así que esto no cambia nada para él.
-                return { id: p.id, total: total, precio: (typeof p.precio === 'number') ? p.precio : null };
+                // fecha. id/total/contado son los únicos campos que arman el
+                // inicial semanal.
+                return { id: p.id, total: total, contado: contado,
+                         precio: (typeof p.precio === 'number') ? p.precio : null };
             });
 
             return {
@@ -726,6 +743,7 @@
                 productos: productos,
                 areas: areas,
                 enCero: enCero,
+                noContados: noContados,
                 totalProductos: productos.length
             };
         }
@@ -787,7 +805,13 @@
          * cualquiera no genera nada aquí, igual que el inicial semanal
          * devuelve null si la fecha no cierra semana.
          *
-         * @param {object} cierre { fecha, inventoryId, numero, productos: [{id, total, precio}] }
+         * Decisión de Eduardo (4-oct-2026): mismo criterio que su hermano del
+         * inicial semanal (15-ciclo-semanal.js) — un producto que nadie contó
+         * (p.contado === false) tampoco entra aquí. No es "sin precio" (eso YA se excluye, ver arriba);
+         * es "no hay físico que valorizar", y valorizarlo en $0 sería justo el
+         * número inventado que esta función existe para evitar.
+         *
+         * @param {object} cierre { fecha, inventoryId, numero, productos: [{id, total, precio, contado?}] }
          */
         function cierreMensualDesdeSnapshot(cierre) {
             if (!cierre || !cierre.fecha) return null;
@@ -795,9 +819,10 @@
             if (!clase || !clase.esCorteMensual) return null;
 
             var saldos = {};
-            var conPrecio = 0, sinPrecio = 0, valorTotal = 0;
+            var conPrecio = 0, sinPrecio = 0, valorTotal = 0, noContados = 0;
             (cierre.productos || []).forEach(function(p) {
                 if (!p || !p.id) return;
+                if (p.contado === false) { noContados++; return; }
                 var t = Number(p.total);
                 if (!isFinite(t)) t = 0;
                 // Mismo redondeo a 3 decimales que el inicial semanal, por la
@@ -826,10 +851,11 @@
                     fechaCierre:   clase.fecha,
                     semanaCerrada: clase.semanaId
                 },
-                saldos:             saldos,
-                totalProductos:     Object.keys(saldos).length,
-                productosConPrecio: conPrecio,
-                productosSinPrecio: sinPrecio,
+                saldos:              saldos,
+                totalProductos:      Object.keys(saldos).length,
+                productosConPrecio:  conPrecio,
+                productosSinPrecio:  sinPrecio,
+                productosNoContados: noContados,
                 // Redondeado a centavos: es dinero, no un conteo de botellas.
                 valorTotal:         Math.round(valorTotal * 100) / 100
             };
@@ -1044,6 +1070,10 @@
                 msg += 'Productos: ' + saldos.totalProductos
                      + (saldos.enCero ? '  (' + saldos.enCero + ' en cero)' : '') + '\n'
                      + 'Total de unidades: ' + (Math.round(totalUnidades * 1000) / 1000) + '\n';
+                if (saldos.noContados) {
+                    msg += '⚠️ ' + saldos.noContados + ' producto(s) sin contar — conservan su stock '
+                         + 'operativo actual (suma de las áreas), NO entran con cero.\n';
+                }
                 if (faltaMes) {
                     msg += 'Valor estimado del corte: '
                          + (corteMensual.productosConPrecio
@@ -1073,33 +1103,35 @@
                                 const inicialRef = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
                                                       .collection('inventariosIniciales').doc(inicial.semanaId);
                                 batch.set(inicialRef, {
-                                    semanaId:         inicial.semanaId,
-                                    origen:           inicial.origen,
-                                    saldos:           inicial.saldos,
-                                    totalProductos:   inicial.totalProductos,
-                                    productosEnCero:  saldos.enCero,
-                                    areas:            saldos.areas,
-                                    contabilizadoPor: currentUserUid,
-                                    contabilizadoEn:  Date.now(),
-                                    semanaOrigenDato: inv.semanaIdOrigen || 'cabecera'
+                                    semanaId:            inicial.semanaId,
+                                    origen:              inicial.origen,
+                                    saldos:              inicial.saldos,
+                                    totalProductos:      inicial.totalProductos,
+                                    productosEnCero:     saldos.enCero,
+                                    productosNoContados: inicial.productosNoContados,
+                                    areas:               saldos.areas,
+                                    contabilizadoPor:    currentUserUid,
+                                    contabilizadoEn:     Date.now(),
+                                    semanaOrigenDato:    inv.semanaIdOrigen || 'cabecera'
                                 });
                             }
                             if (faltaMes) {
                                 const corteRef = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
                                                     .collection('cortesMensuales').doc(corteMensual.mesId);
                                 batch.set(corteRef, {
-                                    mesId:              corteMensual.mesId,
-                                    origen:             corteMensual.origen,
-                                    saldos:             corteMensual.saldos,
-                                    totalProductos:     corteMensual.totalProductos,
-                                    productosConPrecio: corteMensual.productosConPrecio,
-                                    productosSinPrecio: corteMensual.productosSinPrecio,
-                                    valorTotal:         corteMensual.valorTotal,
-                                    productosEnCero:    saldos.enCero,
-                                    areas:              saldos.areas,
-                                    contabilizadoPor:   currentUserUid,
-                                    contabilizadoEn:    Date.now(),
-                                    semanaOrigenDato:   inv.semanaIdOrigen || 'cabecera'
+                                    mesId:               corteMensual.mesId,
+                                    origen:              corteMensual.origen,
+                                    saldos:              corteMensual.saldos,
+                                    totalProductos:      corteMensual.totalProductos,
+                                    productosConPrecio:  corteMensual.productosConPrecio,
+                                    productosSinPrecio:  corteMensual.productosSinPrecio,
+                                    productosNoContados: corteMensual.productosNoContados,
+                                    valorTotal:          corteMensual.valorTotal,
+                                    productosEnCero:     saldos.enCero,
+                                    areas:               saldos.areas,
+                                    contabilizadoPor:    currentUserUid,
+                                    contabilizadoEn:     Date.now(),
+                                    semanaOrigenDato:    inv.semanaIdOrigen || 'cabecera'
                                 });
                             }
                             const estadoUpdate = {

@@ -154,7 +154,9 @@ chk('El permiso de lectura (recipe.read) de renderRecetarioTab no cambió',
 const vHtml = (html.match(/\?v=(\d+\.\d+)/) || [])[1];
 const vSw   = (sw.match(/APP_VERSION\s*=\s*'(\d+\.\d+)'/) || [])[1];
 chk('La versión de index.html y sw.js coincide', vHtml && vHtml === vSw, 'index=' + vHtml + ' sw=' + vSw);
-chk('La versión avanzó respecto a R7 (≥ 5.8)', parseFloat(vSw) >= 5.8, 'es ' + vSw);
+// Comparación por minor, no parseFloat: '5.10' como float da 5.1 y parecería
+// MENOR que 5.8 — corrección 4-oct-2026 (ver prueba-redis-r3.js).
+chk('La versión avanzó respecto a R7 (≥ 5.8)', Number((vSw || '').split('.')[1]) >= 8, 'es ' + vSw);
 
 // ═══ Resultado ═══════════════════════════════════════════════════════════
 const ancho = Math.max.apply(null, casos.map(c => c.nombre.length));
