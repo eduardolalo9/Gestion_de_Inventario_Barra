@@ -73,6 +73,7 @@ const PRUEBAS = [
     'prueba-redis-r7d.js',             // REDISEÑO R7d — Historia, Notificaciones, Ajustes, Admin y Roles
     'prueba-redis-r8.js',              // REDISEÑO R8 — barrido global: contraste, CSS muerto, !important, táctil, encabezado
     'prueba-fase14.js',                // FASE 14 — ancla del Total (arrastre continuo) y venta del turno
+    'prueba-posicion-conteo.js',       // v5.17 — conteo: la lista se queda donde estaba al contar y al cambiar de grupo
     'prueba-conteo-compacto.js',       // v5.11 — vista compacta de las tarjetas de área del Conteo
     'prueba-actualizaciones.js',       // v5.12 — las actualizaciones sí llegan y se ven (SW + aviso + herramientas)
 ];

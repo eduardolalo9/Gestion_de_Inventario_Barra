@@ -63,6 +63,8 @@
     "test:r8redis": "node pruebas/prueba-redis-r8.js",
     "test:r8nav": "node pruebas/prueba-redis-r8-navegador.js",
     "test:f14": "node pruebas/prueba-fase14.js",
+    "test:posicion": "node pruebas/prueba-posicion-conteo.js",
+    "test:posicionnav": "node pruebas/prueba-posicion-conteo-navegador.js",
     "test:f14nav": "node pruebas/prueba-fase14-navegador.js",
     "test:f14integracion": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-fase14-integracion.js\"",
     "test:compacto": "node pruebas/prueba-conteo-compacto.js",

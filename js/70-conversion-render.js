@@ -336,9 +336,13 @@
         }
 
         function updateSelectedGroup(value) {
+            // v5.17 — cada grupo recuerda su posición (js/71-posicion-conteo.js):
+            // se guarda la del grupo que se deja y se recupera la del que se elige.
+            if (typeof posicionGuardarGrupo === 'function') posicionGuardarGrupo(selectedGroup);
             selectedGroup = value;
             saveToLocalStorage();
             renderTab();
+            if (typeof posicionRestaurarGrupo === 'function') posicionRestaurarGrupo(value);
         }
 
         // FIX 4 — Re-render: preservar scroll y foco; evitar salto visual innecesario
@@ -389,10 +393,17 @@
             // FASE 6 — centinelas de carga incremental y altura del encabezado
             // para la barra de búsqueda pegajosa.
             if (typeof BusquedaUI !== 'undefined') BusquedaUI.trasRender();
+            // v5.17 — el riel de grupos conserva su desplazamiento y el grupo
+            // activo queda a la vista (js/71-posicion-conteo.js).
+            if (typeof posicionTrasRender === 'function') posicionTrasRender();
 
             // FIX 4: restaurar scroll (en siguiente frame para no luchar con el layout)
+            // v5.17 — sin animación: html tiene scroll-behavior:smooth y la
+            // lista "viajaba" visiblemente hasta su sitio en cada repintado.
             if (scrollY > 0) {
-                requestAnimationFrame(() => { window.scrollTo(0, scrollY); });
+                requestAnimationFrame(() => {
+                    if (typeof posicionIrA === 'function') posicionIrA(scrollY); else window.scrollTo(0, scrollY);
+                });
             }
 
             // FIX 4: restaurar foco y cursor si el elemento existe en el nuevo DOM
