@@ -56,6 +56,8 @@
     "test:recbuscadornav": "node pruebas/prueba-recetario-buscador-unificado-navegador.js",
     "test:r7bredis": "node pruebas/prueba-redis-r7b.js",
     "test:r7bnav": "node pruebas/prueba-redis-r7b-navegador.js",
+    "test:r7credis": "node pruebas/prueba-redis-r7c.js",
+    "test:r7cnav": "node pruebas/prueba-redis-r7c-navegador.js",
     "test:compacto": "node pruebas/prueba-conteo-compacto.js",
     "test:compactonav": "node pruebas/prueba-conteo-compacto-navegador.js",
     "test:actualizaciones": "node pruebas/prueba-actualizaciones.js",

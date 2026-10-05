@@ -3233,13 +3233,57 @@ html[data-theme="light"] .pm-btn--peligro { color: #fff; }
 .vt-campo input:focus { border-color: var(--accent); outline: none; }
 .vt-semana { padding: 12px 14px; border-radius: 12px; background: var(--accent-dim2); color: var(--txt-primary); font-size: .95rem; line-height: 1.55; }
 .vt-msg { padding: 12px 14px; border-radius: 12px; font-size: .92rem; line-height: 1.5; border: 1px solid; }
-.vt-msg--error { background: var(--danger-dim); border-color: var(--danger-dim); color: var(--red-text, var(--red)); }
-.vt-msg--aviso { background: rgba(246,195,82,.12); border-color: rgba(246,195,82,.45); color: var(--amber); }
+.vt-msg--error { background: var(--danger-dim); border-color: var(--danger); color: var(--danger); }
+.vt-msg--aviso { background: var(--warn-dim); border-color: var(--warn); color: var(--warn); }
 .vt-msg--info  { background: var(--accent-dim); border-color: var(--border-mid); color: var(--txt-primary); }
 .vt-dias { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
 .vt-dia { text-align: center; padding: 8px 0; border-radius: 10px; font-size: .82rem; font-weight: 700; line-height: 1.3; background: var(--card); color: var(--txt-secondary); border: 1px solid var(--border-mid); }
-.vt-dia--ok { background: var(--green); color: #00391a; border-color: var(--green); }
-html[data-theme="light"] .vt-dia--ok { color: #fff; }
+.vt-dia--ok { background: var(--ok-dim); color: var(--ok); border-color: var(--ok); }
+.vt-dia i { font-size: .7rem; }
+
+/* ── R7c (v5.13) · Ventas al kit Carbón & Latón ────────────────────────────
+   Todo lo que 93-ventas.js pintaba con style="…" y colores a mano vive aquí,
+   sobre tokens. Cifras en IBM Plex Mono y alineadas a la derecha; el color
+   nunca va solo (cada aviso lleva icono y texto). */
+.vt-wrap { padding: 4px 0 8px; }
+.vt-vacio { text-align: center; padding: 50px 20px; color: var(--txt-secondary); font-size: 1rem; line-height: 1.5; }
+.vt-vacio i { display: block; margin: 0 auto 10px; font-size: 1.6rem; color: var(--txt-muted); }
+.vt-vacio--caja { padding: 32px 18px; background: var(--surface); border: 1px solid var(--border-mid); border-radius: var(--r-md); }
+.vt-vacio__tit { font-weight: 600; color: var(--txt-primary); margin-bottom: 6px; }
+.vt-vacio__txt { font-size: .9rem; }
+.vt-cab { margin-bottom: 14px; }
+.vt-cab__tit { font-weight: 700; font-size: 1.1rem; color: var(--txt-primary); margin-bottom: 4px; }
+.vt-cab__txt { color: var(--txt-secondary); font-size: .9rem; line-height: 1.5; }
+.vt-msg--sep { margin-bottom: 14px; }
+.vt-msg i, .vt-nota i { margin-right: 4px; }
+.vt-pila { margin-top: 18px; }
+.vt-panel { background: var(--surface); border: 1px solid var(--border-mid); border-radius: var(--r-md); padding: 12px 14px; margin-bottom: 12px; }
+.vt-panel--resumen { border-radius: var(--r-lg); padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.vt-panel__tit { font-weight: 700; font-size: 1.02rem; color: var(--txt-primary); margin-bottom: 2px; }
+.vt-panel--resumen .vt-panel__tit { margin-bottom: 0; }
+.vt-etiqueta { font-size: .75rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--txt-secondary); margin-bottom: 8px; }
+.vt-subtit { font-size: .9rem; font-weight: 600; color: var(--txt-primary); margin-bottom: 8px; }
+.vt-panel--resumen .vt-subtit { margin-bottom: 0; }
+.vt-ayuda--chica { font-size: .8rem; margin-bottom: 8px; }
+.vt-ayuda--sep { margin-top: 10px; margin-bottom: 0; }
+.vt-tabla { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.vt-tabla tr { border-bottom: 1px solid var(--border-mid); }
+.vt-tabla td { padding: 8px 4px; color: var(--txt-primary); }
+.vt-tabla--lista td { padding: 10px 4px; }
+.vt-tabla--densa { font-size: .84rem; }
+.vt-tabla--densa td { padding: 6px 4px; }
+.vt-num { text-align: right; white-space: nowrap; color: var(--txt-secondary); font-family: 'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; }
+.vt-tabla td.vt-num { color: var(--txt-secondary); }
+.vt-sku { color: var(--txt-secondary); font-size: .76rem; }
+.vt-inc { background: var(--surface); border: 1px solid var(--border-mid); border-radius: var(--r-md); padding: 10px 12px; margin-bottom: 8px; font-size: .88rem; }
+.vt-inc__sku { color: var(--txt-secondary); font-size: .78rem; margin-bottom: 2px; }
+.vt-nota { margin-top: 8px; padding: 8px 10px; border-radius: var(--r-sm); border: 1px solid; font-size: .8rem; line-height: 1.5; }
+.vt-nota--aviso { background: var(--warn-dim); border-color: var(--warn); color: var(--warn); }
+.vt-nota--error { background: var(--danger-dim); border-color: var(--danger); color: var(--danger); }
+.vt-nota--info { background: var(--info-dim); border-color: var(--info); color: var(--txt-primary); }
+.vt-txt-aviso { color: var(--warn); }
+.vt-txt-error { color: var(--danger); }
+.vt-txt-chico { font-size: .72rem; }
 
 /* ── Inventario Físico: pantalla principal en una sola columna ─────────── */
 .if-pantalla { display: flex; flex-direction: column; gap: 16px; }
