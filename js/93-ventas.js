@@ -188,7 +188,7 @@
          * Fin vacío = un solo día (fin = inicio).
          * Devuelve { ok, errores[], avisos[], inicio, fin, semanaId, dias[], conflictos[] }.
          */
-        function validarPeriodoVentas(inicio, fin, periodosExistentes, hoyISO) {
+        function validarPeriodoVentas(inicio, fin, periodosExistentes, hoyISO, anclaFecha) {
             var r = { ok: false, errores: [], avisos: [], inicio: inicio || '', fin: fin || inicio || '',
                       semanaId: null, dias: [], conflictos: [] };
             var hoy = hoyISO || fechaISOLocal(new Date());
@@ -214,6 +214,14 @@
                 r.errores.push('La fecha ' + _ventasFmtFecha(r.conflictos[0]) + ' ya se encuentra en el sistema. No se puede cargar.');
             } else if (r.conflictos.length > 1) {
                 r.errores.push('Las fechas ' + r.conflictos.map(_ventasFmtFecha).join(', ') + ' ya se encuentran en el sistema. No se pueden cargar.');
+            }
+            // FASE 14 — un periodo que CRUZA la fecha del último corte no se
+            // podría repartir después (el reporte trae cantidades sumadas):
+            // la parte anterior ya está en el conteo físico y la posterior no.
+            if (anclaFecha && typeof periodoCruzaAncla === 'function' && periodoCruzaAncla(r.inicio, r.fin, anclaFecha)) {
+                r.errores.push('El rango cruza la fecha del último corte contabilizado (' + _ventasFmtFecha(anclaFecha) + '). '
+                             + 'Importa un reporte hasta el ' + _ventasFmtFecha(anclaFecha) + ' y otro desde el día siguiente: '
+                             + 'así lo vendido antes del corte no se descuenta dos veces.');
             }
             if (!r.errores.length && r.fin === hoy) {
                 r.avisos.push('Incluye hoy (' + _ventasFmtFecha(hoy) + '). Si el día no ha terminado, las ventas que falten de hoy ya no se podrán cargar después.');
@@ -441,7 +449,8 @@
         function _ventasValidacionPendiente(parsed) {
             var ex = parsed.existentes || { estado: 'verificando', periodos: [] };
             var v = validarPeriodoVentas(parsed.periodo.inicio, parsed.periodo.fin,
-                                         ex.estado === 'ok' ? ex.periodos : []);
+                                         ex.estado === 'ok' ? ex.periodos : [], undefined,
+                                         (typeof ventaTurnoAnclaFecha === 'function') ? ventaTurnoAnclaFecha() : null);
             v.verificado = (ex.estado === 'ok' && ex.semanaId === v.semanaId);
             v.puedeConfirmar = v.ok && v.verificado && !parsed.excedeTope;
             return v;
@@ -546,16 +555,21 @@
             });
             html += '</table></div>';
 
+            // FASE 14 — reventar la venta contra las recetas antes de procesar.
+            if (typeof renderSimulacionVentaTurno === 'function') html += renderSimulacionVentaTurno(parsed);
+
             var v = _ventasValidacionPendiente(parsed);
             html += '<div class="bt-pila vt-pila">';
             if (parsed.incidencias.length) {
                 html += '<button type="button" class="bt bt--secundario" onclick="_ventasVerIncidencias()"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> Ver ' + parsed.incidencias.length + ' incidencia(s)</button>';
             }
             if (!parsed.excedeTope) {
-                html += '<button type="button" id="ventasBtnConfirmar" class="bt bt--exito" onclick="confirmarImportacionVentas()"'
-                      + (v.puedeConfirmar ? '' : ' disabled aria-disabled="true"') + '><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Confirmar e importar</button>';
+                // FASE 14 — "Procesar" = guardar el periodo; el Total lo resta solo.
+                html += '<button type="button" id="ventasBtnConfirmar" class="bt bt--exito" onclick="'
+                      + (typeof ventaTurnoProcesar === 'function' ? 'ventaTurnoProcesar()' : 'confirmarImportacionVentas()') + '"'
+                      + (v.puedeConfirmar ? '' : ' disabled aria-disabled="true"') + '><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Procesar venta (baja el inventario)</button>';
                 if (!v.puedeConfirmar) {
-                    html += '<p class="bt-nota">' + (v.errores.length ? 'Corrige las fechas marcadas en rojo para poder importar.'
+                    html += '<p class="bt-nota">' + (v.errores.length ? 'Corrige las fechas marcadas en rojo para poder procesar.'
                           : 'Se habilita en cuanto termine la comprobación de fechas.') + '</p>';
                 }
             }
@@ -588,6 +602,7 @@
                 html += '<div class="vt-ayuda">Sin incidencias.</div>';
             }
 
+            if (typeof renderDescargoVentaTurno === 'function') html += renderDescargoVentaTurno(resultado);
             html += '<div class="bt-pila vt-pila"><button type="button" class="bt bt--primario" onclick="cerrarResultadoImportacionVentas()">Aceptar</button></div>';
             return html;
         }
@@ -649,6 +664,11 @@
                     // Qué fechas de esa semana ya están en el servidor: sin esta
                     // respuesta no se habilita "Confirmar".
                     _ventasRevisarPeriodos();
+                    // FASE 14 — el corte vigente decide si el periodo baja el
+                    // Total o lo cruza: se asegura que esté cargado.
+                    if (typeof existenciaCargarInicial === 'function') {
+                        existenciaCargarInicial(function() { if (ventasImportView === 'vista_previa') renderTab(); });
+                    }
                 } catch (err) {
                     console.error('[Ventas] Error leyendo el Excel:', err);
                     showNotification('❌ No se pudo leer el archivo — revisa que sea el reporte de ventas del POS');
@@ -690,6 +710,7 @@
         function _ventasCambiarPeriodo(campo, valor) {
             var p = _ventasImportPendiente;
             if (!p || !p.periodo) return;
+            p.simulacion = null;   // FASE 14: el efecto sobre el Total depende del periodo
             if (campo === 'inicio') {
                 p.periodo.inicio = valor || '';
                 if (!p.periodo.fin || p.periodo.fin < p.periodo.inicio) p.periodo.fin = p.periodo.inicio;
@@ -705,6 +726,7 @@
             var p = _ventasImportPendiente;
             if (!p || !p.periodo || !p.periodo.inicio) return;
             p.periodo.fin = p.periodo.inicio;
+            p.simulacion = null;
             renderTab();
         }
         window._ventasUnSoloDia = _ventasUnSoloDia;
@@ -734,7 +756,8 @@
                 }
                 var existentes = docs.map(function(x) { return _ventasPeriodoDeDoc(x.id, x.data); });
                 parsed.existentes = { semanaId: previa.semanaId, estado: 'ok', periodos: existentes };
-                var v = validarPeriodoVentas(parsed.periodo.inicio, parsed.periodo.fin, existentes);
+                var v = validarPeriodoVentas(parsed.periodo.inicio, parsed.periodo.fin, existentes, undefined,
+                                             (typeof ventaTurnoAnclaFecha === 'function') ? ventaTurnoAnclaFecha() : null);
                 if (!v.ok) { showNotification('🛑 ' + v.errores[0]); renderTab(); return; }
 
                 _crearBackupNombrado('pre_importacion_ventas_' + Date.now());

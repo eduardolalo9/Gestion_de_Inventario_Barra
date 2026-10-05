@@ -261,10 +261,13 @@
             // esto arma la frase ("stock inicial de la semana X" / "corte
             // contable del mes X" / las dos) una sola vez para los tres
             // estados (hecho, pendiente, bloqueado) de abajo.
-            var destinos = function(semanaId, mesId) {
+            // FASE 14 — tercer destino posible: el ancla del Total (fin de mes
+            // entre semana o recuento de mitad de semana).
+            var destinos = function(semanaId, mesId, anclaFecha) {
                 var partes = [];
-                if (semanaId) partes.push('el stock inicial de la ' + escapeHtml(semana(semanaId)));
-                if (mesId)    partes.push('el corte contable del mes ' + escapeHtml(mesId));
+                if (semanaId)   partes.push('el stock inicial de la ' + escapeHtml(semana(semanaId)));
+                if (mesId)      partes.push('el corte contable del mes ' + escapeHtml(mesId));
+                if (anclaFecha) partes.push('el punto de partida (ancla) del Total desde el ' + escapeHtml(anclaFecha));
                 return partes.length ? partes.join(' y ') : 'el stock inicial de la ' + escapeHtml(semana(null));
             };
             var h = '';
@@ -272,7 +275,7 @@
             if (ev.hecho) {
                 h += '<div class="pm-paso pm-paso--hecho" role="status">'
                    + '<div class="pm-paso__titulo"><i class="fa-solid fa-book" aria-hidden="true"></i> Contabilizado</div>'
-                   + '<div class="pm-paso__txt">Su resultado ya es ' + destinos(ev.semanaDestino, ev.mesDestino)
+                   + '<div class="pm-paso__txt">Su resultado ya es ' + destinos(ev.semanaDestino, ev.mesDestino, ev.anclaDestino)
                    + (inv.contabilizadoEn ? ' · ' + escapeHtml(new Date(inv.contabilizadoEn).toLocaleDateString('es-MX')) : '')
                    + '. Queda de solo lectura.</div>';
                 if (puedeCrear) h += '<div class="pm-paso__acc">' + btnCrear(true) + '</div>';
@@ -285,14 +288,17 @@
                    + '<div class="pm-paso__titulo"><i class="fa-solid fa-book" aria-hidden="true"></i> Siguiente paso: contabilizar</div>'
                    + '<div class="pm-paso__txt">'
                    + (puedeContab
-                        ? 'El resultado físico de este inventario pasará a ser ' + destinos(ev.semanaDestino, ev.mesId)
+                        ? 'El resultado físico de este inventario pasará a ser ' + destinos(ev.semanaDestino, ev.mesId, ev.anclaFecha)
                           + '. <b>Es irreversible</b>: no se corrige ni se deshace.'
-                        : 'Pendiente de que administración lo contabilice como ' + destinos(ev.semanaDestino, ev.mesId) + '.')
+                          + (ev.haceAncla ? ' Si ya existe un corte más nuevo, el ancla no se crea (y un recuento de mitad de semana no se contabiliza).' : '')
+                        : 'Pendiente de que administración lo contabilice como ' + destinos(ev.semanaDestino, ev.mesId, ev.anclaFecha) + '.')
                    + '</div>';
                 var acc = '';
                 if (puedeContab) {
                     var etiquetaBtn = (ev.haceSemanal && ev.haceMensual) ? '<i class="fa-solid fa-book" aria-hidden="true"></i> Contabilizar (semana + mes)'
-                                     : (ev.haceMensual ? '<i class="fa-solid fa-calendar-days" aria-hidden="true"></i> Contabilizar cierre de mes' : '<i class="fa-solid fa-book" aria-hidden="true"></i> Contabilizar');
+                                     : (ev.haceMensual ? '<i class="fa-solid fa-calendar-days" aria-hidden="true"></i> Contabilizar cierre de mes'
+                                     : (ev.haceAncla ? '<i class="fa-solid fa-book" aria-hidden="true"></i> Contabilizar como ancla del Total'
+                                                     : '<i class="fa-solid fa-book" aria-hidden="true"></i> Contabilizar'));
                     acc += '<button type="button" class="bt bt--primario" data-inv-accion="contabilizar">' + etiquetaBtn + '</button>';
                 }
                 acc += btnCrear(false);
@@ -384,6 +390,11 @@
                     if (_contab && inv.mesDestino) {
                         html += '<div class="rc-hist__dato" style="color:var(--book);font-weight:600;"><i class="fa-solid fa-calendar-days" aria-hidden="true"></i> Corte mensual '
                              +  escapeHtml(inv.mesDestino) + '</div>';
+                    }
+                    // FASE 14 — ancla del Total (fin de mes entre semana o mitad de semana).
+                    if (_contab && inv.anclaDestino) {
+                        html += '<div class="rc-hist__dato" style="color:var(--accent);font-weight:600;"><i class="fa-solid fa-book" aria-hidden="true"></i> Ancla del Total '
+                             +  escapeHtml(inv.anclaDestino) + '</div>';
                     }
                     html += '</div>';
                 });
@@ -571,6 +582,7 @@
                 var _destPartes = [];
                 if (meta.semanaDestino) _destPartes.push('el stock inicial de la semana ' + escapeHtml(meta.semanaDestino));
                 if (meta.mesDestino)    _destPartes.push('el corte contable del mes ' + escapeHtml(meta.mesDestino));
+                if (meta.anclaDestino)  _destPartes.push('el ancla del Total desde el ' + escapeHtml(meta.anclaDestino));
                 html += '<div class="pm-paso pm-paso--hecho" role="status">'
                      +  '<div class="pm-paso__titulo"><i class="fa-solid fa-book" aria-hidden="true"></i> Contabilizado</div>'
                      +  '<div class="pm-paso__txt">'

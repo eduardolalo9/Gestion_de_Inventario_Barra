@@ -3703,3 +3703,30 @@ textarea.ui-campo { resize: vertical; min-height: 88px; }
    (flex-shrink solo estaba fijado hasta 768 px). Siempre conservan su alto. */
 .sb-item { flex-shrink: 0; }
 .hd-btn { min-width: 44px; }
+
+/* ══ FASE 14 · avisos del arrastre del Total y venta del turno ══════════════ */
+.pm-aviso {
+    display: flex; gap: 8px; align-items: flex-start;
+    margin-top: 8px; padding: 8px 10px; border-radius: var(--r-md);
+    font-size: .76rem; line-height: 1.45; color: var(--txt-primary);
+}
+.pm-aviso i { flex-shrink: 0; margin-top: 2px; }
+.pm-aviso--warn { background: var(--warn-dim); }
+.pm-aviso--warn i { color: var(--warn); }
+.pm-aviso--info { background: var(--info-dim); }
+.pm-aviso--info i { color: var(--info); }
+.vt-sim { display: flex; flex-direction: column; gap: 10px; }
+.vt-sim .bt { align-self: flex-start; }
+.vt-sim__kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.vt-sim__kpi {
+    display: flex; flex-direction: column; gap: 2px; padding: 10px; border-radius: var(--r-md);
+    background: var(--card); border: 1px solid var(--border-mid);
+}
+.vt-sim__kpi span { font-size: .72rem; color: var(--txt-secondary); line-height: 1.3; }
+.vt-sim__kpi b { font-size: 1rem; color: var(--txt-primary); text-align: right; font-family: 'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; }
+.vt-sim__kpi--mal { border-color: var(--danger); background: var(--danger-dim); }
+.vt-sim__kpi--mal b { color: var(--danger); }
+.vt-sim__tabla th { font-size: .72rem; font-weight: 600; color: var(--txt-secondary); text-align: left; padding: 4px 6px; }
+.vt-sim__tabla th.vt-num { text-align: right; }
+.vt-sim__det summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-size: .86rem; font-weight: 600; color: var(--txt-primary); }
+@media (max-width: 420px) { .vt-sim__kpis { grid-template-columns: 1fr; } .vt-sim__kpi { flex-direction: row; justify-content: space-between; align-items: center; } }

@@ -104,7 +104,8 @@ const PUERTO = process.env.PUERTO || '8080';
   const vp = await p.evaluate(() => {
     const re = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
     const cont = document.getElementById('tabContent');
-    const btn = [...cont.querySelectorAll('button')].find(b => /Confirmar e importar/.test(b.textContent));
+    // FASE 14 — el botón pasó a "Procesar venta (baja el inventario)"; mismo id y misma regla.
+    const btn = [...cont.querySelectorAll('button')].find(b => /Confirmar e importar|Procesar venta/.test(b.textContent));
     return {
       emoji: (cont.innerText.match(re) || []).join(' '),
       estilos: cont.querySelectorAll('[style]').length,
@@ -115,7 +116,7 @@ const PUERTO = process.env.PUERTO || '8080';
     };
   });
   chk('★ La vista previa no tiene emoji (antes 📍 📅 ⚠️ ℹ️ ✅) ni estilos en línea', vp.emoji === '' && vp.estilos === 0, JSON.stringify(vp));
-  chk('★ "Confirmar e importar" con fechas válidas y servidor comprobado: habilitado, ≥ 48 px, con icono',
+  chk('★ "Procesar venta" (antes "Confirmar e importar") con fechas válidas y servidor comprobado: habilitado, ≥ 48 px, con icono',
       vp.confirmar && vp.confirmar.habilitado && vp.confirmar.alto >= 48 && vp.confirmar.icono, JSON.stringify(vp.confirmar));
   chk('Todos los iconos de la vista previa tienen ancho real (el kit los pinta)', vp.iconosSinAncho === 0, String(vp.iconosSinAncho));
   chk('Se listan los más vendidos y el aviso de SKU agrupados', vp.masVendidos === 2 && vp.msgInfo, JSON.stringify(vp));

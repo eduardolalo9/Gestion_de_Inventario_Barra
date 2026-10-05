@@ -209,7 +209,7 @@ chk('★ Un inventario CONTABILIZADO queda tan sellado como uno CERRADO',
 // que un corte de fin de mes (puro o combinado con el cierre semanal) pueda
 // escribirse en la misma transición, sin abrir la puerta a ningún otro campo.
 chk('La transición admite los campos exactos, incluido mesDestino (FASE 13)',
-    /hasOnly\(\['estado','contabilizadoEn','contabilizadoPor','semanaDestino','mesDestino'\]\)/.test(reglas));
+    /hasOnly\(\['estado','contabilizadoEn','contabilizadoPor','semanaDestino','mesDestino','anclaDestino'\]\)/.test(reglas));
 chk('★ El snapshot tampoco se amplía tras contabilizar',
     /estado != 'CERRADO' &&[\s\S]{0,300}?estado != 'CONTABILIZADO';/.test(reglas),
     'el agujero H-2 se reabría justo cuando el inventario pasa a ser la base del inicial');

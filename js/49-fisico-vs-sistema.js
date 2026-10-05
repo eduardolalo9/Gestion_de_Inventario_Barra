@@ -83,8 +83,13 @@
                 || typeof inventarioAbierto !== 'function' || !inventarioAbierto(_inventarioActivo)) {
                 return null;
             }
-            var ent = (typeof existenciaEntradasSemana === 'function') ? existenciaEntradasSemana() : {};
-            var ven = (typeof existenciaVentasSemana   === 'function') ? existenciaVentasSemana()   : {};
+            // FASE 14 — las entradas y el consumo que dicta la ruta vigente del
+            // Total (arrastre desde el ancla o, sin ancla, la semana en curso):
+            // el mismo número que muestra el catálogo.
+            var ent = (typeof existenciaEntradas === 'function') ? existenciaEntradas()
+                    : ((typeof existenciaEntradasSemana === 'function') ? existenciaEntradasSemana() : {});
+            var ven = (typeof existenciaVentas === 'function') ? existenciaVentas()
+                    : ((typeof existenciaVentasSemana   === 'function') ? existenciaVentasSemana()   : {});
             var tol = (typeof EXISTENCIA_TOLERANCIA === 'number') ? EXISTENCIA_TOLERANCIA : 0.001;
             var redondear = (typeof _existenciaRedondear === 'function')
                 ? _existenciaRedondear

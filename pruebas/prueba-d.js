@@ -337,7 +337,7 @@ chk('Sigue en pie el bloqueo optimista del conteo',
 chk('Sigue en pie la inmutabilidad del inventario cerrado',
     (/allow update: if isAdminUser\(\) && \(\s*\n\s*\(resource\.data\.estado != 'CERRADO' && resource\.data\.estado != 'CONTABILIZADO'/.test(reglas) &&
      // FASE 13 sumó 'mesDestino' a la lista blanca (corte de fin de mes).
-     /\.hasOnly\(\['estado','contabilizadoEn','contabilizadoPor','semanaDestino','mesDestino'\]\)/.test(reglas)));
+     /\.hasOnly\(\['estado','contabilizadoEn','contabilizadoPor','semanaDestino','mesDestino','anclaDestino'\]\)/.test(reglas)));
 
 // ───────────────────────────────────────────────────────────────────────────
 //  D4 · RASTRO AL FINALIZAR ÁREA

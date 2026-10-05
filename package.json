@@ -62,6 +62,9 @@
     "test:r7dnav": "node pruebas/prueba-redis-r7d-navegador.js",
     "test:r8redis": "node pruebas/prueba-redis-r8.js",
     "test:r8nav": "node pruebas/prueba-redis-r8-navegador.js",
+    "test:f14": "node pruebas/prueba-fase14.js",
+    "test:f14nav": "node pruebas/prueba-fase14-navegador.js",
+    "test:f14integracion": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-fase14-integracion.js\"",
     "test:compacto": "node pruebas/prueba-conteo-compacto.js",
     "test:compactonav": "node pruebas/prueba-conteo-compacto-navegador.js",
     "test:actualizaciones": "node pruebas/prueba-actualizaciones.js",
@@ -81,7 +84,7 @@
     "test:f11a": "node pruebas/prueba-fase11a.js",
     "test:f11anav": "node pruebas/prueba-fase11a-navegador.js",
     "test:f10bnav": "node pruebas/prueba-fase10b-ui-navegador.js",
-    "test:integracion": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-d-integracion.js && node pruebas/prueba-f1-integracion.js && node pruebas/prueba-f3-integracion.js && node pruebas/prueba-p2-integracion.js && node pruebas/prueba-fase5-integracion.js && node pruebas/prueba-fase7-integracion.js && node pruebas/prueba-reconteo-integracion.js && node pruebas/prueba-sesion-integracion.js && node pruebas/prueba-folio-integracion.js && node pruebas/prueba-arranque-integracion.js && node pruebas/prueba-ciclo-completo-integracion.js && node pruebas/prueba-reinicio-integracion.js && node pruebas/prueba-fase13-integracion.js\"",
+    "test:integracion": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-d-integracion.js && node pruebas/prueba-f1-integracion.js && node pruebas/prueba-f3-integracion.js && node pruebas/prueba-p2-integracion.js && node pruebas/prueba-fase5-integracion.js && node pruebas/prueba-fase7-integracion.js && node pruebas/prueba-reconteo-integracion.js && node pruebas/prueba-sesion-integracion.js && node pruebas/prueba-folio-integracion.js && node pruebas/prueba-arranque-integracion.js && node pruebas/prueba-ciclo-completo-integracion.js && node pruebas/prueba-reinicio-integracion.js && node pruebas/prueba-fase13-integracion.js && node pruebas/prueba-fase14-integracion.js\"",
     "respaldo": "node herramientas/respaldo-firestore.js --salida respaldos"
   },
   "devDependencies": {

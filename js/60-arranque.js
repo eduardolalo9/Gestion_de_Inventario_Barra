@@ -197,6 +197,15 @@
                                 console.warn('[Compras] cargarComprasIniciales silenciado:', err)
                             );
                         }
+                        // FASE 14 — el ancla del Total (último corte contabilizado)
+                        // y lo que se arrastra desde ella. Antes solo se pedía al
+                        // abrir Inicio: el catálogo podía pintar el respaldo
+                        // operativo si la app arrancaba en otra pestaña.
+                        if (typeof existenciaCargarInicial === 'function') {
+                            existenciaCargarInicial(function() {
+                                if (typeof existenciaRepintarSeguro === 'function') existenciaRepintarSeguro();
+                            });
+                        }
                         // FASE 5 (5B) — reintentar al arrancar cualquier conteo
                         // huérfano que quedó sin subir (app cerrada offline
                         // antes de que el reintento de reconexión pudiera correr).
@@ -272,4 +281,4 @@ window.addEventListener('beforeunload', function() {
                 }
             }, 3 * 60 * 1000);
         }
-
+

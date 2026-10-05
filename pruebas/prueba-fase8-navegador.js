@@ -78,7 +78,7 @@ const PUERTO = process.env.PUERTO || '8080';
   await p.evaluate(() => abrirFichaProducto('N'));
   const fn = await p.evaluate(() => (document.getElementById('pm-ficha-wrap') || {}).innerText || '');
   chk('★ Sin inicial, la ficha lo dice en vez de comparar contra cero',
-      /Sin inicial contabilizado/.test(fn.replace(/\s+/g, ' ')), fn.slice(0, 200));
+      /(Sin inicial contabilizado|Sin corte contabilizado vigente|no entró al último corte)/.test(fn.replace(/\s+/g, ' ')), fn.slice(0, 300));   // FASE 14: texto del ancla
   await p.keyboard.press('Escape'); await p.waitForTimeout(100);
 
   // EL INTERRUPTOR: ya está encendido por defecto en la app real (FASE 11B),
