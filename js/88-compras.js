@@ -627,7 +627,7 @@
                          : 'Revisa que el archivo sea la exportación de "Entrada de mercancía".')
                      + '</div></div>'
                      + '<div style="margin-top:14px"><button type="button" onclick="cancelarImportacionCompras()" '
-                     + 'style="padding:9px 15px;border-radius:var(--r-md);background:var(--surface);'
+                     + 'style="padding:0 15px;min-height:44px;border-radius:var(--r-md);background:var(--surface);'
                      + 'border:1px solid var(--border-mid);color:var(--txt-primary);cursor:pointer">Cerrar</button></div>';
             }
 
@@ -690,12 +690,12 @@
             html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">';
             if (hayGuardables) {
                 html += '<button type="button" onclick="confirmarImportacionCompras()" '
-                      + 'style="padding:9px 15px;border-radius:var(--r-md);background:var(--ok-dim);'
+                      + 'style="padding:0 15px;min-height:44px;border-radius:var(--r-md);background:var(--ok-dim);'
                       + 'border:1px solid var(--ok-dim);color:var(--ok);font-weight:600;cursor:pointer">'
                       + 'Confirmar e importar</button>';
             }
             html += '<button type="button" onclick="cancelarImportacionCompras()" '
-                  + 'style="padding:9px 15px;border-radius:var(--r-md);background:var(--surface);'
+                  + 'style="padding:0 15px;min-height:44px;border-radius:var(--r-md);background:var(--surface);'
                   + 'border:1px solid var(--border-mid);color:var(--txt-primary);cursor:pointer">Cancelar</button>'
                   + '</div>';
             return html;
@@ -740,7 +740,7 @@
             }
 
             html += '<div style="margin-top:16px"><button type="button" onclick="cerrarResultadoImportacionCompras()" '
-                  + 'style="padding:9px 15px;border-radius:var(--r-md);background:var(--surface);'
+                  + 'style="padding:0 15px;min-height:44px;border-radius:var(--r-md);background:var(--surface);'
                   + 'border:1px solid var(--border-mid);color:var(--txt-primary);cursor:pointer">Aceptar</button></div>';
             return html;
         }
@@ -907,14 +907,14 @@
             html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">';
             if (hasPermission('purchases.import')) {
                 html += '<button type="button" onclick="comprasImportarExcel()" '
-                      + 'style="display:flex;align-items:center;gap:7px;padding:9px 15px;'
+                      + 'style="display:flex;align-items:center;gap:7px;padding:0 15px;min-height:44px;'
                       + 'border-radius:var(--r-md);background:var(--ok-dim);'
                       + 'border:1px solid var(--ok-dim);color:var(--ok);font-weight:600;'
                       + 'cursor:pointer">Importar entrada de mercancía</button>';
             }
             if (hasPermission('purchases.create')) {
                 html += '<button type="button" onclick="comprasNuevaManual()" '
-                      + 'style="display:flex;align-items:center;gap:7px;padding:9px 15px;'
+                      + 'style="display:flex;align-items:center;gap:7px;padding:0 15px;min-height:44px;'
                       + 'border-radius:var(--r-md);background:var(--surface);'
                       + 'border:1px solid var(--border-mid);color:var(--txt-primary);'
                       + 'font-weight:600;cursor:pointer">Capturar a mano</button>';

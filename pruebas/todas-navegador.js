@@ -58,6 +58,7 @@ const PRUEBAS = [
     'prueba-redis-r7b-navegador.js',    // REDISEÑO R7b — Compras (y Pedidos, revisado), en pantalla
     'prueba-redis-r7c-navegador.js',    // REDISEÑO R7c — Ventas, en pantalla (oscuro y claro)
     'prueba-redis-r7d-navegador.js',    // REDISEÑO R7d — Historia, Notificaciones, Ajustes, Admin y Roles (oscuro y claro)
+    'prueba-redis-r8-navegador.js',     // REDISEÑO R8 — desborde, contraste, nombres, táctil y rendimiento (3 anchos × 2 temas)
     'prueba-conteo-compacto-navegador.js', // v5.11 — vista compacta del Conteo, en pantalla
     'prueba-actualizaciones-navegador.js', // v5.12 — despliegue simulado: detecta, avisa, actualiza con un toque, conserva datos
 ];

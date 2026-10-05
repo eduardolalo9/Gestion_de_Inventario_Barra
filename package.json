@@ -60,6 +60,8 @@
     "test:r7cnav": "node pruebas/prueba-redis-r7c-navegador.js",
     "test:r7dredis": "node pruebas/prueba-redis-r7d.js",
     "test:r7dnav": "node pruebas/prueba-redis-r7d-navegador.js",
+    "test:r8redis": "node pruebas/prueba-redis-r8.js",
+    "test:r8nav": "node pruebas/prueba-redis-r8-navegador.js",
     "test:compacto": "node pruebas/prueba-conteo-compacto.js",
     "test:compactonav": "node pruebas/prueba-conteo-compacto-navegador.js",
     "test:actualizaciones": "node pruebas/prueba-actualizaciones.js",
