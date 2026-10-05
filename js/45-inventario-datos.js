@@ -1306,13 +1306,15 @@ const usersList = Object.values(allUsersAuditoria);
             const badge = document.getElementById('cloudSyncBadge');
             const dot   = document.getElementById('syncDot');
 
+            // R7d — cada estado lleva icono + palabra (el color nunca va solo) y
+            // los colores viven en CSS (.sy-insignia[data-sync]), no aquí.
             const cfg = {
-                ok:      { bg: '#06d6a0', icon: '☁️', text: 'Sincronizado',   pulse: false, dotState: 'ok',      dotTitle: 'Sincronizado ✓' },
-                syncing: { bg: '#4cc9f0', icon: '🔄', text: 'Sincronizando…', pulse: true,  dotState: 'syncing', dotTitle: 'Subiendo datos…' },
-                pending: { bg: '#ffd166', icon: '⏳', text: 'Pendiente',       pulse: false, dotState: 'pending', dotTitle: 'Cambios pendientes' },
-                error:   { bg: '#ff6b6b', icon: '⚠️', text: 'Error sync',     pulse: false, dotState: 'error',   dotTitle: 'Error de sincronización' },
-                offline: { bg: '#8b8ca8', icon: '📴', text: 'Sin conexión',   pulse: false, dotState: 'offline', dotTitle: 'Sin conexión' },
-                none:    { bg: '#50516a', icon: '☁️', text: 'Sin Firebase',   pulse: false, dotState: 'none',    dotTitle: 'Sin Firebase' }
+                ok:      { icono: 'circle-check',         text: 'Sincronizado',   pulse: false, dotState: 'ok',      dotTitle: 'Sincronizado' },
+                syncing: { icono: 'arrows-rotate fa-spin', text: 'Sincronizando…', pulse: true,  dotState: 'syncing', dotTitle: 'Subiendo datos…' },
+                pending: { icono: 'hourglass',            text: 'Pendiente',       pulse: false, dotState: 'pending', dotTitle: 'Cambios pendientes' },
+                error:   { icono: 'triangle-exclamation', text: 'Error sync',     pulse: false, dotState: 'error',   dotTitle: 'Error de sincronización' },
+                offline: { icono: 'xmark',                text: 'Sin conexión',   pulse: false, dotState: 'offline', dotTitle: 'Sin conexión' },
+                none:    { icono: 'circle-info',          text: 'Sin Firebase',   pulse: false, dotState: 'none',    dotTitle: 'Sin Firebase' }
             };
 
             if (!_db) { status = 'none'; }
@@ -1333,14 +1335,12 @@ const usersList = Object.values(allUsersAuditoria);
 
             // ── Badge del sidebar ────────────────────────────────────────
             if (badge) {
-                badge.style.background   = c.bg + '22';
-                badge.style.borderColor  = c.bg + '66';
-                badge.style.color        = c.bg;
-                badge.innerHTML = '<span style="margin-right:4px">' + c.icon + '</span>' +
-                    textLabel + lastSyncStr +
+                badge.setAttribute('data-sync', status in cfg ? status : 'none');
+                badge.setAttribute('role', 'status');
+                badge.innerHTML = '<i class="fa-solid fa-' + c.icono + '" aria-hidden="true"></i><span>' +
+                    textLabel + lastSyncStr + '</span>' +
                     (status !== 'none' && status !== 'syncing' ?
-                        ' <button onclick="syncToCloud()" title="Sincronizar ahora" style="margin-left:6px;background:transparent;border:1px solid currentColor;border-radius:4px;padding:1px 5px;cursor:pointer;font-size:0.7rem;color:inherit;opacity:0.75" aria-label="Sincronizar ahora">↑</button>' : '');
-                badge.style.animation    = c.pulse ? 'pulse 1.5s ease-in-out infinite' : 'none';
+                        '<button type="button" class="sy-insignia__btn" onclick="syncToCloud()" title="Sincronizar ahora" aria-label="Sincronizar ahora"><i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i></button>' : '');
             }
 
             // ── Semáforo en el header (círculo verde/amarillo/rojo) ──────

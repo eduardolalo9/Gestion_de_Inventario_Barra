@@ -834,14 +834,7 @@ span.text-xs.px-2.py-1.bg-purple-100 {
 .border-2.border-purple-300 { border-color: var(--accent-dim2) !important; }
 .border-2.border-blue-300   { border-color: var(--accent-dim2) !important; }
 
-/* ─── Network bar ────────────────────────────────────────── */
-#networkStatus {
-    font-family: 'IBM Plex Sans', sans-serif !important;
-    font-weight: 500 !important;
-    font-size: 12px !important;
-    background: #78350f !important;
-    border-top: 1px solid rgba(255,255,255,0.06) !important;
-}
+/* ─── Network bar: ahora es la clase .net-aviso (R7d, v5.14) ─────── */
 
 /* ─── Responsive ─────────────────────────────────────────── */
 @media (min-width: 640px) { .px-6 { padding-left: 1.5rem !important; padding-right: 1.5rem !important; } }
@@ -2585,7 +2578,7 @@ html[data-theme="light"] .sb-logout-btn:hover { background: rgba(186,26,26,0.14)
     border-radius:var(--r-sm);font-size:0.58rem;font-weight:700;
     letter-spacing:.07em;text-transform:uppercase;flex-shrink:0;
 }
-.role-badge.admin{background:rgba(245,158,11,.15);color:var(--amber);border:1px solid rgba(245,158,11,.30);}
+.role-badge.admin{background:var(--warn-dim);color:var(--warn);border:1px solid var(--warn);}
 .role-badge.user {background:var(--accent-dim);color:var(--accent);border:1px solid var(--accent-dim2);}
 
 /* ── Toggle sync ──────────────────────────────────────────── */
@@ -2598,15 +2591,16 @@ html[data-theme="light"] .sb-logout-btn:hover { background: rgba(186,26,26,0.14)
 
 /* ── Panel Admin ──────────────────────────────────────────── */
 .adm-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px 16px;margin-bottom:10px;box-shadow:var(--shadow-card);}
-.adm-card h3{font-size:.82rem;font-weight:600;color:var(--txt-primary);margin-bottom:10px;display:flex;align-items:center;gap:6px;}
-.adm-stat{display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border);font-size:.78rem;color:var(--txt-secondary);}
+.adm-card h3{font-size:.95rem;font-weight:700;color:var(--txt-primary);margin-bottom:10px;display:flex;align-items:center;gap:8px;}
+.adm-stat{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:.88rem;color:var(--txt-secondary);}
 .adm-stat:last-child{border-bottom:none;}
-.adm-stat b{font-family:'IBM Plex Mono',monospace;font-size:.78rem;color:var(--txt-primary);}
-.adm-btn{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;padding:10px;border-radius:var(--r-md);font-family:'IBM Plex Sans',sans-serif;font-weight:600;font-size:.78rem;cursor:pointer;border:none;margin-bottom:6px;transition:opacity .12s;}
+.adm-stat b{font-family:'IBM Plex Mono',monospace;font-size:.88rem;color:var(--txt-primary);text-align:right;}
+.adm-btn{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;min-height:48px;padding:10px 14px;border-radius:var(--r-md);font-family:'IBM Plex Sans',sans-serif;font-weight:600;font-size:.9rem;cursor:pointer;border:1px solid var(--border-mid);background:var(--surface);color:var(--txt-primary);margin-bottom:8px;transition:opacity .12s;}
+.adm-btn:focus-visible{outline:3px solid var(--accent);outline-offset:2px;}
 .adm-btn:hover{opacity:.85;}
-.adm-btn.primary{background:var(--accent);color:#fff;}
+.adm-btn.primary{background:var(--accent);color:var(--accent-on);border-color:var(--accent);}
 .adm-btn.success{background:var(--ok-dim);color:var(--ok);border:1px solid var(--ok-dim);}
-.adm-btn.warn   {background:#4a1010;color:var(--danger);border:1px solid var(--danger-dim);}
+.adm-btn.warn   {background:var(--danger-dim);color:var(--danger);border:1px solid var(--danger);}
 .adm-device-row{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:.75rem;}
 .adm-device-row:last-child{border-bottom:none;}
 .adm-device-name{color:var(--txt-primary);font-weight:500;}
@@ -2614,15 +2608,15 @@ html[data-theme="light"] .sb-logout-btn:hover { background: rgba(186,26,26,0.14)
 
 /* ── Ajustes (solicitudes) ────────────────────────────────── */
 .ajuste-card{background:var(--card);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:var(--r-md);padding:10px 13px;margin-bottom:8px;}
-.ajuste-card.pendiente{border-left-color:var(--amber);}
-.ajuste-card.aprobado {border-left-color:var(--green);}
-.ajuste-card.rechazado{border-left-color:var(--red);}
-.ajuste-meta{font-size:.68rem;color:var(--txt-muted);margin-bottom:3px;}
-.ajuste-desc{font-size:.8rem;color:var(--txt-primary);}
-.ajuste-btns{display:flex;gap:5px;margin-top:7px;}
-.ajuste-btn{padding:3px 10px;border-radius:var(--r-sm);font-size:.72rem;font-weight:600;cursor:pointer;border:none;}
-.ajuste-btn.ok {background:var(--green-dim);color:var(--green-text);border:1px solid var(--ok-dim);}
-.ajuste-btn.nok{background:var(--red-dim)  ;color:var(--red-text)  ;border:1px solid var(--danger-dim);}
+.ajuste-card.pendiente{border-left-color:var(--warn);}
+.ajuste-card.aprobado {border-left-color:var(--ok);}
+.ajuste-card.rechazado{border-left-color:var(--danger);}
+.ajuste-meta{font-size:.8rem;color:var(--txt-secondary);margin-bottom:3px;}
+.ajuste-desc{font-size:.9rem;color:var(--txt-primary);line-height:1.45;}
+.ajuste-btns{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;}
+.ajuste-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:0 14px;border-radius:var(--r-sm);font-size:.85rem;font-weight:600;font-family:inherit;cursor:pointer;border:none;}
+.ajuste-btn.ok {background:var(--ok-dim);color:var(--ok);border:1px solid var(--ok);}
+.ajuste-btn.nok{background:var(--danger-dim);color:var(--danger);border:1px solid var(--danger);}
 
 /* ── Notificaciones ───────────────────────────────────────── */
 .notif-wrap{background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;box-shadow:var(--shadow-card);}
@@ -2632,8 +2626,9 @@ html[data-theme="light"] .sb-logout-btn:hover { background: rgba(186,26,26,0.14)
 .notif-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;margin-top:4px;background:var(--accent);}
 .notif-dot.read{background:var(--txt-muted);}
 .notif-body{flex:1;}
-.notif-text{font-size:.79rem;color:var(--txt-secondary);}
-.notif-time{font-size:.66rem;color:var(--txt-muted);margin-top:1px;}
+.notif-text{font-size:.9rem;color:var(--txt-secondary);line-height:1.45;}
+.notif-item.unread .notif-text{color:var(--txt-primary);}
+.notif-time{font-size:.78rem;color:var(--txt-muted);margin-top:2px;}
 #sbNotifBadge{margin-left:auto;background:var(--red);color:#fff;font-size:.58rem;font-weight:700;padding:1px 5px;border-radius:7px;display:none;}
 
 /* ── Reportes publicados ──────────────────────────────────── */
@@ -2878,7 +2873,7 @@ tbody td { padding: 12px !important; color: var(--txt-primary) !important; }
 
 /* M3 Role Badge — Assist Chip style */
 .role-badge {
-    display: inline-flex; align-items: center;
+    display: inline-flex; align-items: center; gap: 4px;
     height: 24px; padding: 0 10px;
     border-radius: var(--r-full);
     font-family: 'IBM Plex Sans', sans-serif;
@@ -2887,9 +2882,9 @@ tbody td { padding: 12px !important; color: var(--txt-primary) !important; }
     border: 1px solid transparent;
 }
 .role-badge.admin {
-    background: rgba(246,195,82,0.14);
-    color: var(--amber);
-    border-color: rgba(246,195,82,0.28);
+    background: var(--warn-dim);
+    color: var(--warn);
+    border-color: var(--warn);
 }
 .role-badge.user  {
     background: var(--accent-dim);
@@ -2903,15 +2898,15 @@ tbody td { padding: 12px !important; color: var(--txt-primary) !important; }
     border-radius: 50%;
     flex-shrink: 0;
     background: var(--txt-muted);
-    box-shadow: 0 0 0 3px rgba(147,143,153,0.18);
+    box-shadow: 0 0 0 3px var(--border-mid);
     transition: background 0.35s ease, box-shadow 0.35s ease;
     cursor: default; position: relative;
 }
 #syncDot[data-state="ok"]      { background: var(--green); box-shadow: 0 0 0 3px var(--ok-dim); }
 #syncDot[data-state="syncing"] { background: var(--sky);   box-shadow: 0 0 0 3px var(--info-dim); animation: syncPulse 1.2s ease-in-out infinite; }
-#syncDot[data-state="pending"] { background: var(--amber); box-shadow: 0 0 0 3px rgba(246,195,82,0.22); }
+#syncDot[data-state="pending"] { background: var(--warn);  box-shadow: 0 0 0 3px var(--warn-dim); }
 #syncDot[data-state="error"]   { background: var(--red);   box-shadow: 0 0 0 3px var(--danger-dim); }
-#syncDot[data-state="offline"] { background: var(--txt-muted);      box-shadow: 0 0 0 3px rgba(147,143,153,0.18); }
+#syncDot[data-state="offline"] { background: var(--txt-muted); box-shadow: 0 0 0 3px var(--border-mid); }
 
 /* M3 grp-rail fade */
 .grp-rail-wrap::after {
@@ -3016,7 +3011,7 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: var(--txt-secondary)
    ══════════════════════════════════════════════════════════════════════ */
 .rc-screen { padding-bottom: 24px; }
 .rc-cab { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
-.rc-titulo { font-size: 1rem; font-weight: 800; color: var(--txt-strong, var(--txt-primary)); }
+.rc-titulo { font-size: 1rem; font-weight: 800; color: var(--txt-primary); }
 .rc-sub { font-size: 0.72rem; color: var(--txt-muted); margin-top: 2px; }
 .rc-badge { display: inline-block; padding: 2px 8px; border-radius: var(--r-full, 999px); background: var(--accent-dim); color: var(--accent); font-size: 0.66rem; font-weight: 700; vertical-align: middle; }
 .rc-aviso { padding: 10px 12px; border-radius: var(--r-md); background: var(--red-dim); color: var(--red-text, var(--red)); font-size: 0.78rem; margin-bottom: 12px; }
@@ -3189,7 +3184,7 @@ button.pm-tile:active { transform: scale(.98); }
 .pm-card--compara .pm-graf__titulo { font-size: 0.74rem; color: var(--txt-secondary); }
 /* Va con b.pm-dif y no con .pm-dif a secas: `.pm-card__fila b` ya fija el
    color y ganaría por especificidad, dejando la diferencia sin destacar. */
-.pm-card__fila b.pm-dif { color: var(--amber-text, var(--amber)); }
+.pm-card__fila b.pm-dif { color: var(--warn); }
 @media (prefers-reduced-motion: reduce) { .pm-progreso__barra, button.pm-tile { transition: none; } .pm-ficha { animation: none; } }
 
 /* ═════════════════════════════════════════════════════════════════════════
@@ -3285,10 +3280,96 @@ html[data-theme="light"] .pm-btn--peligro { color: #fff; }
 .vt-txt-error { color: var(--danger); }
 .vt-txt-chico { font-size: .72rem; }
 
+/* ── R7d (v5.14) · Historia, Notificaciones, Ajustes, Admin y Roles ────────
+   Mismas reglas que R7c: tokens, sin hex ni prioridades forzadas, cifras en Plex
+   Mono, el color nunca va solo (cada estado lleva palabra e icono) y todo
+   lo tocable mide ≥ 44 px. Prefijos: ui- (comunes), nt- (notificaciones),
+   aj- (ajustes), pr- (permisos y roles), hs- (historia), sy- (sincronía). */
+.ui-vacio { text-align: center; padding: 32px 20px; color: var(--txt-secondary); font-size: .95rem; line-height: 1.5; }
+.ui-vacio i { display: block; margin: 0 auto 10px; font-size: 1.6rem; color: var(--txt-muted); }
+.ui-vacio--caja { background: var(--card); border: 1px solid var(--border-mid); border-radius: var(--r-lg); }
+.ui-nota { font-size: .85rem; color: var(--txt-secondary); line-height: 1.5; margin: 0 0 8px; }
+.ui-nota--chica { font-size: .8rem; color: var(--txt-muted); }
+.ui-nota--aviso { color: var(--warn); }
+.ui-nota--error { color: var(--danger); }
+.ui-nota i { margin-right: 4px; }
+.ui-titulo { font-size: 1rem; font-weight: 700; color: var(--txt-primary); margin: 0; display: flex; align-items: center; gap: 8px; }
+.ui-titulo--seccion { font-size: .8rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--txt-secondary); }
+.ui-cab { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+.ui-link { min-height: 44px; padding: 0 10px; display: inline-flex; align-items: center; justify-content: center; font-size: .88rem; font-weight: 600; font-family: inherit; color: var(--accent); background: none; border: none; cursor: pointer; white-space: nowrap; }
+.ui-link:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: var(--r-sm); }
+.ui-campo { display: block; width: 100%; min-height: 48px; margin-bottom: 8px; padding: 10px 12px; border-radius: var(--r-md); border: 1px solid var(--border-mid); background: var(--surface); color: var(--txt-primary); font-family: inherit; font-size: 1rem; }
+.ui-campo:focus { border-color: var(--accent); outline: none; }
+textarea.ui-campo { resize: vertical; min-height: 88px; }
+.ui-etiqueta { display: block; font-size: .8rem; font-weight: 600; color: var(--txt-secondary); margin: 6px 0 4px; }
+.ui-icono-btn { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--r-md); border: 1px solid var(--border-mid); background: var(--surface); color: var(--txt-primary); font-size: 1rem; cursor: pointer; flex-shrink: 0; }
+.ui-icono-btn--peligro { background: var(--danger-dim); border-color: var(--danger); color: var(--danger); }
+.ui-icono-btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.ui-fila { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ui-fila--sep { margin-top: 6px; }
+.ui-mono { font-family: 'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; }
+.ui-aviso-estado { color: var(--warn); }
+.ui-ok { color: var(--ok); }
+.ui-malo { color: var(--danger); }
+
+/* Notificaciones */
+.nt-icono { flex-shrink: 0; width: 20px; margin-top: 2px; text-align: center; color: var(--txt-secondary); }
+.notif-item.unread .nt-icono { color: var(--accent); }
+.notif-item { align-items: center; }
+
+/* Ajustes / Áreas de conteo */
+.aj-area { border: 1px solid var(--border-mid); border-radius: var(--r-md); padding: 10px 12px; margin-bottom: 8px; background: var(--surface); }
+.aj-area--alta { border-style: dashed; padding: 12px; margin-top: 12px; background: none; }
+.aj-area__icono { font-size: 1.3rem; line-height: 1; min-width: 28px; text-align: center; }
+.aj-area__cuerpo { flex: 1; min-width: 140px; }
+.aj-area__nombre { font-weight: 600; font-size: .95rem; color: var(--txt-primary); }
+.aj-area__id { font-size: .78rem; color: var(--txt-muted); font-family: 'IBM Plex Mono', monospace; }
+.aj-area input.ui-campo { margin-bottom: 0; }
+.aj-area .aj-area__nom-in { flex: 1; min-width: 0; }
+.aj-area .ui-fila + input.ui-campo, .aj-area .ui-fila + .ui-fila { margin-top: 8px; }
+.aj-area__ico-in { width: 64px; text-align: center; flex: none; }
+.aj-nuevo { margin-bottom: 16px; }
+
+/* Permisos y roles */
+.pr-estado { font-size: .78rem; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; }
+.pr-estado--comodin { color: var(--ok); }
+.pr-estado--heredado, .pr-estado--ninguno { color: var(--txt-muted); }
+.pr-estado--asignado { color: var(--info); }
+.pr-estado--revocado { color: var(--danger); }
+.pr-grupo { margin: 14px 0 4px; font-size: .8rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--txt-secondary); }
+.pr-fila { display: flex; align-items: flex-start; gap: 10px; min-height: 48px; padding: 8px 0; border-bottom: 1px solid var(--border-mid); cursor: pointer; }
+.pr-fila--bloqueada { opacity: .6; cursor: default; }
+.pr-fila input[type="checkbox"] { width: 24px; height: 24px; margin-top: 2px; flex-shrink: 0; accent-color: var(--accent); }
+.pr-fila__cuerpo { flex: 1; min-width: 0; }
+.pr-fila__nombre { font-size: .95rem; font-weight: 600; color: var(--txt-primary); }
+.pr-fila__desc { display: block; font-size: .82rem; color: var(--txt-secondary); line-height: 1.4; }
+.pr-fila__aviso { display: block; font-size: .8rem; color: var(--warn); margin-top: 2px; }
+.pr-fila__cod { display: block; font-size: .72rem; color: var(--txt-muted); margin-top: 2px; font-family: 'IBM Plex Mono', monospace; }
+.pr-area { display: flex; align-items: center; gap: 10px; min-height: 48px; font-size: .95rem; cursor: pointer; }
+.pr-area input[type="checkbox"] { width: 24px; height: 24px; flex-shrink: 0; accent-color: var(--accent); }
+
+/* Historia */
+.hs-seccion { margin-bottom: 20px; }
+.hs-rep-acciones { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.hs-rep-acciones .adm-btn { margin: 0; width: auto; flex: 1; }
+.hs-cab { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 14px; }
+.hs-borrar { width: auto; margin: 0; flex-shrink: 0; }
+
+/* Sincronía: la insignia del menú y el aviso de "sin conexión" */
+.sy-insignia { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 4px; font-size: .78rem; font-weight: 600; padding: 6px 10px; border-radius: var(--r-sm); margin-bottom: 8px; border: 1px solid var(--border-mid); color: var(--txt-secondary); background: var(--surface); transition: background .3s ease, color .3s ease, border-color .3s ease; }
+.sy-insignia[data-sync="ok"]      { color: var(--ok);     background: var(--ok-dim);     border-color: var(--ok); }
+.sy-insignia[data-sync="syncing"] { color: var(--info);   background: var(--info-dim);   border-color: var(--info); }
+.sy-insignia[data-sync="pending"] { color: var(--warn);   background: var(--warn-dim);   border-color: var(--warn); }
+.sy-insignia[data-sync="error"]   { color: var(--danger); background: var(--danger-dim); border-color: var(--danger); }
+.sy-insignia__btn { min-width: 44px; min-height: 44px; margin: -12px -6px -12px 2px; display: inline-flex; align-items: center; justify-content: center; background: none; border: none; color: inherit; font-family: inherit; font-size: .85rem; font-weight: 700; cursor: pointer; }
+.sy-insignia__btn:focus-visible { outline: 3px solid var(--accent); outline-offset: -4px; border-radius: var(--r-sm); }
+.net-aviso { position: fixed; left: 0; right: 0; bottom: calc(80px + env(safe-area-inset-bottom, 0px)); z-index: 240; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 16px; background: var(--surface); border-top: 2px solid var(--warn); color: var(--warn); font-size: .88rem; font-weight: 600; text-align: center; }
+/* ── fin R7d ── */
+
 /* ── Inventario Físico: pantalla principal en una sola columna ─────────── */
 .if-pantalla { display: flex; flex-direction: column; gap: 16px; }
 .if-card { background: var(--card); border: 1px solid var(--border-mid); border-radius: 16px; padding: 18px 16px; display: flex; flex-direction: column; gap: 14px; }
-.if-card__titulo { font-size: 1.2rem; font-weight: 800; color: var(--txt-strong, var(--txt-primary)); line-height: 1.25; }
+.if-card__titulo { font-size: 1.2rem; font-weight: 800; color: var(--txt-primary); line-height: 1.25; }
 .if-card__sub { font-size: .92rem; color: var(--txt-secondary); line-height: 1.5; margin-top: -8px; }
 .if-card .pm-estado--cab { font-size: .82rem; padding: 6px 12px; align-self: flex-start; }
 .if-seccion { font-size: .78rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--txt-secondary); margin: 4px 2px -4px; }

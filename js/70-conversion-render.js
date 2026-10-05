@@ -905,7 +905,7 @@
                    + 'text-transform:uppercase;letter-spacing:.05em;color:var(--txt-secondary);'
                    + 'white-space:nowrap;border-bottom:1px solid var(--border-mid)';
             var thNum = th + ';text-align:right';
-            var td = 'padding:9px 10px;font-size:.84rem;border-bottom:1px solid var(--border-soft,var(--border-mid))';
+            var td = 'padding:9px 10px;font-size:.84rem;border-bottom:1px solid var(--border-mid)';
             var tdNum = td + ';text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap';
 
             html += '<div style="background:var(--surface);border:1px solid var(--border-mid);'
@@ -949,7 +949,7 @@
                      + escapeHtml(product.unit || '—') + '</td>';
 
                 // Stock bajo el mínimo se marca. Es la señal que dispara una compra.
-                html += '<td style="' + tdNum + (bajoMin ? ';color:#f87171;font-weight:700' : '') + '">'
+                html += '<td style="' + tdNum + (bajoMin ? ';color:var(--danger);font-weight:700' : '') + '">'
                      + _celdaNum(total) + '</td>';
 
                 html += '<td style="' + tdNum + '" class="cat-col-sec">'
@@ -975,8 +975,8 @@
                     html += '<button type="button" onclick="deleteProduct(\'' + escapeHtml(product.id) + '\')" '
                          + 'title="Eliminar" aria-label="Eliminar ' + escapeHtml(product.name || product.id) + '" '
                          + 'style="min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;'
-                         + 'border-radius:10px;border:1px solid rgba(248,113,113,.3);background:rgba(248,113,113,.08);'
-                         + 'color:#f87171;cursor:pointer">'
+                         + 'border-radius:10px;border:1px solid var(--danger);background:var(--danger-dim);'
+                         + 'color:var(--danger);cursor:pointer">'
                          + '<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>';
                     html += '</div></td>';
                 }

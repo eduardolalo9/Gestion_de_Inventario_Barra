@@ -466,7 +466,7 @@
             html += BusquedaUI.resumen('fvs', r.coincidencias, r.total, 'producto', 'productos');
             html += '<div style="margin-top:8px;">';
             filas.slice(0, lim).forEach(function(f) {
-                html += '<div data-sbx-item style="padding:10px 12px;border:1px solid var(--border-soft);border-radius:var(--r-md);margin-bottom:8px;">';
+                html += '<div data-sbx-item style="padding:10px 12px;border:1px solid var(--border-mid);border-radius:var(--r-md);margin-bottom:8px;">';
                 html += '<div style="font-weight:700;font-size:.82rem;">' + resaltarBusqueda(f.nombre, _fvsSearchTerm) + '</div>';
                 if (f.estado === 'pendiente') {
                     html += '<div style="font-size:.74rem;color:var(--txt-muted);margin-top:2px;"><i class="fa-solid fa-hourglass" aria-hidden="true"></i> Sin contar todavía · '
@@ -1288,19 +1288,19 @@
             let html = '';
 
             // ── Sección: Reportes publicados por admin (visible para todos) ──
-            html += '<div id="historiaReportesWrap" style="margin-bottom:20px;">';
-            html += '<h3 style="font-size:.85rem;font-weight:600;color:var(--txt-primary);margin-bottom:10px;">📊 Reportes globales publicados</h3>';
-            html += '<div id="historiaReportesList" style="color:var(--txt-muted);font-size:.8rem;">Cargando…</div>';
+            html += '<div id="historiaReportesWrap" class="hs-seccion">';
+            html += '<h3 class="ui-titulo ui-titulo--seccion"><i class="fa-solid fa-file-chart-column" aria-hidden="true"></i> Reportes globales publicados</h3>';
+            html += '<div id="historiaReportesList" class="ui-nota">Cargando…</div>';
             html += '</div>';
 
             // ── Sección: Historial de inventarios locales ────────────────────
             if (inventories.length === 0) {
-                html += '<div class="bg-white rounded-2xl p-12 text-center shadow-md"><svg class="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg><p class="text-gray-600">No hay inventarios guardados</p></div>';
+                html += '<div class="ui-vacio ui-vacio--caja"><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>No hay inventarios guardados</div>';
             } else {
-                html += '<div class="flex justify-between items-center mb-4">';
-                html += '<h3 style="font-size:.85rem;font-weight:600;color:var(--txt-primary);">📋 Historial de conteos</h3>';
+                html += '<div class="hs-cab">';
+                html += '<h3 class="ui-titulo ui-titulo--seccion"><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i> Historial de conteos</h3>';
                 if (isAdmin()) {
-                html += '<button onclick="deleteAllInventories()" class="bg-gradient-to-r from-red-500 to-orange-600 text-white px-4 py-2 rounded-xl flex items-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs" title="Eliminar todo el historial"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg><span class="font-medium">Eliminar historial</span></button>';
+                    html += '<button type="button" onclick="deleteAllInventories()" class="adm-btn warn hs-borrar" title="Eliminar todo el historial"><i class="fa-solid fa-trash" aria-hidden="true"></i> <span>Eliminar historial</span></button>';
                 }
                 html += '</div>';
                 // FASE 6 — barra unificada sobre folio, área, fecha y productos,
@@ -1318,31 +1318,29 @@
             setTimeout(function() {
                 const el = document.getElementById('historiaReportesList');
                 if (!el) return;
-                if (!_db) { el.innerHTML = '<p style="color:var(--txt-muted);font-size:.79rem;">Firebase no configurado</p>'; return; }
+                if (!_db) { el.innerHTML = '<p class="ui-nota">Firebase no configurado</p>'; return; }
                 _db.collection('reportes').orderBy('fechaTs', 'desc').limit(10).get()
                     .then(function(snap) {
                         if (!el) return;
-                        if (snap.empty) { el.innerHTML = '<p style="color:var(--txt-muted);font-size:.79rem;">Sin reportes publicados aún</p>'; return; }
+                        if (snap.empty) { el.innerHTML = '<p class="ui-nota">Sin reportes publicados aún</p>'; return; }
                         let rhtml = '';
                         snap.docs.forEach(function(d) {
                             const r = d.data();
-                            rhtml += '<div class="rep-card" style="position:relative;">';
-                            rhtml += '<div class="rep-card-title">📊 ' + escapeHtml(r.fecha || d.id) + '</div>';
-                            rhtml += '<div class="rep-card-meta">' + (r.totalProductos || 0) + ' productos · publicado por admin</div>';
-                            rhtml += '<div style="display:flex;align-items:center;gap:8px;margin-top:6px;">';
-                            rhtml += '<button class="adm-btn primary" style="margin:0;padding:7px 14px;" onclick="descargarReporte(\'' + d.id + '\')"><i class="fa-solid fa-download"></i> Descargar Excel</button>';
+                            rhtml += '<div class="rep-card">';
+                            rhtml += '<div class="rep-card-title"><i class="fa-solid fa-file-chart-column" aria-hidden="true"></i> ' + escapeHtml(r.fecha || d.id) + '</div>';
+                            rhtml += '<div class="rep-card-meta ui-mono">' + (r.totalProductos || 0) + ' productos · publicado por admin</div>';
+                            rhtml += '<div class="hs-rep-acciones">';
+                            rhtml += '<button type="button" class="adm-btn" onclick="descargarReporte(\'' + d.id + '\')"><i class="fa-solid fa-download" aria-hidden="true"></i> Descargar Excel</button>';
                             // Icono eliminar — solo visible para admin
                             if (typeof isAdmin === 'function' && isAdmin()) {
-                                rhtml += '<button onclick="eliminarReporte(\'' + d.id + '\')" title="Eliminar reporte" style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:var(--r-md);background:var(--red-dim,rgba(239,68,68,.12));border:1px solid rgba(239,68,68,.22);color:var(--red-text,#ef4444);cursor:pointer;flex-shrink:0;transition:background .18s;" onmouseover="this.style.background=\'rgba(239,68,68,.22)\'" onmouseout="this.style.background=\'var(--red-dim,rgba(239,68,68,.12))\'">';
-                                rhtml += '<svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>';
-                                rhtml += '</button>';
+                                rhtml += '<button type="button" class="ui-icono-btn ui-icono-btn--peligro" onclick="eliminarReporte(\'' + d.id + '\')" title="Eliminar reporte" aria-label="Eliminar reporte ' + escapeHtml(r.fecha || d.id) + '"><i class="fa-solid fa-trash" aria-hidden="true"></i></button>';
                             }
                             rhtml += '</div>';
                             rhtml += '</div>';
                         });
                         el.innerHTML = rhtml;
                     }).catch(function(e) {
-                        if (el) el.innerHTML = '<p style="color:var(--txt-muted);font-size:.79rem;">Error cargando reportes</p>';
+                        if (el) el.innerHTML = '<p class="ui-nota">Error cargando reportes</p>';
                     });
             }, 80);
 

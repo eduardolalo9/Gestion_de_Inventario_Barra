@@ -70,6 +70,7 @@ const PRUEBAS = [
     'prueba-recetario-buscador-unificado.js', // Recetario — mismo buscador que Inicio (motor unificado, v5.8)
     'prueba-redis-r7b.js',             // REDISEÑO R7b — Compras (y Pedidos, revisado)
     'prueba-redis-r7c.js',             // REDISEÑO R7c — Ventas al kit Carbón & Latón
+    'prueba-redis-r7d.js',             // REDISEÑO R7d — Historia, Notificaciones, Ajustes, Admin y Roles
     'prueba-conteo-compacto.js',       // v5.11 — vista compacta de las tarjetas de área del Conteo
     'prueba-actualizaciones.js',       // v5.12 — las actualizaciones sí llegan y se ven (SW + aviso + herramientas)
 ];
