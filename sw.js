@@ -29,7 +29,7 @@
 // pruebas/prueba-integridad-split.js falla si se desincronizan: un index.html
 // nuevo sirviendo un .js viejo desde cache es el fallo mas dificil de
 // diagnosticar que puede tener una PWA partida en archivos.
-const APP_VERSION = '5.11';
+const APP_VERSION = '5.12';
 const CACHE_NAME  = 'barinventory-v' + APP_VERSION;
 
 // SW8 FIX: OFFLINE_URL calculado desde el scope del SW en tiempo de ejecución.
@@ -111,7 +111,7 @@ function _calentarCache() {
         return Promise.all(WARM_URLS.map(function(url) {
             return cache.match(url).then(function(yaEsta) {
                 if (yaEsta) return;
-                return fetch(url).then(function(res) {
+                return fetch(url, { cache: 'reload' }).then(function(res) {
                     if (isCacheable(res)) return cache.put(url, res);
                 }).catch(function() { /* tolerado a proposito */ });
             });
@@ -140,7 +140,15 @@ self.addEventListener('install', function(event) {
         // SW15 FIX: timeout de 8 s para no colgar en redes muy lentas
         Promise.race([
             caches.open(CACHE_NAME).then(function(cache) {
-                return cache.addAll(PRECACHE_URLS);
+                // v5.12 — {cache:'reload'}: el precache de ESTA versión debe
+                // traer los archivos de ESTA versión, no una copia que la caché
+                // HTTP del navegador (GitHub Pages: max-age=600) guardó hace
+                // minutos. Sin esto, un index.html viejo podía quedar dentro de
+                // barinventory-v5.12 y la app "actualizada" seguía mostrando
+                // la versión anterior.
+                return cache.addAll(PRECACHE_URLS.map(function(u) {
+                    return new Request(u, { cache: 'reload' });
+                }));
             }),
             new Promise(function(_, reject) {
                // M2: 8 s alcanzaban para 2 archivos. Son 5 y el wifi de un bar no
@@ -194,6 +202,23 @@ self.addEventListener('fetch', function(event) {
     // 1. Ignorar peticiones que no son GET
     if (event.request.method !== 'GET') return;
 
+    // v5.12 — el propio sw.js JAMÁS se sirve desde caché. La comprobación
+    // "¿hay versión nueva?" de la app lo pide con ?chk=<hora>; si pasara por
+    // staleWhileRevalidate respondería con la copia vieja y la app juraría
+    // que ya está al día (justo el síntoma de "sigue en la 5.3").
+    if (url.origin === self.location.origin && /\/sw\.js$/.test(url.pathname)) return;
+
+    // v5.12 — NAVEGACIONES (abrir la app, recargar): RED PRIMERO.
+    // El HTML es lo que dice qué versión de cada .js se pide (?v=). Servirlo
+    // viejo "mientras se revalida" obligaba a abrir la app DOS veces después de
+    // cada despliegue para ver la versión nueva. Los .js/.css siguen en
+    // stale-while-revalidate: llevan ?v=, así que una versión nueva es una URL
+    // nueva y nunca se sirve una copia vieja por error.
+    if (event.request.mode === 'navigate') {
+        event.respondWith(networkFirstNavegacion(event));
+        return;
+    }
+
     // 2. Ignorar extensiones de Chrome y protocolos especiales
     if (!event.request.url.startsWith('http')) return;
 
@@ -233,6 +258,47 @@ function isCacheable(response) {
     return response &&
            response.status === 200 &&
            response.type !== 'opaque';
+}
+
+// v5.12 — Red primero para el documento HTML.
+//   · Con señal: trae SIEMPRE la copia revalidada ({cache:'no-cache'}) y la
+//     guarda para cuando falte la señal.
+//   · Red lenta (más de 3.5 s, normal en el wifi de una barra en hora pico):
+//     abre YA con la copia guardada y deja que la descarga termine por detrás
+//     para dejar lista la próxima apertura. Nunca deja al bartender esperando.
+//   · Sin señal: copia guardada; si tampoco hay, el index.html del precache.
+var NAVEGACION_TIMEOUT_MS = 3500;
+function networkFirstNavegacion(event) {
+    var request = event.request;
+    var intento = fetch(request.url, { cache: 'no-cache', credentials: 'same-origin' })
+        .then(function(response) {
+            if (isCacheable(response)) {
+                var clone = response.clone();
+                caches.open(CACHE_NAME).then(function(cache) { cache.put(request, clone); });
+            }
+            return response;
+        });
+    // Que la descarga termine aunque se haya respondido con la copia guardada.
+    event.waitUntil(intento.catch(function() {}));
+
+    var plazo = new Promise(function(resolve) {
+        setTimeout(function() { resolve(null); }, NAVEGACION_TIMEOUT_MS);
+    });
+    var desdeCache = function() {
+        return caches.match(request).then(function(c) {
+            if (c) return c;
+            return caches.match(OFFLINE_URL || './index.html').then(function(o) {
+                return o || caches.match('./index.html');
+            });
+        });
+    };
+    return Promise.race([intento.catch(function() { return null; }), plazo]).then(function(res) {
+        if (res) return res;                       // respondió la red a tiempo
+        return desdeCache().then(function(c) {
+            if (c) return c;                       // red lenta o caída: copia guardada
+            return intento;                        // no hay copia: esperar a la red
+        });
+    });
 }
 
 // SW12 FIX: devuelve 503 explícito en lugar de undefined si no hay caché ni red

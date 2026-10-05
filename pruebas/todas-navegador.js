@@ -57,6 +57,7 @@ const PRUEBAS = [
     'prueba-recetario-buscador-unificado-navegador.js', // Recetario — mismo buscador que Inicio: typos, tildes, PV, paginación, teclado
     'prueba-redis-r7b-navegador.js',    // REDISEÑO R7b — Compras (y Pedidos, revisado), en pantalla
     'prueba-conteo-compacto-navegador.js', // v5.11 — vista compacta del Conteo, en pantalla
+    'prueba-actualizaciones-navegador.js', // v5.12 — despliegue simulado: detecta, avisa, actualiza con un toque, conserva datos
 ];
 
 function esperarServidor(intentos) {

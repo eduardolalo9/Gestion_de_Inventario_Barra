@@ -70,6 +70,7 @@ const PRUEBAS = [
     'prueba-recetario-buscador-unificado.js', // Recetario — mismo buscador que Inicio (motor unificado, v5.8)
     'prueba-redis-r7b.js',             // REDISEÑO R7b — Compras (y Pedidos, revisado)
     'prueba-conteo-compacto.js',       // v5.11 — vista compacta de las tarjetas de área del Conteo
+    'prueba-actualizaciones.js',       // v5.12 — las actualizaciones sí llegan y se ven (SW + aviso + herramientas)
 ];
 
 let fallaron = [];

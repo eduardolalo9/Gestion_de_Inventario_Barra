@@ -3167,6 +3167,21 @@ button.pm-tile:active { transform: scale(.98); }
 .pm-ficha__acc { display: flex; gap: 8px; margin-top: 16px; }
 .pm-ficha__acc .pm-btn { flex: 1; }
 .sb-version { font-size: 0.62rem; color: var(--txt-muted); text-align: center; padding: 0 10px 6px; }
+/* v5.12 — actualizaciones. La palabra ("actualización X lista") va siempre
+   junto al color: el color nunca va solo. */
+.sb-version--pendiente { color: var(--warn); font-weight: 600; }
+.sb-act { display: flex; gap: 6px; padding: 0 10px 8px; }
+.sb-act__btn { flex: 1; min-height: 44px; padding: 0 10px; border-radius: var(--r-md); border: 1px solid var(--border-mid); background: var(--card); color: var(--txt-primary); font: 600 .78rem 'IBM Plex Sans', sans-serif; display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; }
+.sb-act__btn--tenue { flex: 0 0 auto; background: transparent; color: var(--txt-secondary); }
+.sb-act__btn i { width: 16px; height: 16px; }
+/* Aviso fijo de versión nueva: sobre la barra inferior (z 200), bajo el
+   menú lateral (300). El latón es el botón: es LA decisión. */
+.act-banner { position: fixed; left: 12px; right: 12px; bottom: calc(88px + env(safe-area-inset-bottom, 0px)); z-index: 250; display: flex; align-items: center; gap: 8px; padding: 10px 10px 10px 14px; border-radius: var(--r-lg); background: var(--card-high, var(--card)); border: 1px solid var(--border-mid); box-shadow: var(--shadow-card); animation: springUp .28s var(--ease-out) both; }
+.act-banner__txt { flex: 1; min-width: 0; font-size: .86rem; color: var(--txt-primary); display: flex; align-items: center; gap: 8px; }
+.act-banner__txt i { width: 18px; height: 18px; flex-shrink: 0; color: var(--accent); }
+.act-banner__btn { min-height: 44px; padding: 0 16px; border-radius: var(--r-md); border: 1px solid var(--accent); background: var(--accent); color: var(--accent-on); font: 700 .88rem 'IBM Plex Sans', sans-serif; cursor: pointer; }
+.act-banner__btn:disabled { opacity: .7; cursor: progress; }
+.act-banner__x { min-height: 44px; padding: 0 8px; border: 0; background: transparent; color: var(--txt-secondary); font: 600 .82rem 'IBM Plex Sans', sans-serif; cursor: pointer; }
 /* FASE 8 — comparación de las dos existencias. La gráfica va DENTRO de la
    tarjeta, así que pierde su propio marco: dos marcos anidados se leen como
    dos bloques separados, y aquí es un solo bloque. */
