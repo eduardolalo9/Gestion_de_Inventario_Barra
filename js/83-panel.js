@@ -60,6 +60,18 @@
             return (typeof existenciaEntradas === 'function') ? existenciaEntradas() : existenciaEntradasSemana();
         }
 
+        /** v5.19 — "hace 5 min", "hace 2 h", "el 04/10 21:30". */
+        function _panelHace(ms) {
+            var d = Date.now() - ms;
+            if (!isFinite(d) || d < 0) d = 0;
+            if (d < 60000) return 'hace un momento';
+            if (d < 3600000) return 'hace ' + Math.round(d / 60000) + ' min';
+            if (d < 86400000) return 'hace ' + Math.round(d / 3600000) + ' h';
+            var f = new Date(ms);
+            return 'el ' + String(f.getDate()).padStart(2, '0') + '/' + String(f.getMonth() + 1).padStart(2, '0')
+                 + ' ' + String(f.getHours()).padStart(2, '0') + ':' + String(f.getMinutes()).padStart(2, '0');
+        }
+
         /** 'YYYY-MM-DD' → '04/10'. */
         function _panelDiaCorto(iso) {
             var f = (typeof parseFechaLocal === 'function') ? parseFechaLocal(iso) : null;
@@ -231,7 +243,22 @@
                 h += '<div class="pm-card__fila"><span>Ancla</span><b>' + escapeHtml(etq) + '</b></div>';
                 h += '<div class="pm-card__fila"><span>Saldo del corte <small>(inventario #' + escapeHtml(String(o.numero || '—')) + ')</small></span><b>'
                    + _panelNum(total) + ' u · ' + ids.length + ' productos</b></div>';
-                h += '<div class="pm-card__fila"><span>Compras desde el corte</span><b>' + nEnt + ' productos</b></div>';
+                // v5.19 — sin permiso de compras/ventas, el Total viene publicado
+                // por administración (js/51): se dice de dónde y de cuándo.
+                var tpi = (typeof totalPublicadoInfo === 'function') ? totalPublicadoInfo() : null;
+                if (res && res.publicado) {
+                    h += '<div class="pm-card__fila"><span>Compras desde el corte</span><b>' + (res.publicado.conEntradas || 0) + ' productos</b></div>';
+                    h += '<div class="pm-aviso pm-aviso--info"><i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i> <span>'
+                       + 'Total <b>publicado por administración</b>' + (res.publicado.en ? ' ' + escapeHtml(_panelHace(res.publicado.en)) : '')
+                       + ': mismas cantidades que ve el jefe (compras y consumo por recetas incluidos), sin importes.</span></div>';
+                } else {
+                    h += '<div class="pm-card__fila"><span>Compras desde el corte</span><b>' + nEnt + ' productos</b></div>';
+                    if (tpi && tpi.debeUsar) {
+                        h += '<div class="pm-aviso pm-aviso--warn"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> <span>'
+                           + 'Tu usuario no lee compras ni ventas, y todavía no hay un Total publicado por administración para este corte: '
+                           + 'este Total <b>no incluye</b> compras ni consumo. Se corrige solo en cuanto el jefe abra la app.</span></div>';
+                    }
+                }
                 if (res) {
                     h += '<div class="pm-card__fila"><span>Días de ventas descontados</span><b>' + (res.diasEsperados - res.diasFaltantes.length)
                        + ' de ' + res.diasEsperados + '</b></div>';
@@ -418,6 +445,9 @@
             h += '<div class="pm-ficha__sec">' + (_anc ? 'Desde el último corte' : 'Semana actual') + '</div>';
             if (_anc && typeof anclaEtiqueta === 'function') {
                 h += '<div class="pm-card__fila"><span>Ancla</span><b>' + escapeHtml(anclaEtiqueta(_anc)) + '</b></div>';
+            }
+            if (ofic.fuente === 'publicado') {
+                h += '<div class="pm-card__sub">Cifras publicadas por administración' + (ofic.publicadoEn ? ' ' + escapeHtml(_panelHace(ofic.publicadoEn)) : '') + '.</div>';
             }
             h += '<div class="pm-card__fila"><span>' + (_anc ? 'Saldo del corte' : 'Inicial contabilizado') + '</span><b>' + (ini === undefined ? '—' : _panelNum(ini)) + '</b></div>';
             h += '<div class="pm-card__fila"><span>Entradas por compras</span><b>' + _panelNum(ent) + '</b></div>';

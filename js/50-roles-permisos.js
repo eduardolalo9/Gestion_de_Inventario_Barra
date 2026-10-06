@@ -1162,6 +1162,8 @@
             const btn = document.getElementById('sbAdminBtn');
             if (sep) sep.style.display = isAdmin() ? '' : 'none';
             if (btn) btn.style.display  = isAdmin() ? '' : 'none';
+            const pap = document.getElementById('sbPapeleraBtn');   // v5.19
+            if (pap) pap.style.display  = isAdmin() ? '' : 'none';
             renderTab();
         }
 
@@ -1723,10 +1725,20 @@
                 return;
             }
             if (!_db) { showNotification('❌ Sin conexión a base de datos'); return; }
-            showConfirm('¿Eliminar este reporte publicado?\n\nEsta acción no se puede deshacer. Los usuarios ya no podrán descargarlo.', async function() {
+            showConfirm('¿Eliminar este reporte publicado?\n\nLos usuarios ya no podrán descargarlo. Queda una copia en la Papelera (administración puede restaurarlo).', async function() {
                 try {
-                    await _db.collection('reportes').doc(reporteId).delete();
-                    showNotification('🗑️ Reporte eliminado correctamente');
+                    // v5.19 — PAPELERA: copia del reporte y borrado en el MISMO
+                    // batch. Si la copia no se puede escribir, no se borra.
+                    const repRef = _db.collection('reportes').doc(reporteId);
+                    const repSnap = await repRef.get();
+                    const batch = _db.batch();
+                    if (repSnap.exists && typeof papeleraRegistroReporte === 'function') {
+                        const reg = papeleraRegistroReporte(reporteId, repSnap.data(), { uidActor: currentUserUid });
+                        batch.set(_db.collection('inventarioApp').doc(FIRESTORE_DOC_ID).collection('papelera').doc(reg.id), reg.data);
+                    }
+                    batch.delete(repRef);
+                    await batch.commit();
+                    showNotification('🗑️ Reporte eliminado (queda una copia en la Papelera)');
                     // Refrescar la lista de reportes en pantalla
                     const el = document.getElementById('historiaReportesList');
                     if (el) {
