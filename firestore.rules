@@ -801,12 +801,24 @@
                  function _fechaAnclaValida(s) {
                    return s is string && s.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$');
                  }
+                 // v5.18 — CORTE IMPORTADO DE EXCEL: puede haber varios en un día,
+                 // así que su id lleva la hora: 'YYYY-MM-DD_HHmm', y el documento
+                 // declara fecha ('YYYY-MM-DD') y hora ('HH:mm') que deben
+                 // coincidir con el id. Los contabilizados siguen con id = fecha.
+                 function _idAnclaValido(id, d) {
+                   return (d.tipo in ['fin_de_mes', 'mitad_de_semana']
+                           && _fechaAnclaValida(id) && d.fecha == id)
+                       || (d.tipo == 'importacion_excel'
+                           && id.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])_([01][0-9]|2[0-3])[0-5][0-9]$')
+                           && d.fecha is string && d.hora is string
+                           && d.hora.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$')
+                           && id == d.fecha + '_' + d.hora.split(':')[0] + d.hora.split(':')[1]);
+                 }
                  match /anclasExistencia/{fecha} {
                    allow read:   if request.auth != null;
                    allow create: if hasPerm('inventory.post')
-                                    && _fechaAnclaValida(fecha)
-                                    && request.resource.data.fecha == fecha
-                                    && request.resource.data.tipo in ['fin_de_mes', 'mitad_de_semana']
+                                    && request.resource.data.tipo in ['fin_de_mes', 'mitad_de_semana', 'importacion_excel']
+                                    && _idAnclaValido(fecha, request.resource.data)
                                     && request.resource.data.origen.inventoryId is string
                                     && request.resource.data.saldos is map;
                    allow update, delete: if false;

@@ -239,10 +239,12 @@ chk('La pantalla ofrece "Contabilizar como ancla del Total" y lo muestra en Hist
 const bloque = (reglas.match(/match \/anclasExistencia\/\{fecha\} \{[\s\S]*?\n                 \}/) || [''])[0];
 chk('Existe el bloque anclasExistencia/{fecha}', !!bloque);
 chk('★ Inmutable: create sí; update y delete no', /allow update, delete: if false;/.test(bloque));
-chk('Crear exige inventory.post, id = fecha válida, tipo de ancla, origen y saldos',
-    /hasPerm\('inventory\.post'\)/.test(bloque) && /_fechaAnclaValida\(fecha\)/.test(bloque) &&
-    /request\.resource\.data\.fecha == fecha/.test(bloque) && /tipo in \['fin_de_mes', 'mitad_de_semana'\]/.test(bloque) &&
-    /origen\.inventoryId is string/.test(bloque) && /saldos is map/.test(bloque));
+// v5.18 — el id se valida con _idAnclaValido (fecha, o fecha_HHmm para el corte importado).
+chk('Crear exige inventory.post, id válido (fecha o fecha_HHmm), tipo de ancla, origen y saldos',
+    /hasPerm\('inventory\.post'\)/.test(bloque) && /_idAnclaValido\(fecha, request\.resource\.data\)/.test(bloque) &&
+    /tipo in \['fin_de_mes', 'mitad_de_semana', 'importacion_excel'\]/.test(bloque) &&
+    /origen\.inventoryId is string/.test(bloque) && /saldos is map/.test(bloque) &&
+    /d\.fecha == id/.test(reglas) && /id == d\.fecha \+ '_' \+ d\.hora/.test(reglas));
 chk('Lectura para cualquier autenticado (solo cantidades, sin dinero, como el inicial)', /allow read:\s+if request\.auth != null;/.test(bloque));
 chk('★ La transición a CONTABILIZADO admite anclaDestino (si no, hasOnly tumba el batch entero)',
     /hasOnly\(\['estado','contabilizadoEn','contabilizadoPor','semanaDestino','mesDestino','anclaDestino'\]\)/.test(reglas));
@@ -252,7 +254,7 @@ chk('El ancla se pide al arrancar (no solo al abrir Inicio)', /existenciaCargarI
 chk('El repintado al llegar el ancla no interrumpe un modal ni una captura',
     /function existenciaRepintarSeguro[\s\S]{0,500}activeTab !== 'inicio' && activeTab !== 'productos'[\s\S]{0,300}modal-open/.test(exis));
 chk('Si las reglas nuevas no están desplegadas, se sigue con el inicial semanal (no revienta)',
-    /collection\('anclasExistencia'\)[\s\S]{0,200}\.catch\(function\(e\)/.test(exis));
+    /collection\('anclasExistencia'\)[\s\S]{0,450}\.catch\(function\(e\)/.test(exis));
 chk('El panel explica el origen del Total y los días de ventas que faltan',
     /Origen del Total/.test(panel) && /Faltan ' \+ r\.diasFaltantes\.length \+ ' día\(s\) de ventas/.test(panel));
 chk('La ficha del producto muestra el desglose desde el ancla',

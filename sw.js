@@ -29,7 +29,7 @@
 // pruebas/prueba-integridad-split.js falla si se desincronizan: un index.html
 // nuevo sirviendo un .js viejo desde cache es el fallo mas dificil de
 // diagnosticar que puede tener una PWA partida en archivos.
-const APP_VERSION = '5.17';
+const APP_VERSION = '5.18';
 const CACHE_NAME  = 'barinventory-v' + APP_VERSION;
 
 // SW8 FIX: OFFLINE_URL calculado desde el scope del SW en tiempo de ejecución.
@@ -100,12 +100,14 @@ const WARM_URLS = [
     './js/85-ui-inventario-fisico.js?v=' + APP_VERSION,
     './js/87-reconteo.js?v=' + APP_VERSION,          // RECONTEO
     './js/88-compras.js?v=' + APP_VERSION,
+    './js/89-compras-detalle.js?v=' + APP_VERSION,  // v5.18
     './js/90-ciclo-admin.js?v=' + APP_VERSION,
     './js/91-recetario.js?v=' + APP_VERSION,         // RECETARIO-1
     './js/92-recetario-importar.js?v=' + APP_VERSION, // RECETARIO-2
     './js/93-ventas.js?v=' + APP_VERSION,             // FASE 10
     './js/94-venta-turno.js?v=' + APP_VERSION,        // FASE 14
     './js/95-exportacion.js?v=' + APP_VERSION,
+    './js/96-importar.js?v=' + APP_VERSION,         // v5.18
     './js/99-window-arranque.js?v=' + APP_VERSION,
 ];
 

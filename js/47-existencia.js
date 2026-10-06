@@ -122,7 +122,9 @@
             // Si las reglas de FASE 14 todavía no se despliegan, esta lectura
             // falla: se sigue con el inicial semanal, como antes de la fase.
             var pAnc = base.collection('anclasExistencia')
-                           .where('fecha', '<=', hoy).orderBy('fecha', 'desc').limit(1).get()
+                           // v5.18: limit 6 — puede haber varios cortes el mismo día
+                           // (importados con hora); anclaElegir desempata.
+                           .where('fecha', '<=', hoy).orderBy('fecha', 'desc').limit(6).get()
                            .catch(function(e) { console.warn('[Existencia] anclasExistencia no disponible:', e); return null; });
 
             Promise.all([pIni, pAnc]).then(function(rs) {
@@ -131,12 +133,15 @@
                 if (rs[0]) rs[0].forEach(function(doc) {
                     var d = doc.data() || {};
                     cands.push({ tipo: 'inicial_semanal', id: doc.id, semanaId: doc.id,
-                                 fecha: anclaFechaDeInicial(doc.id), saldos: d.saldos || {}, origen: d.origen || null });
+                                 fecha: anclaFechaDeInicial(doc.id), saldos: d.saldos || {}, origen: d.origen || null,
+                                 registradoEn: (typeof d.contabilizadoEn === 'number') ? d.contabilizadoEn : undefined });
                 });
                 if (rs[1]) rs[1].forEach(function(doc) {
                     var d = doc.data() || {};
                     cands.push({ tipo: d.tipo || 'mitad_de_semana', id: doc.id, semanaId: d.semanaId || null,
-                                 fecha: d.fecha || doc.id, saldos: d.saldos || {}, origen: d.origen || null });
+                                 fecha: d.fecha || doc.id, saldos: d.saldos || {}, origen: d.origen || null,
+                                 hora: d.hora || null,
+                                 registradoEn: (typeof d.contabilizadoEn === 'number') ? d.contabilizadoEn : undefined });
                 });
                 var a = anclaElegir(cands, hoy);
                 if (!a) {
@@ -154,7 +159,7 @@
                     _existenciaNotificar();
                     return;
                 }
-                var ancla = { tipo: a.tipo, fecha: a.fecha, id: a.id, ruta: 'arrastre', dias: dias };
+                var ancla = { tipo: a.tipo, fecha: a.fecha, id: a.id, ruta: 'arrastre', dias: dias, hora: a.hora || null };
                 _existenciaCargarArrastre(ancla, hoy).then(function() {
                     if (_existenciaInicial.semana !== sem || _existenciaInicial.estado !== 'cargando') return;
                     _existenciaInicial = { semana: sem, estado: 'ok', saldos: a.saldos, origen: a.origen, ancla: ancla };

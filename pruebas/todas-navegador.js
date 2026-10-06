@@ -61,6 +61,7 @@ const PRUEBAS = [
     'prueba-redis-r8-navegador.js',     // REDISEÑO R8 — desborde, contraste, nombres, táctil y rendimiento (3 anchos × 2 temas)
     'prueba-fase14-navegador.js',       // FASE 14 — ancla del Total y venta del turno (Simular / Procesar)
     'prueba-posicion-conteo-navegador.js', // v5.17 — posición en el conteo (3 áreas, grupos, modales)
+    'prueba-importar-navegador.js',     // v5.18 — módulo Importar desde Excel y detalle de compras
     'prueba-conteo-compacto-navegador.js', // v5.11 — vista compacta del Conteo, en pantalla
     'prueba-actualizaciones-navegador.js', // v5.12 — despliegue simulado: detecta, avisa, actualiza con un toque, conserva datos
 ];

@@ -100,8 +100,9 @@ chk('El aviso de "fecha no reconocible" usa var(--danger-dim)/var(--danger), no 
     !/rgba\(239,\s*68,\s*68/.test(fVista));
 chk('"Confirmar e importar" usa var(--ok-dim)/var(--ok), no #065f46/#86efac a mano',
     /background:var\(--ok-dim\);'\s*\+\s*'border:1px solid var\(--ok-dim\);color:var\(--ok\)/.test(fVista));
-chk('"Importar entrada de mercancía" (en la pestaña) usa el mismo trío var(--ok-dim)/var(--ok)',
-    /background:var\(--ok-dim\);'\s*\+\s*'border:1px solid var\(--ok-dim\);color:var\(--ok\)/.test(fTab));
+// v5.18 — "Importar entrada de mercancía" se movió al módulo Importar desde Excel.
+chk('v5.18 · la pestaña ya no tiene botón de importar (vive en el módulo Importar)',
+    !/comprasImportarExcel\(\)/.test(fTab) && /comprasImportarExcel\(\)/.test(fs.readFileSync(path.join(RAIZ, 'js/96-importar.js'), 'utf8')));
 
 // ═══ 3 · COMPRAS — SIN EMOJI COMO ICONOGRAFÍA ══════════════════════════════
 chk('★ Ningún emoji de interfaz queda en renderVistaPreviaCompras/renderIncidenciasImportacion/renderComprasTab',
@@ -125,7 +126,7 @@ chk('_diferenciasDeCosto() conserva su cálculo (±1% contra el precio del catá
     /if \(!prod \|\| typeof prod\.precio !== 'number' \|\| prod\.precio <= 0\) return;/.test(funcion(compJs, '_diferenciasDeCosto')));
 chk('Los permisos purchases.read/purchases.import/purchases.create siguen gateando lo mismo que antes',
     /hasPermission\('purchases\.read'\)/.test(fTab) &&
-    /hasPermission\('purchases\.import'\)/.test(fTab) &&
+    /permiso: 'purchases\.import'/.test(fs.readFileSync(path.join(RAIZ, 'js/96-importar.js'), 'utf8')) &&   // v5.18: en el módulo
     /hasPermission\('purchases\.create'\)/.test(fTab));
 chk('Las notificaciones de este módulo conservan su emoji (texto plano, no interfaz)',
     /showNotification\('⚠️ No tienes permiso para importar compras'\)/.test(compJs) &&

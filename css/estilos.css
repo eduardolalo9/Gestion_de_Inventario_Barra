@@ -2919,7 +2919,7 @@ button.pm-tile:active { transform: scale(.98); }
 .pm-ficha__cab { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
 .pm-ficha__titulo { font-size: 1.02rem; font-weight: 800; color: var(--txt-primary); }
 .pm-ficha__sub { font-size: 0.72rem; color: var(--txt-muted); margin-top: 2px; }
-.pm-ficha__x { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 999px; border: 1px solid var(--border); background: var(--card-high); color: var(--txt-secondary); cursor: pointer; flex-shrink: 0; transition: background-color .14s ease, color .14s ease; }
+.pm-ficha__x { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 999px; border: 1px solid var(--border); background: var(--card-high); color: var(--txt-secondary); cursor: pointer; flex-shrink: 0; transition: background-color .14s ease, color .14s ease; }
 .pm-ficha__x:hover { background: var(--border); color: var(--txt-primary); }
 .pm-ficha__sec { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--txt-secondary); margin: 14px 0 6px; }
 .pm-ficha__areas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
@@ -3730,3 +3730,81 @@ textarea.ui-campo { resize: vertical; min-height: 88px; }
 .vt-sim__tabla th.vt-num { text-align: right; }
 .vt-sim__det summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-size: .86rem; font-weight: 600; color: var(--txt-primary); }
 @media (max-width: 420px) { .vt-sim__kpis { grid-template-columns: 1fr; } .vt-sim__kpi { flex-direction: row; justify-content: space-between; align-items: center; } }
+
+/* ══ v5.18 · Compras: tarjeta que abre el detalle por proveedor ═════════════ */
+.cp-tarjeta {
+    background: var(--surface); border: 1px solid var(--border-mid); border-radius: var(--r-md);
+    padding: 14px 16px; margin-bottom: 10px; cursor: pointer;
+    transition: border-color .14s var(--ease-out), background-color .14s var(--ease-out);
+}
+.cp-tarjeta:hover { border-color: var(--border-strong); }
+.cp-tarjeta:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cp-tarjeta__ver { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-height: 28px; margin-top: 6px;
+    font-size: .8rem; font-weight: 600; color: var(--brass); }
+.cd-cab__txt { min-width: 0; flex: 1; }
+.cd-resumen { display: flex; justify-content: space-between; gap: 10px; font-size: .84rem; color: var(--txt-secondary); margin-bottom: 6px; }
+.cd-resumen b { color: var(--txt-primary); }
+.cd-lista { list-style: none; margin: 0 0 6px; padding: 0; }
+.cd-item { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.cd-item:last-child { border-bottom: none; }
+.cd-item__nom { min-width: 0; flex: 1; font-size: .86rem; font-weight: 600; color: var(--txt-primary); line-height: 1.35; }
+.cd-item__meta { font-size: .74rem; font-weight: 400; color: var(--txt-secondary); margin-top: 2px; }
+.cd-item__cifras { text-align: right; font-size: .86rem; color: var(--txt-primary); white-space: nowrap; }
+.cd-item__cifras .num, .cd-resumen .num { font-family: 'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; }
+.cd-tag { display: inline-block; font-size: .68rem; font-weight: 700; padding: 1px 6px; border-radius: var(--r-full); vertical-align: middle; }
+.cd-tag--warn { background: var(--warn-dim); color: var(--warn); }
+
+/* ══ v5.18 · Módulo Importar desde Excel ═════════════════════════════════════ */
+.imp-wrap { padding: 4px 0 16px; }
+.imp-cab { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 14px; }
+.imp-cab__tit { font-size: 1.1rem; font-weight: 700; color: var(--txt-primary); }
+.imp-cab__sub { font-size: .84rem; color: var(--txt-secondary); line-height: 1.5; margin-top: 2px; }
+.imp-volver { flex-shrink: 0; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
+    border-radius: var(--r-full); border: 1px solid var(--border-mid); background: var(--surface); color: var(--txt-primary); cursor: pointer; }
+.imp-volver:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.imp-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+@media (min-width: 820px) { .imp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.imp-sec { display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: var(--r-lg);
+    background: var(--surface); border: 1px solid var(--border-mid); }
+.imp-sec--bloq { opacity: .75; }
+.imp-sec__cab { display: flex; align-items: center; gap: 10px; }
+.imp-sec__ico { color: var(--brass); font-size: 1.1rem; }
+.imp-sec__tit { font-weight: 700; font-size: .98rem; color: var(--txt-primary); }
+.imp-sec__desc { font-size: .84rem; color: var(--txt-secondary); line-height: 1.5; }
+.imp-sec__lock { font-size: .82rem; color: var(--txt-secondary); display: flex; align-items: center; gap: 6px; }
+.imp-sec__acc { display: flex; flex-wrap: wrap; gap: 8px; }
+.imp-sec__acc .bt, .imp-acc .bt { min-height: 44px; }
+.imp-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+@media (max-width: 420px) { .imp-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.imp-kpi { display: flex; flex-direction: column; gap: 2px; padding: 10px; border-radius: var(--r-md); background: var(--surface); border: 1px solid var(--border-mid); }
+.imp-kpi span { font-size: .72rem; color: var(--txt-secondary); }
+.imp-kpi b { font-size: 1rem; color: var(--txt-primary); text-align: right; font-family: 'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; }
+.imp-kpi--mal { border-color: var(--danger); background: var(--danger-dim); }
+.imp-kpi--mal b { color: var(--danger); }
+.imp-sub { font-size: .86rem; font-weight: 700; color: var(--txt-primary); margin: 12px 0 6px; }
+.imp-ok { display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border-radius: var(--r-md); background: var(--ok-dim); color: var(--txt-primary); font-size: .86rem; margin-bottom: 8px; }
+.imp-ok i { color: var(--ok); margin-top: 2px; }
+.imp-msgs { list-style: none; margin: 0 0 8px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.imp-msgs li { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border-radius: var(--r-sm); font-size: .8rem; line-height: 1.45; color: var(--txt-primary); }
+.imp-msgs li i { flex-shrink: 0; margin-top: 2px; }
+.imp-msgs--error li { background: var(--danger-dim); }
+.imp-msgs--error li i { color: var(--danger); }
+.imp-msgs--aviso li { background: var(--warn-dim); }
+.imp-msgs--aviso li i { color: var(--warn); }
+.imp-ayuda { font-size: .8rem; color: var(--txt-secondary); line-height: 1.5; }
+.imp-momento { display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: var(--r-lg); background: var(--surface); border: 1px solid var(--border-mid); margin-bottom: 12px; }
+.imp-momento .imp-sub { margin-top: 0; }
+.imp-momento__campos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.imp-campo { display: flex; flex-direction: column; gap: 4px; font-size: .84rem; font-weight: 600; color: var(--txt-primary); }
+.imp-tabla { width: 100%; border-collapse: collapse; font-size: .84rem; margin-bottom: 6px; }
+.imp-tabla th { font-size: .72rem; font-weight: 600; color: var(--txt-secondary); text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--border-mid); }
+.imp-tabla td { padding: 8px 4px; border-bottom: 1px solid var(--border); color: var(--txt-primary); vertical-align: top; }
+.imp-tabla .imp-num, .imp-num { text-align: right; white-space: nowrap; font-family: 'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; }
+.imp-meta { font-size: .72rem; color: var(--txt-secondary); margin-top: 2px; }
+.imp-tabla td.imp-mal { color: var(--danger); }
+.imp-tabla td.imp-bien { color: var(--ok); }
+.imp-acc { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.imp-vacio { text-align: center; padding: 50px 20px; color: var(--txt-secondary); }
+.imp-sec__acc .bt { width: auto; }
+.imp-sec__acc .bt[data-imp-subir] { flex: 1 1 100%; }
+.imp-sec__acc .bt[data-imp-plantilla] { flex: 1 1 0; min-width: 0; white-space: nowrap; padding: 0 10px; font-size: .86rem; gap: 6px; }

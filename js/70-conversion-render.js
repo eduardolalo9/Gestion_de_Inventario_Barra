@@ -385,6 +385,7 @@
                 case 'compras':         content.innerHTML = renderComprasTab(); break;
                 case 'recetario':       content.innerHTML = renderRecetarioTab(); break;
                 case 'ventas':          content.innerHTML = renderVentasTab(); break;
+                case 'importar':        content.innerHTML = (typeof renderImportarTab === 'function') ? renderImportarTab() : renderInicioTab(); break;   // v5.18
                 case 'ajustes':         content.innerHTML = renderAjustesTab(); break;
                 case 'notificaciones':  content.innerHTML = renderNotificacionesTab(); break;
                 case 'admin':           content.innerHTML = isAdmin() ? renderAdminTab() : renderInicioTab(); break;
@@ -471,7 +472,6 @@
                 if (isAdmin()) {
                     headerActions.innerHTML = '<div class="hd-fila">' +
                         _hdBtn('openProductModal()', 'fa-plus', 'Agregar', 'Agregar', 'primario') +
-                        _hdBtn("document.getElementById('fileInput').click()", 'fa-file-arrow-up', 'Importar Excel', 'Importar', 'ok') +
                         _hdBtn('publicarCatalogoFirestore()', 'fa-cloud-arrow-up', 'Publicar catálogo', 'Publicar', 'acento') +
                         _hdBtn('deleteAllProducts()', 'fa-trash', 'Eliminar todos', '', 'peligro', 'Eliminar todos los productos') +
                         '</div>';
@@ -484,7 +484,6 @@
                 if (hasPermission('recipe.edit')) {
                     headerActions.innerHTML = '<div class="hd-fila">' +
                         _hdBtn('openRecetaModal()', 'fa-plus', 'Nueva receta', 'Nueva', 'primario') +
-                        _hdBtn('recetarioImportarExcel()', 'fa-file-arrow-up', 'Importar Excel', 'Importar', 'ok') +
                         _hdBtn('publicarRecetarioFirestore()', 'fa-cloud-arrow-up', 'Publicar recetario', 'Publicar', 'acento') +
                         '</div>';
                 } else {
@@ -493,10 +492,10 @@
             } else if (activeTab === 'ventas') {
                 // FASE 10 — mismo criterio: sin sales.import no hay botón de
                 // escritura, solo la etiqueta de solo lectura.
+                // v5.18 — importar ventas vive en el módulo "Importar desde
+                // Excel" (decisión de Eduardo, 6-oct-2026): aquí ya no hay botón.
                 if (hasPermission('sales.import')) {
-                    headerActions.innerHTML = '<div class="hd-fila">' +
-                        _hdBtn('ventasImportarExcel()', 'fa-file-arrow-up', 'Importar ventas', 'Importar', 'ok') +
-                        '</div>';
+                    headerActions.innerHTML = '';
                 } else {
                     headerActions.innerHTML = _chipSoloLectura();
                 }
@@ -750,9 +749,8 @@
                 html += '<button class="inicio-btn primary" onclick="openProductModal()">'
                       + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>'
                       + 'Producto</button>';
-                html += '<button class="inicio-btn success" onclick="document.getElementById(\'fileInput\').click()">'
-                      + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>'
-                      + 'Excel</button>';
+                // v5.18 — el botón "Excel" (importar catálogo sin validar) se
+                // retiró: importar vive en el módulo "Importar desde Excel".
                 html += '</div>';
             }
 
