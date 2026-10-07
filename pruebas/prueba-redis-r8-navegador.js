@@ -94,7 +94,8 @@ async function abrir(nav, ancho) {
         return { n: bs.length, dentro: rects.every(r => r.left >= 0 && r.right <= innerWidth), altos: rects.map(r => Math.round(r.height)), bajo: ha.top >= hb.bottom - 1,
           nombres: bs.map(b => (b.getAttribute('aria-label') || b.innerText || '').trim()), peligro: !!document.querySelector('#headerActions .hd-btn--peligro'), sw: document.documentElement.scrollWidth };
       });
-      chk('Productos (admin, 390 px): 4 acciones, todas dentro de la pantalla', h.n === 4 && h.dentro, JSON.stringify(h));
+      // v5.18 — "Importar Excel" se mudó al módulo Importar desde Excel: quedan 3 acciones.
+      chk('Productos (admin, 390 px): 3 acciones (Agregar, Publicar, Eliminar todos), todas dentro de la pantalla', h.n === 3 && h.dentro && !h.nombres.some(n => /importar/i.test(n)), JSON.stringify(h));
       chk('Las acciones bajan a su propio renglón (no empujan el título ni desbordan)', h.bajo && h.sw <= 390, JSON.stringify(h));
       chk('Todas las acciones miden ≥44 px y tienen nombre accesible', h.altos.every(a => a >= 44) && h.nombres.every(n => n.length > 0), JSON.stringify(h));
       chk('"Eliminar todos" es el único botón de peligro y conserva su nombre completo', h.peligro && h.nombres.some(n => /eliminar todos/i.test(n)), '');
@@ -102,8 +103,8 @@ async function abrir(nav, ancho) {
     if (ancho >= 820) {
       await p.evaluate(() => { activeTab = 'productos'; renderTab(); });
       await p.waitForTimeout(250);
-      const una = await p.evaluate(() => { const a = [...document.querySelectorAll('#headerActions .hd-btn')].map(b => Math.round(b.getBoundingClientRect().top)); return new Set(a).size === 1 && a.length === 4; });
-      chk('[' + ancho + '] las 4 acciones van en una sola fila', una, '');
+      const una = await p.evaluate(() => { const a = [...document.querySelectorAll('#headerActions .hd-btn')].map(b => Math.round(b.getBoundingClientRect().top)); return new Set(a).size === 1 && a.length === 3; });
+      chk('[' + ancho + '] las 3 acciones van en una sola fila', una, '');
       await p.evaluate(() => { activeTab = 'inicio'; renderTab(); sbOpen(); }); await p.waitForTimeout(350);
       const alt = await p.evaluate(() => [...document.querySelectorAll('.sb-item')].filter(b => b.getBoundingClientRect().height > 0).map(b => Math.round(b.getBoundingClientRect().height)));
       chk('[' + ancho + '] el menú lateral no comprime sus entradas (todas ≥44 px)', alt.length > 5 && alt.every(a => a >= 44), alt.join(','));

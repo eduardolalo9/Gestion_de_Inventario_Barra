@@ -70,8 +70,9 @@ const PUERTO = process.env.PUERTO || '8080';
   chk('★ Conserva el rail de grupos y los chips de filtro', partes.rail >= 2 && partes.chips, 'grupos: ' + partes.rail);
   chk('★ Conserva la LISTA DE PRODUCTOS en Inicio (decisión de Eduardo)',
       partes.productos === 3, 'tarjetas: ' + partes.productos);
-  chk('Conserva los botones de administración (Producto, Excel, Eliminar todos)',
-      partes.btnProducto && partes.btnExcel && partes.btnBorrar, JSON.stringify(partes));
+  // v5.18 — "Excel" (importaba sin validar) se mudó al módulo Importar desde Excel.
+  chk('Conserva los botones de administración (Producto, Eliminar todos); "Excel" se mudó al módulo Importar',
+      partes.btnProducto && !partes.btnExcel && partes.btnBorrar, JSON.stringify(partes));
   chk('Conserva la tarjeta de sincronización y la de reportes',
       partes.sincro && partes.reportes);
 

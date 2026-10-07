@@ -1186,7 +1186,7 @@
 
         // ── MÓDULO: CATÁLOGO (admin publica, usuarios reciben) ────────────
         async function publicarCatalogoFirestore() {
-            if (!_db || !hasPermission('catalog.publish')) return;
+            if (!_db || !hasPermission('catalog.publish')) return false;
             try {
                 await _db.collection('catalogo').doc('productos').set({
                     productos:        products,
@@ -1196,9 +1196,11 @@
                 });
                 await crearNotificacion('catalogo', 'Admin publicó catálogo actualizado (' + products.length + ' productos)', null, true);
                 showNotification('✅ Catálogo publicado a todos los usuarios');
+                return true;    // v5.18 — el módulo Importar necesita saber si se publicó
             } catch (e) {
                 console.error('[Catalogo] Error publicando:', e);
                 showNotification('❌ Error al publicar catálogo');
+                return false;
             }
         }
 

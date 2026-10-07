@@ -68,8 +68,11 @@
         /**
          * anclaElegir(candidatos, hoyISO)
          * De todos los candidatos, el MÁS NUEVO cuya fecha no sea futura.
-         * Empate de fecha: gana el inicial semanal (es el ciclo oficial, y
-         * además un domingo-fin-de-mes ya escribe el inicial).
+         * Empate de fecha: v5.18 — gana el que se REGISTRÓ después
+         * (registradoEn, ms), porque un corte importado a las 14:30 de un día
+         * en que ya se había contabilizado un recuento es lo más reciente que
+         * se sabe. Si alguno no trae registradoEn, se conserva la regla de
+         * FASE 14: gana el inicial semanal (el ciclo oficial).
          *
          * candidato: { tipo: 'inicial_semanal'|'fin_de_mes'|'mitad_de_semana',
          *              fecha, id, saldos, origen, semanaId? }
@@ -80,8 +83,11 @@
                 if (!c || !c.fecha || !_arrFecha(c.fecha)) return;
                 if (hoyISO && c.fecha > hoyISO) return;   // un corte de mañana no vale hoy
                 if (!c.saldos || typeof c.saldos !== 'object') return;
+                var empate = mejor && c.fecha === mejor.fecha;
+                var ambosConRegistro = empate && typeof c.registradoEn === 'number' && typeof mejor.registradoEn === 'number';
                 if (!mejor || c.fecha > mejor.fecha ||
-                    (c.fecha === mejor.fecha && c.tipo === 'inicial_semanal' && mejor.tipo !== 'inicial_semanal')) {
+                    (ambosConRegistro && c.registradoEn > mejor.registradoEn) ||
+                    (empate && !ambosConRegistro && c.tipo === 'inicial_semanal' && mejor.tipo !== 'inicial_semanal')) {
                     mejor = c;
                 }
             });
@@ -255,6 +261,7 @@
             if (ancla.tipo === 'inicial_semanal') return 'Inicial semanal (conteo del ' + fecha + ')';
             if (ancla.tipo === 'fin_de_mes')      return 'Corte de fin de mes (' + fecha + ')';
             if (ancla.tipo === 'mitad_de_semana') return 'Recuento de mitad de semana (' + fecha + ')';
+            if (ancla.tipo === 'importacion_excel') return 'Corte importado de Excel (' + fecha + (ancla.hora ? ' ' + ancla.hora : '') + ')';
             return 'Conteo del ' + fecha;
         }
 

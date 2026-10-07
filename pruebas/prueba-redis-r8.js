@@ -65,14 +65,18 @@ const nImp = sinComentarios.split('\n').filter(l => l.includes('!important')).le
 const TOPE_IMPORTANT = 238;
 chk('Líneas con !important ≤ ' + TOPE_IMPORTANT + ' (eran 338 antes de R8; el número solo puede bajar)', nImp <= TOPE_IMPORTANT, 'hay ' + nImp);
 const bytes = Buffer.byteLength(css);
-chk('estilos.css pesa menos de 185 KB (presupuesto)', bytes < 185 * 1024, Math.round(bytes / 1024) + ' KB');
+// v5.18: el presupuesto sube a 195 KB por los módulos Importar y detalle de compras (~6 KB).
+chk('estilos.css pesa menos de 195 KB (presupuesto)', bytes < 195 * 1024, Math.round(bytes / 1024) + ' KB');
 
 // ═══ Encabezado ═══════════════════════════════════════════
-chk('Los botones del encabezado salen de un solo constructor _hdBtn()', /function _hdBtn\(/.test(j70) && (j70.match(/_hdBtn\(/g) || []).length >= 9);
+chk('Los botones del encabezado salen de un solo constructor _hdBtn()', /function _hdBtn\(/.test(j70) && (j70.match(/_hdBtn\(/g) || []).length >= 6);   // v5.18: sin los 3 de importar
 const fnHeader = (j70.match(/function updateHeaderActions\(\)[\s\S]*?\n        }\n/) || [''])[0];
 chk('updateHeaderActions ya no usa utilidades Tailwind ni degradados', fnHeader && !/bg-gradient|from-purple|from-red|text-xs sm:text-base|px-3 sm:px-6/.test(fnHeader), fnHeader.length + ' chars');
 chk('"Eliminar todos" conserva nombre accesible aunque en celular solo muestre el icono', /_hdBtn\('deleteAllProducts\(\)'[^)]*'Eliminar todos los productos'\)/.test(fnHeader));
-chk('Acciones intactas: openProductModal, importar, publicarCatalogoFirestore, deleteAllProducts, recetas, ventas, Excel', ['openProductModal()', "document.getElementById('fileInput').click()", 'publicarCatalogoFirestore()', 'deleteAllProducts()', 'openRecetaModal()', 'recetarioImportarExcel()', 'publicarRecetarioFirestore()', 'ventasImportarExcel()', 'exportarAuditoriaExcel()'].every(a => fnHeader.includes(a)));
+// v5.18 — los botones de importar (catálogo, recetario, ventas) se movieron al módulo Importar desde Excel.
+chk('Acciones intactas: openProductModal, publicarCatalogoFirestore, deleteAllProducts, recetas, Excel', ['openProductModal()', 'publicarCatalogoFirestore()', 'deleteAllProducts()', 'openRecetaModal()', 'publicarRecetarioFirestore()', 'exportarAuditoriaExcel()'].every(a => fnHeader.includes(a)));
+chk('v5.18 · el encabezado ya no importa nada: catálogo, recetario y ventas se importan desde el módulo',
+    !["document.getElementById('fileInput').click()", 'recetarioImportarExcel()', 'ventasImportarExcel()'].some(a => fnHeader.includes(a)));
 chk('CSS .hd-btn: 44 px y colores por token (sin hex)', /\.hd-btn\s*\{[^}]*min-height:\s*44px/.test(css) && !/\.hd-btn[^{]*\{[^}]*#[0-9a-f]{3,6}/i.test(sinComentarios));
 chk('En ≤520 px la fila de acciones ocupa su propio renglón', /@media \(max-width: 520px\)\s*\{\s*\.hd-acciones:not\(:empty\)\s*\{[^}]*flex:\s*1 1 100%/.test(css));
 chk('La fila del encabezado puede partirse (flex-wrap) y #headerActions usa .hd-acciones', /hd-fila-cab/.test(html) && /id="headerActions" class="hd-acciones"/.test(html) && /\.hd-fila-cab\s*\{[^}]*flex-wrap:\s*wrap/.test(css));
