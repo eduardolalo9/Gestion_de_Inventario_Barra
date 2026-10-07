@@ -822,8 +822,8 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
     <!-- Utilidades locales (sustituyen a Tailwind CDN) + iconos locales
          (sustituyen a Font Awesome CDN). Va ANTES de estilos.css para que
          las reglas propias de la app sigan teniendo la última palabra. -->
-    <link rel="stylesheet" href="css/utilidades.css?v=5.18">
-    <link rel="stylesheet" href="css/estilos.css?v=5.18">
+    <link rel="stylesheet" href="css/utilidades.css?v=5.19">
+    <link rel="stylesheet" href="css/estilos.css?v=5.19">
 </head>
 <body class="min-h-screen">
 
@@ -974,6 +974,11 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
             <button type="button" id="sbAdminBtn" class="sb-item" data-sb-tab="admin" onclick="switchTab('admin'); sbClose()" style="display:none">
                 <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
                 Panel Admin
+            </button>
+            <!-- v5.19 — papelera de servidor (solo administración) -->
+            <button type="button" id="sbPapeleraBtn" class="sb-item" data-sb-tab="papelera" onclick="switchTab('papelera'); sbClose()" style="display:none">
+                <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16M10 11v6M14 11v6M6 7l.9 12.1A2 2 0 008.9 21h6.2a2 2 0 002-1.9L18 7M9 7V4h6v3"/></svg>
+                Papelera
             </button>
 
             <p class="sb-sep">Respaldo</p>
@@ -1498,46 +1503,48 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
         </div>
     </div>
 
-        <script src="js/00-nucleo.js?v=5.18"></script>
-    <script src="js/03-ui-kit.js?v=5.18"></script><!-- BI UI KIT (rediseño R1) -->
-    <script src="js/05-busqueda-motor.js?v=5.18"></script>
-    <script src="js/06-busqueda-ui.js?v=5.18"></script>
-    <script src="js/10-multiusuario.js?v=5.18"></script>
-    <script src="js/15-ciclo-semanal.js?v=5.18"></script>
-    <script src="js/18-areas-config.js?v=5.18"></script>
-    <script src="js/20-persistencia.js?v=5.18"></script>
-    <script src="js/30-indexeddb.js?v=5.18"></script>
-    <script src="js/40-firestore.js?v=5.18"></script>
-    <script src="js/45-inventario-datos.js?v=5.18"></script>
-    <script src="js/46-arrastre.js?v=5.18"></script>
-    <script src="js/47-existencia.js?v=5.18"></script>
-    <script src="js/48-consumo-teorico.js?v=5.18"></script>
-    <script src="js/49-fisico-vs-sistema.js?v=5.18"></script>
-    <script src="js/50-roles-permisos.js?v=5.18"></script>
-    <script src="js/60-arranque.js?v=5.18"></script>
-    <script src="js/70-conversion-render.js?v=5.18"></script>
-    <script src="js/71-posicion-conteo.js?v=5.18"></script>
-    <script src="js/75-auditoria-flujo.js?v=5.18"></script>
-    <script src="js/80-buscador.js?v=5.18"></script>
-    <script src="js/83-panel.js?v=5.18"></script>
-    <script src="js/85-ui-inventario-fisico.js?v=5.18"></script>
-    <script src="js/87-reconteo.js?v=5.18"></script>
-    <script src="js/88-compras.js?v=5.18"></script>
-    <script src="js/89-compras-detalle.js?v=5.18"></script>
-    <script src="js/90-ciclo-admin.js?v=5.18"></script>
-    <script src="js/91-recetario.js?v=5.18"></script>
-    <script src="js/92-recetario-importar.js?v=5.18"></script>
-    <script src="js/93-ventas.js?v=5.18"></script>
-    <script src="js/94-venta-turno.js?v=5.18"></script>
-    <script src="js/95-exportacion.js?v=5.18"></script>
-    <script src="js/96-importar.js?v=5.18"></script>
-    <script src="js/99-window-arranque.js?v=5.18"></script>
+        <script src="js/00-nucleo.js?v=5.19"></script>
+    <script src="js/03-ui-kit.js?v=5.19"></script><!-- BI UI KIT (rediseño R1) -->
+    <script src="js/05-busqueda-motor.js?v=5.19"></script>
+    <script src="js/06-busqueda-ui.js?v=5.19"></script>
+    <script src="js/10-multiusuario.js?v=5.19"></script>
+    <script src="js/15-ciclo-semanal.js?v=5.19"></script>
+    <script src="js/18-areas-config.js?v=5.19"></script>
+    <script src="js/20-persistencia.js?v=5.19"></script>
+    <script src="js/30-indexeddb.js?v=5.19"></script>
+    <script src="js/40-firestore.js?v=5.19"></script>
+    <script src="js/45-inventario-datos.js?v=5.19"></script>
+    <script src="js/46-arrastre.js?v=5.19"></script>
+    <script src="js/47-existencia.js?v=5.19"></script>
+    <script src="js/48-consumo-teorico.js?v=5.19"></script>
+    <script src="js/49-fisico-vs-sistema.js?v=5.19"></script>
+    <script src="js/50-roles-permisos.js?v=5.19"></script>
+    <script src="js/51-total-publicado.js?v=5.19"></script><!-- v5.19 -->
+    <script src="js/53-papelera.js?v=5.19"></script><!-- v5.19 -->
+    <script src="js/60-arranque.js?v=5.19"></script>
+    <script src="js/70-conversion-render.js?v=5.19"></script>
+    <script src="js/71-posicion-conteo.js?v=5.19"></script>
+    <script src="js/75-auditoria-flujo.js?v=5.19"></script>
+    <script src="js/80-buscador.js?v=5.19"></script>
+    <script src="js/83-panel.js?v=5.19"></script>
+    <script src="js/85-ui-inventario-fisico.js?v=5.19"></script>
+    <script src="js/87-reconteo.js?v=5.19"></script>
+    <script src="js/88-compras.js?v=5.19"></script>
+    <script src="js/89-compras-detalle.js?v=5.19"></script>
+    <script src="js/90-ciclo-admin.js?v=5.19"></script>
+    <script src="js/91-recetario.js?v=5.19"></script>
+    <script src="js/92-recetario-importar.js?v=5.19"></script>
+    <script src="js/93-ventas.js?v=5.19"></script>
+    <script src="js/94-venta-turno.js?v=5.19"></script>
+    <script src="js/95-exportacion.js?v=5.19"></script>
+    <script src="js/96-importar.js?v=5.19"></script>
+    <script src="js/99-window-arranque.js?v=5.19"></script>
 
     </div><!-- /#appWrapper -->
 
     <!-- ══════════════════════════════════════════════════════
          AUTH — Lógica de autenticación Firebase
          ══════════════════════════════════════════════════════ -->
-        <script src="js/auth.js?v=5.18"></script>
+        <script src="js/auth.js?v=5.19"></script>
 </body>
 </html>

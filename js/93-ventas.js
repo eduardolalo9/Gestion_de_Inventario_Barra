@@ -237,16 +237,20 @@
             (listas || []).forEach(function(lineas) {
                 (lineas || []).forEach(function(l) {
                     if (!l || !l.sku) return;
-                    if (!porSku[l.sku]) { porSku[l.sku] = { sku: l.sku, nombre: l.nombre || '', tipo: l.tipo || '', cantidad: 0, ventaNeta: 0 }; orden.push(l.sku); }
+                    if (!porSku[l.sku]) { porSku[l.sku] = { sku: l.sku, nombre: l.nombre || '', tipo: l.tipo || '', cantidad: 0, ventaNeta: 0, cortesia: 0, promo: 0 }; orden.push(l.sku); }
                     porSku[l.sku].cantidad  += Number(l.cantidad)  || 0;
                     porSku[l.sku].ventaNeta += Number(l.ventaNeta) || 0;
+                    // v5.19 — cortesías y promos 2x1 viajan con la línea (se suman igual)
+                    var partes = ventaPartesLinea(l);
+                    porSku[l.sku].cortesia += partes.cortesia;
+                    porSku[l.sku].promo    += partes.promo;
                 });
             });
             return orden.map(function(s) {
                 var g = porSku[s];
-                return { sku: g.sku, nombre: g.nombre, tipo: g.tipo,
+                return _ventasLineaConPartes({ sku: g.sku, nombre: g.nombre, tipo: g.tipo,
                          cantidad: Math.round(g.cantidad * 1000) / 1000,
-                         ventaNeta: Math.round(g.ventaNeta * 100) / 100 };
+                         ventaNeta: Math.round(g.ventaNeta * 100) / 100 }, g.cortesia, g.promo);
             });
         }
         window._ventasAgregarLineas = _ventasAgregarLineas;
@@ -258,6 +262,61 @@
             return Object.keys(dias).sort();
         }
         window.ventasCoberturaSemana = ventasCoberturaSemana;
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  v5.19 — CORTESÍAS Y PROMOCIONES 2x1 (decisiones de Eduardo)
+        //  ────────────────────────────────────────────────────────────────────
+        //  · D-5 (19-sep): las cortesías NO se costean contra la venta, pero SÍ
+        //    descuentan stock teórico — el líquido salió de la botella.
+        //  · 2x1 (6-oct): Parrot registra la copa cobrada como el artículo normal
+        //    y la de regalo como "… promo 2x1" a $0, con el MISMO SKU. Cada
+        //    unidad promo es UNA copa: sumarlas (lo que ya se hacía) es correcto.
+        //  El consumo NO cambia. Lo nuevo es separarlas para verlas y saber
+        //  cuánto cuestan (a precio de insumo), como control.
+        //  Una fila es "a $0" si su Venta neta es exactamente 0. Si el archivo
+        //  no trae Venta neta no se clasifica nada (no se adivina).
+        // ══════════════════════════════════════════════════════════════════════
+        var VENTAS_RE_PROMO = /promo|2\s*x\s*1/i;
+
+        /** 'venta' | 'promo' | 'cortesia' para una fila del reporte. */
+        function ventaClasificarFila(nombre, ventaNeta, cantidad) {
+            if (ventaNeta === null || ventaNeta === undefined || ventaNeta === '' || !isFinite(Number(ventaNeta))) return 'venta';
+            if (Number(ventaNeta) !== 0 || !(Number(cantidad) > 0)) return 'venta';
+            return VENTAS_RE_PROMO.test(String(nombre || '')) ? 'promo' : 'cortesia';
+        }
+
+        /** Agrega cortesia/promo a la línea solo si hay (el formato viejo no cambia). */
+        function _ventasLineaConPartes(l, cortesia, promo) {
+            var c = Math.round((Number(cortesia) || 0) * 1000) / 1000;
+            var p = Math.round((Number(promo) || 0) * 1000) / 1000;
+            if (c > 0) l.cortesia = c;
+            if (p > 0) l.promo = p;
+            return l;
+        }
+
+        /**
+         * Unidades de cortesía y de promo 2x1 de una línea guardada. Las líneas
+         * anteriores a v5.19 no traen el desglose: si la línea entera vale $0 se
+         * clasifica por su nombre; si mezcla venta y regalo, no se puede saber.
+         */
+        function ventaPartesLinea(l) {
+            if (!l) return { cortesia: 0, promo: 0 };
+            if (typeof l.cortesia === 'number' || typeof l.promo === 'number') {
+                return { cortesia: Number(l.cortesia) || 0, promo: Number(l.promo) || 0 };
+            }
+            var clase = ventaClasificarFila(l.nombre, l.ventaNeta, l.cantidad);
+            var n = Number(l.cantidad) || 0;
+            return { cortesia: clase === 'cortesia' ? n : 0, promo: clase === 'promo' ? n : 0 };
+        }
+        /** Etiqueta corta "x cortesía · y 2x1" para una línea (vacía si no hay). */
+        function _ventasEtiquetaRegalo(l) {
+            var p = ventaPartesLinea(l), t = [];
+            if (p.cortesia > 0) t.push(p.cortesia + ' cortesía');
+            if (p.promo > 0) t.push(p.promo + ' de regalo 2x1');
+            return t.length ? ' <span class="vt-regalo">' + escapeHtml(t.join(' · ')) + '</span>' : '';
+        }
+        window.ventaClasificarFila = ventaClasificarFila;
+        window.ventaPartesLinea = ventaPartesLinea;
 
         /**
          * _parsearExcelVentas(filas)
@@ -310,6 +369,8 @@
                         tipo: String(_findColCompras(fila, COLUMNAS_EXCEL_VENTAS.tipo) || '').trim(),
                         cantidad: 0,
                         ventaNeta: 0,
+                        cortesia: 0,
+                        promo: 0,
                         filas: 0
                     };
                     orden.push(sku);
@@ -320,6 +381,13 @@
                 g.filas++;
                 const neta = _numeroExcel(_findColCompras(fila, COLUMNAS_EXCEL_VENTAS.ventaNeta));
                 if (neta !== null) g.ventaNeta += neta;
+                // v5.19 — una fila a $0 es cortesía o la copa de regalo de una
+                // promo 2x1 (decisión de Eduardo, 6-oct-2026: cada unidad "promo
+                // 2x1" a $0 es UNA copa). Las dos SÍ descuentan stock (D-5); aquí
+                // solo se separan para poder verlas y costearlas aparte.
+                const clase = ventaClasificarFila(nombre, neta, cantidad);
+                if (clase === 'cortesia') g.cortesia += cantidad;
+                else if (clase === 'promo') g.promo += cantidad;
                 // El nombre de la variante promo es menos útil que el base:
                 // se conserva el primero que llegó, que es el de mayor venta
                 // porque el reporte viene ordenado de mayor a menor.
@@ -327,11 +395,11 @@
 
             const lineas = orden.map(function(sku) {
                 const g = porSku[sku];
-                return {
+                return _ventasLineaConPartes({
                     sku: g.sku, nombre: g.nombre, tipo: g.tipo,
                     cantidad: Math.round(g.cantidad * 1000) / 1000,
                     ventaNeta: Math.round(g.ventaNeta * 100) / 100
-                };
+                }, g.cortesia, g.promo);
             });
 
             const agrupadas = orden.filter(function(sku) { return porSku[sku].filas > 1; })
@@ -345,6 +413,8 @@
                 filasIgnoradas: filasIgnoradas,
                 totalFilas: (filas || []).length,
                 totalUnidades: Math.round(lineas.reduce(function(a, l) { return a + l.cantidad; }, 0) * 1000) / 1000,
+                unidadesCortesia: Math.round(lineas.reduce(function(a, l) { return a + (l.cortesia || 0); }, 0) * 1000) / 1000,
+                unidadesPromo: Math.round(lineas.reduce(function(a, l) { return a + (l.promo || 0); }, 0) * 1000) / 1000,
                 excedeTope: lineas.length > VENTAS_MAX_LINEAS
             };
         }
@@ -540,6 +610,12 @@
                       + escapeHtml(parsed.skusAgrupados.slice(0, 4).map(function(s) { return s.nombre + ' (' + s.filas + ')'; }).join(', '))
                       + (parsed.skusAgrupados.length > 4 ? '…' : '') + '</div>';
             }
+            // v5.19 — cortesías y copas de regalo 2x1 (filas a $0)
+            if (parsed.unidadesCortesia || parsed.unidadesPromo) {
+                html += '<div class="vt-msg vt-msg--info vt-msg--sep">'
+                      + '<i class="fa-solid fa-gift" aria-hidden="true"></i> Incluye <b>' + (parsed.unidadesCortesia || 0) + '</b> cortesía(s) y <b>'
+                      + (parsed.unidadesPromo || 0) + '</b> copa(s) de regalo 2x1 a $0. Descuentan inventario; con <b>Simular</b> ves qué consumieron y su costo.</div>';
+            }
 
             // Las 12 más vendidas, para que se reconozca de un vistazo si el
             // archivo es el correcto sin pintar 200 filas en un teléfono.
@@ -549,7 +625,7 @@
                   + '<table class="vt-tabla">';
             top.forEach(function(l) {
                 html += '<tr>'
-                      + '<td>' + escapeHtml(l.nombre || l.sku) + '</td>'
+                      + '<td>' + escapeHtml(l.nombre || l.sku) + _ventasEtiquetaRegalo(l) + '</td>'
                       + '<td class="vt-num">' + l.cantidad + '</td>'
                       + '</tr>';
             });
@@ -891,11 +967,18 @@
             // ── FASE 11A — consumo teórico calculado con el recetario ────────
             html += _renderConsumoTeorico();
 
+            // ── v5.19 — cortesías y promos 2x1 de la semana, con su costo ──
+            if (typeof ventaCortesiasAnalizar === 'function' && typeof renderCortesiasVenta === 'function') {
+                html += renderCortesiasVenta(ventaCortesiasAnalizar(ventas, { productos: (typeof products !== 'undefined') ? products : [] }), {
+                    notaHistorica: 'En ventas importadas antes del 6-oct-2026, una promo 2x1 que comparte SKU con la venta normal no se puede separar (sí está en el consumo).'
+                });
+            }
+
             var ordenadas = ventas.slice().sort(function(a, b) { return (b.cantidad || 0) - (a.cantidad || 0); });
             html += '<table class="vt-tabla vt-tabla--lista">';
             ordenadas.forEach(function(l) {
                 html += '<tr>'
-                      + '<td>' + escapeHtml(l.nombre || l.sku)
+                      + '<td>' + escapeHtml(l.nombre || l.sku) + _ventasEtiquetaRegalo(l)
                       + '<div class="vt-sku">' + escapeHtml(l.sku) + '</div></td>'
                       + '<td class="vt-num">' + (l.cantidad || 0) + '</td>'
                       + '</tr>';

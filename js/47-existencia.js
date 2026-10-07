@@ -94,6 +94,8 @@
         function existenciaCargarInicial(alTerminar) {
             var sem = existenciaSemanaHoy();
             if (!sem || typeof _db === 'undefined' || !_db) return;
+            // v5.19 — quien no puede leer compras/ventas escucha el Total publicado.
+            if (typeof totalPublicadoSuscribir === 'function') totalPublicadoSuscribir();
 
             // Ya hay respuesta firme para esta semana: no se consulta de nuevo
             // y no se apunta a nadie a la lista de avisos (una lista que nadie
@@ -185,7 +187,14 @@
             var estado = { anclaFecha: ancla.fecha, compras: [], periodos: [],
                            comprasNoDisponibles: false, ventasNoDisponibles: false,
                            version: (_existenciaArrastre.version || 0) + 1 };
-            var leerCompras = semanas.map(function(w) {
+            // v5.19 — sin permiso ni se pregunta: las reglas lo negarían de todos
+            // modos (una lectura fallida por semana es batería y datos tirados).
+            // Ese usuario toma el Total publicado (js/51).
+            var authzListo = (typeof _authzState !== 'undefined' && _authzState && _authzState.loaded && typeof hasPermission === 'function');
+            var semanasCompras = semanas, semanasVentas = semanas;
+            if (authzListo && !hasPermission('purchases.read')) { estado.comprasNoDisponibles = true; semanasCompras = []; }
+            if (authzListo && !hasPermission('sales.read'))     { estado.ventasNoDisponibles = true;  semanasVentas = []; }
+            var leerCompras = semanasCompras.map(function(w) {
                 return _db.collection('compras').where('semanaId', '==', w).get().then(function(snap) {
                     snap.forEach(function(doc) {
                         var c = doc.data() || {};
@@ -197,7 +206,7 @@
                     estado.comprasNoDisponibles = true;
                 });
             });
-            var leerVentas = semanas.map(function(w) {
+            var leerVentas = semanasVentas.map(function(w) {
                 return _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID).collection('ventas')
                           .where('semanaId', '==', w).get().then(function(snap) {
                     snap.forEach(function(doc) {
@@ -267,6 +276,9 @@
          */
         function existenciaArrastreResumen() {
             if (_existenciaRuta() !== 'arrastre' || _existenciaInicial.estado !== 'ok') return null;
+            // v5.19 — quien usa el Total publicado ve el resumen de quien lo publicó.
+            var pub = (typeof _totalPublicadoResumen === 'function') ? _totalPublicadoResumen() : null;
+            if (pub) return pub;
             var c = _existenciaArrastreCalcular();
             return {
                 ancla:                _existenciaInicial.ancla,
@@ -325,6 +337,10 @@
             lista.forEach(function(fn) {
                 try { fn(); } catch (e) { console.warn('[Existencia] Aviso falló:', e); }
             });
+            // v5.19 — el Total cambió de base: publicarlo (o escuchar el publicado).
+            if (typeof totalPublicadoAlCambiarExistencia === 'function') {
+                try { totalPublicadoAlCambiarExistencia(); } catch (e) { console.warn('[Existencia] Total publicado:', e); }
+            }
         }
 
         /**
@@ -406,6 +422,13 @@
             if (!product || !product.id) {
                 return { valor: 0, origen: 'operativo_no_reconciliado', inicial: undefined,
                          entradas: 0, ventas: 0, operativa: 0, hayInicial: false };
+            }
+            // v5.19 — sin permiso de compras/ventas manda el Total publicado
+            // (mismas cantidades que ve administración, sin dinero). js/51.
+            var pub = (typeof _totalPublicadoParaProducto === 'function') ? _totalPublicadoParaProducto(product) : null;
+            if (pub) {
+                return { valor: pub.valor, origen: 'oficial', inicial: pub.inicial, entradas: pub.entradas, ventas: pub.ventas,
+                         operativa: operativa, hayInicial: true, ancla: pub.ancla, fuente: 'publicado', publicadoEn: pub.publicadoEn };
             }
             var ent = (cacheEntradas || existenciaEntradas())[product.id] || 0;
             var ven = (cacheVentas   || existenciaVentas())[product.id]   || 0;

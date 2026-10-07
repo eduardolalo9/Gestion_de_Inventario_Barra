@@ -132,9 +132,101 @@
                 noAlcanzanSinPrecio: sinPrecio,
                 enRespaldo:       insumos.filter(function(x) { return x.origen !== 'oficial'; }).length,
                 avisos:           avisos,
+                // v5.19 — cortesías y copas de regalo 2x1, con su costo (control)
+                cortesias:        ventaCortesiasAnalizar(lineas, { productos: opciones.productos, consumir: consumir }),
                 calculadoEn:      Date.now()
             };
         }
+
+        /**
+         * v5.19 — ventaCortesiasAnalizar(lineas, opciones) — capa pura.
+         * Cortesías y copas de regalo de promos 2x1: cuántas unidades, qué
+         * insumos consumieron y cuánto cuestan a precio de insumo. Es CONTROL:
+         * no cambia el consumo (que ya las incluye, D-5) ni se costea contra la
+         * venta. Un insumo sin precio se cuenta aparte, sin inventar valor.
+         *
+         * opciones: { productos, consumir: function(lineas) → { consumo } }
+         */
+        function ventaCortesiasAnalizar(lineas, opciones) {
+            opciones = opciones || {};
+            var partes = (typeof ventaPartesLinea === 'function') ? ventaPartesLinea
+                       : function(l) { return { cortesia: Number(l && l.cortesia) || 0, promo: Number(l && l.promo) || 0 }; };
+            var consumir = opciones.consumir || (typeof consumoTeoricoDeLineas === 'function' ? consumoTeoricoDeLineas : null);
+            var porId = {};
+            (opciones.productos || []).forEach(function(p) { if (p && p.id) porId[String(p.id)] = p; });
+
+            function grupo(campo) {
+                var items = [], sub = [];
+                (lineas || []).forEach(function(l) {
+                    if (!l || !l.sku) return;
+                    var n = partes(l)[campo];
+                    if (!(n > 0)) return;
+                    items.push({ sku: l.sku, nombre: l.nombre || l.sku, unidades: _vtRed(n), totalSku: _vtRed(Number(l.cantidad) || 0) });
+                    sub.push({ sku: l.sku, nombre: l.nombre, cantidad: n });
+                });
+                items.sort(function(a, b) { return b.unidades - a.unidades; });
+                var consumo = (consumir && sub.length) ? (consumir(sub).consumo || {}) : {};
+                var insumos = [], costo = 0, sinPrecio = 0;
+                Object.keys(consumo).forEach(function(pid) {
+                    var p = porId[pid];
+                    var c = _vtRed(consumo[pid]);
+                    if (!c) return;
+                    var precio = (p && typeof p.precio === 'number' && isFinite(p.precio)) ? p.precio : null;
+                    var imp = precio !== null ? _vtRed(c * precio, 2) : null;
+                    if (imp === null) sinPrecio++; else costo += imp;
+                    insumos.push({ productoId: pid, nombre: p ? (p.name || pid) : pid, unidad: p ? (p.unit || '') : '',
+                                   consumo: c, precio: precio, costo: imp, enCatalogo: !!p });
+                });
+                insumos.sort(function(a, b) { return (b.costo === null ? -1 : b.costo) - (a.costo === null ? -1 : a.costo); });
+                return { items: items, unidades: _vtRed(items.reduce(function(a, x) { return a + x.unidades; }, 0)),
+                         insumos: insumos, costo: _vtRed(costo, 2), sinPrecio: sinPrecio };
+            }
+            var cortesias = grupo('cortesia'), promos = grupo('promo');
+            return { cortesias: cortesias, promos: promos,
+                     hay: cortesias.items.length > 0 || promos.items.length > 0,
+                     costoTotal: _vtRed(cortesias.costo + promos.costo, 2) };
+        }
+
+        /** Panel "Cortesías y promociones 2x1" (simulación y pestaña Ventas). */
+        function renderCortesiasVenta(cz, opciones) {
+            opciones = opciones || {};
+            if (!cz || !cz.hay) return '';
+            var h = '<section class="vt-panel vt-cz" aria-labelledby="vtCzTit">'
+                  + '<div id="vtCzTit" class="vt-panel__tit">Cortesías y promociones 2x1</div>'
+                  + '<div class="vt-ayuda vt-ayuda--chica">Salieron de la barra a $0. <b>Sí descuentan inventario</b> (ya están en el consumo de arriba) '
+                  + 'y <b>no se costean contra la venta</b>: el costo es a precio de insumo, para control.</div>'
+                  + '<div class="vt-sim__kpis">'
+                  + '<div class="vt-sim__kpi"><span>Cortesías</span><b class="num">' + cz.cortesias.unidades + '</b></div>'
+                  + '<div class="vt-sim__kpi"><span>Copas de regalo 2x1</span><b class="num">' + cz.promos.unidades + '</b></div>'
+                  + '<div class="vt-sim__kpi"><span>Costo a precio de insumo</span><b class="num">' + _vtMoneda(cz.costoTotal) + '</b></div></div>';
+            [['cortesias', 'Cortesías'], ['promos', 'Promos 2x1 (copa de regalo)']].forEach(function(par) {
+                var g = cz[par[0]];
+                if (!g.items.length) return;
+                h += '<div class="vt-subtit">' + par[1] + ' · ' + _vtMoneda(g.costo) + '</div>'
+                   + '<table class="vt-tabla vt-tabla--densa"><tbody>';
+                g.items.slice(0, 12).forEach(function(x) {
+                    h += '<tr><td>' + escapeHtml(x.nombre) + '<div class="vt-sku">' + escapeHtml(x.sku)
+                       + (par[0] === 'promos' ? ' · ' + x.totalSku + ' en total con las cobradas' : '') + '</div></td>'
+                       + '<td class="vt-num">' + x.unidades + '</td></tr>';
+                });
+                h += '</tbody></table>';
+                if (g.insumos.length) {
+                    h += '<details class="vt-sim__det"><summary>Insumos que consumieron (' + g.insumos.length + ')</summary>'
+                       + '<table class="vt-tabla vt-tabla--densa"><tbody>';
+                    g.insumos.slice(0, 40).forEach(function(i) {
+                        h += '<tr><td>' + escapeHtml(i.nombre) + (i.enCatalogo ? '' : ' <span class="vt-txt-chico vt-txt-error">(no está en el catálogo)</span>')
+                           + '<div class="vt-sku"><span class="num">' + i.consumo + '</span> ' + escapeHtml(i.unidad) + '</div></td>'
+                           + '<td class="vt-num">' + (i.costo === null ? 'sin precio' : _vtMoneda(i.costo)) + '</td></tr>';
+                    });
+                    h += '</tbody></table></details>';
+                }
+                if (g.sinPrecio) h += '<div class="vt-ayuda vt-ayuda--chica">' + g.sinPrecio + ' insumo(s) sin precio no entran al costo.</div>';
+            });
+            if (opciones.notaHistorica) h += '<div class="vt-ayuda vt-ayuda--chica">' + opciones.notaHistorica + '</div>';
+            return h + '</section>';
+        }
+        window.ventaCortesiasAnalizar = ventaCortesiasAnalizar;
+        window.renderCortesiasVenta = renderCortesiasVenta;
 
         // ══════════════════════════════════════════════════════════════════════
         //  CONEXIÓN CON LA APP
@@ -280,6 +372,7 @@
                 h += '<div class="vt-ayuda vt-ayuda--chica">' + sim.enRespaldo + ' insumo(s) marcados "(respaldo)" no entraron al último corte: '
                    + 'su Total es la suma de áreas y no baja al procesar.</div>';
             }
+            h += renderCortesiasVenta(sim.cortesias);
             h += '<button type="button" class="bt bt--secundario" onclick="ventaTurnoSimular()"><i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i> Volver a simular</button>';
             h += '</section>';
             return h;
@@ -314,6 +407,10 @@
             if (sim.totalNoAlcanzan) {
                 msg += '⚠️ ' + sim.totalNoAlcanzan + ' insumo(s) no alcanzan · desviación ' + _vtMoneda(sim.costoDesviacion)
                      + (sim.noAlcanzanSinPrecio ? ' (+' + sim.noAlcanzanSinPrecio + ' sin precio)' : '') + '\n';
+            }
+            if (sim.cortesias && sim.cortesias.hay) {
+                msg += '🎁 ' + sim.cortesias.cortesias.unidades + ' cortesía(s) y ' + sim.cortesias.promos.unidades + ' copa(s) de regalo 2x1 · '
+                     + _vtMoneda(sim.cortesias.costoTotal) + ' a precio de insumo (descuentan inventario, no se costean contra la venta)\n';
             }
             if (sim.efecto === 'anterior_al_corte') msg += 'ℹ️ Son ventas anteriores al último corte: se guardan, pero NO bajan el Total.\n';
             if (sim.efecto === 'sin_ancla')         msg += 'ℹ️ No hay corte contabilizado: se guardan, pero el Total (respaldo) no baja todavía.\n';

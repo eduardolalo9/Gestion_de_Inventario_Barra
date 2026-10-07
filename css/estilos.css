@@ -3808,3 +3808,25 @@ textarea.ui-campo { resize: vertical; min-height: 88px; }
 .imp-sec__acc .bt { width: auto; }
 .imp-sec__acc .bt[data-imp-subir] { flex: 1 1 100%; }
 .imp-sec__acc .bt[data-imp-plantilla] { flex: 1 1 0; min-width: 0; white-space: nowrap; padding: 0 10px; font-size: .86rem; gap: 6px; }
+
+/* ══ v5.19 · Cortesías y promos 2x1 · Papelera ═══════════════════════════════ */
+.vt-regalo { display: inline-block; margin-left: 4px; padding: 1px 6px; border-radius: var(--r-full); background: var(--accent-dim); color: var(--txt-primary); font-size: .7rem; font-weight: 600; white-space: nowrap; }
+.vt-cz { margin-top: 12px; }
+.pap-wrap { padding: 4px 0 16px; }
+.pap-cab { margin-bottom: 14px; }
+.pap-cab__tit { font-size: 1.1rem; font-weight: 700; color: var(--txt-primary); }
+.pap-cab__sub { font-size: .84rem; color: var(--txt-secondary); line-height: 1.5; margin-top: 2px; }
+.pap-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.pap-item { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: var(--r-lg); background: var(--surface); border: 1px solid var(--border-mid); }
+.pap-item--hecho { opacity: .8; }
+.pap-item__cab { display: flex; gap: 10px; align-items: flex-start; }
+.pap-item__ico { color: var(--brass); font-size: 1.05rem; margin-top: 2px; flex-shrink: 0; }
+.pap-item__txt { min-width: 0; flex: 1; }
+.pap-item__tit { font-weight: 700; font-size: .95rem; color: var(--txt-primary); }
+.pap-item__meta { font-size: .8rem; color: var(--txt-secondary); line-height: 1.45; overflow-wrap: anywhere; }
+.pap-item__ok { font-size: .8rem; color: var(--txt-primary); margin-top: 4px; display: flex; gap: 6px; align-items: center; }
+.pap-item__ok i { color: var(--ok); }
+.pap-item__acc, .pap-acc { display: flex; flex-wrap: wrap; gap: 8px; }
+.pap-acc { margin-top: 14px; }
+.pap-item__acc .bt, .pap-acc .bt { width: auto; min-height: 44px; flex: 1 1 auto; }
+.pap-vacio { text-align: center; padding: 40px 20px; color: var(--txt-secondary); }

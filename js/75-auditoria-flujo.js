@@ -1813,7 +1813,12 @@
                                 // NO se tocó, sigue en la sesión anterior. No hay nada que
                                 // revertir.
                                 console.error('[AuditReset] Error crítico al iniciar sesión en Firestore — estado local NO modificado, sesión anterior sigue activa:', err);
-                                showNotification('❌ No se pudo iniciar la nueva auditoría — la auditoría anterior sigue activa. Revisa la conexión y vuelve a intentarlo');
+                                // v5.19 — la papelera viaja en el mismo batch: si el servidor
+                                // la rechaza (reglas sin desplegar) no se borra nada.
+                                var _denegado = err && (err.code === 'permission-denied' || /permission/i.test(err.message || ''));
+                                showNotification(_denegado
+                                    ? '❌ No se pudo iniciar el inventario: el servidor rechazó la escritura (¿faltan desplegar las reglas de Firestore de la v5.19, papelera?). No se borró nada.'
+                                    : '❌ No se pudo iniciar la nueva auditoría — la auditoría anterior sigue activa. Revisa la conexión y vuelve a intentarlo');
                             } finally {
                                 _auditoriaCreandoEnProgreso = false;
                             }

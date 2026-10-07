@@ -823,6 +823,15 @@ const usersList = Object.values(allUsersAuditoria);
             //    anterior, EXCEPTO el propio admin (BUG-6 FIX: evita que su
             //    propio delete dispare un loop de reset en su propio listener;
             //    su doc se sobrescribe explícitamente en el punto 3).
+            // v5.19 — PAPELERA: antes de borrar (o reescribir, en el caso del
+            // propio admin, punto 3) se guarda en papelera/ lo que cada persona
+            // llevaba contado, en ESTE MISMO batch. Si la papelera no se puede
+            // escribir, el batch entero falla y no se borra nada (js/53).
+            if (typeof papeleraAgregarConteosABatch === 'function') {
+                const docsPapelera = [];
+                snap.forEach(doc => { docsPapelera.push({ id: doc.id, data: doc.data() }); });
+                papeleraAgregarConteosABatch(batch, docsPapelera, sessionId);
+            }
             snap.forEach(doc => {
                 if (doc.id !== currentUserUid) batch.delete(doc.ref);
             });

@@ -825,6 +825,61 @@
                  }
 
                  // ══════════════════════════════════════════════════════════
+                 //  v5.19 — TOTAL PUBLICADO (js/51-total-publicado.js)
+                 //  Un solo documento, 'actual', con el Total por producto en
+                 //  CANTIDADES (sin precios ni importes). Lo escribe quien puede
+                 //  leer compras y ventas —es quien puede calcularlo completo— y
+                 //  lo lee cualquier cuenta activa: así el bartender ve el mismo
+                 //  Total que el jefe sin acceso a dinero. La hora la pone el
+                 //  servidor (request.time): un reloj atrasado no lo "rejuvenece".
+                 //  Lista cerrada de campos: no puede colarse un importe.
+                 // ══════════════════════════════════════════════════════════
+                 match /totalPublicado/{docName} {
+                   allow read:   if _cuentaActiva();
+                   allow create, update: if docName == 'actual'
+                                    && hasPerm('sales.read') && hasPerm('purchases.read')
+                                    && request.resource.data.keys().hasOnly(['version', 'ancla', 'valores', 'productos', 'conEntradas',
+                                         'diasEsperados', 'diasFaltantes', 'periodosIncluidos', 'periodosPartidos', 'sinReceta',
+                                         'publicadoPor', 'huella', 'publicadoEn'])
+                                    && request.resource.data.version == 1
+                                    && request.resource.data.publicadoPor == request.auth.uid
+                                    && request.resource.data.publicadoEn == request.time
+                                    && request.resource.data.valores is map
+                                    && request.resource.data.ancla is map
+                                    && request.resource.data.ancla.fecha is string;
+                   allow delete: if false;
+                 }
+
+                 // ══════════════════════════════════════════════════════════
+                 //  v5.19 — PAPELERA DE SERVIDOR (js/53-papelera.js)
+                 //  Lo que se borra se copia aquí ANTES (en el mismo batch para
+                 //  conteos y reportes; confirmado antes del borrado local para
+                 //  productos). Lee administración. Un registro NO se edita: solo
+                 //  se marca restaurado (dos campos). Solo se vacía lo de más de
+                 //  30 días; borradoEn lo fija el cliente, por eso al crearlo se
+                 //  exige que esté a ±10 min de la hora del servidor.
+                 // ══════════════════════════════════════════════════════════
+                 match /papelera/{registroId} {
+                   allow read:   if isAdminUser();
+                   allow create: if _cuentaActiva()
+                                    && request.resource.data.borradoPor == request.auth.uid
+                                    && request.resource.data.borradoEn is number
+                                    && request.resource.data.borradoEn > request.time.toMillis() - 600000
+                                    && request.resource.data.borradoEn < request.time.toMillis() + 600000
+                                    && request.resource.data.contenido is map
+                                    && request.resource.data.rutaOriginal is string
+                                    && !('restauradoEn' in request.resource.data)
+                                    && ((request.resource.data.origen in ['conteos', 'reporte'] && isAdminUser())
+                                        || (request.resource.data.origen in ['producto', 'catalogo'] && hasPerm('catalog.edit')));
+                   allow update: if isAdminUser()
+                                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['restauradoEn', 'restauradoPor'])
+                                    && request.resource.data.restauradoPor == request.auth.uid
+                                    && request.resource.data.restauradoEn is number;
+                   allow delete: if isAdminUser()
+                                    && resource.data.borradoEn < request.time.toMillis() - 2592000000;
+                 }
+
+                 // ══════════════════════════════════════════════════════════
                  //  FASE 10 — VENTAS DEL POS, un documento por semana, aquí
                  //  junto a inventariosIniciales porque es dato del ciclo
                  //  semanal (js/93-ventas.js escribe en

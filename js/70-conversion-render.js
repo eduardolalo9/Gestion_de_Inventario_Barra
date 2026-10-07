@@ -386,6 +386,7 @@
                 case 'recetario':       content.innerHTML = renderRecetarioTab(); break;
                 case 'ventas':          content.innerHTML = renderVentasTab(); break;
                 case 'importar':        content.innerHTML = (typeof renderImportarTab === 'function') ? renderImportarTab() : renderInicioTab(); break;   // v5.18
+                case 'papelera':        content.innerHTML = (typeof renderPapeleraTab === 'function') ? renderPapeleraTab() : renderInicioTab(); break;   // v5.19
                 case 'ajustes':         content.innerHTML = renderAjustesTab(); break;
                 case 'notificaciones':  content.innerHTML = renderNotificacionesTab(); break;
                 case 'admin':           content.innerHTML = isAdmin() ? renderAdminTab() : renderInicioTab(); break;
@@ -397,6 +398,9 @@
             // v5.17 — el riel de grupos conserva su desplazamiento y el grupo
             // activo queda a la vista (js/71-posicion-conteo.js).
             if (typeof posicionTrasRender === 'function') posicionTrasRender();
+            // v5.19 — si el Total cambió (compra/venta guardada aquí), publicarlo
+            // para el equipo. Con espera e intervalo mínimo: no cuesta por toque.
+            if (typeof totalPublicadoQuizasPublicar === 'function') totalPublicadoQuizasPublicar(false);
 
             // FIX 4: restaurar scroll (en siguiente frame para no luchar con el layout)
             // v5.17 — sin animación: html tiene scroll-behavior:smooth y la

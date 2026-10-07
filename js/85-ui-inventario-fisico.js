@@ -1799,12 +1799,15 @@
             showConfirm(
                 '⚠️ ¿Eliminar el producto "' + prodName + '"?\n\n' +
                 'Se borrarán también sus conteos en todas las áreas.\n' +
-                'Esta acción NO se puede deshacer.',
+                'Queda una copia en la Papelera (administración puede restaurarlo).',
                 function() {
                     // Segunda confirmación para mayor seguridad
                     showConfirm(
-                        '🗑️ CONFIRMAR ELIMINACIÓN\n\n"' + prodName + '" será eliminado permanentemente.\n\n¿Estás seguro?',
+                        '🗑️ CONFIRMAR ELIMINACIÓN\n\n"' + prodName + '" será eliminado del catálogo.\n\n¿Estás seguro?',
                         function() {
+                          // v5.19 — PAPELERA: primero la copia en el servidor; solo
+                          // si se confirma, se borra (js/53). Sin señal no se borra.
+                          var _aplicarBorrado = function() {
                             // Crear respaldo antes de eliminar
                             _crearBackupNombrado('pre_eliminacion_' + id + '_' + Date.now());
 
@@ -1827,8 +1830,11 @@
                             });
 
                             saveToLocalStorage();
-                            showNotification('Producto eliminado: ' + prodName);
+                            showNotification('Producto eliminado: ' + prodName + (typeof _db !== 'undefined' && _db ? ' (copia en la Papelera)' : ''));
                             renderTab();
+                          };
+                          if (product && typeof papeleraProtegerProductos === 'function') papeleraProtegerProductos([product], 'producto', _aplicarBorrado);
+                          else _aplicarBorrado();
                         }
                     );
                 }
@@ -1843,12 +1849,15 @@
             showConfirm(
                 '🚨 ¿Eliminar TODOS los ' + products.length + ' productos?\n\n' +
                 'Se borrarán el catálogo completo y todos los conteos.\n' +
-                'Esta acción NO se puede deshacer.',
+                'Queda una copia en la Papelera del servidor (administración puede restaurarlo).',
                 function() {
                     showConfirm(
                         '🗑️ CONFIRMACIÓN FINAL\n\nSe eliminará TODO el catálogo (' + products.length + ' productos).\n\n' +
                         'Se creará un respaldo automático antes de continuar.\n\n¿Confirmar eliminación total?',
                         function() {
+                          // v5.19 — PAPELERA: copia de TODO el catálogo en el servidor
+                          // antes de vaciarlo; si no se confirma, no se borra nada.
+                          var _aplicarVaciado = function() {
                             // Backup automático antes de eliminar todo
                             _crearBackupNombrado('pre_eliminacion_total_' + Date.now());
 
@@ -1884,8 +1893,11 @@
                                     'vaciar en la nube. Vuelve a intentarlo con señal.');
                             });
 
-                            showNotification('Todos los productos han sido eliminados. Respaldo guardado.');
+                            showNotification('Todos los productos han sido eliminados. Respaldo guardado' + (typeof _db !== 'undefined' && _db ? ' y copia en la Papelera.' : '.'));
                             renderTab();
+                          };
+                          if (typeof papeleraProtegerProductos === 'function') papeleraProtegerProductos(products.slice(), 'catalogo', _aplicarVaciado);
+                          else _aplicarVaciado();
                         }
                     );
                 }
