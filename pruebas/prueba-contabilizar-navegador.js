@@ -84,8 +84,9 @@ const PUERTO = process.env.PUERTO || '8080';
 
   // ── C · Cerrado a media semana ────────────────────────────────────────
   const c = await p.evaluate(b => __pintar(Object.assign({}, b, { estado: 'CERRADO', fechaRecuento: '2026-09-23' }), ['*']), base);
-  chk('★ Un corte a media semana explica por qué no se contabiliza',
-      /No se puede contabilizar\. Solo se contabiliza un recuento fechado en DOMINGO/.test(c.txt) && !c.contab, c.txt.slice(0, 400));
+  // FASE 14 (5-oct-2026): a media semana ya se contabiliza, como ancla del Total.
+  chk('★ FASE 14 · un corte a media semana ofrece contabilizarse como ancla del Total',
+      /Contabilizar como ancla del Total/.test(c.txt) && /punto de partida \(ancla\) del Total/.test(c.txt) && c.contab, c.txt.slice(0, 400));
   chk('…y deja crear el siguiente', c.crear);
 
   // ── D · Contabilizado: el caso que antes dejaba la app atorada ─────────

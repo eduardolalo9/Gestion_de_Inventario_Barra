@@ -668,13 +668,17 @@
                    //  revienta con un error de evaluación y tumba el batch entero
                    //  con un mensaje opaco, incluida la escritura del corte
                    //  mensual que viaja en el MISMO batch.
+                   //
+                   //  FASE 14 — se agregó 'anclaDestino' por la misma razón: un
+                   //  fin de mes entre semana o un recuento de mitad de semana
+                   //  escriben el ancla del Total y la anotan en la cabecera.
                    allow update: if isAdminUser() && (
                         (resource.data.estado != 'CERRADO' && resource.data.estado != 'CONTABILIZADO'
                          && request.resource.data.estado != 'CONTABILIZADO')
                      || ( resource.data.estado == 'CERRADO'
                           && request.resource.data.estado == 'CONTABILIZADO'
                           && request.resource.data.diff(resource.data).affectedKeys()
-                               .hasOnly(['estado','contabilizadoEn','contabilizadoPor','semanaDestino','mesDestino'])
+                               .hasOnly(['estado','contabilizadoEn','contabilizadoPor','semanaDestino','mesDestino','anclaDestino'])
                           && hasPerm('inventory.post') )
                    );
                    allow delete: if false;
@@ -777,6 +781,32 @@
                    allow create: if hasPerm('inventory.post')
                                     && _mesIdValido(mesId)
                                     && request.resource.data.mesId == mesId
+                                    && request.resource.data.origen.inventoryId is string
+                                    && request.resource.data.saldos is map;
+                   allow update, delete: if false;
+                 }
+
+                 // ══════════════════════════════════════════════════════════
+                 //  FASE 14 — ANCLAS DEL TOTAL (arrastre continuo)
+                 //  ────────────────────────────────────────────────────────
+                 //  Un fin de mes entre semana o un recuento de mitad de
+                 //  semana, contabilizado, deja aquí su físico: es el punto de
+                 //  partida del Total (saldo + compras − ventas posteriores).
+                 //  Mismo patrón que inventariosIniciales: id determinista (la
+                 //  FECHA del recuento, 'YYYY-MM-DD'), create sin update ni
+                 //  delete — un ancla equivocada no se reescribe, se supera
+                 //  con un recuento más nuevo. Solo cantidades, sin dinero:
+                 //  legible por cualquier autenticado, como el inicial.
+                 // ══════════════════════════════════════════════════════════
+                 function _fechaAnclaValida(s) {
+                   return s is string && s.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$');
+                 }
+                 match /anclasExistencia/{fecha} {
+                   allow read:   if request.auth != null;
+                   allow create: if hasPerm('inventory.post')
+                                    && _fechaAnclaValida(fecha)
+                                    && request.resource.data.fecha == fecha
+                                    && request.resource.data.tipo in ['fin_de_mes', 'mitad_de_semana']
                                     && request.resource.data.origen.inventoryId is string
                                     && request.resource.data.saldos is map;
                    allow update, delete: if false;

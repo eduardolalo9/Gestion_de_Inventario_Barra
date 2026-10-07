@@ -56,6 +56,13 @@ const PRUEBAS = [
     'prueba-redis-r7-navegador.js',     // REDISEÑO R7 — Recetario y los modales pendientes, en pantalla
     'prueba-recetario-buscador-unificado-navegador.js', // Recetario — mismo buscador que Inicio: typos, tildes, PV, paginación, teclado
     'prueba-redis-r7b-navegador.js',    // REDISEÑO R7b — Compras (y Pedidos, revisado), en pantalla
+    'prueba-redis-r7c-navegador.js',    // REDISEÑO R7c — Ventas, en pantalla (oscuro y claro)
+    'prueba-redis-r7d-navegador.js',    // REDISEÑO R7d — Historia, Notificaciones, Ajustes, Admin y Roles (oscuro y claro)
+    'prueba-redis-r8-navegador.js',     // REDISEÑO R8 — desborde, contraste, nombres, táctil y rendimiento (3 anchos × 2 temas)
+    'prueba-fase14-navegador.js',       // FASE 14 — ancla del Total y venta del turno (Simular / Procesar)
+    'prueba-posicion-conteo-navegador.js', // v5.17 — posición en el conteo (3 áreas, grupos, modales)
+    'prueba-conteo-compacto-navegador.js', // v5.11 — vista compacta del Conteo, en pantalla
+    'prueba-actualizaciones-navegador.js', // v5.12 — despliegue simulado: detecta, avisa, actualiza con un toque, conserva datos
 ];
 
 function esperarServidor(intentos) {

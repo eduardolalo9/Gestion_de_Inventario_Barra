@@ -336,9 +336,13 @@
         }
 
         function updateSelectedGroup(value) {
+            // v5.17 — cada grupo recuerda su posición (js/71-posicion-conteo.js):
+            // se guarda la del grupo que se deja y se recupera la del que se elige.
+            if (typeof posicionGuardarGrupo === 'function') posicionGuardarGrupo(selectedGroup);
             selectedGroup = value;
             saveToLocalStorage();
             renderTab();
+            if (typeof posicionRestaurarGrupo === 'function') posicionRestaurarGrupo(value);
         }
 
         // FIX 4 — Re-render: preservar scroll y foco; evitar salto visual innecesario
@@ -389,10 +393,17 @@
             // FASE 6 — centinelas de carga incremental y altura del encabezado
             // para la barra de búsqueda pegajosa.
             if (typeof BusquedaUI !== 'undefined') BusquedaUI.trasRender();
+            // v5.17 — el riel de grupos conserva su desplazamiento y el grupo
+            // activo queda a la vista (js/71-posicion-conteo.js).
+            if (typeof posicionTrasRender === 'function') posicionTrasRender();
 
             // FIX 4: restaurar scroll (en siguiente frame para no luchar con el layout)
+            // v5.17 — sin animación: html tiene scroll-behavior:smooth y la
+            // lista "viajaba" visiblemente hasta su sitio en cada repintado.
             if (scrollY > 0) {
-                requestAnimationFrame(() => { window.scrollTo(0, scrollY); });
+                requestAnimationFrame(() => {
+                    if (typeof posicionIrA === 'function') posicionIrA(scrollY); else window.scrollTo(0, scrollY);
+                });
             }
 
             // FIX 4: restaurar foco y cursor si el elemento existe en el nuevo DOM
@@ -431,6 +442,23 @@
             return '<span class="bi-badge bi-badge--neutral">Solo lectura</span>';
         }
 
+        /**
+         * R8 — Botón del encabezado con clases del sistema de diseño.
+         * Antes cada botón repetía ~300 caracteres de utilidades Tailwind,
+         * medía 32-40 px de alto y en celular (390 px) la fila de Productos
+         * desbordaba la pantalla. Ahora: 44 px de alto, una sola definición
+         * (.hd-btn), la fila baja a su propio renglón y se parte en líneas.
+         * tono: 'primario' (latón, acción decisiva) | 'ok' | 'acento' | 'peligro' | 'neutro'
+         */
+        function _hdBtn(onclick, icono, largo, corto, tono, aria) {
+            return '<button type="button" class="hd-btn hd-btn--' + tono + '" onclick="' + onclick + '"' +
+                (aria ? ' aria-label="' + aria + '" title="' + aria + '"' : '') + '>' +
+                '<i class="fa-solid ' + icono + '" aria-hidden="true"></i>' +
+                (largo ? '<span class="hd-btn__txt-largo">' + largo + '</span>' : '') +
+                (corto ? '<span class="hd-btn__txt-corto">' + corto + '</span>' : '') +
+                '</button>';
+        }
+
         function updateHeaderActions() {
             const headerActions = document.getElementById('headerActions');
             if (activeTab === 'inicio') {
@@ -438,10 +466,15 @@
                 headerActions.innerHTML = '';
             } else if (activeTab === 'inventario') {
                 // Conteo — botón Excel para exportar
-                headerActions.innerHTML = '<button onclick="exportarAuditoriaExcel()" style="display:flex;align-items:center;gap:6px;padding:7px 13px;border-radius:var(--r-md);background:var(--ok-dim);border:1px solid var(--ok-dim);color:var(--ok);font-size:.75rem;font-weight:600;cursor:pointer;"><svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>Excel</button>';
+                headerActions.innerHTML = _hdBtn('exportarAuditoriaExcel()', 'fa-download', 'Excel', '', 'ok');
             } else if (activeTab === 'productos') {
                 if (isAdmin()) {
-                    headerActions.innerHTML = '<div class="flex gap-2 sm:gap-3 flex-wrap"><button onclick="openProductModal()" class="bg-gradient-to-r from-purple-500 to-orange-500 text-white px-3 sm:px-6 py-2 sm:py-3 rounded-full flex items-center gap-1 sm:gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs sm:text-base whitespace-nowrap"><svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg><span class="hidden sm:inline">Agregar</span><span class="sm:hidden">+</span></button><button onclick="document.getElementById(\'fileInput\').click()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:var(--ok-dim);border:1px solid var(--ok-dim);color:var(--ok);"><i class="fa-solid fa-file-arrow-up"></i><span class="hidden sm:inline">Importar Excel</span><span class="sm:hidden">Importar</span></button><button onclick="publicarCatalogoFirestore()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:var(--accent-dim);border:1px solid var(--accent-dim2);color:var(--brass);"><i class="fa-solid fa-cloud-arrow-up"></i><span class="hidden sm:inline">Publicar catálogo</span><span class="sm:hidden">Publicar</span></button><button onclick="deleteAllProducts()" class="bg-gradient-to-r from-red-500 to-orange-600 text-white px-3 sm:px-6 py-2 sm:py-3 rounded-full flex items-center gap-1 sm:gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs sm:text-base whitespace-nowrap" title="Eliminar todos"><svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg><span class="hidden sm:inline">Eliminar Todos</span><span class="sm:hidden">Del</span></button></div>';
+                    headerActions.innerHTML = '<div class="hd-fila">' +
+                        _hdBtn('openProductModal()', 'fa-plus', 'Agregar', 'Agregar', 'primario') +
+                        _hdBtn("document.getElementById('fileInput').click()", 'fa-file-arrow-up', 'Importar Excel', 'Importar', 'ok') +
+                        _hdBtn('publicarCatalogoFirestore()', 'fa-cloud-arrow-up', 'Publicar catálogo', 'Publicar', 'acento') +
+                        _hdBtn('deleteAllProducts()', 'fa-trash', 'Eliminar todos', '', 'peligro', 'Eliminar todos los productos') +
+                        '</div>';
                 } else {
                     headerActions.innerHTML = _chipSoloLectura();
                 }
@@ -449,15 +482,10 @@
                 // RECETARIO-1 — mismo criterio que Productos: sin recipe.edit
                 // no hay botones de escritura, solo la etiqueta de solo lectura.
                 if (hasPermission('recipe.edit')) {
-                    headerActions.innerHTML =
-                        '<div class="flex gap-2 sm:gap-3 flex-wrap">' +
-                        '<button onclick="openRecetaModal()" class="bg-gradient-to-r from-purple-500 to-orange-500 text-white px-3 sm:px-6 py-2 sm:py-3 rounded-full flex items-center gap-1 sm:gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs sm:text-base whitespace-nowrap">' +
-                        '<svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>' +
-                        '<span class="hidden sm:inline">Nueva receta</span><span class="sm:hidden">+</span></button>' +
-                        '<button onclick="recetarioImportarExcel()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:var(--ok-dim);border:1px solid var(--ok-dim);color:var(--ok);">' +
-                        '<i class="fa-solid fa-file-arrow-up"></i><span class="hidden sm:inline">Importar Excel</span><span class="sm:hidden">Importar</span></button>' +
-                        '<button onclick="publicarRecetarioFirestore()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:var(--accent-dim);border:1px solid var(--accent-dim2);color:var(--brass);">' +
-                        '<i class="fa-solid fa-cloud-arrow-up"></i><span class="hidden sm:inline">Publicar recetario</span><span class="sm:hidden">Publicar</span></button>' +
+                    headerActions.innerHTML = '<div class="hd-fila">' +
+                        _hdBtn('openRecetaModal()', 'fa-plus', 'Nueva receta', 'Nueva', 'primario') +
+                        _hdBtn('recetarioImportarExcel()', 'fa-file-arrow-up', 'Importar Excel', 'Importar', 'ok') +
+                        _hdBtn('publicarRecetarioFirestore()', 'fa-cloud-arrow-up', 'Publicar recetario', 'Publicar', 'acento') +
                         '</div>';
                 } else {
                     headerActions.innerHTML = _chipSoloLectura();
@@ -466,10 +494,8 @@
                 // FASE 10 — mismo criterio: sin sales.import no hay botón de
                 // escritura, solo la etiqueta de solo lectura.
                 if (hasPermission('sales.import')) {
-                    headerActions.innerHTML =
-                        '<div class="flex gap-2 sm:gap-3 flex-wrap">' +
-                        '<button onclick="ventasImportarExcel()" class="flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full text-xs sm:text-base whitespace-nowrap font-medium transition-all duration-200 shadow-md hover:scale-105 active:scale-95" style="background:var(--ok-dim);border:1px solid var(--ok-dim);color:var(--ok);">' +
-                        '<i class="fa-solid fa-file-arrow-up"></i><span class="hidden sm:inline">Importar ventas</span><span class="sm:hidden">Importar</span></button>' +
+                    headerActions.innerHTML = '<div class="hd-fila">' +
+                        _hdBtn('ventasImportarExcel()', 'fa-file-arrow-up', 'Importar ventas', 'Importar', 'ok') +
                         '</div>';
                 } else {
                     headerActions.innerHTML = _chipSoloLectura();
@@ -905,7 +931,7 @@
                    + 'text-transform:uppercase;letter-spacing:.05em;color:var(--txt-secondary);'
                    + 'white-space:nowrap;border-bottom:1px solid var(--border-mid)';
             var thNum = th + ';text-align:right';
-            var td = 'padding:9px 10px;font-size:.84rem;border-bottom:1px solid var(--border-soft,var(--border-mid))';
+            var td = 'padding:9px 10px;font-size:.84rem;border-bottom:1px solid var(--border-mid)';
             var tdNum = td + ';text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap';
 
             html += '<div style="background:var(--surface);border:1px solid var(--border-mid);'
@@ -949,7 +975,7 @@
                      + escapeHtml(product.unit || '—') + '</td>';
 
                 // Stock bajo el mínimo se marca. Es la señal que dispara una compra.
-                html += '<td style="' + tdNum + (bajoMin ? ';color:#f87171;font-weight:700' : '') + '">'
+                html += '<td style="' + tdNum + (bajoMin ? ';color:var(--danger);font-weight:700' : '') + '">'
                      + _celdaNum(total) + '</td>';
 
                 html += '<td style="' + tdNum + '" class="cat-col-sec">'
@@ -975,8 +1001,8 @@
                     html += '<button type="button" onclick="deleteProduct(\'' + escapeHtml(product.id) + '\')" '
                          + 'title="Eliminar" aria-label="Eliminar ' + escapeHtml(product.name || product.id) + '" '
                          + 'style="min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;'
-                         + 'border-radius:10px;border:1px solid rgba(248,113,113,.3);background:rgba(248,113,113,.08);'
-                         + 'color:#f87171;cursor:pointer">'
+                         + 'border-radius:10px;border:1px solid var(--danger);background:var(--danger-dim);'
+                         + 'color:var(--danger);cursor:pointer">'
                          + '<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>';
                     html += '</div></td>';
                 }
@@ -1063,10 +1089,10 @@
                 '<p style="color:var(--txt-primary);font-family:\'IBM Plex Sans\',sans-serif;font-size:0.875rem;' +
                 'line-height:1.55;margin:0 0 20px;white-space:pre-wrap;">' + message.replace(/</g, '&lt;') + '</p>' +
                 '<div style="display:flex;gap:10px;justify-content:flex-end;">' +
-                '<button id="_cfmCancel" style="padding:7px 18px;border:1px solid var(--border-mid);border-radius:6px;' +
+                '<button id="_cfmCancel" style="padding:0 18px;min-height:44px;border:1px solid var(--border-mid);border-radius:6px;' +
                 'background:transparent;color:var(--txt-secondary);font-family:\'IBM Plex Sans\',sans-serif;' +
                 'font-size:0.8125rem;cursor:pointer;">Cancelar</button>' +
-                '<button id="_cfmOk" style="padding:7px 18px;background:var(--red);color:#fff;border:none;' +
+                '<button id="_cfmOk" style="padding:0 18px;min-height:44px;background:var(--red);color:#fff;border:none;' +
                 'border-radius:6px;font-family:\'IBM Plex Sans\',sans-serif;font-size:0.8125rem;' +
                 'font-weight:600;cursor:pointer;">Confirmar</button>' +
                 '</div></div>';

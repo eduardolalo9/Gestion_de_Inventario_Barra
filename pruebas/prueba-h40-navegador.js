@@ -69,8 +69,10 @@ const PUERTO = process.env.PUERTO || '8080';
     return { disabled: document.getElementById('nuevoInvBtnCrear').disabled,
              aviso: document.getElementById('nuevoInvAvisoFecha').textContent };
   });
-  chk('★ Un martes cualquiera deshabilita "Crear inventario"',
-      invalida.disabled && /no es domingo ni fin de mes/.test(invalida.aviso), JSON.stringify(invalida));
+  // FASE 14 (decisión de Eduardo, 5-oct-2026): un martes ya NO se bloquea —
+  // se crea y, al contabilizarlo, será el ancla del Total. Se avisa en ámbar.
+  chk('★ FASE 14 · un martes cualquiera se permite, con aviso de que será ancla del Total',
+      !invalida.disabled && /Recuento de mitad de semana/.test(invalida.aviso), JSON.stringify(invalida));
 
   const domingo = await p.evaluate(() => {
     const f = document.getElementById('nuevoInvFecha');
@@ -95,7 +97,7 @@ const PUERTO = process.env.PUERTO || '8080';
   // una carrera de eventos…), confirmarNuevoInventario() vuelve a comprobar.
   const forzado = await p.evaluate(() => {
     __avisos = [];
-    const f = document.getElementById('nuevoInvFecha'); f.value = '2026-09-22';
+    const f = document.getElementById('nuevoInvFecha'); f.value = '2026-02-30';   // FASE 14: lo que sigue bloqueado es una fecha inválida
     document.getElementById('nuevoInvBtnCrear').disabled = false;
     document.querySelector('.nuevoInvArea').checked = true;
     confirmarNuevoInventario();
@@ -103,7 +105,7 @@ const PUERTO = process.env.PUERTO || '8080';
              av: __avisos.slice() };
   });
   chk('★ confirmarNuevoInventario() rechaza la fecha aunque el botón esté habilitado',
-      forzado.av.some(m => /no es domingo ni fin de mes/.test(m)), JSON.stringify(forzado));
+      forzado.av.some(m => /no es válida/.test(m)), JSON.stringify(forzado));
   await p.evaluate(() => cerrarModalNuevoInventario());
 
   // ══════════════════════════════════════════════════════════════════════
@@ -140,7 +142,7 @@ const PUERTO = process.env.PUERTO || '8080';
     f.value = '2026-09-22'; _pintarAvisoFechaRegistrar();
     return document.getElementById('regFechaRecuentoBtnGuardar').disabled;
   });
-  chk('Fuera de domingo/fin de mes, "Guardar" se deshabilita', regInvalida);
+  chk('FASE 14 · fuera de domingo/fin de mes, "Guardar" se permite (mitad de semana = ancla)', regInvalida === false);
 
   const guardar = await p.evaluate(async () => {
     const f = document.getElementById('regFechaRecuentoInput');

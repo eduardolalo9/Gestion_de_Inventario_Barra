@@ -56,7 +56,42 @@
 
         // Entradas por compras de la semana, por producto.
         function _panelEntradasSemana() {
-            return existenciaEntradasSemana();
+            // FASE 14 — las que de verdad suman al Total: desde el ancla.
+            return (typeof existenciaEntradas === 'function') ? existenciaEntradas() : existenciaEntradasSemana();
+        }
+
+        /** 'YYYY-MM-DD' → '04/10'. */
+        function _panelDiaCorto(iso) {
+            var f = (typeof parseFechaLocal === 'function') ? parseFechaLocal(iso) : null;
+            return f ? String(f.getDate()).padStart(2, '0') + '/' + String(f.getMonth() + 1).padStart(2, '0') : String(iso || '');
+        }
+
+        /**
+         * FASE 14 — los avisos que hacen honesto al Total: días sin ventas,
+         * periodos que cruzan el corte y datos que no se pudieron leer.
+         */
+        function _panelAvisosArrastre(r) {
+            if (!r) return '';
+            var h = '';
+            if (r.diasFaltantes.length) {
+                h += '<div class="pm-aviso pm-aviso--warn"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> '
+                   + '<span><b>Faltan ' + r.diasFaltantes.length + ' día(s) de ventas</b> desde el corte ('
+                   + escapeHtml(r.diasFaltantes.slice(0, 6).map(_panelDiaCorto).join(', ')) + (r.diasFaltantes.length > 6 ? '…' : '')
+                   + '): el Total puede estar <b>alto</b> hasta que se importen.</span></div>';
+            }
+            if (r.periodosPartidos.length) {
+                h += '<div class="pm-aviso pm-aviso--warn"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> '
+                   + '<span>' + r.periodosPartidos.length + ' periodo(s) de ventas cruzan la fecha del corte ('
+                   + escapeHtml(r.periodosPartidos.map(function(p) { return _panelDiaCorto(p.inicio) + '–' + _panelDiaCorto(p.fin); }).join(', '))
+                   + ') y no se pueden repartir por día: <b>no se descuentan</b>.</span></div>';
+            }
+            if (r.comprasNoDisponibles || r.ventasNoDisponibles) {
+                h += '<div class="pm-aviso pm-aviso--info"><i class="fa-solid fa-circle-info" aria-hidden="true"></i> <span>'
+                   + 'No se pudieron leer ' + (r.comprasNoDisponibles && r.ventasNoDisponibles ? 'las compras ni las ventas'
+                                               : (r.comprasNoDisponibles ? 'las compras' : 'las ventas'))
+                   + ' de todas las semanas desde el corte (sin conexión o sin permiso): el Total usa solo lo que hay en este dispositivo.</span></div>';
+            }
+            return h;
         }
 
         function _panelComprasSemana() {
@@ -179,22 +214,44 @@
             var ent = _panelEntradasSemana();
             var nEnt = Object.keys(ent).length;
             var h = '<div class="pm-card">';
-            h += '<div class="pm-card__titulo"><i class="fa-solid fa-box"></i> Existencia de la semana</div>';
+            // FASE 14 — esta tarjeta responde "¿de dónde sale el Total?": del
+            // último corte contabilizado (el ancla) más compras menos ventas
+            // posteriores a su fecha.
+            h += '<div class="pm-card__titulo"><i class="fa-solid fa-box"></i> Origen del Total</div>';
             if (est.estado === 'cargando' || est.estado === 'sin_cargar') {
-                h += '<div class="pm-card__sub">Cargando inventario inicial…</div>';
+                h += '<div class="pm-card__sub">Buscando el último corte contabilizado…</div>';
             } else if (est.estado === 'ok') {
                 var s = est.saldos || {};
                 var ids = Object.keys(s);
                 var total = ids.reduce(function(a, k) { return a + (s[k] || 0); }, 0);
                 var o = est.origen || {};
-                h += '<div class="pm-card__fila"><span>Inicial (inventario #' + escapeHtml(String(o.numero || '—')) + ')</span><b>' + _panelNum(total) + ' u · ' + ids.length + ' productos</b></div>';
-                h += '<div class="pm-card__fila"><span>Entradas por compras</span><b>' + nEnt + ' productos</b></div>';
-                h += '<div class="pm-card__sub">Toca un producto para ver su existencia. Aún no descuenta ventas (el módulo de ventas es una fase pendiente).</div>';
+                var res = (typeof existenciaArrastreResumen === 'function') ? existenciaArrastreResumen() : null;
+                var etq = (est.ancla && typeof anclaEtiqueta === 'function') ? anclaEtiqueta(est.ancla)
+                          : 'Inicial de la semana';
+                h += '<div class="pm-card__fila"><span>Ancla</span><b>' + escapeHtml(etq) + '</b></div>';
+                h += '<div class="pm-card__fila"><span>Saldo del corte <small>(inventario #' + escapeHtml(String(o.numero || '—')) + ')</small></span><b>'
+                   + _panelNum(total) + ' u · ' + ids.length + ' productos</b></div>';
+                h += '<div class="pm-card__fila"><span>Compras desde el corte</span><b>' + nEnt + ' productos</b></div>';
+                if (res) {
+                    h += '<div class="pm-card__fila"><span>Días de ventas descontados</span><b>' + (res.diasEsperados - res.diasFaltantes.length)
+                       + ' de ' + res.diasEsperados + '</b></div>';
+                    h += _panelAvisosArrastre(res);
+                }
+                h += '<div class="pm-card__sub">Total = saldo del corte + compras − consumo teórico de las ventas posteriores al corte. '
+                   + 'Toca un producto para ver su desglose.</div>';
             } else if (est.estado === 'no_existe') {
-                h += '<div class="pm-card__sub">Esta semana todavía no tiene inventario inicial. Se crea al <b>contabilizar</b> el inventario cerrado del domingo: en Conteo, botón <b>Contabilizar</b>.</div>';
+                if (est.motivo === 'ancla_vieja' && est.anclaVieja) {
+                    h += '<div class="pm-aviso pm-aviso--warn"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> <span>El último corte ('
+                       + escapeHtml(typeof anclaEtiqueta === 'function' ? anclaEtiqueta(est.anclaVieja) : est.anclaVieja.fecha)
+                       + ') tiene ' + escapeHtml(String(est.anclaVieja.dias)) + ' días: más de 8 semanas ya no se arrastra. '
+                       + 'El Total usa el respaldo operativo (suma de áreas) hasta que contabilices un recuento nuevo.</span></div>';
+                } else {
+                    h += '<div class="pm-card__sub">Todavía no hay ningún corte contabilizado: el Total usa el respaldo operativo (suma de áreas). '
+                       + 'Se crea al <b>contabilizar</b> un recuento cerrado — domingo, fin de mes o mitad de semana — en Conteo.</div>';
+                }
                 if (nEnt) h += '<div class="pm-card__fila"><span>Entradas por compras</span><b>' + nEnt + ' productos</b></div>';
             } else {
-                h += '<div class="pm-card__sub">No se pudo consultar el inventario inicial (¿sin conexión?).</div>';
+                h += '<div class="pm-card__sub">No se pudo consultar el último corte (¿sin conexión?).</div>';
             }
             h += '</div>';
             return h;
@@ -216,8 +273,8 @@
                 return h;
             }
             if (est.estado === 'no_existe') {
-                h += '<div class="pm-card__sub">No se puede comparar todavía: esta semana no tiene inventario inicial. '
-                   + 'Se crea al <b>contabilizar</b> el inventario cerrado del domingo.</div></div>';
+                h += '<div class="pm-card__sub">No se puede comparar todavía: no hay un corte contabilizado vigente. '
+                   + 'Se crea al <b>contabilizar</b> un recuento cerrado (domingo, fin de mes o mitad de semana).</div></div>';
                 return h;
             }
             if (est.estado !== 'ok') {
@@ -226,8 +283,9 @@
             }
 
             var c = existenciaComparacion();
-            h += '<div class="pm-card__sub">Operativa (conteo continuo) contra oficial (inicial + compras'
-               + (Object.keys(existenciaVentasSemana()).length ? ' − consumo teórico' : ', aún sin ventas') + '). '
+            var _venC = (typeof existenciaVentas === 'function') ? existenciaVentas() : existenciaVentasSemana();
+            h += '<div class="pm-card__sub">Operativa (conteo continuo) contra oficial (corte + compras'
+               + (Object.keys(_venC).length ? ' − consumo teórico' : ', aún sin ventas') + '). '
                + (EXISTENCIA_FUENTE_OFICIAL_ACTIVA
                   ? 'La oficial ya es la que decide "bajo mínimo" y el catálogo.'
                   : 'Manda la operativa hasta que confirmes el cambio.') + '</div>';
@@ -354,9 +412,16 @@
             if (typeof p.precio === 'number') h += '<div class="pm-card__fila"><span>Precio</span><b>' + _panelMoneda(p.precio) + '</b></div>';
             if (costo) h += '<div class="pm-card__fila"><span>Último costo</span><b>' + _panelMoneda(Number(costo.costo) || 0) + ' <small>(' + escapeHtml(costo.fecha || '') + ')</small></b></div>';
 
-            h += '<div class="pm-ficha__sec">Semana actual</div>';
-            h += '<div class="pm-card__fila"><span>Inicial contabilizado</span><b>' + (ini === undefined ? '—' : _panelNum(ini)) + '</b></div>';
+            // FASE 14 — el desglose desde el ancla: de qué corte sale, qué se
+            // sumó y qué se restó. Es la respuesta a "¿por qué este Total?".
+            var _anc = ofic.ancla || null;
+            h += '<div class="pm-ficha__sec">' + (_anc ? 'Desde el último corte' : 'Semana actual') + '</div>';
+            if (_anc && typeof anclaEtiqueta === 'function') {
+                h += '<div class="pm-card__fila"><span>Ancla</span><b>' + escapeHtml(anclaEtiqueta(_anc)) + '</b></div>';
+            }
+            h += '<div class="pm-card__fila"><span>' + (_anc ? 'Saldo del corte' : 'Inicial contabilizado') + '</span><b>' + (ini === undefined ? '—' : _panelNum(ini)) + '</b></div>';
             h += '<div class="pm-card__fila"><span>Entradas por compras</span><b>' + _panelNum(ent) + '</b></div>';
+            h += '<div class="pm-card__fila"><span>Consumo teórico (ventas × receta)</span><b>' + (ofic.ventas ? '−' + _panelNum(ofic.ventas) : '0') + '</b></div>';
             if (ini !== undefined) {
                 // Las dos cifras juntas, con su diferencia. Es el punto en el
                 // que se ve, producto por producto, si el conteo operativo y el
@@ -364,7 +429,7 @@
                 var dif = Math.round((ofic.valor - st) * 1000) / 1000;
                 h += '<div class="pm-ficha__sec">Las dos cifras</div>';
                 h += '<div class="pm-card__fila"><span>Operativa <small>(conteo por área)</small></span><b>' + _panelNum(st) + '</b></div>';
-                h += '<div class="pm-card__fila"><span>Oficial <small>(inicial + entradas − consumo teórico)</small></span><b>' + _panelNum(ofic.valor) + '</b></div>';
+                h += '<div class="pm-card__fila"><span>Oficial <small>(corte + entradas − consumo teórico)</small></span><b>' + _panelNum(ofic.valor) + '</b></div>';
                 h += '<div class="pm-card__fila"><span>Diferencia</span><b' + (dif ? ' class="pm-dif"' : '') + '>'
                    + (dif > 0 ? '+' : '') + _panelNum(dif) + '</b></div>';
                 if (!EXISTENCIA_FUENTE_OFICIAL_ACTIVA) {
@@ -373,7 +438,9 @@
                     h += '<div class="pm-card__sub">La oficial ya es la que decide "bajo mínimo" y el catálogo para este producto.</div>';
                 }
             } else {
-                h += '<div class="pm-card__sub">Sin inicial contabilizado para este producto esta semana: no hay arrastre con el que comparar.</div>';
+                h += '<div class="pm-card__sub">' + (_anc
+                    ? 'Este producto no entró al último corte (nadie lo contó o se dio de alta después): su Total usa el respaldo operativo (suma de áreas).'
+                    : 'Sin corte contabilizado vigente: no hay arrastre con el que comparar. El Total usa el respaldo operativo (suma de áreas).') + '</div>';
             }
 
             var lineas = [];

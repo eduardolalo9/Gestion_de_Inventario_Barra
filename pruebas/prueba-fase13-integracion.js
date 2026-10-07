@@ -25,7 +25,9 @@
  *   Q7   La lectura de cortesMensuales exige inventory.viewAll (lleva
  *        dinero); inventariosIniciales sigue abierto a cualquier
  *        autenticado.
- *   Q8   Un recuento fuera de calendario (ni domingo ni fin de mes) sigue
+ *   Q8   Un recuento fuera de calendario (ni domingo ni fin de mes) no
+ *        genera inicial ni corte; desde FASE 14 genera solo el ANCLA.
+ *        (línea original:) sigue
  *        sin generar nada — ni inicial ni corte.
  *
  * ── CÓMO EJECUTAR ──
@@ -75,6 +77,8 @@ function montarApp(db, uid, opciones) {
     const confirmaciones = [];
 
     const ciclo  = fs.readFileSync(path.join(RAIZ, 'js/15-ciclo-semanal.js'), 'utf8');
+    // FASE 14 — anclaDesdeCierre() (fin de mes entre semana y mitad de semana).
+    const arrastre = fs.readFileSync(path.join(RAIZ, 'js/46-arrastre.js'), 'utf8');
     const flujo  = fs.readFileSync(path.join(RAIZ, 'js/75-auditoria-flujo.js'), 'utf8');
     const firest = fs.readFileSync(path.join(RAIZ, 'js/40-firestore.js'), 'utf8');
 
@@ -149,7 +153,7 @@ function montarApp(db, uid, opciones) {
     };
     deps.window = deps;
 
-    const montar = new Function('deps', 'with (deps) {\n' + ciclo + '\n' + conv + '\n' + firest + '\n' + flujo +
+    const montar = new Function('deps', 'with (deps) {\n' + ciclo + '\n' + arrastre + '\n' + conv + '\n' + firest + '\n' + flujo +
         '\n; return { contabilizarInventario: contabilizarInventario,' +
         '            _saldosDesdeSnapshot: _saldosDesdeSnapshot,' +
         '            cierreMensualDesdeSnapshot: cierreMensualDesdeSnapshot,' +
@@ -479,11 +483,20 @@ async function main() {
     const inicialesAntesFuera = await contarIniciales();
     const appFuera = montarApp(dbAdmin, 'jefe', { admin: true });
     await appFuera.contabilizar('inv-fuera', 401);
-    chk('Q8 · un miércoles que no es fin de mes sigue sin generar nada',
+    // FASE 14 (decisión de Eduardo, 5-oct-2026): un miércoles normal ya no se
+    // bloquea — se contabiliza como ANCLA del Total. Sigue sin generar inicial
+    // ni corte mensual (eso es lo que esta prueba de FASE 13 protege).
+    chk('Q8 · un miércoles que no es fin de mes no genera inicial ni corte mensual',
         (await contarCortes()) === cortesAntesFuera && (await contarIniciales()) === inicialesAntesFuera);
-    chk('Q8 · el motivo menciona las dos reglas (domingo y fin de mes)',
-        appFuera._avisos.some(a => /DOMINGO/.test(a) && /último día del mes/.test(a)),
-        appFuera._avisos.join(' | '));
+    let anclaFuera = null, invFuera = null;
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const s1 = await ctx.firestore().doc(R + '/anclasExistencia/2026-09-16').get();
+        anclaFuera = s1.exists ? s1.data() : null;
+    });
+    invFuera = await leerInventario('inv-fuera');
+    chk('Q8 · FASE 14 — en cambio sí genera el ancla del Total de esa fecha',
+        !!anclaFuera && anclaFuera.tipo === 'mitad_de_semana' && invFuera.estado === 'CONTABILIZADO' && invFuera.anclaDestino === '2026-09-16',
+        JSON.stringify({ anclaFuera: !!anclaFuera, inv: invFuera && invFuera.estado, avisos: appFuera._avisos }));
 
     await testEnv.cleanup();
 

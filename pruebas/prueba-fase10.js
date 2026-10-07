@@ -157,8 +157,8 @@ chk('index.html declara #fileInputVentas, propio y separado de los otros inputs'
     /id="fileInputVentas"/.test(html));
 chk('js/99-window-arranque.js cablea #fileInputVentas a handleFileImportVentas',
     /getElementById\('fileInputVentas'\)/.test(arranque) && /handleFileImportVentas\(e\)/.test(arranque));
-chk('index.html carga js/93-ventas.js entre 92-recetario-importar.js y 95-exportacion.js',
-    /92-recetario-importar\.js\?v=[\d.]+"><\/script>\s*<script src="js\/93-ventas\.js\?v=[\d.]+"><\/script>\s*<script src="js\/95-exportacion/.test(html));
+chk('index.html carga js/93-ventas.js entre 92-recetario-importar.js y 95-exportacion.js (FASE 14: 94 en medio)',
+    /92-recetario-importar\.js\?v=[\d.]+"><\/script>\s*<script src="js\/93-ventas\.js\?v=[\d.]+"><\/script>\s*(<script src="js\/94-venta-turno\.js\?v=[\d.]+"><\/script>\s*)?<script src="js\/95-exportacion/.test(html));
 chk('sw.js precalienta js/93-ventas.js',
     /'\.\/js\/93-ventas\.js\?v=' \+ APP_VERSION/.test(sw));
 

@@ -84,9 +84,26 @@
             if (_consumoMemo.resultado && _consumoMemo.huella === huella) return _consumoMemo.resultado;
 
             var listaVentas  = (typeof ventas  !== 'undefined' && Array.isArray(ventas))  ? ventas  : [];
+            var semana       = (typeof ventasSemanaId !== 'undefined') ? ventasSemanaId : null;
+            var resultado    = _consumoCalcular(listaVentas, semana);
+
+            _consumoMemo = { huella: huella, resultado: resultado };
+            return resultado;
+        }
+
+        /**
+         * _consumoCalcular(listaVentas, semana)
+         * FASE 14 — el cruce, separado de DE DÓNDE salen las ventas. Antes vivía
+         * dentro de consumoTeorico() (que solo sabe de la semana en memoria);
+         * ahora lo usan también el arrastre desde el ancla (varias semanas) y la
+         * simulación de la venta del turno (un archivo que todavía no se guarda).
+         * Mismo código, mismo resultado: consumoTeorico() le delega sin cambiar
+         * una sola regla.
+         */
+        function _consumoCalcular(listaVentas, semana) {
+            listaVentas      = Array.isArray(listaVentas) ? listaVentas : [];
             var listaRecetas = (typeof recetas !== 'undefined' && Array.isArray(recetas)) ? recetas : [];
             var listaProd    = (typeof products !== 'undefined' && Array.isArray(products)) ? products : [];
-            var semana       = (typeof ventasSemanaId !== 'undefined') ? ventasSemanaId : null;
 
             var resultado = {
                 semana: semana,
@@ -96,10 +113,7 @@
                 avisos: { sinReceta: [], sinCatalogo: [], uomDistinta: [] }
             };
 
-            if (!listaVentas.length || !listaRecetas.length) {
-                _consumoMemo = { huella: huella, resultado: resultado };
-                return resultado;
-            }
+            if (!listaVentas.length || !listaRecetas.length) return resultado;
 
             // Índices por código, para no recorrer los arreglos dentro del bucle.
             var recetaPorPV = {};
@@ -163,10 +177,19 @@
             Object.keys(resultado.consumo).forEach(function(k) {
                 resultado.consumo[k] = _consumoRedondear(resultado.consumo[k]);
             });
-
-            _consumoMemo = { huella: huella, resultado: resultado };
             return resultado;
         }
+
+        /**
+         * consumoTeoricoDeLineas(lineas, etiqueta?)
+         * FASE 14 — el mismo cruce para un conjunto de ventas cualquiera (las
+         * del arrastre desde el ancla, o las de un archivo en vista previa).
+         * Sin memoria propia: quien lo llama decide cuándo recalcular.
+         */
+        function consumoTeoricoDeLineas(lineas, etiqueta) {
+            return _consumoCalcular(lineas, etiqueta || null);
+        }
+        window.consumoTeoricoDeLineas = consumoTeoricoDeLineas;
         window.consumoTeorico = consumoTeorico;
 
         /**
