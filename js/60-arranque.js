@@ -206,6 +206,9 @@
                                 if (typeof existenciaRepintarSeguro === 'function') existenciaRepintarSeguro();
                             });
                         }
+                        // v5.22 — compras, ventas y cortes en vivo: lo que otro
+                        // dispositivo importa o registra aparece aquí sin recargar.
+                        if (typeof syncVivoIniciar === 'function') syncVivoIniciar();
                         // FASE 5 (5B) — reintentar al arrancar cualquier conteo
                         // huérfano que quedó sin subir (app cerrada offline
                         // antes de que el reintento de reconexión pudiera correr).

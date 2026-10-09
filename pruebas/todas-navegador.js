@@ -65,6 +65,7 @@ const PRUEBAS = [
     'prueba-fase16-navegador.js',       // v5.19 — Total publicado, cortesías/2x1 y papelera
     'prueba-icono-navegador.js',        // v5.20 — ícono de la app
     'prueba-corte-total-navegador.js',  // v5.21 — corte de existencias con el reporte de SBO
+    'prueba-sync-vivo-navegador.js',    // v5.22 — compras, ventas y cortes en vivo
     'prueba-conteo-compacto-navegador.js', // v5.11 — vista compacta del Conteo, en pantalla
     'prueba-actualizaciones-navegador.js', // v5.12 — despliegue simulado: detecta, avisa, actualiza con un toque, conserva datos
 ];
