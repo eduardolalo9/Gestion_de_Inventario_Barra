@@ -79,6 +79,7 @@ const PRUEBAS = [
     'prueba-icono.js',                 // v5.20 — ícono de la app (archivos reales, manifest, SW)
     'prueba-corte-total.js',           // v5.21 — corte de existencias con el reporte de SBO (En Stock = total)
     'prueba-sync-vivo.js',             // v5.22 — compras, ventas y cortes en vivo entre dispositivos
+    'prueba-inicio-conteo.js',         // v5.23 — diseño de Inicio y Conteo
     'prueba-conteo-compacto.js',       // v5.11 — vista compacta de las tarjetas de área del Conteo
     'prueba-actualizaciones.js',       // v5.12 — las actualizaciones sí llegan y se ven (SW + aviso + herramientas)
 ];

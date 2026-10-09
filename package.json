@@ -73,6 +73,8 @@
     "test:cortetotalnav": "node pruebas/prueba-corte-total-navegador.js",
     "test:syncvivo": "node pruebas/prueba-sync-vivo.js",
     "test:syncvivonav": "node pruebas/prueba-sync-vivo-navegador.js",
+    "test:inicioconteo": "node pruebas/prueba-inicio-conteo.js",
+    "test:inicioconteo-nav": "node pruebas/prueba-inicio-conteo-navegador.js",
     "test:icononav": "node pruebas/prueba-icono-navegador.js",
     "test:f16nav": "node pruebas/prueba-fase16-navegador.js",
     "test:f16integracion": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-fase16-integracion.js\"",
