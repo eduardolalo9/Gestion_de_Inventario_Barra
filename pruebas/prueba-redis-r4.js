@@ -66,7 +66,8 @@ const modal = html.slice(html.indexOf('id="inventarioModal"'),
 });
 [
     ['closeInventarioModal()', 'cerrar'],
-    ['saveInventarioModal()',  'guardar'],
+    ['inventarioGuardarYSiguiente()',  'guardar (v5.23: "Guardar y siguiente", que llama a saveInventarioModal())'],
+    ['inventarioModalPaso(',   'el paso ± de las botellas enteras (v5.23)'],
     ['addAbiertaInModal()',    'añadir otra botella abierta'],
     ['_sanearEntradaEntero(this)',  'saneado de enteros'],
     ['_sanearEntradaDecimal(this)', 'saneado de decimales']

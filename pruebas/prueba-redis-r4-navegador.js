@@ -120,7 +120,7 @@ const GRIS_DE_FABRICA = /rgb\(239, 239, 239\)|buttonface/i;
       enteras: med('#inv_enteras'),
       abierta: med('#inv_abiertasContainer input'),
       agregar: med('.inv-modal__agregar'),
-      cancelar: med('.inv-modal__btn--fantasma'),
+      cancelar: med('.inv-modal__cerrar'),   // v5.23: la X de la cabecera sustituye a Cancelar
       guardar: med('.inv-modal__btn--primario'),
       // ¿La etiqueta de abiertas y el botón de agregar se pisan? Antes sí: el
       // botón compartía fila con la etiqueta y la tapaba al crecer a dos líneas.

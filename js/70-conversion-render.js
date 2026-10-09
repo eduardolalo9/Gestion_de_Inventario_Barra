@@ -726,7 +726,12 @@
             // Sustituye la rejilla 2×2: conserva Productos, Carrito y Pedidos
             // (mismas acciones) y suma bajo mínimo, valor, compras de la
             // semana, estado del inventario y existencia de la semana.
-            let html = (typeof renderPanelInicio === 'function') ? renderPanelInicio() : '';
+            // v5.23 — el tablero de arranque (saludo, inventario, alertas, pedido
+            // sugerido y módulos) va primero; el panel de indicadores sigue debajo
+            // sin su tarjeta de inventario, que el tablero ya muestra.
+            let html = (typeof renderInicioTablero === 'function') ? renderInicioTablero() : '';
+            html += (typeof renderPanelInicio === 'function')
+                ? renderPanelInicio({ sinInventario: typeof renderInicioTablero === 'function' }) : '';
 
             // ── Búsqueda (FASE 6: barra unificada, comparte estado con Productos) ──
             html += BusquedaUI.barra('catalogo', {
@@ -1187,6 +1192,10 @@ document.body.appendChild(overlay);
             }
 
             document.getElementById('inventarioModalTitle').textContent = product.name;
+            // v5.23 — el mismo monograma que la tarjeta de la lista.
+            const _monoEl = document.getElementById('inventarioModalMono');
+            if (_monoEl) _monoEl.innerHTML = (typeof UI !== 'undefined' && UI.mono) ? UI.mono(product.name, product.group) : '';
+            _guardarYSiguiente = false;
             document.getElementById('inventarioModalSubtitle').textContent = (product.group || 'General') + ' · ' + (product.unit || '') + ' — ' + areaLabel;
 
             // Mostrar hint de unidad en botellas abiertas
@@ -1228,6 +1237,7 @@ document.body.appendChild(overlay);
             isInventarioModalOpen = true;
             disableAreaButtons(true);
             const modal = document.getElementById('inventarioModal');
+            inventarioModalTotalVivo();
             modal.classList.remove('hidden');
             document.body.classList.add('modal-open');
             setTimeout(() => {
@@ -1275,6 +1285,7 @@ document.body.appendChild(overlay);
             const idx = container.children.length;
             const product = products.find(p => p.id === inventarioModalProductId);
             renderAbiertaInput(0, idx, tieneConversion(product));
+            inventarioModalTotalVivo();
         }
 
         function removeAbiertaInModal(idx) {
@@ -1287,7 +1298,79 @@ document.body.appendChild(overlay);
             container.innerHTML = '';
             const product = products.find(p => p.id === inventarioModalProductId);
             vals.forEach((v, i) => renderAbiertaInput(v, i, tieneConversion(product)));
+            inventarioModalTotalVivo();
         }
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  v5.23 (diseño Conteo) — hoja de captura: paso ± de enteras, total del
+        //  área en vivo y "Guardar y siguiente".
+        //  Es presentación: el total en vivo LEE los campos y usa la misma
+        //  convertirOzAPuntos que la lista; no escribe nada. Guardar sigue siendo
+        //  saveInventarioModal() con todas sus validaciones.
+        // ══════════════════════════════════════════════════════════════════════
+        var _guardarYSiguiente = false;
+
+        /** Suma ±1 a las botellas enteras (nunca por debajo de 0 ni por encima del tope de 9999). */
+        function inventarioModalPaso(delta) {
+            const el = document.getElementById('inv_enteras');
+            if (!el) return;
+            const actual = parseInt(el.value, 10);
+            const base = isNaN(actual) ? 0 : actual;
+            el.value = Math.max(0, Math.min(9999, base + delta));
+            inventarioModalTotalVivo();
+        }
+
+        /** Repinta la tarjeta "Total del área" con lo que hay escrito ahora mismo. */
+        function inventarioModalTotalVivo() {
+            const valorEl = document.getElementById('inv_totalValor');
+            if (!valorEl) return;
+            const detEl = document.getElementById('inv_totalDetalle');
+            const uniEl = document.getElementById('inv_totalUnidad');
+            const product = products.find(p => p.id === inventarioModalProductId);
+            if (!product) return;
+            try {
+                if (tieneConversion(product)) {
+                    const e = parseInt(document.getElementById('inv_enteras').value, 10) || 0;
+                    const cont = document.getElementById('inv_abiertasContainer');
+                    let fraccion = 0, nAb = 0;
+                    for (let i = 0; cont && i < cont.children.length; i++) {
+                        const inp = document.getElementById('inv_abierta_' + i);
+                        const oz = inp ? parseFloat(String(inp.value).trim().replace(/,/g, '.')) : NaN;
+                        if (!isNaN(oz) && oz > 0) { fraccion += convertirOzAPuntos(oz, product.capacidadMl, product.pesoBotellaLlenaOz); nAb++; }
+                    }
+                    valorEl.textContent = (e + fraccion).toFixed(2);
+                    if (detEl) detEl.textContent = e + (e === 1 ? ' entera' : ' enteras') + ' + ' + fraccion.toFixed(2) + (nAb > 1 ? ' de las abiertas' : ' de la abierta');
+                    if (uniEl) uniEl.textContent = 'botellas';
+                } else {
+                    const c = parseFloat(String((document.getElementById('inv_cantidadTotal') || {}).value || '').trim().replace(/,/g, '.'));
+                    valorEl.textContent = String(isNaN(c) ? 0 : Math.round(c * 1000) / 1000);
+                    if (detEl) detEl.textContent = 'Cantidad total contada';
+                    if (uniEl) uniEl.textContent = product.unit || '';
+                }
+            } catch (_) { /* el total en vivo nunca interrumpe la captura */ }
+        }
+
+        /** Siguiente producto de la lista que se está contando (respeta búsqueda y filtros). */
+        function _siguienteProductoConteo(idActual) {
+            if (!idActual || _reconteoEdicion || !isAuditoriaMode || !auditoriaAreaActiva) return null;
+            try {
+                const conteoRef = puedeVerConteosAjenos() ? auditoriaConteo : myAuditoriaConteo;
+                const items = _buscarConteo(auditoriaAreaActiva, conteoRef).items;
+                const i = items.findIndex(p => p.id === idActual);
+                return (i >= 0 && i + 1 < items.length) ? items[i + 1].id : null;
+            } catch (_) { return null; }
+        }
+
+        /** "Guardar y siguiente": guarda (con TODAS las validaciones de siempre) y abre el siguiente producto. */
+        function inventarioGuardarYSiguiente() {
+            _guardarYSiguiente = true;
+            saveInventarioModal();
+        }
+
+        // El total se recalcula con cada tecla en cualquiera de los campos del modal.
+        document.addEventListener('input', function(e) {
+            if (e.target && e.target.closest && e.target.closest('#inventarioModal')) inventarioModalTotalVivo();
+        });
 
         saveInventarioModal._auditSyncTimer = null; // timer de debounce para sync parcial de auditoría
 
@@ -1299,11 +1382,15 @@ document.body.appendChild(overlay);
             inventarioModalProductId = null;
             isInventarioModalOpen = false;
             _reconteoEdicion = null;
+            _guardarYSiguiente = false;
             disableAreaButtons(false);
         }
 
         function saveInventarioModal() {
             if (!inventarioModalProductId) return;
+            // v5.23 — "Guardar y siguiente": el siguiente se fija ANTES de guardar,
+            // para que un filtro como "Sin contar" no lo mueva al marcar este.
+            const _sigId = _guardarYSiguiente ? _siguienteProductoConteo(inventarioModalProductId) : null;
 
             // ── CICLO CERRADO: bloquear cualquier modificación ───────────────
             // El administrador cierra el ciclo cuando el inventario está listo;
@@ -1587,8 +1674,10 @@ document.body.appendChild(overlay);
                 })(inventarioModalProductId, selectedArea, enteras, abiertas);
             }
 
+            _guardarYSiguiente = false;
             closeInventarioModal();
             renderTab();
+            if (_sigId) openInventarioModal(_sigId);
         }
 
 

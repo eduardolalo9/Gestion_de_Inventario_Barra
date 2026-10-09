@@ -1023,11 +1023,16 @@
                     // Sin contar y contado en cero NO son lo mismo: el primero sale
                     // apagado, el segundo con la cifra en firme. En un inventario esa
                     // diferencia decide si hay que volver a pasar por el producto.
+                    // v5.23 (diseño Conteo) — bajo la cifra, una palabra: Capturado /
+                    // Pendiente. Es el mismo criterio de "hasData" de siempre.
+                    html += '<div class="inv-card__valor">';
                     html += '<div class="inv-card__total' + (hasData ? '' : ' inv-card__total--vacio') + '"'
                           + ' title="Total (enteras + fracciones de abiertas)">'
                           + '<span class="num bi-cifra inv-card__total-n">' + totalFinalTexto + '</span>'
                           + '<span class="inv-card__total-u">u</span>'
                           + '</div>';
+                    html += '<span class="inv-card__estado' + (hasData ? ' inv-card__estado--ok' : '') + '">' + (hasData ? 'Capturado' : 'Pendiente') + '</span>';
+                    html += '</div>';
                     html += '</div>';
 
                     html += '<div class="inv-card__chips">';
@@ -1113,29 +1118,41 @@
             let html = '<div class="audit-screen">';
 
             // ── Header sticky del área ────────────────────────────────────────
+            // v5.23 (diseño Conteo): fila 1 = volver + "Conteo ciego"; fila 2 =
+            // área, inventario y fecha a la izquierda, "capturados" a la derecha;
+            // y el medidor segmentado. Mismos datos que antes (productos con
+            // cantidad / total), solo ordenados como en el diseño.
+            const ingresados = products.filter(p => conteoRef[p.id] && conteoRef[p.id][area] && (conteoRef[p.id][area].enteras > 0 || (conteoRef[p.id][area].abiertas || []).some(a => a > 0))).length;
+            const _invCab = (typeof _inventarioActivo !== 'undefined') ? _inventarioActivo : null;
+            let _subCab = '';
+            if (_invCab) {
+                _subCab = 'Inventario #' + escapeHtml(String(_invCab.numero || '—'));
+                if (_invCab.fechaRecuento) _subCab += ' · ' + escapeHtml(String(_invCab.fechaRecuento));
+            }
             html += '<div class="audit-count-header">';
-            html += '<div class="flex items-center justify-between gap-3">';
-            html += '<div class="flex items-center gap-3">';
+            html += '<div class="cnt-cab__fila">';
             html += '<button class="audit-back-btn" onclick="auditoriaVolverSeleccion()">';
-            html += '<i class="fa-solid fa-chevron-left"></i> Áreas';
+            html += '<i class="fa-solid fa-chevron-left" aria-hidden="true"></i> Áreas';
             html += '</button>';
-            html += '<div>';
+            html += '<span class="it-pill it-pill--info">Conteo ciego</span>';
+            html += '</div>';
+            html += '<div class="cnt-cab__fila cnt-cab__fila--area">';
+            html += '<div class="cnt-cab__area">';
             html += '<div class="audit-count-area-badge"><i class="' + (areasAuditoriaFA[area] || 'fa-solid fa-location-dot') + '" aria-hidden="true"></i>&nbsp;' + nombreArea + '</div>';
+            if (_subCab) html += '<div class="cnt-cab__sub">' + _subCab + '</div>';
             if (soloLectura) {
                 // FIX #4 — Mensaje claro de que el área está bloqueada para el bartender
-                html += '<div style="font-size:0.62rem;color:var(--amber);margin-top:4px;font-weight:600;"><i class="fa-solid fa-lock" aria-hidden="true"></i> Área completada — solicita al administrador reabrir para corregir</div>';
+                html += '<div class="cnt-cab__aviso cnt-cab__aviso--warn"><i class="fa-solid fa-lock" aria-hidden="true"></i> Área completada — solicita al administrador reabrir para corregir</div>';
             } else if (estaCompleta && isAdmin()) {
-                html += '<div style="font-size:0.62rem;color:var(--green);margin-top:4px;font-weight:600;"><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Área completada — editando como administrador</div>';
+                html += '<div class="cnt-cab__aviso cnt-cab__aviso--ok"><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Área completada — editando como administrador</div>';
             }
             html += '</div>';
-            html += '</div>';
             // Contador de productos ingresados
-            const ingresados = products.filter(p => conteoRef[p.id] && conteoRef[p.id][area] && (conteoRef[p.id][area].enteras > 0 || (conteoRef[p.id][area].abiertas || []).some(a => a > 0))).length;
-            html += '<div style="text-align:right;">';
-            html += '<div style="font-size:0.65rem;font-weight:600;color:var(--txt-muted);">Con cantidad</div>';
-            html += '<div style="font-family:\'IBM Plex Mono\',monospace;font-weight:700;font-size:1rem;color:var(--accent);">' + ingresados + '<span style="font-size:0.65rem;font-weight:500;color:var(--txt-muted);">/' + products.length + '</span></div>';
+            html += '<div class="cnt-cab__cifra"><span class="num cnt-cab__n">' + ingresados + '</span><span class="num cnt-cab__de"> / ' + products.length + '</span>'
+                  + '<span class="cnt-cab__u">Capturados</span></div>';
             html += '</div>';
-            html += '</div></div>'; // end audit-count-header
+            if (typeof inicioMedidor === 'function') html += inicioMedidor(ingresados, products.length);
+            html += '</div>'; // end audit-count-header
 
             // ── Pantalla bloqueada para bartender ────────────────────────────
             // FIX #4: Si soloLectura, mostrar vista de resumen en lugar del formulario

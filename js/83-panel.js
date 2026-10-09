@@ -349,7 +349,7 @@
         }
 
         /** Panel de la pestaña Inicio. */
-        function renderPanelInicio() {
+        function renderPanelInicio(opciones) {
             var k = _panelIndicadores();
             var h = '<section id="pm-panel" class="pm-panel" aria-label="Panel de indicadores">';
 
@@ -366,7 +366,7 @@
             h += _panelTile('fa-clipboard-list', k.pedidos, 'Pedidos', { accion: "switchTab('pedidos')" });
             h += '</div>';
 
-            h += _panelEstadoInventario();
+            if (!(opciones && opciones.sinInventario)) h += _panelEstadoInventario();
 
             // Bajo mínimo: existencia como fracción del mínimo (peores primero)
             var filasBajo = k.bajo.map(function(p) {

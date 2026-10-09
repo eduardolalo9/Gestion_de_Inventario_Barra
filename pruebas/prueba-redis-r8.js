@@ -66,7 +66,8 @@ const TOPE_IMPORTANT = 238;
 chk('Líneas con !important ≤ ' + TOPE_IMPORTANT + ' (eran 338 antes de R8; el número solo puede bajar)', nImp <= TOPE_IMPORTANT, 'hay ' + nImp);
 const bytes = Buffer.byteLength(css);
 // v5.18: el presupuesto sube a 195 KB por los módulos Importar y detalle de compras (~6 KB).
-chk('estilos.css pesa menos de 195 KB (presupuesto)', bytes < 195 * 1024, Math.round(bytes / 1024) + ' KB');
+// v5.23: sube a 210 KB por el diseño de Inicio y Conteo (tablero, encabezado, hoja de captura: ~9 KB).
+chk('estilos.css pesa menos de 210 KB (presupuesto)', bytes < 210 * 1024, Math.round(bytes / 1024) + ' KB');
 
 // ═══ Encabezado ═══════════════════════════════════════════
 chk('Los botones del encabezado salen de un solo constructor _hdBtn()', /function _hdBtn\(/.test(j70) && (j70.match(/_hdBtn\(/g) || []).length >= 6);   // v5.18: sin los 3 de importar
