@@ -261,10 +261,13 @@
             // esto arma la frase ("stock inicial de la semana X" / "corte
             // contable del mes X" / las dos) una sola vez para los tres
             // estados (hecho, pendiente, bloqueado) de abajo.
-            var destinos = function(semanaId, mesId) {
+            // FASE 14 — tercer destino posible: el ancla del Total (fin de mes
+            // entre semana o recuento de mitad de semana).
+            var destinos = function(semanaId, mesId, anclaFecha) {
                 var partes = [];
-                if (semanaId) partes.push('el stock inicial de la ' + escapeHtml(semana(semanaId)));
-                if (mesId)    partes.push('el corte contable del mes ' + escapeHtml(mesId));
+                if (semanaId)   partes.push('el stock inicial de la ' + escapeHtml(semana(semanaId)));
+                if (mesId)      partes.push('el corte contable del mes ' + escapeHtml(mesId));
+                if (anclaFecha) partes.push('el punto de partida (ancla) del Total desde el ' + escapeHtml(anclaFecha));
                 return partes.length ? partes.join(' y ') : 'el stock inicial de la ' + escapeHtml(semana(null));
             };
             var h = '';
@@ -272,7 +275,7 @@
             if (ev.hecho) {
                 h += '<div class="pm-paso pm-paso--hecho" role="status">'
                    + '<div class="pm-paso__titulo"><i class="fa-solid fa-book" aria-hidden="true"></i> Contabilizado</div>'
-                   + '<div class="pm-paso__txt">Su resultado ya es ' + destinos(ev.semanaDestino, ev.mesDestino)
+                   + '<div class="pm-paso__txt">Su resultado ya es ' + destinos(ev.semanaDestino, ev.mesDestino, ev.anclaDestino)
                    + (inv.contabilizadoEn ? ' · ' + escapeHtml(new Date(inv.contabilizadoEn).toLocaleDateString('es-MX')) : '')
                    + '. Queda de solo lectura.</div>';
                 if (puedeCrear) h += '<div class="pm-paso__acc">' + btnCrear(true) + '</div>';
@@ -285,14 +288,17 @@
                    + '<div class="pm-paso__titulo"><i class="fa-solid fa-book" aria-hidden="true"></i> Siguiente paso: contabilizar</div>'
                    + '<div class="pm-paso__txt">'
                    + (puedeContab
-                        ? 'El resultado físico de este inventario pasará a ser ' + destinos(ev.semanaDestino, ev.mesId)
+                        ? 'El resultado físico de este inventario pasará a ser ' + destinos(ev.semanaDestino, ev.mesId, ev.anclaFecha)
                           + '. <b>Es irreversible</b>: no se corrige ni se deshace.'
-                        : 'Pendiente de que administración lo contabilice como ' + destinos(ev.semanaDestino, ev.mesId) + '.')
+                          + (ev.haceAncla ? ' Si ya existe un corte más nuevo, el ancla no se crea (y un recuento de mitad de semana no se contabiliza).' : '')
+                        : 'Pendiente de que administración lo contabilice como ' + destinos(ev.semanaDestino, ev.mesId, ev.anclaFecha) + '.')
                    + '</div>';
                 var acc = '';
                 if (puedeContab) {
                     var etiquetaBtn = (ev.haceSemanal && ev.haceMensual) ? '<i class="fa-solid fa-book" aria-hidden="true"></i> Contabilizar (semana + mes)'
-                                     : (ev.haceMensual ? '<i class="fa-solid fa-calendar-days" aria-hidden="true"></i> Contabilizar cierre de mes' : '<i class="fa-solid fa-book" aria-hidden="true"></i> Contabilizar');
+                                     : (ev.haceMensual ? '<i class="fa-solid fa-calendar-days" aria-hidden="true"></i> Contabilizar cierre de mes'
+                                     : (ev.haceAncla ? '<i class="fa-solid fa-book" aria-hidden="true"></i> Contabilizar como ancla del Total'
+                                                     : '<i class="fa-solid fa-book" aria-hidden="true"></i> Contabilizar'));
                     acc += '<button type="button" class="bt bt--primario" data-inv-accion="contabilizar">' + etiquetaBtn + '</button>';
                 }
                 acc += btnCrear(false);
@@ -385,6 +391,11 @@
                         html += '<div class="rc-hist__dato" style="color:var(--book);font-weight:600;"><i class="fa-solid fa-calendar-days" aria-hidden="true"></i> Corte mensual '
                              +  escapeHtml(inv.mesDestino) + '</div>';
                     }
+                    // FASE 14 — ancla del Total (fin de mes entre semana o mitad de semana).
+                    if (_contab && inv.anclaDestino) {
+                        html += '<div class="rc-hist__dato" style="color:var(--accent);font-weight:600;"><i class="fa-solid fa-book" aria-hidden="true"></i> Ancla del Total '
+                             +  escapeHtml(inv.anclaDestino) + '</div>';
+                    }
                     html += '</div>';
                 });
                 html += '</div>';
@@ -466,7 +477,7 @@
             html += BusquedaUI.resumen('fvs', r.coincidencias, r.total, 'producto', 'productos');
             html += '<div style="margin-top:8px;">';
             filas.slice(0, lim).forEach(function(f) {
-                html += '<div data-sbx-item style="padding:10px 12px;border:1px solid var(--border-soft);border-radius:var(--r-md);margin-bottom:8px;">';
+                html += '<div data-sbx-item style="padding:10px 12px;border:1px solid var(--border-mid);border-radius:var(--r-md);margin-bottom:8px;">';
                 html += '<div style="font-weight:700;font-size:.82rem;">' + resaltarBusqueda(f.nombre, _fvsSearchTerm) + '</div>';
                 if (f.estado === 'pendiente') {
                     html += '<div style="font-size:.74rem;color:var(--txt-muted);margin-top:2px;"><i class="fa-solid fa-hourglass" aria-hidden="true"></i> Sin contar todavía · '
@@ -571,6 +582,7 @@
                 var _destPartes = [];
                 if (meta.semanaDestino) _destPartes.push('el stock inicial de la semana ' + escapeHtml(meta.semanaDestino));
                 if (meta.mesDestino)    _destPartes.push('el corte contable del mes ' + escapeHtml(meta.mesDestino));
+                if (meta.anclaDestino)  _destPartes.push('el ancla del Total desde el ' + escapeHtml(meta.anclaDestino));
                 html += '<div class="pm-paso pm-paso--hecho" role="status">'
                      +  '<div class="pm-paso__titulo"><i class="fa-solid fa-book" aria-hidden="true"></i> Contabilizado</div>'
                      +  '<div class="pm-paso__txt">'
@@ -652,7 +664,7 @@
             // para todos" salen de la tarjeta como botón propio: antes eran
             // enlaces de 10 px DENTRO de la zona que entra al área.
             html += '<p class="if-seccion">Áreas</p>';
-            html += '<div class="if-areas">';
+            html += '<div class="if-areas if-areas--compacto">';
             AREAS_CONTEO.forEach(area => {
                 const isCompleta = statusRef[area] === 'completada';
                 const tieneUnlock = !isAdmin() && Object.keys(myAuditoriaUnlocks)
@@ -662,7 +674,7 @@
                       + ' onclick="auditoriaEntrarArea(\'' + area + '\')"'
                       + ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();auditoriaEntrarArea(\'' + area + '\');}"'
                       + ' role="button" tabindex="0" aria-label="Entrar a ' + areasAuditoria[area] + '">';
-                html += '<div class="audit-area-icon"><i class="' + areasAuditoriaFA[area] + '" style="font-size:1.3rem;color:' + (isCompleta ? 'var(--green)' : 'var(--accent)') + ';"></i></div>';
+                html += '<div class="audit-area-icon"><i class="' + areasAuditoriaFA[area] + '" style="font-size:1.05rem;color:' + (isCompleta ? 'var(--green)' : 'var(--accent)') + ';"></i></div>';
                 html += '<div class="audit-area-info">';
                 html += '<div class="audit-area-name">' + areasAuditoria[area] + '</div>';
                 html += '<div class="audit-area-status ' + (isCompleta ? 'completada' : 'pendiente') + '">';
@@ -677,11 +689,11 @@
                     const conteoRef = puedeVerConteosAjenos() ? auditoriaConteo : myAuditoriaConteo;
                     const totalProductos = products.filter(p => conteoRef[p.id] && conteoRef[p.id][area] &&
                         (conteoRef[p.id][area].enteras > 0 || (conteoRef[p.id][area].abiertas || []).some(a => a > 0))).length;
-                    html += '<div class="if-area__detalle">' + totalProductos + ' producto(s) con cantidad';
+                    html += '<div class="if-area__detalle">' + totalProductos + ' con cantidad';
                     // D — según el permiso, no según isAdmin(): el mismo
                     // criterio que aplica reabrirArea().
                     if (hasPermission('inventory.reopenArea')) {
-                        accionArea = '<button type="button" class="bt bt--secundario" onclick="reabrirArea(\'' + area + '\')"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Reabrir ' + escapeHtml(areasAuditoria[area]) + '</button>';
+                        accionArea = '<button type="button" class="bt bt--secundario" onclick="reabrirArea(\'' + area + '\')" aria-label="Reabrir ' + escapeHtml(areasAuditoria[area]) + '"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Reabrir</button>';
                     } else if (tieneUnlock) {
                         html += ' · <span style="color:var(--amber);font-weight:700;"><i class="fa-solid fa-unlock" aria-hidden="true"></i> Corrección habilitada</span>';
                     } else {
@@ -694,7 +706,7 @@
                     accionArea = '<button type="button" class="bt bt--secundario" onclick="auditoriaCerrarArea(\'' + area + '\')"><i class="fa-solid fa-lock" aria-hidden="true"></i> Cerrar área para todos</button>';
                 }
                 html += '</div>';
-                html += '<svg class="audit-area-arrow" width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 18l6-6-6-6"/></svg>';
+                html += '<svg class="audit-area-arrow" width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 18l6-6-6-6"/></svg>';
                 html += '</div>';
                 html += accionArea;
                 html += '</div>';
@@ -1011,11 +1023,16 @@
                     // Sin contar y contado en cero NO son lo mismo: el primero sale
                     // apagado, el segundo con la cifra en firme. En un inventario esa
                     // diferencia decide si hay que volver a pasar por el producto.
+                    // v5.23 (diseño Conteo) — bajo la cifra, una palabra: Capturado /
+                    // Pendiente. Es el mismo criterio de "hasData" de siempre.
+                    html += '<div class="inv-card__valor">';
                     html += '<div class="inv-card__total' + (hasData ? '' : ' inv-card__total--vacio') + '"'
                           + ' title="Total (enteras + fracciones de abiertas)">'
                           + '<span class="num bi-cifra inv-card__total-n">' + totalFinalTexto + '</span>'
                           + '<span class="inv-card__total-u">u</span>'
                           + '</div>';
+                    html += '<span class="inv-card__estado' + (hasData ? ' inv-card__estado--ok' : '') + '">' + (hasData ? 'Capturado' : 'Pendiente') + '</span>';
+                    html += '</div>';
                     html += '</div>';
 
                     html += '<div class="inv-card__chips">';
@@ -1101,29 +1118,41 @@
             let html = '<div class="audit-screen">';
 
             // ── Header sticky del área ────────────────────────────────────────
+            // v5.23 (diseño Conteo): fila 1 = volver + "Conteo ciego"; fila 2 =
+            // área, inventario y fecha a la izquierda, "capturados" a la derecha;
+            // y el medidor segmentado. Mismos datos que antes (productos con
+            // cantidad / total), solo ordenados como en el diseño.
+            const ingresados = products.filter(p => conteoRef[p.id] && conteoRef[p.id][area] && (conteoRef[p.id][area].enteras > 0 || (conteoRef[p.id][area].abiertas || []).some(a => a > 0))).length;
+            const _invCab = (typeof _inventarioActivo !== 'undefined') ? _inventarioActivo : null;
+            let _subCab = '';
+            if (_invCab) {
+                _subCab = 'Inventario #' + escapeHtml(String(_invCab.numero || '—'));
+                if (_invCab.fechaRecuento) _subCab += ' · ' + escapeHtml(String(_invCab.fechaRecuento));
+            }
             html += '<div class="audit-count-header">';
-            html += '<div class="flex items-center justify-between gap-3">';
-            html += '<div class="flex items-center gap-3">';
+            html += '<div class="cnt-cab__fila">';
             html += '<button class="audit-back-btn" onclick="auditoriaVolverSeleccion()">';
-            html += '<i class="fa-solid fa-chevron-left"></i> Áreas';
+            html += '<i class="fa-solid fa-chevron-left" aria-hidden="true"></i> Áreas';
             html += '</button>';
-            html += '<div>';
+            html += '<span class="it-pill it-pill--info">Conteo ciego</span>';
+            html += '</div>';
+            html += '<div class="cnt-cab__fila cnt-cab__fila--area">';
+            html += '<div class="cnt-cab__area">';
             html += '<div class="audit-count-area-badge"><i class="' + (areasAuditoriaFA[area] || 'fa-solid fa-location-dot') + '" aria-hidden="true"></i>&nbsp;' + nombreArea + '</div>';
+            if (_subCab) html += '<div class="cnt-cab__sub">' + _subCab + '</div>';
             if (soloLectura) {
                 // FIX #4 — Mensaje claro de que el área está bloqueada para el bartender
-                html += '<div style="font-size:0.62rem;color:var(--amber);margin-top:4px;font-weight:600;"><i class="fa-solid fa-lock" aria-hidden="true"></i> Área completada — solicita al administrador reabrir para corregir</div>';
+                html += '<div class="cnt-cab__aviso cnt-cab__aviso--warn"><i class="fa-solid fa-lock" aria-hidden="true"></i> Área completada — solicita al administrador reabrir para corregir</div>';
             } else if (estaCompleta && isAdmin()) {
-                html += '<div style="font-size:0.62rem;color:var(--green);margin-top:4px;font-weight:600;"><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Área completada — editando como administrador</div>';
+                html += '<div class="cnt-cab__aviso cnt-cab__aviso--ok"><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Área completada — editando como administrador</div>';
             }
             html += '</div>';
-            html += '</div>';
             // Contador de productos ingresados
-            const ingresados = products.filter(p => conteoRef[p.id] && conteoRef[p.id][area] && (conteoRef[p.id][area].enteras > 0 || (conteoRef[p.id][area].abiertas || []).some(a => a > 0))).length;
-            html += '<div style="text-align:right;">';
-            html += '<div style="font-size:0.65rem;font-weight:600;color:var(--txt-muted);">Con cantidad</div>';
-            html += '<div style="font-family:\'IBM Plex Mono\',monospace;font-weight:700;font-size:1rem;color:var(--accent);">' + ingresados + '<span style="font-size:0.65rem;font-weight:500;color:var(--txt-muted);">/' + products.length + '</span></div>';
+            html += '<div class="cnt-cab__cifra"><span class="num cnt-cab__n">' + ingresados + '</span><span class="num cnt-cab__de"> / ' + products.length + '</span>'
+                  + '<span class="cnt-cab__u">Capturados</span></div>';
             html += '</div>';
-            html += '</div></div>'; // end audit-count-header
+            if (typeof inicioMedidor === 'function') html += inicioMedidor(ingresados, products.length);
+            html += '</div>'; // end audit-count-header
 
             // ── Pantalla bloqueada para bartender ────────────────────────────
             // FIX #4: Si soloLectura, mostrar vista de resumen en lugar del formulario
@@ -1288,19 +1317,19 @@
             let html = '';
 
             // ── Sección: Reportes publicados por admin (visible para todos) ──
-            html += '<div id="historiaReportesWrap" style="margin-bottom:20px;">';
-            html += '<h3 style="font-size:.85rem;font-weight:600;color:var(--txt-primary);margin-bottom:10px;">📊 Reportes globales publicados</h3>';
-            html += '<div id="historiaReportesList" style="color:var(--txt-muted);font-size:.8rem;">Cargando…</div>';
+            html += '<div id="historiaReportesWrap" class="hs-seccion">';
+            html += '<h3 class="ui-titulo ui-titulo--seccion"><i class="fa-solid fa-file-chart-column" aria-hidden="true"></i> Reportes globales publicados</h3>';
+            html += '<div id="historiaReportesList" class="ui-nota">Cargando…</div>';
             html += '</div>';
 
             // ── Sección: Historial de inventarios locales ────────────────────
             if (inventories.length === 0) {
-                html += '<div class="bg-white rounded-2xl p-12 text-center shadow-md"><svg class="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg><p class="text-gray-600">No hay inventarios guardados</p></div>';
+                html += '<div class="ui-vacio ui-vacio--caja"><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>No hay inventarios guardados</div>';
             } else {
-                html += '<div class="flex justify-between items-center mb-4">';
-                html += '<h3 style="font-size:.85rem;font-weight:600;color:var(--txt-primary);">📋 Historial de conteos</h3>';
+                html += '<div class="hs-cab">';
+                html += '<h3 class="ui-titulo ui-titulo--seccion"><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i> Historial de conteos</h3>';
                 if (isAdmin()) {
-                html += '<button onclick="deleteAllInventories()" class="bg-gradient-to-r from-red-500 to-orange-600 text-white px-4 py-2 rounded-xl flex items-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200 text-xs" title="Eliminar todo el historial"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg><span class="font-medium">Eliminar historial</span></button>';
+                    html += '<button type="button" onclick="deleteAllInventories()" class="adm-btn warn hs-borrar" title="Eliminar todo el historial"><i class="fa-solid fa-trash" aria-hidden="true"></i> <span>Eliminar historial</span></button>';
                 }
                 html += '</div>';
                 // FASE 6 — barra unificada sobre folio, área, fecha y productos,
@@ -1318,31 +1347,29 @@
             setTimeout(function() {
                 const el = document.getElementById('historiaReportesList');
                 if (!el) return;
-                if (!_db) { el.innerHTML = '<p style="color:var(--txt-muted);font-size:.79rem;">Firebase no configurado</p>'; return; }
+                if (!_db) { el.innerHTML = '<p class="ui-nota">Firebase no configurado</p>'; return; }
                 _db.collection('reportes').orderBy('fechaTs', 'desc').limit(10).get()
                     .then(function(snap) {
                         if (!el) return;
-                        if (snap.empty) { el.innerHTML = '<p style="color:var(--txt-muted);font-size:.79rem;">Sin reportes publicados aún</p>'; return; }
+                        if (snap.empty) { el.innerHTML = '<p class="ui-nota">Sin reportes publicados aún</p>'; return; }
                         let rhtml = '';
                         snap.docs.forEach(function(d) {
                             const r = d.data();
-                            rhtml += '<div class="rep-card" style="position:relative;">';
-                            rhtml += '<div class="rep-card-title">📊 ' + escapeHtml(r.fecha || d.id) + '</div>';
-                            rhtml += '<div class="rep-card-meta">' + (r.totalProductos || 0) + ' productos · publicado por admin</div>';
-                            rhtml += '<div style="display:flex;align-items:center;gap:8px;margin-top:6px;">';
-                            rhtml += '<button class="adm-btn primary" style="margin:0;padding:7px 14px;" onclick="descargarReporte(\'' + d.id + '\')"><i class="fa-solid fa-download"></i> Descargar Excel</button>';
+                            rhtml += '<div class="rep-card">';
+                            rhtml += '<div class="rep-card-title"><i class="fa-solid fa-file-chart-column" aria-hidden="true"></i> ' + escapeHtml(r.fecha || d.id) + '</div>';
+                            rhtml += '<div class="rep-card-meta ui-mono">' + (r.totalProductos || 0) + ' productos · publicado por admin</div>';
+                            rhtml += '<div class="hs-rep-acciones">';
+                            rhtml += '<button type="button" class="adm-btn" onclick="descargarReporte(\'' + d.id + '\')"><i class="fa-solid fa-download" aria-hidden="true"></i> Descargar Excel</button>';
                             // Icono eliminar — solo visible para admin
                             if (typeof isAdmin === 'function' && isAdmin()) {
-                                rhtml += '<button onclick="eliminarReporte(\'' + d.id + '\')" title="Eliminar reporte" style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:var(--r-md);background:var(--red-dim,rgba(239,68,68,.12));border:1px solid rgba(239,68,68,.22);color:var(--red-text,#ef4444);cursor:pointer;flex-shrink:0;transition:background .18s;" onmouseover="this.style.background=\'rgba(239,68,68,.22)\'" onmouseout="this.style.background=\'var(--red-dim,rgba(239,68,68,.12))\'">';
-                                rhtml += '<svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>';
-                                rhtml += '</button>';
+                                rhtml += '<button type="button" class="ui-icono-btn ui-icono-btn--peligro" onclick="eliminarReporte(\'' + d.id + '\')" title="Eliminar reporte" aria-label="Eliminar reporte ' + escapeHtml(r.fecha || d.id) + '"><i class="fa-solid fa-trash" aria-hidden="true"></i></button>';
                             }
                             rhtml += '</div>';
                             rhtml += '</div>';
                         });
                         el.innerHTML = rhtml;
                     }).catch(function(e) {
-                        if (el) el.innerHTML = '<p style="color:var(--txt-muted);font-size:.79rem;">Error cargando reportes</p>';
+                        if (el) el.innerHTML = '<p class="ui-nota">Error cargando reportes</p>';
                     });
             }, 80);
 
@@ -1789,12 +1816,15 @@
             showConfirm(
                 '⚠️ ¿Eliminar el producto "' + prodName + '"?\n\n' +
                 'Se borrarán también sus conteos en todas las áreas.\n' +
-                'Esta acción NO se puede deshacer.',
+                'Queda una copia en la Papelera (administración puede restaurarlo).',
                 function() {
                     // Segunda confirmación para mayor seguridad
                     showConfirm(
-                        '🗑️ CONFIRMAR ELIMINACIÓN\n\n"' + prodName + '" será eliminado permanentemente.\n\n¿Estás seguro?',
+                        '🗑️ CONFIRMAR ELIMINACIÓN\n\n"' + prodName + '" será eliminado del catálogo.\n\n¿Estás seguro?',
                         function() {
+                          // v5.19 — PAPELERA: primero la copia en el servidor; solo
+                          // si se confirma, se borra (js/53). Sin señal no se borra.
+                          var _aplicarBorrado = function() {
                             // Crear respaldo antes de eliminar
                             _crearBackupNombrado('pre_eliminacion_' + id + '_' + Date.now());
 
@@ -1817,8 +1847,11 @@
                             });
 
                             saveToLocalStorage();
-                            showNotification('Producto eliminado: ' + prodName);
+                            showNotification('Producto eliminado: ' + prodName + (typeof _db !== 'undefined' && _db ? ' (copia en la Papelera)' : ''));
                             renderTab();
+                          };
+                          if (product && typeof papeleraProtegerProductos === 'function') papeleraProtegerProductos([product], 'producto', _aplicarBorrado);
+                          else _aplicarBorrado();
                         }
                     );
                 }
@@ -1833,12 +1866,15 @@
             showConfirm(
                 '🚨 ¿Eliminar TODOS los ' + products.length + ' productos?\n\n' +
                 'Se borrarán el catálogo completo y todos los conteos.\n' +
-                'Esta acción NO se puede deshacer.',
+                'Queda una copia en la Papelera del servidor (administración puede restaurarlo).',
                 function() {
                     showConfirm(
                         '🗑️ CONFIRMACIÓN FINAL\n\nSe eliminará TODO el catálogo (' + products.length + ' productos).\n\n' +
                         'Se creará un respaldo automático antes de continuar.\n\n¿Confirmar eliminación total?',
                         function() {
+                          // v5.19 — PAPELERA: copia de TODO el catálogo en el servidor
+                          // antes de vaciarlo; si no se confirma, no se borra nada.
+                          var _aplicarVaciado = function() {
                             // Backup automático antes de eliminar todo
                             _crearBackupNombrado('pre_eliminacion_total_' + Date.now());
 
@@ -1874,8 +1910,11 @@
                                     'vaciar en la nube. Vuelve a intentarlo con señal.');
                             });
 
-                            showNotification('Todos los productos han sido eliminados. Respaldo guardado.');
+                            showNotification('Todos los productos han sido eliminados. Respaldo guardado' + (typeof _db !== 'undefined' && _db ? ' y copia en la Papelera.' : '.'));
                             renderTab();
+                          };
+                          if (typeof papeleraProtegerProductos === 'function') papeleraProtegerProductos(products.slice(), 'catalogo', _aplicarVaciado);
+                          else _aplicarVaciado();
                         }
                     );
                 }

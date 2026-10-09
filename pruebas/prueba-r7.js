@@ -88,10 +88,13 @@ chk('Y el fin de mes, que NO cierra semana pero sí se puede contabilizar',
 // crear, en vez de solo avisar. Defensa en dos capas: el botón se
 // deshabilita en la pantalla, y confirmarNuevoInventario() lo vuelve a
 // comprobar por si el estado del botón se pierde.
-chk('Fuera de domingo/fin de mes se deshabilita el botón de crear',
-    /no es domingo ni fin de mes[\s\S]{0,400}btn\.disabled = true/.test(flujo));
-chk('…y confirmarNuevoInventario() lo bloquea también, no solo la pantalla',
-    /cierraSemana && !_cl\.esCorteMensual\)[\s\S]{0,200}?return;/.test(flujo));
+// FASE 14 (decisión de Eduardo, 5-oct-2026): un recuento de mitad de semana
+// ya NO se bloquea — se contabiliza como ancla del Total. Se avisa en ámbar.
+chk('FASE 14 · mitad de semana se permite, con aviso ámbar de que será ancla del Total',
+    /Recuento de mitad de semana[\s\S]{0,400}btn\.disabled = false/.test(flujo) &&
+    /el\.style\.color = 'var\(--amber\)';\s*\n\s*\/\/ textContent/.test(flujo));
+chk('…y confirmarNuevoInventario() solo bloquea una fecha inválida',
+    /function confirmarNuevoInventario[\s\S]{0,1600}if \(!_cl\) \{[\s\S]{0,120}?return;/.test(flujo));
 chk('La fecha por defecto ya no es "hoy": se propone la próxima fecha válida',
     /proximaFechaRecuentoValida\(new Date\(\)\)/.test(flujo),
     'proponer "hoy" casi siempre generaba un inventario que no se podía contabilizar');
@@ -210,8 +213,9 @@ chk('★ No escribe si el inventario ya no está abierto (FASE 7: nada retroacti
     /if \(!inventarioAbierto\(inv\)\) \{[\s\S]{0,250}return;/.test(flujo));
 chk('Solo escribe fechaRecuento y semanaId — nada más del documento',
     /ref\.update\(\{ fechaRecuento: fecha, semanaId: cl\.semanaId \}\)/.test(flujo));
-chk('La fecha se valida con la misma regla que "Nuevo Inventario" (domingo o fin de mes)',
-    /function confirmarRegistrarFechaRecuento[\s\S]{0,600}!cl\.cierraSemana && !cl\.esCorteMensual/.test(flujo));
+chk('La fecha se valida con la misma regla que "Nuevo Inventario" (FASE 14: cualquier fecha válida)',
+    /function confirmarRegistrarFechaRecuento[\s\S]{0,600}if \(!cl\) \{/.test(flujo) &&
+    !/function confirmarRegistrarFechaRecuento[\s\S]{0,600}!cl\.cierraSemana && !cl\.esCorteMensual/.test(flujo));
 chk('El encabezado ofrece el botón solo mientras el inventario sigue abierto',
     /!esCerrado && isAdmin\(\) && hasPermission\('inventory\.create'\)\)[\s\S]{0,200}abrirModalRegistrarFechaRecuento/.test(uiInv));
 chk('Sin fechaRecuento, el encabezado avisa en vez de mostrar una línea vacía',

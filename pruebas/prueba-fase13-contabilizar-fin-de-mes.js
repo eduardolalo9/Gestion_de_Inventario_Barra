@@ -192,11 +192,17 @@ if (A) {
         combinado.semanaDestino === A.semanaSiguiente('2026-05-31') && combinado.mesId === '2026-05',
         JSON.stringify(combinado));
 
-    // Fuera de calendario sigue bloqueado, y el motivo menciona ambas reglas.
-    const fuera = A.evaluarContabilizable(Object.assign({}, base, { fechaRecuento: '2026-09-23' }));  // miércoles normal
-    chk('Un miércoles que no es fin de mes sigue bloqueado',
-        fuera.puede === false && /DOMINGO/.test(fuera.motivo) && /último día del mes/.test(fuera.motivo),
+    // FASE 14 (decisión de Eduardo, 5-oct-2026): un miércoles normal ya NO se
+    // bloquea — se contabiliza como ANCLA del Total, sin inicial ni corte.
+    const fuera = A.evaluarContabilizable(Object.assign({}, base, { fechaRecuento: '2026-09-23' }), '2026-10-05');  // miércoles normal
+    chk('FASE 14 · un miércoles que no es fin de mes se contabiliza solo como ancla',
+        fuera.puede === true && fuera.haceAncla === true && fuera.anclaTipo === 'mitad_de_semana' &&
+        fuera.haceSemanal === false && fuera.haceMensual === false && fuera.anclaFecha === '2026-09-23',
         JSON.stringify(fuera));
+    chk('FASE 14 · el fin de mes entre semana además es ancla (tipo fin_de_mes)',
+        mensualPuro.haceAncla === true && mensualPuro.anclaTipo === 'fin_de_mes', JSON.stringify(mensualPuro));
+    chk('FASE 14 · un domingo NO genera ancla aparte (su inicial ya lo es)',
+        semanalPuro.haceAncla === false && combinado.haceAncla === false);
 
     // Ya contabilizado: el "hecho" ahora puede traer los dos destinos.
     const hecho = A.evaluarContabilizable({ estado: 'CONTABILIZADO', semanaDestino: '2026-06-01', mesDestino: '2026-05' });
@@ -258,10 +264,10 @@ chk('NO escribe el corte mensual cuando el cierre es semanal puro (sin regresió
 const paso = extraer(ui, '_renderSiguientePasoInventario') || '';
 chk('★ El botón cambia de etiqueta cuando el corte es mensual',
     /Contabilizar \(semana \+ mes\)/.test(paso) && /Contabilizar cierre de mes/.test(paso));
-chk('El texto de "pendiente" ya no asume que siempre hay una semana destino',
-    /destinos\(ev\.semanaDestino, ev\.mesId\)/.test(paso));
-chk('El texto de "hecho" también usa ambos destinos',
-    /destinos\(ev\.semanaDestino, ev\.mesDestino\)/.test(paso));
+chk('El texto de "pendiente" ya no asume que siempre hay una semana destino (FASE 14: + ancla)',
+    /destinos\(ev\.semanaDestino, ev\.mesId, ev\.anclaFecha\)/.test(paso));
+chk('El texto de "hecho" también usa todos los destinos (FASE 14: + ancla)',
+    /destinos\(ev\.semanaDestino, ev\.mesDestino, ev\.anclaDestino\)/.test(paso));
 chk('El Historial muestra el corte mensual aparte del inicial semanal',
     /inv\.mesDestino/.test(ui) && /Corte mensual/.test(ui));
 chk('El detalle del inventario cerrado también distingue ambos destinos',

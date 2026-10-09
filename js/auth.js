@@ -64,6 +64,8 @@
                     if (typeof _unsubMainDoc   === 'function') { _unsubMainDoc();   _unsubMainDoc   = null; } // FIX SYNC-6
                     if (typeof _unsubAllUsers  === 'function') { _unsubAllUsers();  _unsubAllUsers  = null; }
                     if (typeof _unsubMyAuditoria === 'function') { _unsubMyAuditoria(); _unsubMyAuditoria = null; }
+                    // v5.22 — las escuchas en vivo de compras, ventas y cortes tampoco sobreviven al logout.
+                    if (typeof syncVivoDetener === 'function') syncVivoDetener();
                     // ETAPA 14.1.1: limpiar también los listeners en tiempo
                     // real del contexto de autorización — nunca deben
                     // sobrevivir a un logout, ni seguir escuchando el doc del

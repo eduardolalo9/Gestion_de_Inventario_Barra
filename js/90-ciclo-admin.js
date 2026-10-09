@@ -1,3 +1,47 @@
+        // ── Mapeo flexible de columnas del catálogo ──────────────────────────
+        // Acepta variantes de nombre para mayor compatibilidad. v5.18: se sacó
+        // de handleFileImport para compartirlo con el validador del módulo
+        // "Importar desde Excel" (js/96-importar.js) — una sola lista de
+        // nombres, para que lo que el validador acepta sea lo que se importa.
+        var COLUMNAS_CATALOGO = {
+            id:                 ['ID', 'Id', 'id', 'Código', 'codigo'],
+            name:               ['Nombre', 'Descripción', 'descripcion', 'Producto', 'producto', 'nombre'],
+            unit:               ['Unidad', 'unidad', 'Medida', 'medida'],
+            group:              ['Grupo', 'grupo', 'Categoría', 'categoria'],
+            stock:              ['Cantidad', 'cantidad', 'Stock', 'stock', 'Enteras'],
+            // ── Campos de conversión oz→puntos ──
+            // IMPORTANTE: se leen con parseFloat + null (no parseExcelNumber)
+            // para respetar exactamente los nombres del Excel exportado
+            capacidadMl:        ['CapacidadML', 'capacidadMl', 'CapacidadMl', 'Capacidad_ML', 'CapML'],
+            pesoBotellaLlenaOz: ['PesoBotellaOz', 'pesoBotellaOz', 'PesoLlenaOz', 'PesoBotella_Oz', 'PesoOz'],
+
+            // R1 (regla 14) — columna OPCIONAL. Si el Excel no la trae,
+            // el modo se deduce de tener capacidad y peso, que es como se
+            // ha comportado la app hasta ahora.
+            conteoOz: ['ConteoOz', 'Conteo oz', 'ConteoBotellaOz', 'ContarEnOz', 'Habilitar conteo oz'],
+
+            // R2 (reglas 2 y 8) — el product_id de Parrot. En la hoja
+            // "Venta" la columna se llama SKU, asi que se aceptan los
+            // dos nombres: son el mismo dato.
+            pv: ['PV', 'SKU', 'PV de venta', 'PVVenta', 'ProductId', 'product_id'],
+
+            // ── P0: cuatro columnas que el Excel del catalogo YA trae ──
+            // Estaban en Productos_Barra15.xlsx desde siempre y la importacion
+            // las ignoraba, asi que el producto guardado no tenia con que
+            // costear una compra ni calcular un sugerido. Verificado sobre el
+            // archivo real: 424/424 traen Precio, 419 Conversion, 254 Stock
+            // minimo y 424 Proveedor.
+            // OJO: en ese Excel los dos ultimos nombres llevan un espacio
+            // FINAL ('Conversion de producto ', 'Proveedor '). Se aceptan las
+            // dos formas para no depender de que eso se mantenga.
+            precio:      ['Precio', 'precio', 'PrecioUnitario', 'Costo', 'costo'],
+            conversion:  ['Conversion de producto ', 'Conversion de producto',
+                          'Conversion', 'conversion', 'Conversi\u00f3n'],
+            stockMinimo: ['Stock minimo', 'Stock Minimo', 'StockMinimo',
+                          'stockMinimo', 'Minimo', 'M\u00ednimo'],
+            proveedor:   ['Proveedor ', 'Proveedor', 'proveedor']
+        };
+
         function handleFileImport(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -22,7 +66,7 @@
             // ═══ FIX #3: Verificar que XLSX esté cargado (tiene defer) ═══
             // El script de SheetJS usa defer → puede no estar listo si el usuario
             // intenta importar muy rápido tras cargar la página.
-            if (typeof XLSX === 'undefined') {
+            if (typeof XLSX === 'undefined' && !Array.isArray(event._filas)) {
                 showNotification('⏳ Cargando librería Excel... intenta en unos segundos');
                 event.target.value = '';
                 return;
@@ -38,6 +82,14 @@
                 usuario: (auditCurrentUser ? auditCurrentUser.userName : null) || currentUserUid || 'local',
                 uid:     currentUserUid || null
             });
+            // v5.18 — el módulo "Importar desde Excel" (js/96-importar.js) ya
+            // leyó y VALIDÓ el archivo antes de llegar aquí, y entrega las filas
+            // (event._filas): se aplican con exactamente las mismas reglas de
+            // siempre (_catalogoAplicarFilas), sin volver a leer el archivo.
+            if (Array.isArray(event._filas)) {
+                _catalogoAplicarFilas(event._filas, fileInput, event);
+                return;
+            }
             const reader = new FileReader();
             reader.onload = function(e) {
                 try {
@@ -48,47 +100,32 @@
                     if (!firstSheet) { showNotification('La primera hoja del archivo está vacía o es inválida'); return; }
                     const jsonData = XLSX.utils.sheet_to_json(firstSheet);
                     if (!jsonData || jsonData.length === 0) { showNotification('El archivo no contiene datos válidos'); return; }
+                    _catalogoAplicarFilas(jsonData, fileInput, event);
+                } catch (error) {
+                    showNotification('Error al importar archivo: ' + error.message);
+                    console.error(error);
+                    fileInput.value = '';
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        /**
+         * _catalogoAplicarFilas(jsonData, fileInput, event)
+         * v5.18 — el cuerpo de siempre de la importación del catálogo (mapeo de
+         * columnas, alta o actualización por ID, F1/conteo en oz, aviso de PV
+         * repetidos), separado de la LECTURA del archivo para que el módulo
+         * "Importar desde Excel" pueda aplicar filas ya validadas. Sin cambios
+         * de regla.
+         */
+        function _catalogoAplicarFilas(jsonData, fileInput, event) {
+                try {
 
                     // ── Mapeo flexible de columnas ───────────────────────────
                     // Acepta variantes de nombre para mayor compatibilidad
-                    const columnMap = {
-                        id:                 ['ID', 'Id', 'id', 'Código', 'codigo'],
-                        name:               ['Nombre', 'Descripción', 'descripcion', 'Producto', 'producto', 'nombre'],
-                        unit:               ['Unidad', 'unidad', 'Medida', 'medida'],
-                        group:              ['Grupo', 'grupo', 'Categoría', 'categoria'],
-                        stock:              ['Cantidad', 'cantidad', 'Stock', 'stock', 'Enteras'],
-                        // ── Campos de conversión oz→puntos ──
-                        // IMPORTANTE: se leen con parseFloat + null (no parseExcelNumber)
-                        // para respetar exactamente los nombres del Excel exportado
-                        capacidadMl:        ['CapacidadML', 'capacidadMl', 'CapacidadMl', 'Capacidad_ML', 'CapML'],
-                        pesoBotellaLlenaOz: ['PesoBotellaOz', 'pesoBotellaOz', 'PesoLlenaOz', 'PesoBotella_Oz', 'PesoOz'],
-
-                        // R1 (regla 14) — columna OPCIONAL. Si el Excel no la trae,
-                        // el modo se deduce de tener capacidad y peso, que es como se
-                        // ha comportado la app hasta ahora.
-                        conteoOz: ['ConteoOz', 'Conteo oz', 'ConteoBotellaOz', 'ContarEnOz', 'Habilitar conteo oz'],
-
-                        // R2 (reglas 2 y 8) — el product_id de Parrot. En la hoja
-                        // "Venta" la columna se llama SKU, asi que se aceptan los
-                        // dos nombres: son el mismo dato.
-                        pv: ['PV', 'SKU', 'PV de venta', 'PVVenta', 'ProductId', 'product_id'],
-
-                        // ── P0: cuatro columnas que el Excel del catalogo YA trae ──
-                        // Estaban en Productos_Barra15.xlsx desde siempre y la importacion
-                        // las ignoraba, asi que el producto guardado no tenia con que
-                        // costear una compra ni calcular un sugerido. Verificado sobre el
-                        // archivo real: 424/424 traen Precio, 419 Conversion, 254 Stock
-                        // minimo y 424 Proveedor.
-                        // OJO: en ese Excel los dos ultimos nombres llevan un espacio
-                        // FINAL ('Conversion de producto ', 'Proveedor '). Se aceptan las
-                        // dos formas para no depender de que eso se mantenga.
-                        precio:      ['Precio', 'precio', 'PrecioUnitario', 'Costo', 'costo'],
-                        conversion:  ['Conversion de producto ', 'Conversion de producto',
-                                      'Conversion', 'conversion', 'Conversi\u00f3n'],
-                        stockMinimo: ['Stock minimo', 'Stock Minimo', 'StockMinimo',
-                                      'stockMinimo', 'Minimo', 'M\u00ednimo'],
-                        proveedor:   ['Proveedor ', 'Proveedor', 'proveedor']
-                    };
+                    // v5.18 — el mapa vive arriba (COLUMNAS_CATALOGO) para que el
+                    // validador del módulo Importar use EXACTAMENTE los mismos nombres.
+                    const columnMap = COLUMNAS_CATALOGO;
 
                     // ── Helper: buscar valor en la fila por mapa de claves ───
                     //
@@ -375,20 +412,28 @@
                         + (valoresCorregidos ? ' ⚠️ ' + valoresCorregidos + ' valor(es) no físico(s) (negativo/cero) descartado(s).' : '')
                         + (_pvRepes.length ? ' ⚠️ ' + _pvRepes.length + ' PV repetido(s): ' + _pvRepes.slice(0, 3).join(', ')
                            + (_pvRepes.length > 3 ? '…' : '') + '. Las ventas no cruzarán bien hasta corregirlos.' : ''));
-                    activeTab = 'inicio';
-                    selectedGroup = 'Todos';
-                    searchTerm = '';
-                    selectedArea = AREAS_CONTEO[0] || 'almacen';   // R6
-                    saveToLocalStorage();
-                    renderTab();
+                    if (event && event._desdeModulo) {
+                        // v5.18 — desde el módulo: se queda en el módulo, que
+                        // publica y muestra el resultado.
+                        saveToLocalStorage();
+                        if (typeof event._alTerminar === 'function') {
+                            event._alTerminar({ nuevos: _nuevos, actualizados: _actualizados, omitidas: skipped,
+                                                corregidos: valoresCorregidos, pvRepetidos: _pvRepes.slice() });
+                        }
+                    } else {
+                        activeTab = 'inicio';
+                        selectedGroup = 'Todos';
+                        searchTerm = '';
+                        selectedArea = AREAS_CONTEO[0] || 'almacen';   // R6
+                        saveToLocalStorage();
+                        renderTab();
+                    }
                     fileInput.value = '';
                 } catch (error) {
                     showNotification('Error al importar archivo: ' + error.message);
                     console.error(error);
-                    fileInput.value = '';
+                    if (fileInput) fileInput.value = '';
                 }
-            };
-            reader.readAsArrayBuffer(file);
         }
 
         // ══════════════════════════════════════════════════════════════════════

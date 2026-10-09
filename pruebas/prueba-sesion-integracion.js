@@ -114,6 +114,7 @@ function montar(db, uid) {
         extraerFuncion(leer('js/00-nucleo.js'), 'estadoAreasVacio') + '\n' +
         extraerFuncion(leer('js/10-multiusuario.js'), 'inventarioAbierto') + '\n' +
         leer('js/15-ciclo-semanal.js') + '\n' +
+        leer('js/46-arrastre.js') + '\n' +   // FASE 14
         extraerFuncion(datos, '_suscribirInventarioActivo') + '\n' +
         extraerFuncion(datos, 'handleAuditSessionChange') + '\n' +
         extraerFuncion(datos, '_obtenerSiguienteNumeroInventario') + '\n' +

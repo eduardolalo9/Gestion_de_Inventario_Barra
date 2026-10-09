@@ -33,8 +33,10 @@ const C=[]; const chk=(n,ok,d)=>C.push({n,ok,d});
     return {txt:t, botones:[...document.querySelectorAll('#tabContent button')].map(b=>b.textContent.trim())}; });
   chk('Con 0 compras muestra el mensaje de vacío',
       vacio.txt.includes('Todavía no hay compras registradas'), vacio.txt.slice(0,90));
-  chk('Ofrece importar y capturar a mano',
-      vacio.botones.some(b=>b.includes('Importar')) && vacio.botones.some(b=>b.includes('a mano')),
+  // v5.18 — importar se mudó al módulo "Importar desde Excel" (decisión de Eduardo);
+  // la pestaña conserva "Capturar a mano" y el texto indica dónde importar.
+  chk('Ofrece capturar a mano y dice dónde importar (módulo Importar desde Excel)',
+      !vacio.botones.some(b=>b.includes('Importar')) && vacio.botones.some(b=>b.includes('a mano')) && vacio.txt.includes('Importar desde Excel'),
       JSON.stringify(vacio.botones));
 
   // ── Con compras: totaliza bien ──

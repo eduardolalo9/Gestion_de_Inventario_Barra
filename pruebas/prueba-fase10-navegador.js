@@ -28,8 +28,9 @@ const PUERTO = process.env.PUERTO || '8080';
   });
   await p.waitForTimeout(150);
 
-  chk('Con sales.import el header ofrece "Importar ventas"',
-      await p.evaluate(() => !!document.querySelector('[onclick="ventasImportarExcel()"]')), '');
+  // v5.18 — importar ventas vive en el módulo "Importar desde Excel".
+  chk('Con sales.import el header ya NO importa: se hace desde el módulo Importar',
+      await p.evaluate(() => !document.querySelector('[onclick="ventasImportarExcel()"]') && !!document.querySelector('[data-sb-tab="importar"]')), '');
   chk('Sin ventas cargadas, la pestaña lo dice',
       /Todavía no hay ventas cargadas/.test(await p.evaluate(() => document.getElementById('tabContent').innerText)), '');
 

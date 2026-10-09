@@ -56,7 +56,15 @@
         // flotante (0.30000000000000004) se reportaría como discrepancia real.
         var EXISTENCIA_TOLERANCIA = 0.001;
 
-        var _existenciaInicial = { semana: null, estado: 'sin_cargar', saldos: null, origen: null };
+        var _existenciaInicial = { semana: null, estado: 'sin_cargar', saldos: null, origen: null, ancla: null };
+
+        // FASE 14 — lo que el arrastre desde el ancla necesita y la memoria del
+        // dispositivo no tiene: las compras y los periodos de ventas de TODAS las
+        // semanas desde el ancla (la app solo guarda la semana en curso y la
+        // anterior). Se lee una vez por ancla y sesión; nunca se persiste.
+        var _existenciaArrastre = { anclaFecha: null, compras: [], periodos: [],
+                                    comprasNoDisponibles: false, ventasNoDisponibles: false, version: 0 };
+        var _existenciaArrastreMemo = { clave: null, entradas: null, ventas: null, periodos: null, consumo: null };
         var _existenciaAvisos  = [];   // repintados pendientes cuando llegue el inicial
 
         function _existenciaRedondear(n) {
@@ -86,6 +94,8 @@
         function existenciaCargarInicial(alTerminar) {
             var sem = existenciaSemanaHoy();
             if (!sem || typeof _db === 'undefined' || !_db) return;
+            // v5.19 — quien no puede leer compras/ventas escucha el Total publicado.
+            if (typeof totalPublicadoSuscribir === 'function') totalPublicadoSuscribir();
 
             // Ya hay respuesta firme para esta semana: no se consulta de nuevo
             // y no se apunta a nadie a la lista de avisos (una lista que nadie
@@ -101,26 +111,190 @@
             // apuntado, no se lanza una segunda lectura.
             if (_existenciaInicial.semana === sem && _existenciaInicial.estado === 'cargando') return;
 
-            _existenciaInicial = { semana: sem, estado: 'cargando', saldos: null, origen: null };
-            _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
-               .collection('inventariosIniciales').doc(sem).get()
-               .then(function(doc) {
-                   if (_existenciaInicial.semana !== sem) return;   // cambió de semana mientras volaba
-                   if (doc.exists) {
-                       var d = doc.data() || {};
-                       _existenciaInicial = { semana: sem, estado: 'ok',
-                                              saldos: d.saldos || {}, origen: d.origen || null };
-                   } else {
-                       _existenciaInicial = { semana: sem, estado: 'no_existe', saldos: null, origen: null };
-                   }
-                   _existenciaNotificar();
-               })
-               .catch(function(e) {
-                   console.warn('[Existencia] No se pudo leer el inventario inicial:', e);
-                   if (_existenciaInicial.semana !== sem) return;   // estado ya invalidado
-                   _existenciaInicial.estado = 'error';
-                   _existenciaNotificar();
-               });
+            _existenciaInicial = { semana: sem, estado: 'cargando', saldos: null, origen: null, ancla: null };
+
+            // FASE 14 — ya no se pregunta solo por el inicial de ESTA semana:
+            // se busca el ancla más nueva entre (a) el último inicial semanal
+            // y (b) la última ancla de fin de mes / mitad de semana. Dos
+            // consultas de un documento cada una (limit 1), en paralelo.
+            var hoy  = (typeof fechaISOLocal === 'function') ? fechaISOLocal(new Date()) : null;
+            var base = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID);
+            var pIni = base.collection('inventariosIniciales')
+                           .where('semanaId', '<=', sem).orderBy('semanaId', 'desc').limit(1).get();
+            // Si las reglas de FASE 14 todavía no se despliegan, esta lectura
+            // falla: se sigue con el inicial semanal, como antes de la fase.
+            var pAnc = base.collection('anclasExistencia')
+                           // v5.18: limit 6 — puede haber varios cortes el mismo día
+                           // (importados con hora); anclaElegir desempata.
+                           .where('fecha', '<=', hoy).orderBy('fecha', 'desc').limit(6).get()
+                           .catch(function(e) { console.warn('[Existencia] anclasExistencia no disponible:', e); return null; });
+
+            Promise.all([pIni, pAnc]).then(function(rs) {
+                if (_existenciaInicial.semana !== sem) return;   // cambió de semana o se invalidó
+                var cands = [];
+                if (rs[0]) rs[0].forEach(function(doc) {
+                    var d = doc.data() || {};
+                    cands.push({ tipo: 'inicial_semanal', id: doc.id, semanaId: doc.id,
+                                 fecha: anclaFechaDeInicial(doc.id), saldos: d.saldos || {}, origen: d.origen || null,
+                                 registradoEn: (typeof d.contabilizadoEn === 'number') ? d.contabilizadoEn : undefined });
+                });
+                if (rs[1]) rs[1].forEach(function(doc) {
+                    var d = doc.data() || {};
+                    cands.push({ tipo: d.tipo || 'mitad_de_semana', id: doc.id, semanaId: d.semanaId || null,
+                                 fecha: d.fecha || doc.id, saldos: d.saldos || {}, origen: d.origen || null,
+                                 hora: d.hora || null,
+                                 registradoEn: (typeof d.contabilizadoEn === 'number') ? d.contabilizadoEn : undefined });
+                });
+                var a = anclaElegir(cands, hoy);
+                if (!a) {
+                    _existenciaInicial = { semana: sem, estado: 'no_existe', saldos: null, origen: null, ancla: null };
+                    _existenciaNotificar();
+                    return;
+                }
+                var dias = arrastreDiasEntre(a.fecha, hoy);
+                if (dias === null || dias > ARRASTRE_MAX_DIAS) {
+                    // Un ancla demasiado vieja no se arrastra: cualquier día de
+                    // ventas sin cargar se habría acumulado semanas. Se cae al
+                    // respaldo y se dice por qué.
+                    _existenciaInicial = { semana: sem, estado: 'no_existe', saldos: null, origen: null, ancla: null,
+                                           motivo: 'ancla_vieja', anclaVieja: { tipo: a.tipo, fecha: a.fecha, id: a.id, dias: dias } };
+                    _existenciaNotificar();
+                    return;
+                }
+                var ancla = { tipo: a.tipo, fecha: a.fecha, id: a.id, ruta: 'arrastre', dias: dias, hora: a.hora || null };
+                _existenciaCargarArrastre(ancla, hoy).then(function() {
+                    if (_existenciaInicial.semana !== sem || _existenciaInicial.estado !== 'cargando') return;
+                    _existenciaInicial = { semana: sem, estado: 'ok', saldos: a.saldos, origen: a.origen, ancla: ancla };
+                    _existenciaNotificar();
+                });
+            }).catch(function(e) {
+                console.warn('[Existencia] No se pudo leer el inventario inicial:', e);
+                if (_existenciaInicial.semana !== sem) return;   // estado ya invalidado
+                _existenciaInicial.estado = 'error';
+                _existenciaNotificar();
+            });
+        }
+
+        /**
+         * FASE 14 — trae a memoria lo que el arrastre necesita: compras y
+         * periodos de ventas de cada semana desde el ancla hasta hoy. Una
+         * semana que no se puede leer (sin permiso, sin red) NO revienta: se
+         * marca, se sigue con lo que hay en el dispositivo, y la pantalla lo
+         * dice. Nunca rechaza.
+         */
+        function _existenciaCargarArrastre(ancla, hoy) {
+            var semanas = arrastreSemanasNecesarias(ancla.fecha, hoy);
+            var estado = { anclaFecha: ancla.fecha, compras: [], periodos: [],
+                           comprasNoDisponibles: false, ventasNoDisponibles: false,
+                           version: (_existenciaArrastre.version || 0) + 1 };
+            // v5.19 — sin permiso ni se pregunta: las reglas lo negarían de todos
+            // modos (una lectura fallida por semana es batería y datos tirados).
+            // Ese usuario toma el Total publicado (js/51).
+            var authzListo = (typeof _authzState !== 'undefined' && _authzState && _authzState.loaded && typeof hasPermission === 'function');
+            var semanasCompras = semanas, semanasVentas = semanas;
+            if (authzListo && !hasPermission('purchases.read')) { estado.comprasNoDisponibles = true; semanasCompras = []; }
+            if (authzListo && !hasPermission('sales.read'))     { estado.ventasNoDisponibles = true;  semanasVentas = []; }
+            var leerCompras = semanasCompras.map(function(w) {
+                return _db.collection('compras').where('semanaId', '==', w).get().then(function(snap) {
+                    snap.forEach(function(doc) {
+                        var c = doc.data() || {};
+                        var asientos = (typeof _asientosDesdeCompra === 'function') ? _asientosDesdeCompra(c) : [];
+                        asientos.forEach(function(m) { estado.compras.push(m); });
+                    });
+                }).catch(function(e) {
+                    console.warn('[Existencia] Compras de la semana ' + w + ' no disponibles:', e);
+                    estado.comprasNoDisponibles = true;
+                });
+            });
+            var leerVentas = semanasVentas.map(function(w) {
+                return _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID).collection('ventas')
+                          .where('semanaId', '==', w).get().then(function(snap) {
+                    snap.forEach(function(doc) {
+                        var d = doc.data() || {};
+                        var per = (typeof _ventasPeriodoDeDoc === 'function') ? _ventasPeriodoDeDoc(doc.id, d)
+                                  : { id: doc.id, inicio: d.fechaInicio, fin: d.fechaFin };
+                        estado.periodos.push({ id: per.id, inicio: per.inicio, fin: per.fin, semanaId: per.semanaId || w,
+                                               lineas: Array.isArray(d.lineas) ? d.lineas : [] });
+                    });
+                }).catch(function(e) {
+                    console.warn('[Existencia] Ventas de la semana ' + w + ' no disponibles:', e);
+                    estado.ventasNoDisponibles = true;
+                });
+            });
+            return Promise.all(leerCompras.concat(leerVentas)).then(function() {
+                _existenciaArrastre = estado;
+                _existenciaArrastreMemo = { clave: null, entradas: null, ventas: null, periodos: null, consumo: null };
+            });
+        }
+
+        /** Ruta de cálculo: 'arrastre' (FASE 14) o 'semana' (inicial de esta semana, como antes). */
+        function _existenciaRuta() {
+            return (_existenciaInicial && _existenciaInicial.ancla && _existenciaInicial.ancla.ruta === 'arrastre')
+                   ? 'arrastre' : 'semana';
+        }
+
+        /**
+         * Los tres resultados del arrastre (entradas, periodos clasificados y
+         * consumo), calculados una vez por versión de datos. Se piden 424 veces
+         * al pintar el catálogo: recalcular el cruce cada vez se notaría.
+         */
+        function _existenciaArrastreCalcular() {
+            var ancla = _existenciaInicial.ancla;
+            var hoy = (typeof fechaISOLocal === 'function') ? fechaISOLocal(new Date()) : null;
+            var mem = (typeof movimientos !== 'undefined' && Array.isArray(movimientos)) ? movimientos : [];
+            var nRec = (typeof recetas !== 'undefined' && Array.isArray(recetas)) ? recetas.length : -1;
+            var nProd = (typeof products !== 'undefined' && Array.isArray(products)) ? products.length : -1;
+            var clave = [ancla.fecha, _existenciaArrastre.version, mem.length, nRec, nProd, hoy].join('|');
+            if (_existenciaArrastreMemo.clave === clave) return _existenciaArrastreMemo;
+            // Lo leído de Firestore + lo que el dispositivo ya tiene (una compra
+            // recién guardada en esta sesión cuenta al instante).
+            var entradas = arrastreEntradas(ancla.fecha, _existenciaArrastre.compras.concat(mem), hoy);
+            var periodos = arrastrePeriodosVentas(ancla.fecha, _existenciaArrastre.periodos, hoy);
+            var consumo  = (typeof consumoTeoricoDeLineas === 'function')
+                           ? consumoTeoricoDeLineas(arrastreLineasVentas(periodos.incluidos), 'arrastre')
+                           : { consumo: {}, avisos: { sinReceta: [], sinCatalogo: [], uomDistinta: [] } };
+            _existenciaArrastreMemo = { clave: clave, entradas: entradas, ventas: consumo.consumo || {},
+                                        periodos: periodos, consumo: consumo };
+            return _existenciaArrastreMemo;
+        }
+
+        /** Entradas por compra que suman al Total, por producto, según la ruta vigente. */
+        function existenciaEntradas() {
+            return _existenciaRuta() === 'arrastre' ? _existenciaArrastreCalcular().entradas : existenciaEntradasSemana();
+        }
+
+        /** Consumo teórico que se resta del Total, por producto, según la ruta vigente. */
+        function existenciaVentas() {
+            return _existenciaRuta() === 'arrastre' ? _existenciaArrastreCalcular().ventas : existenciaVentasSemana();
+        }
+
+        /**
+         * existenciaArrastreResumen()
+         * Lo que la pantalla necesita para ser honesta sobre el Total: de qué
+         * ancla sale, cuántos días de ventas faltan, qué periodos no se pudieron
+         * repartir y qué no se pudo leer. null si no hay ancla de arrastre.
+         */
+        function existenciaArrastreResumen() {
+            if (_existenciaRuta() !== 'arrastre' || _existenciaInicial.estado !== 'ok') return null;
+            // v5.19 — quien usa el Total publicado ve el resumen de quien lo publicó.
+            var pub = (typeof _totalPublicadoResumen === 'function') ? _totalPublicadoResumen() : null;
+            if (pub) return pub;
+            var c = _existenciaArrastreCalcular();
+            return {
+                ancla:                _existenciaInicial.ancla,
+                diasEsperados:        c.periodos.diasEsperados.length,
+                diasFaltantes:        c.periodos.diasFaltantes.slice(),
+                periodosIncluidos:    c.periodos.incluidos.length,
+                periodosPartidos:     c.periodos.partidos.map(function(p) { return { id: p.id, inicio: p.inicio, fin: p.fin }; }),
+                comprasNoDisponibles: !!_existenciaArrastre.comprasNoDisponibles,
+                ventasNoDisponibles:  !!_existenciaArrastre.ventasNoDisponibles,
+                avisosConsumo:        c.consumo.avisos
+            };
+        }
+        if (typeof window !== 'undefined') {
+            window.existenciaArrastreResumen = existenciaArrastreResumen;
+            window.existenciaEntradas = existenciaEntradas;
+            window.existenciaVentas = existenciaVentas;
         }
 
         /**
@@ -134,8 +308,28 @@
             // pudo salir ANTES de contabilizar y traer "no existe". Al poner
             // semana en null, su respuesta llega a un estado que ya no es el
             // suyo y se descarta (ver la guarda en existenciaCargarInicial).
-            _existenciaInicial = { semana: null, estado: 'sin_cargar', saldos: null, origen: null };
+            _existenciaInicial = { semana: null, estado: 'sin_cargar', saldos: null, origen: null, ancla: null };
+            // FASE 14 — también lo leído para el arrastre: tras contabilizar o
+            // procesar una venta, el ancla o los periodos ya no son los mismos.
+            _existenciaArrastre = { anclaFecha: null, compras: [], periodos: [],
+                                    comprasNoDisponibles: false, ventasNoDisponibles: false,
+                                    version: (_existenciaArrastre.version || 0) + 1 };
+            _existenciaArrastreMemo = { clave: null, entradas: null, ventas: null, periodos: null, consumo: null };
         }
+
+        /**
+         * FASE 14 — repinta la pestaña cuando llega el ancla, SOLO si la pantalla
+         * muestra el Total (Inicio o Productos) y no hay un modal abierto: un
+         * repintado a mitad de una captura de conteo movería la pantalla bajo
+         * los dedos del bartender.
+         */
+        function existenciaRepintarSeguro() {
+            if (typeof activeTab === 'undefined' || typeof renderTab !== 'function') return;
+            if (activeTab !== 'inicio' && activeTab !== 'productos') return;
+            if (typeof document !== 'undefined' && document.body && document.body.classList.contains('modal-open')) return;
+            try { renderTab(); } catch (e) { console.warn('[Existencia] Repintado falló:', e); }
+        }
+        if (typeof window !== 'undefined') window.existenciaRepintarSeguro = existenciaRepintarSeguro;
 
         function _existenciaNotificar() {
             var lista = _existenciaAvisos.slice();
@@ -143,6 +337,10 @@
             lista.forEach(function(fn) {
                 try { fn(); } catch (e) { console.warn('[Existencia] Aviso falló:', e); }
             });
+            // v5.19 — el Total cambió de base: publicarlo (o escuchar el publicado).
+            if (typeof totalPublicadoAlCambiarExistencia === 'function') {
+                try { totalPublicadoAlCambiarExistencia(); } catch (e) { console.warn('[Existencia] Total publicado:', e); }
+            }
         }
 
         /**
@@ -225,13 +423,21 @@
                 return { valor: 0, origen: 'operativo_no_reconciliado', inicial: undefined,
                          entradas: 0, ventas: 0, operativa: 0, hayInicial: false };
             }
-            var ent = (cacheEntradas || existenciaEntradasSemana())[product.id] || 0;
-            var ven = (cacheVentas   || existenciaVentasSemana())[product.id]   || 0;
+            // v5.19 — sin permiso de compras/ventas manda el Total publicado
+            // (mismas cantidades que ve administración, sin dinero). js/51.
+            var pub = (typeof _totalPublicadoParaProducto === 'function') ? _totalPublicadoParaProducto(product) : null;
+            if (pub) {
+                return { valor: pub.valor, origen: 'oficial', inicial: pub.inicial, entradas: pub.entradas, ventas: pub.ventas,
+                         operativa: operativa, hayInicial: true, ancla: pub.ancla, fuente: 'publicado', publicadoEn: pub.publicadoEn };
+            }
+            var ent = (cacheEntradas || existenciaEntradas())[product.id] || 0;
+            var ven = (cacheVentas   || existenciaVentas())[product.id]   || 0;
+            var ancla = _existenciaInicial.ancla || null;
             var hay = (_existenciaInicial.estado === 'ok' && _existenciaInicial.saldos &&
                        typeof _existenciaInicial.saldos[product.id] === 'number');
             if (!hay) {
                 return { valor: operativa, origen: 'operativo_no_reconciliado', inicial: undefined,
-                         entradas: ent, ventas: ven, operativa: operativa, hayInicial: false };
+                         entradas: ent, ventas: ven, operativa: operativa, hayInicial: false, ancla: ancla };
             }
             var ini = _existenciaInicial.saldos[product.id];
             return {
@@ -241,7 +447,8 @@
                 entradas:  ent,
                 ventas:    ven,
                 operativa: operativa,
-                hayInicial: true
+                hayInicial: true,
+                ancla:     ancla
             };
         }
 
@@ -271,8 +478,8 @@
          * simplemente todavía no se puede comparar.
          */
         function existenciaComparacion() {
-            var ent   = existenciaEntradasSemana();
-            var ven   = existenciaVentasSemana();
+            var ent   = existenciaEntradas();
+            var ven   = existenciaVentas();
             var filas = [];
             var coinciden = 0, sinInicial = 0;
             (typeof products !== 'undefined' && Array.isArray(products) ? products : [])

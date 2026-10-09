@@ -627,7 +627,7 @@
                          : 'Revisa que el archivo sea la exportación de "Entrada de mercancía".')
                      + '</div></div>'
                      + '<div style="margin-top:14px"><button type="button" onclick="cancelarImportacionCompras()" '
-                     + 'style="padding:9px 15px;border-radius:var(--r-md);background:var(--surface);'
+                     + 'style="padding:0 15px;min-height:44px;border-radius:var(--r-md);background:var(--surface);'
                      + 'border:1px solid var(--border-mid);color:var(--txt-primary);cursor:pointer">Cerrar</button></div>';
             }
 
@@ -690,12 +690,12 @@
             html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">';
             if (hayGuardables) {
                 html += '<button type="button" onclick="confirmarImportacionCompras()" '
-                      + 'style="padding:9px 15px;border-radius:var(--r-md);background:var(--ok-dim);'
+                      + 'style="padding:0 15px;min-height:44px;border-radius:var(--r-md);background:var(--ok-dim);'
                       + 'border:1px solid var(--ok-dim);color:var(--ok);font-weight:600;cursor:pointer">'
                       + 'Confirmar e importar</button>';
             }
             html += '<button type="button" onclick="cancelarImportacionCompras()" '
-                  + 'style="padding:9px 15px;border-radius:var(--r-md);background:var(--surface);'
+                  + 'style="padding:0 15px;min-height:44px;border-radius:var(--r-md);background:var(--surface);'
                   + 'border:1px solid var(--border-mid);color:var(--txt-primary);cursor:pointer">Cancelar</button>'
                   + '</div>';
             return html;
@@ -740,7 +740,7 @@
             }
 
             html += '<div style="margin-top:16px"><button type="button" onclick="cerrarResultadoImportacionCompras()" '
-                  + 'style="padding:9px 15px;border-radius:var(--r-md);background:var(--surface);'
+                  + 'style="padding:0 15px;min-height:44px;border-radius:var(--r-md);background:var(--surface);'
                   + 'border:1px solid var(--border-mid);color:var(--txt-primary);cursor:pointer">Aceptar</button></div>';
             return html;
         }
@@ -905,16 +905,12 @@
 
             // ── Acciones ──────────────────────────────────────────────────────
             html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">';
-            if (hasPermission('purchases.import')) {
-                html += '<button type="button" onclick="comprasImportarExcel()" '
-                      + 'style="display:flex;align-items:center;gap:7px;padding:9px 15px;'
-                      + 'border-radius:var(--r-md);background:var(--ok-dim);'
-                      + 'border:1px solid var(--ok-dim);color:var(--ok);font-weight:600;'
-                      + 'cursor:pointer">Importar entrada de mercancía</button>';
-            }
+            // v5.18 — importar ya no vive aquí: todas las importaciones se
+            // hacen desde el módulo "Importar desde Excel" (js/96-importar.js),
+            // decisión de Eduardo (6-oct-2026).
             if (hasPermission('purchases.create')) {
                 html += '<button type="button" onclick="comprasNuevaManual()" '
-                      + 'style="display:flex;align-items:center;gap:7px;padding:9px 15px;'
+                      + 'style="display:flex;align-items:center;gap:7px;padding:0 15px;min-height:44px;'
                       + 'border-radius:var(--r-md);background:var(--surface);'
                       + 'border:1px solid var(--border-mid);color:var(--txt-primary);'
                       + 'font-weight:600;cursor:pointer">Capturar a mano</button>';
@@ -931,14 +927,21 @@
                       + '<div style="font-weight:600;margin-bottom:6px">Todavía no hay compras registradas</div>'
                       + '<div style="color:var(--txt-secondary);font-size:.88rem;max-width:420px;'
                       + 'margin:0 auto;line-height:1.55">'
-                      + 'Importa el Excel de entrada de mercancía de SAP, o captura una a mano. '
+                      + 'Importa el Excel de entrada de mercancía de SAP desde el módulo Importar desde Excel (menú Más), o captura una a mano. '
                       + 'Antes de guardar nada verás un resumen por proveedor y fecha para revisarlo.'
                       + '</div></div>';
             } else {
                 lista.forEach(function(c) {
                     var totalLineas = Array.isArray(c.lineas) ? c.lineas.length : 0;
-                    html += '<div style="background:var(--surface);border:1px solid var(--border-mid);'
-                          + 'border-radius:12px;padding:14px 16px;margin-bottom:10px">'
+                    // v5.18 — la tarjeta abre el detalle: productos de esta
+                    // entrada y todo lo recibido del proveedor (js/89).
+                    // El id va en data-compra-id y se lee de ahí: un apóstrofo en el
+                    // folio no puede romper el onclick.
+                    var _idC = escapeHtml(String(c.compraId || ''));
+                    html += '<div class="cp-tarjeta" role="button" tabindex="0" data-compra-id="' + _idC + '"'
+                          + ' aria-label="Ver los productos de esta entrada de ' + escapeHtml(c.proveedorNombre || 'Sin proveedor') + '"'
+                          + ' onclick="comprasVerDetalle(this.getAttribute(\'data-compra-id\'))"'
+                          + ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();comprasVerDetalle(this.getAttribute(\'data-compra-id\'));}">'
                           + '<div style="display:flex;justify-content:space-between;gap:10px;'
                           + 'flex-wrap:wrap;align-items:baseline">'
                           + '<span style="font-weight:700">' + escapeHtml(c.proveedorNombre || 'Sin proveedor')
@@ -957,6 +960,7 @@
                           + '<b>' + totalLineas + '</b> línea' + (totalLineas === 1 ? '' : 's')
                           + ' · ' + _unidadesCompra(c) + ' unidades'
                           + ' · <b>' + _dineroMX(c.importe) + '</b></div>'
+                          + '<div class="cp-tarjeta__ver">Ver productos <i class="fa-solid fa-chevron-right" aria-hidden="true"></i></div>'
                           + '</div>';
                 });
             }
