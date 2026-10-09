@@ -70,7 +70,7 @@ chk('★ La tarjeta de sincronización sigue en Inicio',
 chk('★ Los reportes publicados siguen en Inicio (solo admin)',
     /inicioReportesLista/.test(rend) && /generarYPublicarReporte\(\)/.test(rend));
 chk('★ El panel de mandos sigue siendo el de 83-panel.js',
-    /_panelTile\(/.test(panel) && /pm-tile/.test(panel) && /pm-barra/.test(panel));
+    /_panelTile\(/.test(panel) && /pm-tile/.test(panel) && !/pm-barra/.test(panel));   // v5.24: sin gráficas de barras
 chk('No se inventó una pestaña nueva para mover nada de Inicio',
     !/activeTab === 'tablero'/.test(rend) && !/case 'tablero'/.test(rend),
     'R3 era aspecto, no arquitectura de navegación');

@@ -116,6 +116,26 @@ const PUERTO = process.env.PUERTO || '8080';
   chk('Después de generar abre el pedido', gen.abrio === true);
   await p.evaluate(() => { cart = []; });
 
+  // ══ A2 · v5.24: ENCABEZADO Y TARJETA DE PRODUCTO COMPACTOS ═══════════════
+  const c24 = await p.evaluate(() => {
+    const hd = document.querySelector('.sticky.top-0'), h1 = hd.querySelector('h1');
+    const tarjs = [...document.querySelectorAll('.prd-card')].map(c => ({ n: c.querySelector('.prd-card__name').textContent.trim(), h: Math.round(c.getBoundingClientRect().height),
+      conPedido: !!c.querySelector('.prd-card__pedido'), conBadge: !!c.querySelector('.prd-card__estado'),
+      mismoRenglon: (() => { const a = c.querySelector('.prd-card__areas'), b = c.querySelector('.prd-card__actions'); return Math.abs(a.getBoundingClientRect().top - b.getBoundingClientRect().top) < 20; })(),
+      acciones: [...c.querySelectorAll('.prd-action-btn')].map(b => Math.round(b.getBoundingClientRect().height)) }));
+    return { hd: Math.round(hd.getBoundingClientRect().height), h1: parseFloat(getComputedStyle(h1).fontSize), peso: getComputedStyle(h1).fontWeight, logo: !!hd.querySelector('.hd-logo'),
+      ham: Math.round(hd.querySelector('#hamburgerBtn').getBoundingClientRect().height), tem: Math.round(hd.querySelector('#themeToggleBtn').getBoundingClientRect().height), tarjs,
+      textos: /Bajo mínimo — existencia|Productos por grupo|Comparación de existencias/.test(document.getElementById('tabContent').innerText) };
+  });
+  chk('★ v5.24 · El encabezado mide 48 px (antes 55) y conserva botones de 44 px', c24.hd <= 48 && c24.ham >= 44 && c24.tem >= 44, JSON.stringify([c24.hd, c24.ham, c24.tem]));
+  chk('v5.24 · El título va en 16 px negrita con la marca latón al lado', c24.h1 === 16 && Number(c24.peso) >= 600 && c24.logo, JSON.stringify([c24.h1, c24.peso, c24.logo]));
+  chk('★ v5.24 · Las tarjetas "Bajo mínimo — existencia / mínimo", "Productos por grupo" y "Comparación de existencias" ya no están', c24.textos === false);
+  const sinExtra = c24.tarjs.find(t => !t.conPedido && !t.conBadge);
+  chk('★ v5.24 · La tarjeta de producto simple mide <= 125 px (antes 200) y las áreas comparten renglón con las acciones',
+      sinExtra && sinExtra.h <= 125 && c24.tarjs.every(t => t.mismoRenglon), JSON.stringify(c24.tarjs));
+  chk('★ v5.24 · Con badge de nivel y pedido sugerido la tarjeta mide <= 215 px (antes 304) y los botones siguen en >= 44 px',
+      c24.tarjs.filter(t => t.conPedido && t.conBadge).every(t => t.h <= 215) && c24.tarjs.every(t => t.acciones.every(h => h >= 44)), JSON.stringify(c24.tarjs));
+
   // ══ B · CONTEO: ENCABEZADO Y TARJETAS ════════════════════════════════════
   await p.evaluate(() => { activeTab = 'inventario'; auditoriaView = 'counting'; auditoriaAreaActiva = 'barra2'; isAuditoriaMode = true; selectedArea = 'barra2'; renderTab(); });
   await p.waitForTimeout(300);

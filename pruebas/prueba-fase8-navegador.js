@@ -50,13 +50,13 @@ const PUERTO = process.env.PUERTO || '8080';
     return { txt: c ? c.innerText.replace(/\s+/g, ' ').trim() : '',
              barras: [...document.querySelectorAll('.pm-card--compara .pm-barra')].map(b => b.innerText.replace(/\s+/g, ' ').trim()) };
   });
-  chk('★ Inicio muestra la tarjeta de comparación de existencias', /Comparaci[óo]n de existencias/i.test(comp.txt), comp.txt.slice(0, 120));
-  chk('★ Cuenta cuántos coinciden y cuántos difieren', /Coinciden 2 de 3/.test(comp.txt) && /Difieren 1/.test(comp.txt), comp.txt.slice(0, 200));
-  chk('Los productos sin inicial se declaran no comparables', /Sin inicial.*1/.test(comp.txt), comp.txt.slice(0, 240));
-  chk('★ La gráfica muestra operativa → oficial con la diferencia firmada',
-      /5 → 16 \(\+11\)/.test(comp.barras[0] || ''), JSON.stringify(comp.barras));
-  chk('Dice que manda la operativa mientras dure la comprobación', /[Mm]anda la operativa/.test(comp.txt), comp.txt.slice(0, 240));
-  chk('★ Un nombre con HTML no se ejecuta en la comparación',
+  // v5.24 — la tarjeta "Comparación de existencias" ya no está en Inicio (pedido de Eduardo).
+  // El cálculo sigue en existenciaComparacion() y las dos cifras siguen en la ficha del producto.
+  chk('★ v5.24 · Inicio ya no muestra la tarjeta de comparación de existencias', comp.txt === '' && comp.barras.length === 0, comp.txt.slice(0, 120));
+  const cmp = await p.evaluate(() => existenciaComparacion());
+  chk('★ La capa de existencia sigue comparando: coinciden 2 de 3, difiere 1, uno sin inicial',
+      cmp && cmp.coinciden === 2 && cmp.comparados === 3 && cmp.sinInicial === 1, JSON.stringify(cmp && { c: cmp.coinciden, n: cmp.comparados, s: cmp.sinInicial }));
+  chk('★ Un nombre con HTML no se ejecuta en el panel',
       await p.evaluate(() => window.__xss === undefined && !document.querySelector('.pm-panel img')), '');
 
   const tiles = await p.evaluate(() => [...document.querySelectorAll('.pm-tile')].map(t => t.innerText.replace(/\s+/g, ' ').trim()));
@@ -64,7 +64,7 @@ const PUERTO = process.env.PUERTO || '8080';
       /2 BAJO M[ÍI]NIMO/i.test(tiles[1] || ''), tiles[1]);
 
   // La ficha: las dos cifras, una al lado de la otra.
-  await p.evaluate(() => document.querySelector('.pm-card--compara .pm-barra[data-pm-ficha="A"]').click());
+  await p.evaluate(() => document.querySelector('.pm-nombre-btn[data-pm-ficha="A"]').click());
   await p.waitForTimeout(150);
   const f = await p.evaluate(() => { const w = document.getElementById('pm-ficha-wrap'); return w ? w.innerText.replace(/\s+/g, ' ') : ''; });
   chk('★ La ficha del producto muestra las dos cifras y su diferencia',

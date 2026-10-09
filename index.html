@@ -771,8 +771,8 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
     <!-- Utilidades locales (sustituyen a Tailwind CDN) + iconos locales
          (sustituyen a Font Awesome CDN). Va ANTES de estilos.css para que
          las reglas propias de la app sigan teniendo la última palabra. -->
-    <link rel="stylesheet" href="css/utilidades.css?v=5.23">
-    <link rel="stylesheet" href="css/estilos.css?v=5.23">
+    <link rel="stylesheet" href="css/utilidades.css?v=5.24">
+    <link rel="stylesheet" href="css/estilos.css?v=5.24">
 </head>
 <body class="min-h-screen">
 
@@ -987,6 +987,8 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 6h16M4 12h16M4 18h16"/>
                     </svg>
                 </button>
+                <!-- v5.24 — marca compacta: cuadro latón con el icono + nombre -->
+                <span class="hd-logo" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h14l-6 8v6h3M11 18H8"/></svg></span>
                 <h1 class="flex-1 text-base font-bold text-white truncate">BarInventory</h1>
                 <button type="button" id="themeToggleBtn" onclick="toggleTheme()" aria-label="Cambiar tema" title="Modo claro / oscuro"
                     style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:10px;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);cursor:pointer;transition:background .18s ease,transform .14s;color:#fff;flex-shrink:0;">
@@ -1473,50 +1475,50 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
         </div>
     </div>
 
-        <script src="js/00-nucleo.js?v=5.23"></script>
-    <script src="js/03-ui-kit.js?v=5.23"></script><!-- BI UI KIT (rediseño R1) -->
-    <script src="js/05-busqueda-motor.js?v=5.23"></script>
-    <script src="js/06-busqueda-ui.js?v=5.23"></script>
-    <script src="js/10-multiusuario.js?v=5.23"></script>
-    <script src="js/15-ciclo-semanal.js?v=5.23"></script>
-    <script src="js/18-areas-config.js?v=5.23"></script>
-    <script src="js/20-persistencia.js?v=5.23"></script>
-    <script src="js/30-indexeddb.js?v=5.23"></script>
-    <script src="js/40-firestore.js?v=5.23"></script>
-    <script src="js/45-inventario-datos.js?v=5.23"></script>
-    <script src="js/46-arrastre.js?v=5.23"></script>
-    <script src="js/47-existencia.js?v=5.23"></script>
-    <script src="js/48-consumo-teorico.js?v=5.23"></script>
-    <script src="js/49-fisico-vs-sistema.js?v=5.23"></script>
-    <script src="js/50-roles-permisos.js?v=5.23"></script>
-    <script src="js/51-total-publicado.js?v=5.23"></script><!-- v5.19 -->
-    <script src="js/53-papelera.js?v=5.23"></script><!-- v5.19 -->
-    <script src="js/54-sync-vivo.js?v=5.23"></script><!-- v5.22 -->
-    <script src="js/60-arranque.js?v=5.23"></script>
-    <script src="js/70-conversion-render.js?v=5.23"></script>
-    <script src="js/71-posicion-conteo.js?v=5.23"></script>
-    <script src="js/72-inicio-tablero.js?v=5.23"></script><!-- v5.23 -->
-    <script src="js/75-auditoria-flujo.js?v=5.23"></script>
-    <script src="js/80-buscador.js?v=5.23"></script>
-    <script src="js/83-panel.js?v=5.23"></script>
-    <script src="js/85-ui-inventario-fisico.js?v=5.23"></script>
-    <script src="js/87-reconteo.js?v=5.23"></script>
-    <script src="js/88-compras.js?v=5.23"></script>
-    <script src="js/89-compras-detalle.js?v=5.23"></script>
-    <script src="js/90-ciclo-admin.js?v=5.23"></script>
-    <script src="js/91-recetario.js?v=5.23"></script>
-    <script src="js/92-recetario-importar.js?v=5.23"></script>
-    <script src="js/93-ventas.js?v=5.23"></script>
-    <script src="js/94-venta-turno.js?v=5.23"></script>
-    <script src="js/95-exportacion.js?v=5.23"></script>
-    <script src="js/96-importar.js?v=5.23"></script>
-    <script src="js/99-window-arranque.js?v=5.23"></script>
+        <script src="js/00-nucleo.js?v=5.24"></script>
+    <script src="js/03-ui-kit.js?v=5.24"></script><!-- BI UI KIT (rediseño R1) -->
+    <script src="js/05-busqueda-motor.js?v=5.24"></script>
+    <script src="js/06-busqueda-ui.js?v=5.24"></script>
+    <script src="js/10-multiusuario.js?v=5.24"></script>
+    <script src="js/15-ciclo-semanal.js?v=5.24"></script>
+    <script src="js/18-areas-config.js?v=5.24"></script>
+    <script src="js/20-persistencia.js?v=5.24"></script>
+    <script src="js/30-indexeddb.js?v=5.24"></script>
+    <script src="js/40-firestore.js?v=5.24"></script>
+    <script src="js/45-inventario-datos.js?v=5.24"></script>
+    <script src="js/46-arrastre.js?v=5.24"></script>
+    <script src="js/47-existencia.js?v=5.24"></script>
+    <script src="js/48-consumo-teorico.js?v=5.24"></script>
+    <script src="js/49-fisico-vs-sistema.js?v=5.24"></script>
+    <script src="js/50-roles-permisos.js?v=5.24"></script>
+    <script src="js/51-total-publicado.js?v=5.24"></script><!-- v5.19 -->
+    <script src="js/53-papelera.js?v=5.24"></script><!-- v5.19 -->
+    <script src="js/54-sync-vivo.js?v=5.24"></script><!-- v5.22 -->
+    <script src="js/60-arranque.js?v=5.24"></script>
+    <script src="js/70-conversion-render.js?v=5.24"></script>
+    <script src="js/71-posicion-conteo.js?v=5.24"></script>
+    <script src="js/72-inicio-tablero.js?v=5.24"></script><!-- v5.23 -->
+    <script src="js/75-auditoria-flujo.js?v=5.24"></script>
+    <script src="js/80-buscador.js?v=5.24"></script>
+    <script src="js/83-panel.js?v=5.24"></script>
+    <script src="js/85-ui-inventario-fisico.js?v=5.24"></script>
+    <script src="js/87-reconteo.js?v=5.24"></script>
+    <script src="js/88-compras.js?v=5.24"></script>
+    <script src="js/89-compras-detalle.js?v=5.24"></script>
+    <script src="js/90-ciclo-admin.js?v=5.24"></script>
+    <script src="js/91-recetario.js?v=5.24"></script>
+    <script src="js/92-recetario-importar.js?v=5.24"></script>
+    <script src="js/93-ventas.js?v=5.24"></script>
+    <script src="js/94-venta-turno.js?v=5.24"></script>
+    <script src="js/95-exportacion.js?v=5.24"></script>
+    <script src="js/96-importar.js?v=5.24"></script>
+    <script src="js/99-window-arranque.js?v=5.24"></script>
 
     </div><!-- /#appWrapper -->
 
     <!-- ══════════════════════════════════════════════════════
          AUTH — Lógica de autenticación Firebase
          ══════════════════════════════════════════════════════ -->
-        <script src="js/auth.js?v=5.23"></script>
+        <script src="js/auth.js?v=5.24"></script>
 </body>
 </html>
