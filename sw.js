@@ -5,7 +5,7 @@
 //
 //  CORRECCIONES v2.4 (heredadas):
 //  - SW8: OFFLINE_URL calculado dinámicamente desde self.registration.scope.
-//  - SW9: CACHE_ICONS guarda íconos PWA generados por Canvas desde la página.
+//  - SW9: (retirado en v5.20) CACHE_ICONS guardaba íconos generados por Canvas.
 //  - SW10: Handler fetch para rutas de íconos PWA con fallback OffscreenCanvas.
 //
 //  CORRECCIONES v2.5 (nuevas):
@@ -14,7 +14,7 @@
 //          Antes: fetch chain recibía undefined → TypeError no controlado.
 //          Ahora: devuelve Response 503 con body descriptivo → visible en DevTools.
 //  - SW12: cacheFirst también retorna 503 explícito si la red falla sin caché.
-//  - SW13: serveIcon — ruta de último recurso devuelve PNG 1×1 siempre,
+//  - SW13: (retirado en v5.20) serveIcon — ruta de último recurso devolvía PNG 1×1,
 //          incluso si la propia generación de la Response falla (doble try-catch).
 //  - SW14: activate — clients.claim() se envuelve en su propio try-catch para
 //          no interrumpir la limpieza de cachés si claim() lanza en contextos
@@ -29,7 +29,7 @@
 // pruebas/prueba-integridad-split.js falla si se desincronizan: un index.html
 // nuevo sirviendo un .js viejo desde cache es el fallo mas dificil de
 // diagnosticar que puede tener una PWA partida en archivos.
-const APP_VERSION = '5.19';
+const APP_VERSION = '5.20';
 const CACHE_NAME  = 'barinventory-v' + APP_VERSION;
 
 // SW8 FIX: OFFLINE_URL calculado desde el scope del SW en tiempo de ejecución.
@@ -111,6 +111,12 @@ const WARM_URLS = [
     './js/95-exportacion.js?v=' + APP_VERSION,
     './js/96-importar.js?v=' + APP_VERSION,         // v5.18
     './js/99-window-arranque.js?v=' + APP_VERSION,
+    // v5.20 — icono de la app: archivos reales (antes se dibujaba una "B"
+    // azul con Canvas). Calentados uno por uno: si faltara uno, no tumba la
+    // instalación del Service Worker.
+    './icons/barinventory-192.png',
+    './icons/apple-touch-icon.png',
+    './icons/favicon-32.png',
 ];
 
 function _calentarCache() {
@@ -234,11 +240,8 @@ self.addEventListener('fetch', function(event) {
         return; // dejar pasar a la red sin interceptar
     }
 
-    // SW10 FIX: Interceptar rutas de íconos PWA del manifest.
-    if (url.pathname.endsWith('/icon-192.png') || url.pathname.endsWith('/icon-512.png')) {
-        event.respondWith(serveIcon(event.request, url));
-        return;
-    }
+    // v5.20 — los íconos ya son archivos reales en icons/: ya no se
+    // interceptan ni se dibujan aquí (antes: SW10, "B" azul con Canvas).
 
     // 4. CDNs de terceros → Cache-First con fallback a red
     if (url.hostname.includes('cdn.tailwindcss.com') ||
@@ -382,76 +385,10 @@ function staleWhileRevalidate(request) {
     });
 }
 
-// ── MANEJO DE ÍCONOS PWA (SW9 / SW10) ───────────────────────────────────────
-
-/**
- * Sirve un ícono PWA para las rutas icons/icon-192.png e icons/icon-512.png.
- * Orden de prioridad:
- *   1. Cache (colocado por CACHE_ICONS desde la página principal)
- *   2. OffscreenCanvas generado en el SW (fallback, Chrome 69+)
- *   3. PNG 1×1 transparente como último recurso (evita el 404)
- *
- * SW13 FIX: doble try-catch para que el PNG 1×1 siempre se retorne aunque
- * la propia construcción de la Response falle en entornos muy restringidos.
- */
-function serveIcon(request, url) {
-    return caches.match(request).then(function(cached) {
-        if (cached) {
-            console.info('[SW] Ícono servido desde caché:', url.pathname);
-            return cached;
-        }
-        var size = url.pathname.includes('192') ? 192 : 512;
-        return generateIconResponse(size).catch(function() {
-            // SW13 FIX: doble try-catch para garantizar que siempre se retorna algo
-            try {
-                var tiny1x1PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
-                return new Response(
-                    Uint8Array.from(atob(tiny1x1PNG), function(c) { return c.charCodeAt(0); }),
-                    { status: 200, headers: { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' } }
-                );
-            } catch(e2) {
-                return new Response('', { status: 204 });
-            }
-        });
-    });
-}
-
-/**
- * Genera un PNG de `size`×`size` con OffscreenCanvas (Chrome 69+ / Android 9+).
- * @param {number} size
- * @returns {Promise<Response>}
- */
-function generateIconResponse(size) {
-    return new Promise(function(resolve, reject) {
-        try {
-            var canvas = new OffscreenCanvas(size, size);
-            var ctx = canvas.getContext('2d');
-            // FIX-ICON-CONSISTENCIA (BarInventory): antes este respaldo usaba un
-            // degradado oscuro con letra ámbar, distinto del ícono real que genera
-            // index.html (azul sólido #0A84FF con letra blanca). Se alinean los
-            // colores para que, si alguna vez se usa este respaldo, no se vea como
-            // un ícono de otra app.
-            ctx.fillStyle = '#0A84FF';
-            try { ctx.roundRect(0, 0, size, size, size * 0.22); }
-            catch(_) { ctx.rect(0, 0, size, size); }
-            ctx.fill();
-            // Letra "B" en blanco (igual que el ícono generado por la página)
-            ctx.fillStyle = '#FFFFFF';
-            ctx.font = 'bold ' + Math.round(size * 0.52) + 'px system-ui,sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('B', size / 2, size / 2 + size * 0.03);
-            canvas.convertToBlob({ type: 'image/png' }).then(function(blob) {
-                resolve(new Response(blob, {
-                    status: 200,
-                    headers: { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' }
-                }));
-            }).catch(reject);
-        } catch(e) {
-            reject(e);
-        }
-    });
-}
+// ── ÍCONOS PWA ──────────────────────────────────────────────────────────────
+// v5.20 — Se retiraron serveIcon() y generateIconResponse(): el ícono de la
+// app vive en icons/ como archivos PNG reales (192, 512 y sus versiones
+// "maskable"), declarados en manifest.json.
 
 // ── BACKGROUND SYNC ──────────────────────────────────────────────────────────
 self.addEventListener('sync', function(event) {
@@ -478,7 +415,7 @@ self.addEventListener('push', function(event) {
     event.waitUntil(
         self.registration.showNotification(data.title || 'BarInventory', {
             body:    data.body    || 'Tienes una actualización pendiente',
-            icon:    data.icon    || './icons/icon-192.png',
+            icon:    data.icon    || './icons/barinventory-192.png',
             badge:   data.badge   || '',
             vibrate: [200, 100, 200],
             data:    data.url ? { url: data.url } : {}
@@ -522,39 +459,7 @@ self.addEventListener('message', function(event) {
         });
     }
 
-    // SW9 FIX: Recibir íconos PWA generados por Canvas en la página principal
-    if (event.data.type === 'CACHE_ICONS') {
-        var scope   = self.registration.scope;
-        var icons   = [
-            { key: scope + 'icons/icon-192.png', dataUrl: event.data.icon192 },
-            { key: scope + 'icons/icon-512.png', dataUrl: event.data.icon512 },
-        ];
+    // v5.20 — CACHE_ICONS ya no se atiende: una pestaña con la versión vieja
+    // de la app podría volver a meter la "B" azul en la caché.
 
-        caches.open(CACHE_NAME).then(function(cache) {
-            icons.forEach(function(icon) {
-                if (!icon.dataUrl || !icon.dataUrl.startsWith('data:image/png;base64,')) return;
-                try {
-                    var base64 = icon.dataUrl.split(',')[1];
-                    var binary = atob(base64);
-                    var bytes  = new Uint8Array(binary.length);
-                    for (var i = 0; i < binary.length; i++) {
-                        bytes[i] = binary.charCodeAt(i);
-                    }
-                    var response = new Response(bytes.buffer, {
-                        status:  200,
-                        headers: {
-                            'Content-Type':  'image/png',
-                            'Cache-Control': 'public, max-age=86400'
-                        }
-                    });
-                    cache.put(icon.key, response)
-                        .then(function() {
-                            console.info('[SW] Ícono PWA cacheado:', icon.key);
-                        });
-                } catch(e) {
-                    console.warn('[SW] Error convirtiendo ícono a Response:', icon.key, e);
-                }
-            });
-        });
-    }
 });

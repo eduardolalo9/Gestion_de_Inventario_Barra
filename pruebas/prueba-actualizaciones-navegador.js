@@ -22,6 +22,7 @@ function copiar(origen, destino) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'bar-despliegue-'));
   ['index.html', 'sw.js', 'manifest.json'].forEach(f => fs.copyFileSync(path.join(RAIZ, f), path.join(tmp, f)));
   copiar(path.join(RAIZ, 'css'), path.join(tmp, 'css')); copiar(path.join(RAIZ, 'js'), path.join(tmp, 'js'));
+  copiar(path.join(RAIZ, 'icons'), path.join(tmp, 'icons'));   // v5.20 — el ícono ya es un archivo
   const V0 = (fs.readFileSync(path.join(tmp, 'sw.js'), 'utf8').match(/APP_VERSION = '([^']+)'/) || [])[1];
   const V1 = '5.99';
 
