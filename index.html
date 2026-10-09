@@ -31,36 +31,12 @@
         })();
     </script>
 
-    <!-- FIX ICONS: Generar íconos PWA dinámicamente via Canvas (evita 404 del manifest) -->
-    <script>
-    (function generatePWAIcons() {
-        function makeIcon(size) {
-            var c = document.createElement('canvas');
-            c.width = c.height = size;
-            var ctx = c.getContext('2d');
-            ctx.fillStyle = '#0A84FF';
-            try { ctx.roundRect(0, 0, size, size, size * 0.22); }
-            catch(_) { ctx.rect(0, 0, size, size); } // fallback: sin roundRect
-            ctx.fill();
-            ctx.fillStyle = '#FFFFFF';
-            ctx.font = 'bold ' + Math.round(size * 0.52) + 'px system-ui,sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('B', size / 2, size / 2 + size * 0.03);
-            return c.toDataURL('image/png');
-        }
-        try {
-            var link192 = document.createElement('link');
-            link192.rel = 'icon'; link192.type = 'image/png';
-            link192.href = makeIcon(192);
-            document.head.appendChild(link192);
-            var appleLink = document.createElement('link');
-            appleLink.rel = 'apple-touch-icon';
-            appleLink.href = makeIcon(180);
-            document.head.appendChild(appleLink);
-        } catch(e) { /* canvas no disponible */ }
-    })();
-    </script>
+    <!-- v5.20 — ICONO DE LA APP (archivos reales en icons/; antes se dibujaba
+         una "B" azul con Canvas en cada carga) -->
+    <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+    <link rel="icon" type="image/png" sizes="48x48" href="icons/favicon-48.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/barinventory-192.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
 
     <!-- ══════════════════════════════════════════════════════════
          v5.12 — ACTUALIZACIONES QUE SÍ LLEGAN (y se ven)
@@ -260,34 +236,8 @@
                     .then(function(registration) {
                         console.info('[SW] Registrado con scope:', registration.scope);
 
-                        // FIX-ICONS: Los iconos del manifest (icons/icon-192.png y icon-512.png)
-                        // no existen como archivos físicos. Los generamos aquí via Canvas y los
-                        // enviamos al SW para que los cachée y los sirva cuando el navegador los
-                        // solicite al validar la instalabilidad de la PWA.
-                        navigator.serviceWorker.ready.then(function(reg) {
-                            if (!reg.active) return;
-                            try {
-                                function _makeIconPng(size) {
-                                    var c = document.createElement('canvas');
-                                    c.width = c.height = size;
-                                    var ctx = c.getContext('2d');
-                                    ctx.fillStyle = '#0A84FF';
-                                    try { ctx.roundRect(0, 0, size, size, size * 0.22); }
-                                    catch(_) { ctx.rect(0, 0, size, size); }
-                                    ctx.fill();
-                                    ctx.fillStyle = '#FFFFFF';
-                                    ctx.font = 'bold ' + Math.round(size * 0.52) + 'px system-ui,sans-serif';
-                                    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                                    ctx.fillText('B', size / 2, size / 2 + size * 0.03);
-                                    return c.toDataURL('image/png');
-                                }
-                                reg.active.postMessage({
-                                    type:    'CACHE_ICONS',
-                                    icon192: _makeIconPng(192),
-                                    icon512: _makeIconPng(512)
-                                });
-                            } catch(e) { console.warn('[SW] No se pudieron cachear íconos PWA:', e); }
-                        });
+                        // v5.20 — los íconos del manifest son archivos reales en
+                        // icons/: ya no se generan con Canvas ni se mandan al SW.
 
                         // v5.12 — la detección de versión nueva vive en el módulo
                         // de actualizaciones (más abajo): un aviso que NO se va solo.
@@ -318,7 +268,6 @@
         })();
     </script>
     <meta name="description" content="Sistema de control de inventario para barra — gestión de productos, pedidos y conteo físico.">
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%A6%3C/text%3E%3C/svg%3E"><!-- BUG-FIX m2: favicon URL-encoded -->
     <title>BarInventory — Control de Inventario</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -822,8 +771,8 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
     <!-- Utilidades locales (sustituyen a Tailwind CDN) + iconos locales
          (sustituyen a Font Awesome CDN). Va ANTES de estilos.css para que
          las reglas propias de la app sigan teniendo la última palabra. -->
-    <link rel="stylesheet" href="css/utilidades.css?v=5.19">
-    <link rel="stylesheet" href="css/estilos.css?v=5.19">
+    <link rel="stylesheet" href="css/utilidades.css?v=5.20">
+    <link rel="stylesheet" href="css/estilos.css?v=5.20">
 </head>
 <body class="min-h-screen">
 
@@ -843,7 +792,7 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
             <!-- ── Brand header ── -->
             <div class="login-brand-header">
                 <div class="login-brand-row">
-                    <div class="login-brand-icon" role="img" aria-label="BarInventory">🍸</div>
+                    <img class="login-brand-icon" src="icons/barinventory-192.png" alt="BarInventory" width="56" height="56">
                     <div class="login-brand-text">
                         <div class="login-brand-name">BarInventory</div>
                         <div class="login-brand-sub">Sistema de Control de Inventario</div>
@@ -1503,48 +1452,48 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
         </div>
     </div>
 
-        <script src="js/00-nucleo.js?v=5.19"></script>
-    <script src="js/03-ui-kit.js?v=5.19"></script><!-- BI UI KIT (rediseño R1) -->
-    <script src="js/05-busqueda-motor.js?v=5.19"></script>
-    <script src="js/06-busqueda-ui.js?v=5.19"></script>
-    <script src="js/10-multiusuario.js?v=5.19"></script>
-    <script src="js/15-ciclo-semanal.js?v=5.19"></script>
-    <script src="js/18-areas-config.js?v=5.19"></script>
-    <script src="js/20-persistencia.js?v=5.19"></script>
-    <script src="js/30-indexeddb.js?v=5.19"></script>
-    <script src="js/40-firestore.js?v=5.19"></script>
-    <script src="js/45-inventario-datos.js?v=5.19"></script>
-    <script src="js/46-arrastre.js?v=5.19"></script>
-    <script src="js/47-existencia.js?v=5.19"></script>
-    <script src="js/48-consumo-teorico.js?v=5.19"></script>
-    <script src="js/49-fisico-vs-sistema.js?v=5.19"></script>
-    <script src="js/50-roles-permisos.js?v=5.19"></script>
-    <script src="js/51-total-publicado.js?v=5.19"></script><!-- v5.19 -->
-    <script src="js/53-papelera.js?v=5.19"></script><!-- v5.19 -->
-    <script src="js/60-arranque.js?v=5.19"></script>
-    <script src="js/70-conversion-render.js?v=5.19"></script>
-    <script src="js/71-posicion-conteo.js?v=5.19"></script>
-    <script src="js/75-auditoria-flujo.js?v=5.19"></script>
-    <script src="js/80-buscador.js?v=5.19"></script>
-    <script src="js/83-panel.js?v=5.19"></script>
-    <script src="js/85-ui-inventario-fisico.js?v=5.19"></script>
-    <script src="js/87-reconteo.js?v=5.19"></script>
-    <script src="js/88-compras.js?v=5.19"></script>
-    <script src="js/89-compras-detalle.js?v=5.19"></script>
-    <script src="js/90-ciclo-admin.js?v=5.19"></script>
-    <script src="js/91-recetario.js?v=5.19"></script>
-    <script src="js/92-recetario-importar.js?v=5.19"></script>
-    <script src="js/93-ventas.js?v=5.19"></script>
-    <script src="js/94-venta-turno.js?v=5.19"></script>
-    <script src="js/95-exportacion.js?v=5.19"></script>
-    <script src="js/96-importar.js?v=5.19"></script>
-    <script src="js/99-window-arranque.js?v=5.19"></script>
+        <script src="js/00-nucleo.js?v=5.20"></script>
+    <script src="js/03-ui-kit.js?v=5.20"></script><!-- BI UI KIT (rediseño R1) -->
+    <script src="js/05-busqueda-motor.js?v=5.20"></script>
+    <script src="js/06-busqueda-ui.js?v=5.20"></script>
+    <script src="js/10-multiusuario.js?v=5.20"></script>
+    <script src="js/15-ciclo-semanal.js?v=5.20"></script>
+    <script src="js/18-areas-config.js?v=5.20"></script>
+    <script src="js/20-persistencia.js?v=5.20"></script>
+    <script src="js/30-indexeddb.js?v=5.20"></script>
+    <script src="js/40-firestore.js?v=5.20"></script>
+    <script src="js/45-inventario-datos.js?v=5.20"></script>
+    <script src="js/46-arrastre.js?v=5.20"></script>
+    <script src="js/47-existencia.js?v=5.20"></script>
+    <script src="js/48-consumo-teorico.js?v=5.20"></script>
+    <script src="js/49-fisico-vs-sistema.js?v=5.20"></script>
+    <script src="js/50-roles-permisos.js?v=5.20"></script>
+    <script src="js/51-total-publicado.js?v=5.20"></script><!-- v5.19 -->
+    <script src="js/53-papelera.js?v=5.20"></script><!-- v5.19 -->
+    <script src="js/60-arranque.js?v=5.20"></script>
+    <script src="js/70-conversion-render.js?v=5.20"></script>
+    <script src="js/71-posicion-conteo.js?v=5.20"></script>
+    <script src="js/75-auditoria-flujo.js?v=5.20"></script>
+    <script src="js/80-buscador.js?v=5.20"></script>
+    <script src="js/83-panel.js?v=5.20"></script>
+    <script src="js/85-ui-inventario-fisico.js?v=5.20"></script>
+    <script src="js/87-reconteo.js?v=5.20"></script>
+    <script src="js/88-compras.js?v=5.20"></script>
+    <script src="js/89-compras-detalle.js?v=5.20"></script>
+    <script src="js/90-ciclo-admin.js?v=5.20"></script>
+    <script src="js/91-recetario.js?v=5.20"></script>
+    <script src="js/92-recetario-importar.js?v=5.20"></script>
+    <script src="js/93-ventas.js?v=5.20"></script>
+    <script src="js/94-venta-turno.js?v=5.20"></script>
+    <script src="js/95-exportacion.js?v=5.20"></script>
+    <script src="js/96-importar.js?v=5.20"></script>
+    <script src="js/99-window-arranque.js?v=5.20"></script>
 
     </div><!-- /#appWrapper -->
 
     <!-- ══════════════════════════════════════════════════════
          AUTH — Lógica de autenticación Firebase
          ══════════════════════════════════════════════════════ -->
-        <script src="js/auth.js?v=5.19"></script>
+        <script src="js/auth.js?v=5.20"></script>
 </body>
 </html>

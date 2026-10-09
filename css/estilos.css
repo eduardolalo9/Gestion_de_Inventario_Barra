@@ -2185,13 +2185,12 @@ html[data-theme="light"] .login-brand-header {
     display: flex; align-items: center; gap: 15px;
 }
 .login-brand-icon {
+    /* v5.20 — el ícono real de la app (icons/barinventory-192.png) */
     width: 56px; height: 56px; flex-shrink: 0;
-    background: linear-gradient(135deg, #0A84FF 0%, #3b82f6 100%);
+    display: block; object-fit: cover;
     border-radius: 15px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 27px;
-    box-shadow: 0 6px 18px rgba(10,132,255,0.32);
-    user-select: none;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+    user-select: none; -webkit-user-drag: none;
 }
 .login-brand-text { flex: 1; min-width: 0; }
 .login-brand-name {
