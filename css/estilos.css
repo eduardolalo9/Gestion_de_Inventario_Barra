@@ -3795,6 +3795,12 @@ textarea.ui-campo { resize: vertical; min-height: 88px; }
 .imp-momento .imp-sub { margin-top: 0; }
 .imp-momento__campos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .imp-campo { display: flex; flex-direction: column; gap: 4px; font-size: .84rem; font-weight: 600; color: var(--txt-primary); }
+.imp-opciones { display: flex; flex-direction: column; gap: 8px; }
+.imp-opcion { display: flex; gap: 10px; align-items: flex-start; min-height: 44px; padding: 10px 12px; border-radius: var(--r-md); border: 1px solid var(--border-mid); background: var(--surface); cursor: pointer; }
+.imp-opcion input { width: 22px; height: 22px; margin: 0; flex-shrink: 0; accent-color: var(--accent); }
+.imp-opcion span { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: .86rem; color: var(--txt-primary); }
+.imp-opcion small { font-size: .78rem; color: var(--txt-secondary); line-height: 1.4; }
+.imp-opcion:has(input:checked) { border-color: var(--accent); background: var(--accent-dim); }
 .imp-tabla { width: 100%; border-collapse: collapse; font-size: .84rem; margin-bottom: 6px; }
 .imp-tabla th { font-size: .72rem; font-weight: 600; color: var(--txt-secondary); text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--border-mid); }
 .imp-tabla td { padding: 8px 4px; border-bottom: 1px solid var(--border); color: var(--txt-primary); vertical-align: top; }

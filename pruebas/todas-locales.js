@@ -77,6 +77,7 @@ const PRUEBAS = [
     'prueba-importar.js',              // v5.18 — Importar desde Excel, corte de existencias y detalle de compras
     'prueba-fase16.js',                // v5.19 — Total publicado, cortesías/2x1 y papelera de servidor
     'prueba-icono.js',                 // v5.20 — ícono de la app (archivos reales, manifest, SW)
+    'prueba-corte-total.js',           // v5.21 — corte de existencias con el reporte de SBO (En Stock = total)
     'prueba-conteo-compacto.js',       // v5.11 — vista compacta de las tarjetas de área del Conteo
     'prueba-actualizaciones.js',       // v5.12 — las actualizaciones sí llegan y se ven (SW + aviso + herramientas)
 ];

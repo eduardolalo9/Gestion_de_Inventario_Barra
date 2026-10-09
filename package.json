@@ -69,6 +69,8 @@
     "test:importar": "node pruebas/prueba-importar.js",
     "test:f16": "node pruebas/prueba-fase16.js",
     "test:icono": "node pruebas/prueba-icono.js",
+    "test:cortetotal": "node pruebas/prueba-corte-total.js",
+    "test:cortetotalnav": "node pruebas/prueba-corte-total-navegador.js",
     "test:icononav": "node pruebas/prueba-icono-navegador.js",
     "test:f16nav": "node pruebas/prueba-fase16-navegador.js",
     "test:f16integracion": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-fase16-integracion.js\"",

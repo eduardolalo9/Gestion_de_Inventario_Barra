@@ -32,7 +32,7 @@
               desc: 'Recetas por PV con sus insumos (solo almacén 12 · barra). Vista previa con incidencias antes de guardar.',
               formatos: ['xlsx', 'csv'] },
             { id: 'existencias', titulo: 'Corte de existencias', icono: 'fa-warehouse', permiso: 'inventory.post',
-              desc: 'Inventario actual: unidades cerradas y fracción abierta. Crea un corte con fecha y hora y recalcula el Total desde esa línea base.',
+              desc: 'Inventario actual: unidades cerradas y fracción abierta, o el reporte de existencias de SBO (columna "En Stock" = total). Crea un corte con fecha y hora y recalcula el Total desde esa línea base.',
               formatos: ['xlsx', 'csv'] },
             { id: 'compras', titulo: 'Compras (entrada de mercancía SAP)', icono: 'fa-receipt', permiso: 'purchases.import',
               desc: 'El Excel de entrada de mercancía de SAP. Agrupa por folio, valida códigos y precios, y suma al Total.',
@@ -141,7 +141,8 @@
                     'Abierta: lo que queda de las abiertas, como FRACCIÓN decimal de una unidad (media botella = 0.5). Si hay varias abiertas, súmalas (0.5 + 0.25 = 0.75).',
                     'Área es opcional. Si la usas, repite el producto en una fila por área y se suman. Áreas válidas: ' + (nombresAreas || 'las configuradas'),
                     'Deja vacía la fila de un producto que NO contaste: conserva su Total actual. Un 0 escrito sí significa cero.',
-                    'Código y Producto vienen de tu catálogo: no los cambies. Unidad es solo referencia.'] };
+                    'Código y Producto vienen de tu catálogo: no los cambies. Unidad es solo referencia.',
+                    'También puedes subir directo el reporte de existencias de SBO: su columna "En Stock" se toma como el TOTAL del producto (sin Enteras ni Abierta) y solo se leen las filas del almacén 12.'] };
             }
             if (seccion === 'recetas') {
                 return { archivo: 'plantilla-recetario', hoja: 'Recetas',
@@ -302,27 +303,56 @@
 
         var COLUMNAS_EXISTENCIAS = {
             codigo:  ['Código', 'Codigo', 'ID', 'Id', 'Código insumo', 'Clave'],
-            nombre:  ['Producto', 'Nombre', 'Descripción', 'Descripcion'],
+            nombre:  ['Producto', 'Nombre', 'Descripción', 'Descripcion', 'Artículo', 'Articulo'],
             area:    ['Área', 'Area', 'Almacén', 'Almacen'],
             enteras: ['Enteras', 'Cerradas', 'Unidades cerradas', 'Cantidad'],
-            abierta: ['Abierta', 'Abiertas', 'Fracción abierta', 'Fraccion abierta', 'Fracción', 'Fraccion']
+            abierta: ['Abierta', 'Abiertas', 'Fracción abierta', 'Fraccion abierta', 'Fracción', 'Fraccion'],
+            // v5.21 — reporte de existencias de SBO: "En Stock" ya es el TOTAL
+            // (cerradas + fracción abierta juntas). Sin Enteras ni Abierta.
+            total:   ['En Stock', 'Stock', 'Existencia', 'Existencias', 'Cantidad total'],
+            // En ese reporte "Almacén" es el CÓDIGO del almacén SAP (12 = barra),
+            // no un área de conteo: se usa para dejar fuera otros almacenes.
+            almacenSbo: ['Almacén', 'Almacen', 'Código almacén', 'Codigo almacen']
         };
+        var COLUMNAS_AREA_EXISTENCIAS_TOTAL = ['Área', 'Area'];
 
         /**
          * importarValidarExistencias(filas, productos, areasDef, existenciaDe) — pura.
          * existenciaDe(producto) → { valor, origen } (el Total de hoy).
          * Devuelve saldos por producto (enteras + abierta, sumado por área), la
          * comparación contra el Total actual, y qué productos no vienen.
+         *
+         * v5.21 · DOS FORMAS de archivo (se detecta por las cabeceras):
+         *   · Plantilla:  Código + Enteras (+ Abierta) (+ Área)      → modo 'enteras_abierta'
+         *   · Total:      Código + "En Stock" (reporte de SBO)        → modo 'total'
+         *     El valor ya es el TOTAL del producto. En este modo:
+         *       – un código que no está en el catálogo se OMITE con aviso (el
+         *         reporte es de todo el almacén; no nace del catálogo);
+         *       – las filas de un almacén distinto de 12 se omiten con aviso;
+         *       – opciones.faltantes decide qué pasa con los productos del
+         *         catálogo que el reporte no lista: 'conservar' (por defecto:
+         *         conservan su Total oficial) o 'cero' (SBO no lista lo que no
+         *         tiene existencia → se registran en 0).
          */
-        function importarValidarExistencias(filas, productos, areasDef, existenciaDe) {
+        function importarValidarExistencias(filas, productos, areasDef, existenciaDe, opciones) {
+            var opc = opciones || {};
             var r = { errores: [], avisos: [], saldos: {}, porArea: {}, contados: 0, total: (filas || []).length,
-                      vacias: 0, noVienen: [], arrastrables: {}, comparacion: [], resumen: null };
+                      vacias: 0, noVienen: [], arrastrables: {}, comparacion: [], resumen: null,
+                      modo: 'enteras_abierta', faltantes: 'conservar', enCero: [], ajenos: [], otroAlmacen: 0, cobertura: null };
             if (!filas || !filas.length) { r.errores.push('El archivo no trae filas.'); return r; }
             var cab = _impCabeceras(filas);
+            var tieneEnt = _impTieneColumna(cab, COLUMNAS_EXISTENCIAS.enteras);
+            var tieneTot = _impTieneColumna(cab, COLUMNAS_EXISTENCIAS.total);
+            var modoTotal = tieneTot && !tieneEnt;
+            r.modo = modoTotal ? 'total' : 'enteras_abierta';
             if (!_impTieneColumna(cab, COLUMNAS_EXISTENCIAS.codigo))  r.errores.push('Falta la columna "Código".');
-            if (!_impTieneColumna(cab, COLUMNAS_EXISTENCIAS.enteras)) r.errores.push('Falta la columna "Enteras".');
-            if (!_impTieneColumna(cab, COLUMNAS_EXISTENCIAS.abierta)) r.avisos.push('No hay columna "Abierta": se toma 0 en fracciones abiertas.');
+            if (tieneTot && tieneEnt) r.errores.push('El archivo trae "En Stock" (total) y también "Enteras": usa una sola forma para no sumar dos veces.');
+            else if (!tieneEnt && !tieneTot) r.errores.push('Falta la columna "Enteras" (o "En Stock" si el archivo trae el total).');
+            if (tieneEnt && !_impTieneColumna(cab, COLUMNAS_EXISTENCIAS.abierta)) r.avisos.push('No hay columna "Abierta": se toma 0 en fracciones abiertas.');
             if (r.errores.length) return r;
+            var colCant = modoTotal ? COLUMNAS_EXISTENCIAS.total : COLUMNAS_EXISTENCIAS.enteras;
+            var colArea = modoTotal ? COLUMNAS_AREA_EXISTENCIAS_TOTAL : COLUMNAS_EXISTENCIAS.area;
+            var almBarra = (typeof ALMACEN_BARRA_CODIGO !== 'undefined') ? String(ALMACEN_BARRA_CODIGO) : '12';
 
             var porId = {};
             (productos || []).forEach(function(p) { if (p && p.id) porId[String(p.id)] = p; });
@@ -334,28 +364,39 @@
                 var n = i + 2;
                 var codigo = _impCol(f, COLUMNAS_EXISTENCIAS.codigo);
                 codigo = (codigo === undefined || codigo === null) ? '' : String(codigo).trim();
-                var entCrudo = _impCol(f, COLUMNAS_EXISTENCIAS.enteras);
-                var abCrudo  = _impCol(f, COLUMNAS_EXISTENCIAS.abierta);
+                var entCrudo = _impCol(f, colCant);
+                var abCrudo  = modoTotal ? undefined : _impCol(f, COLUMNAS_EXISTENCIAS.abierta);
+                if (modoTotal) {
+                    var alm = _impCol(f, COLUMNAS_EXISTENCIAS.almacenSbo);
+                    var almT = (alm === undefined || alm === null) ? '' : String(alm).trim();
+                    if (/^\d+$/.test(almT) && almT !== almBarra) { r.otroAlmacen++; return; }
+                }
                 if (!codigo) {
                     if (entCrudo !== undefined || abCrudo !== undefined) r.errores.push('Fila ' + n + ': trae cantidades pero no Código.');
                     return;
                 }
                 if (entCrudo === undefined && abCrudo === undefined) { r.vacias++; return; }   // no contado: se respeta
                 var p = porId[codigo];
-                if (!p) { r.errores.push('Fila ' + n + ': el código ' + codigo + ' no está en el catálogo.'); return; }
+                if (!p) {
+                    if (modoTotal) { r.ajenos.push({ codigo: codigo, nombre: String(_impCol(f, COLUMNAS_EXISTENCIAS.nombre) || '').trim(), fila: n }); return; }
+                    r.errores.push('Fila ' + n + ': el código ' + codigo + ' no está en el catálogo.'); return;
+                }
                 var ent = _impNumero(entCrudo), ab = _impNumero(abCrudo);
                 var mal = false;
-                if (ent !== null && isNaN(ent)) { r.errores.push('Fila ' + n + ' (' + codigo + '): Enteras no es un número ("' + entCrudo + '").'); mal = true; }
+                var etq = modoTotal ? 'En Stock' : 'Enteras';
+                if (ent !== null && isNaN(ent)) { r.errores.push('Fila ' + n + ' (' + codigo + '): ' + etq + ' no es un número ("' + entCrudo + '").'); mal = true; }
                 if (ab !== null && isNaN(ab))   { r.errores.push('Fila ' + n + ' (' + codigo + '): Abierta no es un número ("' + abCrudo + '").'); mal = true; }
-                if (!mal && ent !== null && ent < 0) { r.errores.push('Fila ' + n + ' (' + codigo + '): Enteras negativas.'); mal = true; }
+                if (!mal && ent !== null && ent < 0) { r.errores.push('Fila ' + n + ' (' + codigo + '): ' + etq + (modoTotal ? ' negativo.' : ' negativas.')); mal = true; }
                 if (!mal && ab !== null && ab < 0)   { r.errores.push('Fila ' + n + ' (' + codigo + '): Abierta negativa.'); mal = true; }
                 if (mal) return;
                 ent = ent || 0; ab = ab || 0;
-                var unidadPieza = /^(pza|pz|pieza|piezas|botella|botellas|unidad)$/i.test(String(p.unit || '').trim());
-                if (unidadPieza && Math.round(ent) !== ent) r.avisos.push('Fila ' + n + ' (' + codigo + '): ' + ent + ' enteras con decimales en un producto por pieza — ¿iba en "Abierta"?');
-                if (ab >= 1) r.avisos.push('Fila ' + n + ' (' + codigo + '): Abierta = ' + ab + ' (más de una unidad): se toma como suma de varias abiertas.');
+                if (!modoTotal) {
+                    var unidadPieza = /^(pza|pz|pieza|piezas|botella|botellas|unidad)$/i.test(String(p.unit || '').trim());
+                    if (unidadPieza && Math.round(ent) !== ent) r.avisos.push('Fila ' + n + ' (' + codigo + '): ' + ent + ' enteras con decimales en un producto por pieza — ¿iba en "Abierta"?');
+                    if (ab >= 1) r.avisos.push('Fila ' + n + ' (' + codigo + '): Abierta = ' + ab + ' (más de una unidad): se toma como suma de varias abiertas.');
+                }
 
-                var areaCrudo = _impCol(f, COLUMNAS_EXISTENCIAS.area);
+                var areaCrudo = _impCol(f, colArea);
                 var area = '';
                 if (areaCrudo !== undefined && String(areaCrudo).trim() !== '') {
                     area = areaPorClave[_impNorm(areaCrudo)] || '';
@@ -377,7 +418,25 @@
             });
 
             r.contados = Object.keys(r.saldos).length;
-            if (!r.contados && !r.errores.length) r.errores.push('Ninguna fila trae cantidades: no hay nada que cortar.');
+            if (!r.contados && !r.errores.length) {
+                r.errores.push(modoTotal && r.ajenos.length ? 'Ningún código del archivo coincide con tu catálogo: no hay nada que cortar.'
+                                                            : 'Ninguna fila trae cantidades: no hay nada que cortar.');
+            }
+            if (modoTotal) {
+                if (r.otroAlmacen) r.avisos.push(r.otroAlmacen + ' fila(s) son de un almacén distinto del ' + almBarra + ' (barra) y se omiten.');
+                if (r.ajenos.length) {
+                    var ej = r.ajenos.slice(0, 8).map(function(a) { return a.codigo + (a.nombre ? ' ' + a.nombre : ''); }).join('; ');
+                    r.avisos.push(r.ajenos.length + ' código(s) del archivo no están en tu catálogo y se omiten: ' + ej + (r.ajenos.length > 8 ? '; y ' + (r.ajenos.length - 8) + ' más' : '') + '.');
+                }
+                r.cobertura = { archivo: r.contados, catalogo: (productos || []).length };
+                // SBO no lista lo que no tiene existencia: el jefe decide en la vista previa.
+                if (opc.faltantes === 'cero' && r.contados) {
+                    r.faltantes = 'cero';
+                    (productos || []).forEach(function(p) {
+                        if (p && p.id && !Object.prototype.hasOwnProperty.call(r.saldos, p.id)) { r.saldos[p.id] = 0; r.enCero.push(p.id); }
+                    });
+                }
+            }
 
             // Comparación contra el Total de hoy, y los que no vienen.
             var faltante = 0, sobrante = 0, sinPrecio = 0;
@@ -402,6 +461,10 @@
             r.comparacion.sort(function(a, b) { return Math.abs(b.dinero || b.dif) - Math.abs(a.dinero || a.dif); });
             r.resumen = { faltante: _impRed(faltante, 2), sobrante: _impRed(sobrante, 2), neto: _impRed(faltante + sobrante, 2),
                           sinPrecio: sinPrecio, conDiferencia: r.comparacion.filter(function(c) { return Math.abs(c.dif) > 0.0005; }).length };
+            if (r.enCero.length) {
+                var bajan = r.comparacion.filter(function(c) { return r.enCero.indexOf(c.id) !== -1 && c.antes > 0.0005; }).length;
+                r.avisos.push(r.enCero.length + ' producto(s) del catálogo no vienen en el archivo y se registran en 0 (' + bajan + ' tenían Total mayor a 0).');
+            }
             if (r.noVienen.length) {
                 r.avisos.push(r.noVienen.length + ' producto(s) del catálogo no vienen con cantidades: '
                     + Object.keys(r.arrastrables).length + ' conservan su Total actual dentro del corte; el resto sigue con la suma de áreas.');
@@ -435,6 +498,9 @@
                     totalProductos: Object.keys(saldos).length,
                     productosContados: v.contados,
                     productosArrastrados: Object.keys(v.arrastrables).filter(function(k) { return !(k in v.saldos); }),
+                    modoArchivo: v.modo || 'enteras_abierta',          // 'total' = reporte SBO ("En Stock")
+                    faltantes: v.faltantes || 'conservar',
+                    productosEnCero: (v.enCero || []).length,
                     previo: previo,                                    // el Total de cada producto ANTES del corte (histórico)
                     anclaAnterior: o.anclaAnterior || null,
                     resumen: v.resumen,
@@ -513,8 +579,8 @@
                                   validacion: importarValidarCatalogo(filas, (typeof products !== 'undefined') ? products : []) };
             } else if (seccion === 'existencias') {
                 var ahora = _impAhora();
-                _impPendiente = { seccion: seccion, archivo: archivo, filas: filas, fecha: ahora.fecha, hora: ahora.hora,
-                                  validacion: importarValidarExistencias(filas, (typeof products !== 'undefined') ? products : [], _impAreasDef(), _impExistenciaDe) };
+                _impPendiente = { seccion: seccion, archivo: archivo, filas: filas, fecha: ahora.fecha, hora: ahora.hora, faltantes: 'conservar',
+                                  validacion: importarValidarExistencias(filas, (typeof products !== 'undefined') ? products : [], _impAreasDef(), _impExistenciaDe, { faltantes: 'conservar' }) };
             } else {
                 return;
             }
@@ -542,6 +608,15 @@
         function importarCambiarMomento(campo, valor) {
             if (!_impPendiente || _impPendiente.seccion !== 'existencias') return;
             _impPendiente[campo] = valor;
+            renderTab();
+        }
+
+        /** v5.21 — Qué hacer con los productos del catálogo que el reporte de SBO no lista. */
+        function importarCambiarFaltantes(valor) {
+            if (!_impPendiente || _impPendiente.seccion !== 'existencias') return;
+            _impPendiente.faltantes = (valor === 'cero') ? 'cero' : 'conservar';
+            _impPendiente.validacion = importarValidarExistencias(_impPendiente.filas, (typeof products !== 'undefined') ? products : [], _impAreasDef(),
+                                                                 _impExistenciaDe, { faltantes: _impPendiente.faltantes });
             renderTab();
         }
 
@@ -595,7 +670,7 @@
             if (errM) { showNotification('🛑 ' + errM); return; }
             // Se vuelve a validar contra el Total de este instante: la vista
             // previa pudo quedar vieja (llegó una venta o una compra).
-            p.validacion = importarValidarExistencias(p.filas, products, _impAreasDef(), _impExistenciaDe);
+            p.validacion = importarValidarExistencias(p.filas, products, _impAreasDef(), _impExistenciaDe, { faltantes: p.faltantes });
             if (p.validacion.errores.length) { renderTab(); showNotification('🛑 Corrige los errores del archivo antes de aplicar'); return; }
             if (typeof _db === 'undefined' || !_db) { showNotification('📴 Sin conexión a Firestore'); return; }
             if (!navigator.onLine) { showNotification('📴 Sin conexión — conecta a internet para registrar el corte'); return; }
@@ -613,6 +688,8 @@
             var v = p.validacion;
             showConfirm('🏷️ REGISTRAR CORTE DE EXISTENCIAS\n\nFecha y hora: ' + p.fecha + ' ' + p.hora + ' (vale al cierre de ese día)\n'
                 + v.contados + ' producto(s) contados · ' + corte.doc.productosArrastrados.length + ' conservan su Total actual\n'
+                + (v.modo === 'total' ? 'Archivo de SBO: "En Stock" tomado como el total de cada producto.\n' : '')
+                + (v.enCero.length ? v.enCero.length + ' producto(s) que no vienen en el archivo quedan en 0\n' : '')
                 + (v.resumen.conDiferencia ? v.resumen.conDiferencia + ' con diferencia contra el sistema · neto ' + _impDinero(v.resumen.neto) + '\n' : '')
                 + '\nEl Total de cada producto partirá de este corte: se le sumarán las compras y se le restará el consumo por recetas POSTERIORES.\n'
                 + 'El Total anterior queda guardado como histórico dentro del corte. Es INMUTABLE: no se edita ni se borra.\n\n¿Registrar?',
@@ -627,7 +704,7 @@
                         if (typeof existenciaInvalidarInicial === 'function') existenciaInvalidarInicial();
                         if (typeof existenciaCargarInicial === 'function') existenciaCargarInicial(function() { renderTab(); });
                         _impPendiente = null;
-                        _impResultado = { seccion: 'existencias', ok: true, id: corte.id, contados: v.contados,
+                        _impResultado = { seccion: 'existencias', ok: true, id: corte.id, contados: v.contados, enCero: v.enCero.length,
                                           arrastrados: corte.doc.productosArrastrados.length, resumen: v.resumen, archivo: p.archivo };
                         showNotification('✅ Corte ' + corte.id + ' registrado — el Total se recalcula desde aquí');
                         renderTab();
@@ -700,9 +777,22 @@
                + '<div class="imp-ayuda">El corte vale <b>al cierre de ese día</b>: lo vendido y comprado ese mismo día ya está dentro del conteo. '
                + 'La hora queda guardada para el histórico.</div>'
                + (errM ? _impMensajes([errM], 'error', 'fa-circle-exclamation') : '') + '</section>';
+            if (v.modo === 'total') {
+                var nFalt = v.enCero.length || v.noVienen.length;
+                h += '<section class="imp-momento" aria-labelledby="impFaltTit"><div id="impFaltTit" class="imp-sub">Archivo de SBO · total por producto</div>'
+                   + '<div class="imp-ayuda">Se tomó <b>"En Stock"</b> como el total de cada producto (cerradas y abiertas juntas), solo del almacén 12. '
+                   + (v.cobertura ? 'Cubre <b>' + v.cobertura.archivo + '</b> de <b>' + v.cobertura.catalogo + '</b> productos de tu catálogo.' : '') + '</div>'
+                   + '<div class="imp-sub">Productos del catálogo que el archivo no lista (' + nFalt + ')</div>'
+                   + '<div class="imp-opciones" role="radiogroup" aria-labelledby="impFaltTit">'
+                   + '<label class="imp-opcion"><input type="radio" name="impFalt" value="conservar"' + (v.faltantes !== 'cero' ? ' checked' : '') + ' onchange="importarCambiarFaltantes(this.value)">'
+                   + '<span><b>Conservar su Total actual</b><small>No se tocan: siguen con el Total de hoy (si es oficial).</small></span></label>'
+                   + '<label class="imp-opcion"><input type="radio" name="impFalt" value="cero"' + (v.faltantes === 'cero' ? ' checked' : '') + ' onchange="importarCambiarFaltantes(this.value)">'
+                   + '<span><b>Ponerlos en 0</b><small>SBO solo lista lo que tiene existencia: lo que no aparece, vale 0.</small></span></label></div></section>';
+            }
             h += '<div class="imp-kpis">'
                + '<div class="imp-kpi"><span>Contados</span><b class="num">' + v.contados + '</b></div>'
-               + '<div class="imp-kpi"><span>Sin capturar</span><b class="num">' + v.noVienen.length + '</b></div>'
+               + (v.enCero.length ? '<div class="imp-kpi"><span>En 0 (no vienen)</span><b class="num">' + v.enCero.length + '</b></div>'
+                                   : '<div class="imp-kpi"><span>Sin capturar</span><b class="num">' + v.noVienen.length + '</b></div>')
                + '<div class="imp-kpi' + (v.resumen && v.resumen.neto < 0 ? ' imp-kpi--mal' : '') + '"><span>Neto vs sistema</span><b class="num">' + (v.resumen ? _impDinero(v.resumen.neto) : '—') + '</b></div>'
                + '<div class="imp-kpi' + (v.errores.length ? ' imp-kpi--mal' : '') + '"><span>Errores</span><b class="num">' + v.errores.length + '</b></div></div>';
             if (v.errores.length) h += '<div class="imp-sub">Errores — corrígelos en el archivo y vuelve a subirlo</div>' + _impMensajes(v.errores, 'error', 'fa-circle-exclamation');
@@ -740,7 +830,8 @@
                 if (s.pvRepetidos && s.pvRepetidos.length) h += _impMensajes(['PV repetidos: ' + s.pvRepetidos.slice(0, 6).join(', ') + ' — las ventas no cruzarán bien hasta corregirlos.'], 'aviso', 'fa-triangle-exclamation');
             } else {
                 h += '<div class="imp-ok"><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Corte <b>' + escapeHtml(r.id) + '</b> registrado: '
-                   + r.contados + ' producto(s) contados, ' + r.arrastrados + ' conservan su Total.</div>'
+                   + r.contados + ' producto(s) contados, ' + r.arrastrados + ' conservan su Total'
+                   + (r.enCero ? ', ' + r.enCero + ' quedaron en 0' : '') + '.</div>'
                    + '<div class="imp-ayuda">Desde ahora el Total = este corte + compras posteriores − consumo por recetas posterior. '
                    + 'Lo ves en Inicio → "Origen del Total" y en la ficha de cada producto.</div>';
             }
@@ -813,6 +904,7 @@
         window.importarValidarMomento    = importarValidarMomento;
         window.importarElegirArchivo     = importarElegirArchivo;
         window.importarArchivoElegido    = importarArchivoElegido;
+        window.importarCambiarFaltantes  = importarCambiarFaltantes;
         window.importarProcesarFilas     = importarProcesarFilas;
         window.importarAplicarCatalogo   = importarAplicarCatalogo;
         window.importarAplicarExistencias = importarAplicarExistencias;
