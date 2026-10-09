@@ -16,7 +16,6 @@
         //  lo confunda con un stock teórico.
         // ═════════════════════════════════════════════════════════════════════
 
-        var PANEL_TOP = 8;
 
         // FASE 8 — el panel ya no guarda su propia copia del inicial ni su
         // propia forma de sumar compras: pregunta a la capa de existencia
@@ -131,50 +130,6 @@
             };
         }
 
-        // ── Gráfica de barras horizontales (SVG en línea) ───────────────────
-        // filas: [{ id, etiqueta, valor, max, texto, estado: 'critico'|'aviso'|null }]
-        function _panelBarras(filas, titulo, ayuda) {
-            if (!filas.length) return '';
-            var h = '<figure class="pm-graf">';
-            h += '<figcaption class="pm-graf__titulo">' + escapeHtml(titulo) + '</figcaption>';
-            if (ayuda) h += '<div class="pm-graf__ayuda">' + escapeHtml(ayuda) + '</div>';
-            h += '<div class="pm-barras" role="list">';
-            filas.forEach(function(f) {
-                var pct = f.max > 0 ? Math.max(2, Math.min(100, f.valor / f.max * 100)) : 0;
-                var cls = f.estado === 'critico' ? ' pm-barra--critico' : (f.estado === 'aviso' ? ' pm-barra--aviso' : '');
-                /**
-                 * REDISEÑO R3 — el emoji se sustituye por un icono local que
-                 * hereda el color de la clase de estado, y la palabra del
-                 * estado viaja oculta para el lector de pantalla: la barra
-                 * ya va coloreada, y el color por sí solo no es un dato.
-                 */
-                var ico = '';
-                if (f.estado === 'critico') {
-                    ico = '<i class="fa-solid fa-circle-exclamation pm-barra__ico" aria-hidden="true"></i>'
-                        + '<span class="bi-sr">Crítico: </span>';
-                } else if (f.estado === 'aviso') {
-                    ico = '<i class="fa-solid fa-triangle-exclamation pm-barra__ico" aria-hidden="true"></i>'
-                        + '<span class="bi-sr">Aviso: </span>';
-                }
-                h += '<button type="button" class="pm-barra' + cls + '" role="listitem"'
-                   + (f.id ? ' data-pm-ficha="' + escapeHtml(f.id) + '"' : '')
-                   + ' title="' + escapeHtml(f.etiqueta + ': ' + f.texto) + '">';
-                // El nombre va en su propio span: text-overflow:ellipsis no actúa
-                // sobre un nodo de texto suelto dentro de un contenedor flex, y
-                // sin él los nombres largos se cortaban a hachazos
-                // ("JOHNNIE WALKER I") en vez de terminar en puntos suspensivos.
-                h += '<span class="pm-barra__etq">' + ico
-                   + '<span class="pm-barra__nombre">' + escapeHtml(f.etiqueta) + '</span></span>';
-                h += '<svg class="pm-barra__svg" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true">'
-                   + '<rect class="pm-barra__fondo" x="0" y="2" width="100" height="6" rx="3"></rect>'
-                   + '<rect class="pm-barra__valor" x="0" y="2" width="' + pct.toFixed(1) + '" height="6" rx="3"></rect></svg>';
-                h += '<span class="pm-barra__txt">' + escapeHtml(f.texto) + '</span>';
-                h += '</button>';
-            });
-            h += '</div></figure>';
-            return h;
-        }
-
         /**
          * REDISEÑO R3 — `icono` ya no es un emoji, es el nombre de un icono
          * local (ver css/utilidades.css). El emoji lo dibujaba cada teléfono
@@ -284,69 +239,7 @@
             return h;
         }
 
-        // ── Comparación de las dos cifras (FASE 8) ───────────────────────────
-        // Con la fuente oficial ya encendida (1-oct-2026), esta tarjeta sigue
-        // siendo el punto donde se ve si operativa y oficial coinciden —
-        // ahora para confirmar que la cifra que YA decide es razonable, no
-        // para decidir si encenderla.
-        function _panelComparacion() {
-            _panelCargarInicial();
-            var est = _panelInicialEstado();
-            var h = '<div class="pm-card pm-card--compara">';
-            h += '<div class="pm-card__titulo"><i class="fa-solid fa-magnifying-glass"></i> Comparación de existencias</div>';
-
-            if (est.estado === 'cargando' || est.estado === 'sin_cargar') {
-                h += '<div class="pm-card__sub">Cargando el inventario inicial para comparar…</div></div>';
-                return h;
-            }
-            if (est.estado === 'no_existe') {
-                h += '<div class="pm-card__sub">No se puede comparar todavía: no hay un corte contabilizado vigente. '
-                   + 'Se crea al <b>contabilizar</b> un recuento cerrado (domingo, fin de mes o mitad de semana).</div></div>';
-                return h;
-            }
-            if (est.estado !== 'ok') {
-                h += '<div class="pm-card__sub">No se pudo leer el inventario inicial (¿sin conexión?).</div></div>';
-                return h;
-            }
-
-            var c = existenciaComparacion();
-            var _venC = (typeof existenciaVentas === 'function') ? existenciaVentas() : existenciaVentasSemana();
-            h += '<div class="pm-card__sub">Operativa (conteo continuo) contra oficial (corte + compras'
-               + (Object.keys(_venC).length ? ' − consumo teórico' : ', aún sin ventas') + '). '
-               + (EXISTENCIA_FUENTE_OFICIAL_ACTIVA
-                  ? 'La oficial ya es la que decide "bajo mínimo" y el catálogo.'
-                  : 'Manda la operativa hasta que confirmes el cambio.') + '</div>';
-            h += '<div class="pm-card__fila"><span>Coinciden</span><b>' + c.coinciden + ' de ' + c.comparados + '</b></div>';
-            h += '<div class="pm-card__fila"><span>Difieren</span><b'
-               + (c.difieren ? ' class="pm-dif"' : '') + '>' + c.difieren + '</b></div>';
-            if (c.sinInicial) {
-                h += '<div class="pm-card__fila"><span>Sin inicial <small>(no comparables)</small></span><b>' + c.sinInicial + '</b></div>';
-            }
-
-            if (c.filas.length) {
-                var maxAbs = Math.abs(c.filas[0].dif) || 1;
-                var filas = c.filas.slice(0, PANEL_TOP).map(function(f) {
-                    var ref = Math.max(Math.abs(f.operativa), Math.abs(f.oficial), 1);
-                    return {
-                        id: f.id,
-                        etiqueta: f.nombre,
-                        valor: Math.abs(f.dif),
-                        max: maxAbs,
-                        texto: _panelNum(f.operativa) + ' → ' + _panelNum(f.oficial)
-                               + ' (' + (f.dif > 0 ? '+' : '') + _panelNum(f.dif) + ')',
-                        // Crítico = la diferencia pesa más de la cuarta parte de
-                        // la cifra: ahí ya no es un redondeo, es otra historia.
-                        estado: (Math.abs(f.dif) / ref) > 0.25 ? 'critico' : 'aviso'
-                    };
-                });
-                h += _panelBarras(filas, 'Mayores diferencias',
-                        c.filas.length > PANEL_TOP ? 'Las ' + PANEL_TOP + ' mayores de ' + c.filas.length : null);
-            } else if (c.comparados) {
-                h += '<div class="pm-card__sub"><i class="fa-solid fa-circle-check"></i> Las dos cifras coinciden en los ' + c.comparados + ' productos comparables.</div>';
-            }
-            h += '</div>';
-            return h;
-        }
+        // v5.24 — Inicio ya no pinta las tarjetas de comparación, bajo mínimo en barras ni productos por grupo (pedido de Eduardo, 9-oct-2026).
 
         /** Panel de la pestaña Inicio. */
         function renderPanelInicio(opciones) {
@@ -368,30 +261,7 @@
 
             if (!(opciones && opciones.sinInventario)) h += _panelEstadoInventario();
 
-            // Bajo mínimo: existencia como fracción del mínimo (peores primero)
-            var filasBajo = k.bajo.map(function(p) {
-                var st = existenciaMostrada(p);
-                return { id: p.id, etiqueta: p.name || p.id, valor: st, max: p.stockMinimo,
-                         texto: _panelNum(st) + ' / ' + _panelNum(p.stockMinimo),
-                         estado: st <= p.stockMinimo * 0.5 ? 'critico' : 'aviso', r: p.stockMinimo ? st / p.stockMinimo : 0 };
-            }).sort(function(a, b) { return a.r - b.r; }).slice(0, PANEL_TOP);
-            h += '<div class="pm-grafs">';
-            h += filasBajo.length
-                ? _panelBarras(filasBajo, 'Bajo mínimo — existencia / mínimo', k.bajo.length > PANEL_TOP ? 'Los ' + PANEL_TOP + ' más urgentes de ' + k.bajo.length : null)
-                : '<div class="pm-card"><div class="pm-card__titulo"><i class="fa-solid fa-circle-check"></i> Sin productos bajo mínimo</div><div class="pm-card__sub">Ningún producto con mínimo definido está por debajo.</div></div>';
-
-            // Productos por grupo (magnitud, un solo tono)
-            var grupos = {};
-            products.forEach(function(p) { var g = p.group || 'General'; grupos[g] = (grupos[g] || 0) + 1; });
-            var filasG = Object.keys(grupos).map(function(g) { return { etiqueta: g, valor: grupos[g] }; })
-                .sort(function(a, b) { return b.valor - a.valor; });
-            var maxG = filasG.length ? filasG[0].valor : 0;
-            filasG = filasG.slice(0, PANEL_TOP).map(function(f) { return { etiqueta: f.etiqueta, valor: f.valor, max: maxG, texto: String(f.valor) }; });
-            h += _panelBarras(filasG, 'Productos por grupo', null);
-            h += '</div>';
-
             h += _panelExistenciaSemana();
-            h += _panelComparacion();
             h += '</section>';
             return h;
         }

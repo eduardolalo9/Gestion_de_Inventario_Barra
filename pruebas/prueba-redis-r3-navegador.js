@@ -96,8 +96,11 @@ const PUERTO = process.env.PUERTO || '8080';
       // La cifra tiene que estar a la DERECHA del nombre, no debajo
       cifraALaDerecha: (cifra && nombre)
         ? cifra.getBoundingClientRect().left > nombre.getBoundingClientRect().right - 2 : null,
-      accionesAlPie: (acciones && chips.length)
-        ? acciones.getBoundingClientRect().top >= chips[0].getBoundingClientRect().top : null,
+      // v5.24 (tarjeta compacta): las acciones siguen BAJO el nombre (no le quitan ancho),
+      // pero comparten renglón con los chips de área en vez de llevar uno propio.
+      accionesAlPie: (acciones && nombre && chips.length)
+        ? (acciones.getBoundingClientRect().top >= nombre.getBoundingClientRect().bottom - 2
+           && Math.abs(acciones.getBoundingClientRect().top - chips[0].getBoundingClientRect().top) < 20) : null,
       botonesTactiles: acciones ? [...acciones.querySelectorAll('button')].every(b => b.getBoundingClientRect().height >= 44) : null,
       chips: chips.length,
       fondo: cs.backgroundColor,
@@ -113,7 +116,7 @@ const PUERTO = process.env.PUERTO || '8080';
   chk('★ La existencia va a la DERECHA del nombre, en mono tabular',
       card.cifraALaDerecha === true && /Plex Mono/.test(card.cifraFuente || ''),
       JSON.stringify({ derecha: card.cifraALaDerecha, fuente: card.cifraFuente, texto: card.cifraTexto }));
-  chk('★ Las acciones bajan al pie (el nombre se queda con el ancho de arriba)',
+  chk('★ Las acciones quedan bajo el nombre, en el renglón de los chips (el nombre se queda con el ancho de arriba)',
       card.accionesAlPie === true);
   chk('★ Los botones de acción son táctiles (≥ 44 px de alto)', card.botonesTactiles === true);
 

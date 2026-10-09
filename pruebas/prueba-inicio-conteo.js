@@ -26,8 +26,8 @@ const mod = leer('js/72-inicio-tablero.js'), r70 = leer('js/70-conversion-render
 chk('index.html carga 72-inicio-tablero.js entre 71 y 75',
     html.indexOf('js/71-posicion-conteo.js') < html.indexOf('js/72-inicio-tablero.js') && html.indexOf('js/72-inicio-tablero.js') < html.indexOf('js/75-auditoria-flujo.js'));
 chk('sw.js precalienta el módulo con APP_VERSION', /'\.\/js\/72-inicio-tablero\.js\?v=' \+ APP_VERSION/.test(sw));
-chk('★ La versión es 5.23 en sw.js y en todos los ?v= de index.html',
-    /APP_VERSION = '5\.23'/.test(sw) && !/\?v=5\.22/.test(html) && (html.match(/\?v=5\.23/g) || []).length >= 35);
+chk('★ La versión es 5.24 en sw.js y en todos los ?v= de index.html',
+    /APP_VERSION = '5\.24'/.test(sw) && !/\?v=5\.2[0-3]/.test(html) && (html.match(/\?v=5\.24/g) || []).length >= 35);
 chk('renderInicioTab pinta el tablero primero y el panel de siempre debajo',
     /renderInicioTablero\(\)/.test(r70) && /renderPanelInicio\(\{ sinInventario:/.test(r70));
 chk('El panel omite SU tarjeta de inventario solo cuando el tablero la muestra',
@@ -72,6 +72,17 @@ chk('Todo id del modal que lee saveInventarioModal sigue en index.html',
 chk('Conteo: el encabezado conserva volver, área y contador (y suma medidor y "Conteo ciego")',
     /auditoriaVolverSeleccion\(\)/.test(r85) && /Conteo ciego/.test(r85) && /Capturados/.test(r85) && /inicioMedidor\(ingresados, products\.length\)/.test(r85));
 chk('La tarjeta de conteo conserva su criterio hasData y suma Capturado/Pendiente', /hasData \? 'Capturado' : 'Pendiente'/.test(r85));
+
+// ── C2 · v5.24: tarjetas quitadas, tarjeta de producto y encabezado compactos ──
+const panel = leer('js/83-panel.js'), bloque24 = css.slice(css.indexOf('v5.24 · Encabezado compacto'));
+chk('★ v5.24 · El panel ya no arma "Bajo mínimo — existencia / mínimo", "Productos por grupo" ni "Comparación de existencias"',
+    !/Bajo mínimo — existencia|Productos por grupo|Comparación de existencias|_panelComparacion|_panelBarras|pm-grafs/.test(panel));
+chk('El panel conserva sus indicadores, "Origen del Total" y la ficha del producto',
+    /_panelTile\(/.test(panel) && /_panelExistenciaSemana\(\)/.test(panel) && /function abrirFichaProducto/.test(panel));
+chk('★ v5.24 · El CSS del encabezado y de la tarjeta usa solo tokens (cero colores hex)', bloque24.length > 500 && !/#[0-9a-fA-F]{3,8}\b/.test(bloque24) && !/rgba?\(/.test(bloque24));
+chk('v5.24 · El encabezado lleva su marca (cuadro latón) y el título', /class="hd-logo"/.test(html) && /<h1[^>]*>BarInventory<\/h1>/.test(html));
+chk('v5.24 · La tarjeta de producto conserva sus atributos funcionales (buscador, ficha, carrito)',
+    /data-sbx-item/.test(r70) && /data-sbx-principal/.test(r70) && /data-pm-ficha=/.test(r70) && /agregarPedidoSugerido\(/.test(r70) && /prd-card__actions/.test(r70));
 
 // ── D · el módulo REAL contra un estado simulado ─────────────────────────
 const ctx = { console, escapeHtml: s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'), window: {} };
