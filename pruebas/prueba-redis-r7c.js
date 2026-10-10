@@ -73,8 +73,8 @@ chk('★ .vt-dia--ok ya no depende de #00391a ni de un override del tema claro: 
     !/html\[data-theme="light"\] \.vt-dia--ok/.test(css));
 chk('★ El día cargado lleva un icono de check además del color (el color nunca va solo)',
     /vt-dia--ok/.test(js) && /fa-circle-check" aria-hidden="true"><\/i>' : ''\)/.test(js));
-chk('Las cifras de las tablas van en IBM Plex Mono, a la derecha',
-    /\.vt-num \{[^}]*text-align: right[^}]*IBM Plex Mono/.test(css));
+chk('Las cifras de las tablas van en la fuente de cifras (--f-num, Manrope), a la derecha',
+    /\.vt-num \{[^}]*text-align: right[^}]*var\(--f-num\)/.test(css));
 chk('Los radios usan los tokens --r-sm/--r-md/--r-lg, no píxeles sueltos',
     /\.vt-panel \{[^}]*var\(--r-md\)/.test(css) && /\.vt-nota \{[^}]*var\(--r-sm\)/.test(css) && /\.vt-panel--resumen \{[^}]*var\(--r-lg\)/.test(css));
 // Toda clase vt-* que usa el JS está definida.

@@ -11,7 +11,7 @@ const PUERTO = process.env.PUERTO || '8080';
 
 (async () => {
   const nav = await chromium.launch(require('./_lanzar-navegador')());
-  const p = await (await nav.newContext({ viewport: { width: 390, height: 844 } })).newPage();
+  const p = await require('./_tema-oscuro')(await nav.newContext({ viewport: { width: 390, height: 844 } })).newPage();
   const errs = []; p.on('pageerror', e => errs.push(String(e).slice(0, 200)));
   await p.goto('http://127.0.0.1:' + PUERTO + '/index.html', { waitUntil: 'load' });
   await p.evaluate(async () => {
@@ -81,8 +81,8 @@ const PUERTO = process.env.PUERTO || '8080';
   });
   chk('Hay exactamente un destino activo, y es Inicio',
       activo.destino === 'inicio' && activo.cuantosActivos === 1, JSON.stringify(activo));
-  chk('★ El destino activo es latón calculado (no un azul heredado)',
-      activo.colorTexto === 'rgb(232, 181, 92)' && activo.colorIcono === 'rgb(232, 181, 92)',
+  chk('★ El destino activo es esmeralda calculado (v5.25) (no un azul heredado)',
+      activo.colorTexto === 'rgb(84, 195, 152)' && activo.colorIcono === 'rgb(84, 195, 152)',
       JSON.stringify(activo));
   chk('★ El activo lleva aria-current="page" (el color solo no informa)',
       activo.aria === 'page', 'aria-current: ' + activo.aria);
@@ -142,8 +142,8 @@ const PUERTO = process.env.PUERTO || '8080';
     return { fondo: cs.backgroundColor, alto: b.getBoundingClientRect().height,
              tocables: [...b.querySelectorAll('button')].every(x => x.getBoundingClientRect().height >= 44) };
   });
-  chk('La barra inferior usa la superficie del tema (#15181D), no un color fijo',
-      barra.fondo === 'rgb(21, 24, 29)', 'fondo: ' + barra.fondo);
+  chk('La barra inferior usa la superficie del tema (#15211C), no un color fijo',
+      barra.fondo === 'rgb(21, 33, 28)', 'fondo: ' + barra.fondo);
   chk('Todos sus controles son táctiles (≥ 44 px)', barra.tocables, 'alto barra: ' + barra.alto);
 
   // ── G · El glosario de estados usa los badges del kit ──────────────────
@@ -169,7 +169,7 @@ const PUERTO = process.env.PUERTO || '8080';
   chk('"Contabilizado" usa el lila del estado contable, no el morado de Tailwind',
       glos.colorContab === 'rgb(201, 160, 232)', 'color: ' + glos.colorContab);
   chk('Un estado desconocido sale en gris, con su texto tal cual',
-      glos.textos[2] === 'LO_QUE_SEA' && glos.desconocido === 'rgb(180, 176, 170)',
+      glos.textos[2] === 'LO_QUE_SEA' && glos.desconocido === 'rgb(183, 192, 188)',
       JSON.stringify(glos));
 
   chk('Sin errores de JS en toda la prueba', errs.length === 0, errs.join(' | '));

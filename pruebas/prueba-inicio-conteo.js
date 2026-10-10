@@ -26,8 +26,8 @@ const mod = leer('js/72-inicio-tablero.js'), r70 = leer('js/70-conversion-render
 chk('index.html carga 72-inicio-tablero.js entre 71 y 75',
     html.indexOf('js/71-posicion-conteo.js') < html.indexOf('js/72-inicio-tablero.js') && html.indexOf('js/72-inicio-tablero.js') < html.indexOf('js/75-auditoria-flujo.js'));
 chk('sw.js precalienta el módulo con APP_VERSION', /'\.\/js\/72-inicio-tablero\.js\?v=' \+ APP_VERSION/.test(sw));
-chk('★ La versión es 5.24 en sw.js y en todos los ?v= de index.html',
-    /APP_VERSION = '5\.24'/.test(sw) && !/\?v=5\.2[0-3]/.test(html) && (html.match(/\?v=5\.24/g) || []).length >= 35);
+chk('★ La versión es 5.25 en sw.js y en todos los ?v= de index.html',
+    /APP_VERSION = '5\.25'/.test(sw) && !/\?v=5\.2[0-4]/.test(html) && (html.match(/\?v=5\.25/g) || []).length >= 35);
 chk('renderInicioTab pinta el tablero primero y el panel de siempre debajo',
     /renderInicioTablero\(\)/.test(r70) && /renderPanelInicio\(\{ sinInventario:/.test(r70));
 chk('El panel omite SU tarjeta de inventario solo cuando el tablero la muestra',

@@ -118,6 +118,16 @@
                 var semilla = 0, g = String(grupo || '');
                 for (var i = 0; i < g.length; i++) semilla = (semilla + g.charCodeAt(i)) % 997;
                 var tinte = g ? TINTES[semilla % TINTES.length] : 'neutro';
+                /* v5.25 — pasteles de categoría de licores (morado/azul/índigo/celeste).
+                   Se reconoce por palabra clave del grupo; lo que no encaja conserva
+                   el tinte por hash de siempre, así ningún grupo cambia de golpe. */
+                var gu = g.toUpperCase();
+                if (gu) {
+                    if (/WHISK|BOURBON|SCOTCH/.test(gu))                                  tinte = 'whisky';
+                    else if (/\bGIN\b|GINEBRA/.test(gu))                                   tinte = 'gin';
+                    else if (/TEQUILA|MEZCAL|\bRON\b|\bRUM\b|VODKA|BRANDY|COGNAC|DESTILAD/.test(gu)) tinte = 'dest';
+                    else if (/LICOR|VERMUT|AMARGO|CREMA|APERITIVO/.test(gu))             tinte = 'lic';
+                }
                 return '<span class="bi-mono bi-mono--' + tinte + '" aria-hidden="true">' + esc(iniciales) + '</span>';
             }
 

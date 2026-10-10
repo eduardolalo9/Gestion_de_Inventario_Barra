@@ -80,7 +80,7 @@ const PUERTO = process.env.PUERTO || '8080';
     chk('[' + tema + '] ★ Cero atributos style="…" en la pantalla de Ventas', m.estilosEnLinea === 0, String(m.estilosEnLinea));
     chk('[' + tema + '] Aviso "sin receta": fondo real, icono y contraste ≥ 4.5', m.aviso && m.aviso.opaco && m.aviso.icono && m.aviso.contraste >= 4.5, JSON.stringify(m.aviso));
     chk('[' + tema + '] Aviso "insumo fuera del catálogo": fondo real, icono y contraste ≥ 4.5', m.error && m.error.opaco && m.error.icono && m.error.contraste >= 4.5, JSON.stringify(m.error));
-    chk('[' + tema + '] Las cifras van a la derecha y en IBM Plex Mono', m.numAlign === 'right' && /Plex Mono/i.test(m.numFont || ''), m.numAlign + ' / ' + m.numFont);
+    chk('[' + tema + '] Las cifras van a la derecha y en Manrope', m.numAlign === 'right' && /Manrope/i.test(m.numFont || ''), m.numAlign + ' / ' + m.numFont);
     chk('[' + tema + '] Día con ventas: lleva check (no solo color), contraste ≥ 3 y objetivo ≥ 36 px de ancho', m.diaOk && m.diaOk.icono && m.diaOk.contraste >= 3 && m.diaOk.ancho >= 36, JSON.stringify(m.diaOk));
     chk('[' + tema + '] Sin desbordamiento horizontal a 390 px', !m.scrollHorizontal, '');
   }

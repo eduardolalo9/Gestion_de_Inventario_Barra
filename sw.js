@@ -29,7 +29,7 @@
 // pruebas/prueba-integridad-split.js falla si se desincronizan: un index.html
 // nuevo sirviendo un .js viejo desde cache es el fallo mas dificil de
 // diagnosticar que puede tener una PWA partida en archivos.
-const APP_VERSION = '5.24';
+const APP_VERSION = '5.25';
 const CACHE_NAME  = 'barinventory-v' + APP_VERSION;
 
 // SW8 FIX: OFFLINE_URL calculado desde el scope del SW en tiempo de ejecución.
@@ -76,6 +76,9 @@ const PRECACHE_URLS = [
 // A diferencia de addAll(), esto va UNO POR UNO y cada fallo se tolera: que un
 // archivo no se pueda traer no puede tumbar al resto ni impedir la activacion.
 const WARM_URLS = [
+    // v5.25 — tipografías propias (Manrope y DM Sans): sin esto la primera carga sin red caería a la fuente del sistema.
+    './fonts/manrope-600.woff2', './fonts/manrope-700.woff2', './fonts/manrope-800.woff2',
+    './fonts/dm-sans-400.woff2', './fonts/dm-sans-500.woff2', './fonts/dm-sans-600.woff2', './fonts/dm-sans-700.woff2',
     './js/03-ui-kit.js?v=' + APP_VERSION,            // BI UI KIT (rediseño R1)
     './js/05-busqueda-motor.js?v=' + APP_VERSION,   // FASE 6
     './js/06-busqueda-ui.js?v=' + APP_VERSION,       // FASE 6

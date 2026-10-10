@@ -1093,14 +1093,14 @@
             overlay.innerHTML =
                 '<div style="background:var(--card);border:1px solid var(--border-mid);border-radius:10px;' +
                 'padding:24px 24px 20px;max-width:360px;width:90%;box-shadow:var(--shadow-modal);">' +
-                '<p style="color:var(--txt-primary);font-family:\'IBM Plex Sans\',sans-serif;font-size:0.875rem;' +
+                '<p style="color:var(--txt-primary);font-family:var(--f-body);font-size:0.875rem;' +
                 'line-height:1.55;margin:0 0 20px;white-space:pre-wrap;">' + message.replace(/</g, '&lt;') + '</p>' +
                 '<div style="display:flex;gap:10px;justify-content:flex-end;">' +
                 '<button id="_cfmCancel" style="padding:0 18px;min-height:44px;border:1px solid var(--border-mid);border-radius:6px;' +
-                'background:transparent;color:var(--txt-secondary);font-family:\'IBM Plex Sans\',sans-serif;' +
+                'background:transparent;color:var(--txt-secondary);font-family:var(--f-body);' +
                 'font-size:0.8125rem;cursor:pointer;">Cancelar</button>' +
                 '<button id="_cfmOk" style="padding:0 18px;min-height:44px;background:var(--red);color:#fff;border:none;' +
-                'border-radius:6px;font-family:\'IBM Plex Sans\',sans-serif;font-size:0.8125rem;' +
+                'border-radius:6px;font-family:var(--f-body);font-size:0.8125rem;' +
                 'font-weight:600;cursor:pointer;">Confirmar</button>' +
                 '</div></div>';
 document.body.appendChild(overlay);
