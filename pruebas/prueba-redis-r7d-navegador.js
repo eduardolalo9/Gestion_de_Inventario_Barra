@@ -190,7 +190,7 @@ const PUERTO = process.env.PUERTO || '8080';
     chk(T + '★ Historia: sin emoji ni style="…", con estado vacío de icono del kit', hs.emoji === '' && hs.estilos === 0 && hs.vacio, JSON.stringify(hs));
     chk(T + '★ Reporte publicado: "Descargar" ≥ 48 px y eliminar ≥ 44×44 con contraste ≥ 3 (sin SVG a mano)',
         hs.tarjetas === 1 && hs.desc >= 48 && hs.borrar && hs.borrar[0] >= 44 && hs.borrar[1] >= 44 && hs.borrar[2] >= 3, JSON.stringify([hs.desc, hs.borrar]));
-    chk(T + 'Los iconos de Historia tienen ancho real y la cifra va en Plex Mono', hs.sinIcono === 0 && /Plex Mono/i.test(hs.cifra), hs.sinIcono + ' / ' + hs.cifra);
+    chk(T + 'Los iconos de Historia tienen ancho real y la cifra va en Manrope', hs.sinIcono === 0 && /Manrope/i.test(hs.cifra), hs.sinIcono + ' / ' + hs.cifra);
     await p.evaluate(() => { _db = null; });
 
     // ══ F · INSIGNIA DE SINCRONÍA ═════════════════════════════════════════

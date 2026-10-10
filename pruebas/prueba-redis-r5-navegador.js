@@ -28,7 +28,7 @@ const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
 
 (async () => {
   const nav = await chromium.launch(require('./_lanzar-navegador')());
-  const p = await (await nav.newContext({ viewport: { width: 390, height: 844 } })).newPage();
+  const p = await require('./_tema-oscuro')(await nav.newContext({ viewport: { width: 390, height: 844 } })).newPage();
   const errs = []; p.on('pageerror', e => errs.push(String(e).slice(0, 200)));
   await p.goto('http://127.0.0.1:' + PUERTO + '/index.html', { waitUntil: 'load' });
   await p.evaluate(async () => {
@@ -179,7 +179,7 @@ const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
     return { existe: !!btn, icono: btn ? !!btn.querySelector('.fa-book') : false, bg: cs ? cs.backgroundColor : null };
   });
   chk('★ El botón "Contabilizar" del detalle es bt--primario (el único latón de la pantalla)',
-      contab.existe && contab.icono && /rgb\(232, 181, 92\)/.test(contab.bg || ''), JSON.stringify(contab));
+      contab.existe && contab.icono && /rgb\(84, 195, 152\)/.test(contab.bg || ''), JSON.stringify(contab));
 
   chk('Sin errores de JS en toda la prueba', errs.length === 0, errs.join(' | '));
 

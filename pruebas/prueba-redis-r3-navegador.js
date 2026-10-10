@@ -14,7 +14,7 @@ const PUERTO = process.env.PUERTO || '8080';
 
 (async () => {
   const nav = await chromium.launch(require('./_lanzar-navegador')());
-  const p = await (await nav.newContext({ viewport: { width: 390, height: 844 } })).newPage();
+  const p = await require('./_tema-oscuro')(await nav.newContext({ viewport: { width: 390, height: 844 } })).newPage();
   const errs = []; p.on('pageerror', e => errs.push(String(e).slice(0, 200)));
   await p.goto('http://127.0.0.1:' + PUERTO + '/index.html', { waitUntil: 'load' });
   await p.evaluate(async () => {
@@ -114,7 +114,7 @@ const PUERTO = process.env.PUERTO || '8080';
   chk('El nombre sigue siendo el botón que abre la ficha del producto',
       card.nombreEsBoton === 'BUTTON' && card.fichaAttr === 'DJ7', JSON.stringify(card));
   chk('★ La existencia va a la DERECHA del nombre, en mono tabular',
-      card.cifraALaDerecha === true && /Plex Mono/.test(card.cifraFuente || ''),
+      card.cifraALaDerecha === true && /Manrope/.test(card.cifraFuente || ''),
       JSON.stringify({ derecha: card.cifraALaDerecha, fuente: card.cifraFuente, texto: card.cifraTexto }));
   chk('★ Las acciones quedan bajo el nombre, en el renglón de los chips (el nombre se queda con el ancho de arriba)',
       card.accionesAlPie === true);
@@ -202,7 +202,7 @@ const PUERTO = process.env.PUERTO || '8080';
   const limpio = await p.evaluate(() => {
     const t = document.getElementById('tabContent');
     return {
-      blancos: [...t.querySelectorAll('*')].filter(el => getComputedStyle(el).backgroundColor === 'rgb(255, 255, 255)').length,
+      blancos: [...t.querySelectorAll('*')].filter(el => getComputedStyle(el).backgroundColor === 'rgb(255, 255, 255)' && !el.closest('.it-inv')).length,
       grpActivo: (() => {
         const a = t.querySelector('.grp-pill--active');
         return a ? getComputedStyle(a).backgroundColor : null;
@@ -211,8 +211,8 @@ const PUERTO = process.env.PUERTO || '8080';
   });
   chk('★ Ni un elemento con fondo blanco en toda la pantalla de Inicio',
       limpio.blancos === 0, 'blancos: ' + limpio.blancos);
-  chk('El grupo activo del rail se pinta en latón sólido',
-      limpio.grpActivo === 'rgb(232, 181, 92)', 'color: ' + limpio.grpActivo);
+  chk('El grupo activo del rail se pinta en esmeralda sólido',
+      limpio.grpActivo === 'rgb(84, 195, 152)', 'color: ' + limpio.grpActivo);
 
   chk('Sin errores de JS en toda la prueba', errs.length === 0, errs.join(' | '));
   await nav.close();

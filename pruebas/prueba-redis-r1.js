@@ -176,18 +176,18 @@ chk('El preflight que la app necesitaba se replicó (márgenes de títulos a cer
 // ═══ 4 · Tokens de Carbón & Latón ══════════════════════════════════════════
 const raiz = (/:root\s*\{([\s\S]*?)\n\}/.exec(esti) || ['', ''])[1];
 const claro = (/html\[data-theme="light"\]\s*\{([\s\S]*?)\n\}/.exec(esti) || ['', ''])[1];
-chk('★ El acento es latón (#E8B55C), no el azul anterior',
-    /--accent:\s*#E8B55C/i.test(raiz) && !/#a8c7fa/i.test(raiz));
-chk('El texto sobre latón es oscuro (contraste), no blanco',
-    /--accent-on:\s*#2A1D05/i.test(raiz));
+chk('★ v5.25 · El acento oscuro es esmeralda claro (oklch .74 .12 165), no el latón ni el azul anteriores',
+    /--accent:\s*#54C398/i.test(raiz) && !/#E8B55C/i.test(raiz) && !/#a8c7fa/i.test(raiz));
+chk('El texto sobre el acento oscuro es verde casi negro (contraste), no blanco',
+    /--accent-on:\s*#00190F/i.test(raiz));
 chk('Existen los alias nuevos (--brass, --ok, --warn, --info, --danger, --book)',
     ['--brass:', '--ok:', '--warn:', '--info:', '--danger:', '--book:'].every(t => raiz.includes(t)));
 chk('★ Los nombres viejos siguen existiendo (--green/--red/--amber/--sky): miles de reglas los usan',
     ['--green:', '--red:', '--amber:', '--sky:'].every(t => raiz.includes(t)));
-chk('El fondo es carbón azulado, no negro plano',
-    /--bg:\s*#0E1013/i.test(raiz));
-chk('★ El tema claro usa bronce, no el mismo amarillo (que no pasaría contraste)',
-    /--accent:\s*#8A5A14/i.test(claro) && /--accent-on:\s*#FFFFFF/i.test(claro));
+chk('El fondo oscuro es verde-carbón (oklch .17 .014 165), no negro plano',
+    /--bg:\s*#0A110E/i.test(raiz));
+chk('★ v5.25 · El tema claro usa el esmeralda de marca (oklch .455 .09 165) con texto blanco encima',
+    /--accent:\s*#10664A/i.test(claro) && /--accent-on:\s*#FFFFFF/i.test(claro));
 chk('El tema claro define también --book y --scrim (paridad con el oscuro)',
     /--book:/.test(claro) && /--scrim:/.test(claro));
 

@@ -459,7 +459,7 @@
             html += '<div class="if-dato"><dt>Comparación</dt><dd>' + datos.contados + ' contados · '
                  +  datos.pendientes + ' pendientes de ' + datos.totalProductos + '</dd></div>';
             var netoColor = datos.totalNeto < 0 ? 'var(--danger)' : (datos.totalNeto > 0 ? 'var(--ok)' : 'var(--txt-primary)');
-            html += '<div class="if-dato"><dt>Neto en dinero</dt><dd class="num" style="font-family:\'IBM Plex Mono\',monospace;font-variant-numeric:tabular-nums;color:' + netoColor + ';font-weight:700;">'
+            html += '<div class="if-dato"><dt>Neto en dinero</dt><dd class="num" style="font-family:var(--f-num);font-variant-numeric:tabular-nums;color:' + netoColor + ';font-weight:700;">'
                  +  _fvsMoneda(datos.totalNeto) + '</dd></div>';
             html += '</dl>';
 
@@ -485,7 +485,7 @@
                 } else {
                     var color = f.diferencia < -tol ? 'var(--danger)' : (f.diferencia > tol ? 'var(--ok)' : 'var(--txt-muted)');
                     var etiqueta = f.diferencia < -tol ? 'Faltante' : (f.diferencia > tol ? 'Sobrante' : 'Coincide');
-                    html += '<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:.76rem;color:var(--txt-muted);margin-top:2px;font-family:\'IBM Plex Mono\',monospace;font-variant-numeric:tabular-nums;">'
+                    html += '<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:.76rem;color:var(--txt-muted);margin-top:2px;font-family:var(--f-num);font-variant-numeric:tabular-nums;">'
                          +  '<span>Físico: <b style="color:var(--txt-primary);">' + _fvsNum(f.fisico) + '</b></span>'
                          +  '<span>Sistema: <b style="color:var(--txt-primary);">' + _fvsNum(f.sistema) + '</b></span>'
                          +  '<span style="color:' + color + ';font-weight:700;">' + etiqueta + ': '

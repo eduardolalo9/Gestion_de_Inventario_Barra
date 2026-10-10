@@ -128,7 +128,7 @@ const PUERTO = process.env.PUERTO || '8080';
       textos: /Bajo mínimo — existencia|Productos por grupo|Comparación de existencias/.test(document.getElementById('tabContent').innerText) };
   });
   chk('★ v5.24 · El encabezado mide 48 px (antes 55) y conserva botones de 44 px', c24.hd <= 48 && c24.ham >= 44 && c24.tem >= 44, JSON.stringify([c24.hd, c24.ham, c24.tem]));
-  chk('v5.24 · El título va en 16 px negrita con la marca latón al lado', c24.h1 === 16 && Number(c24.peso) >= 600 && c24.logo, JSON.stringify([c24.h1, c24.peso, c24.logo]));
+  chk('v5.25 · El título va en 17 px Manrope extranegrita con la marca esmeralda al lado', c24.h1 === 17 && Number(c24.peso) >= 700 && c24.logo, JSON.stringify([c24.h1, c24.peso, c24.logo]));
   chk('★ v5.24 · Las tarjetas "Bajo mínimo — existencia / mínimo", "Productos por grupo" y "Comparación de existencias" ya no están', c24.textos === false);
   const sinExtra = c24.tarjs.find(t => !t.conPedido && !t.conBadge);
   chk('★ v5.24 · La tarjeta de producto simple mide <= 125 px (antes 200) y las áreas comparten renglón con las acciones',

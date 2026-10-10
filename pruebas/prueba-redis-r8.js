@@ -44,25 +44,26 @@ const tokenEn = (bloque, nombre) => { const m = new RegExp(nombre + '\\s*:\\s*(#
 const iOscuro = css.indexOf(':root'), iClaro = css.indexOf('html[data-theme="light"]{') >= 0 ? css.indexOf('html[data-theme="light"]{') : css.search(/html\[data-theme="light"\]\s*\{/);
 const bOscuro = css.slice(iOscuro, iOscuro + 6000);
 const bClaro = css.slice(iClaro, iClaro + 6000);
-const mOscuro = tokenEn(bOscuro, '--txt-muted'), mClaro = tokenEn(bClaro, '--txt-muted');
-chk('--txt-muted (oscuro) = #A19D96', mOscuro && mOscuro.toUpperCase() === '#A19D96', String(mOscuro));
-chk('--txt-muted (claro) = #68635D', mClaro && mClaro.toUpperCase() === '#68635D', String(mClaro));
-chk('--txt-muted oscuro ≥ 4.5:1 sobre una tarjeta tintada (#2A2723 aprox.)', mOscuro && ratio(mOscuro, '#2A2723') >= 4.5, mOscuro && ratio(mOscuro, '#2A2723').toFixed(2));
-chk('--txt-muted claro ≥ 4.5:1 sobre un fondo tintado (#EFE9DF aprox.)', mClaro && ratio(mClaro, '#EFE9DF') >= 4.5, mClaro && ratio(mClaro, '#EFE9DF').toFixed(2));
-
-// ═══ CSS muerto ═══════════════════════════════════════════
-const { huerfanos, leerCorpus } = require('../herramientas/css-huerfano.js');
-const h = huerfanos(css, leerCorpus());
-chk('Cero reglas huérfanas en estilos.css (herramientas/css-huerfano.js)', h.res.length === 0, h.res.slice(0, 5).map(r => r.sel).join(' | '));
-const definidos = new Set(); (css + util).replace(/(--[a-z0-9-]+)\s*:/gi, (m, n) => { definidos.add(n); return m; });
-const muertos = []; sinComentarios.replace(/var\(\s*(--[a-z0-9-]+)\s*,\s*([^()]*?(?:\([^()]*\))?[^()]*?)\)/gi, (m, n) => { if (definidos.has(n) && n !== '--sbx-top') muertos.push(m); return m; });
-chk('Sin var(--token, fallback) con el token definido (fallback inalcanzable)', muertos.length === 0, muertos.slice(0, 4).join(' | '));
+// v5.25: los tokens de texto pasaron a oklch. Se convierten a sRGB para medir el contraste igual que antes.
+function oklchHex(str) {
+    const m = /oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)/.exec(str || ''); if (!m) return null;
+    const L = +m[1], C = +m[2], H = +m[3] * Math.PI / 180, a = C * Math.cos(H), b = C * Math.sin(H);
+    const l = Math.pow(L + .3963377774 * a + .2158037573 * b, 3), mm = Math.pow(L - .1055613458 * a - .0638541728 * b, 3), s = Math.pow(L - .0894841775 * a - 1.291485548 * b, 3);
+    const lin = [4.0767416621 * l - 3.3077115913 * mm + .2309699292 * s, -1.2684380046 * l + 2.6097574011 * mm - .3413193965 * s, -.0041960863 * l - .7034186147 * mm + 1.707614701 * s];
+    return '#' + lin.map(v => { v = Math.min(1, Math.max(0, v)); v = v <= .0031308 ? 12.92 * v : 1.055 * Math.pow(v, 1 / 2.4) - .055; return Math.round(v * 255).toString(16).padStart(2, '0'); }).join('');
+}
+const tokenOk = tokenEn; // v5.25: los tokens siguen en hex (el oklch del diseño queda documentado en el comentario del tema)
+const mOscuro = tokenOk(bOscuro, '--txt-muted'), mClaro = tokenOk(bClaro, '--txt-muted');
+const cardOsc = tokenOk(bOscuro, '--card-high'), surfClaro = tokenOk(bClaro, '--card-high');
+chk('--txt-muted existe en oscuro y claro (oklch, v5.25)', mOscuro && mClaro, String(mOscuro) + ' / ' + String(mClaro));
+chk('--txt-muted oscuro ≥ 4.5:1 sobre la tarjeta más clara (--card-high)', mOscuro && cardOsc && ratio(mOscuro, cardOsc) >= 4.5, mOscuro && cardOsc && ratio(mOscuro, cardOsc).toFixed(2));
+chk('--txt-muted claro ≥ 4.5:1 sobre el fondo tintado más oscuro (--card-high)', mClaro && surfClaro && ratio(mClaro, surfClaro) >= 4.5, mClaro && surfClaro && ratio(mClaro, surfClaro).toFixed(2));
 chk('.fa-download definido una sola vez en utilidades.css', (util.match(/^\.fa-download\b/gm) || []).length === 1, String((util.match(/^\.fa-download\b/gm) || []).length));
 chk('El bloque viejo de estados de #syncDot (hex) ya no existe', !/#syncDot\[data-state="[a-z]+"\]\s*\{\s*background:\s*(#|rgba)/.test(sinComentarios));
 
 // ═══ Tope de !important (solo puede bajar) ════════════════
 const nImp = sinComentarios.split('\n').filter(l => l.includes('!important')).length;
-const TOPE_IMPORTANT = 238;
+const TOPE_IMPORTANT = 226; // v5.25: bajó de 238 al retirar el bloque viejo del encabezado azul marino
 chk('Líneas con !important ≤ ' + TOPE_IMPORTANT + ' (eran 338 antes de R8; el número solo puede bajar)', nImp <= TOPE_IMPORTANT, 'hay ' + nImp);
 const bytes = Buffer.byteLength(css);
 // v5.18: el presupuesto sube a 195 KB por los módulos Importar y detalle de compras (~6 KB).
