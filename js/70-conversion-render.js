@@ -1022,7 +1022,11 @@
         }
 
         function renderPedidosTab() {
-            let headerHtml = '<div style="margin-bottom:14px;"><h2 style="font-size:1.05rem;font-weight:700;color:var(--txt-primary);">Pedidos WhatsApp</h2><p style="font-size:.75rem;color:var(--txt-muted);">Solo en este dispositivo</p></div>';
+            // v5.26 (hallazgo del paquete de textos) — "Solo en este
+            // dispositivo" era falso: 'orders' se sincroniza a Firestore vía
+            // ordersChunks (ver eliminarPedido más abajo), igual que compras
+            // o inventarios. "Sincronizado" es lo que realmente pasa.
+            let headerHtml = '<div style="margin-bottom:14px;"><h2 style="font-size:1.05rem;font-weight:700;color:var(--txt-primary);">Pedidos WhatsApp</h2><p style="font-size:.75rem;color:var(--txt-muted);">Sincronizado entre dispositivos</p></div>';
             if (orders.length === 0) {
                 // REDISEÑO R3 — el vacío de Pedidos cae dentro de R7, pero su
                 // emoji vivía en este archivo y la prueba de R3 vigila el
@@ -1044,7 +1048,15 @@
             });
             html += '<div class="mb-6">';
             if (isAdmin()) {
-            html += '<button onclick="deleteAllOrders()" class="bg-gradient-to-r from-red-500 to-orange-600 text-white px-6 py-3 rounded-xl flex items-center gap-2 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 transition-all duration-200" title="Eliminar todos los pedidos"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg><span class="font-medium">Eliminar todos los pedidos</span></button>';
+            // v5.26 (hallazgo del paquete de textos) — era bg-gradient-to-r
+            // from-red-500 to-orange-600 (Tailwind fijo): en modo oscuro no
+            // cambiaba de tono como el resto de la app. Usa la clase
+            // .bt--peligro (ya theme-aware en estilos.css) en vez de un hex
+            // a mano para el texto: resuelve a blanco en modo claro y a un
+            // rojo oscuro legible en modo oscuro, sin tocar esta regla cada
+            // vez que cambie un tema. "width:auto" anula el 100% de .bt
+            // porque este botón vive solo, no en una pila a lo ancho.
+            html += '<button onclick="deleteAllOrders()" class="bt bt--peligro" style="width:auto;padding:0 24px;min-height:48px;" title="Eliminar todos los pedidos"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg><span>Eliminar todos los pedidos</span></button>';
             }
             html += '</div>';
             html += BusquedaUI.region('pedidos', _renderPedidosResultados().html);
@@ -1062,17 +1074,42 @@
             }
             html += BusquedaUI.resumen('pedidos', r.coincidencias, r.total, 'pedido', 'pedidos');
             html += '<div class="space-y-4">';
+            // v5.26 (hallazgo del paquete de textos) — toda la tarjeta era
+            // Tailwind con colores fijos (bg-white, text-gray-900, gradientes
+            // puna a punta…): en modo oscuro se quedaba una tarjeta blanca
+            // entre tarjetas oscuras. Reescrita con los mismos tokens de tema
+            // que ya usa el resto de pantallas (var(--card), var(--txt-*),
+            // etc.) y con aria-label en los dos botones de icono (antes solo
+            // tenían title, invisible para un lector de pantalla en un botón
+            // sin texto).
             filteredOrders.slice(0, lim).forEach((order, idx) => {
                 const delay = Math.min(idx * 50, 400);
-                html += '<div class="bg-white rounded-2xl p-6 shadow-md" data-sbx-item style="animation: tabContentIn 0.3s ease-out both; animation-delay:' + delay + 'ms"><div class="flex justify-between items-start mb-4"><div><h3 class="text-xl font-bold text-gray-900">' + resaltarBusqueda(order.id, _pedidosSearchTerm) + '</h3><p class="text-gray-600">Proveedor: ' + resaltarBusqueda(order.supplier, _pedidosSearchTerm) + '</p><p class="text-sm text-gray-600">Fecha: ' + escapeHtml(order.date) + '</p>';
-                if (order.deliveryDate) html += '<p class="text-sm text-gray-600">Entrega: ' + escapeHtml(order.deliveryDate) + '</p>';
-                html += '</div><div class="flex gap-2"><button data-sbx-principal onclick="shareOrderWhatsApp(\'' + escapeHtml(order.id) + '\')" class="p-2.5 bg-gradient-to-br from-green-500 to-emerald-500 text-white rounded-xl hover:shadow-lg transition-all transform active:scale-95"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg></button><button onclick="deleteOrder(\'' + escapeHtml(order.id) + '\')" class="p-2.5 bg-gradient-to-br from-red-500 to-orange-500 text-white rounded-xl hover:shadow-lg transition-all transform active:scale-95"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button></div></div><div class="overflow-x-auto"><table class="w-full"><thead class="bg-gradient-to-r from-purple-600 to-blue-600"><tr><th class="px-4 py-3 text-left text-sm font-semibold text-white">Nombre de Producto</th><th class="px-4 py-3 text-center text-sm font-semibold text-white">Unidad de Medida</th><th class="px-4 py-3 text-center text-sm font-semibold text-white">Cantidad</th></tr></thead><tbody class="divide-y divide-gray-200">';
+                html += '<div class="bi-card" data-sbx-item style="animation: tabContentIn 0.3s ease-out both; animation-delay:' + delay + 'ms">'
+                      + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:14px;"><div>'
+                      + '<h3 style="font-size:1.1rem;font-weight:700;color:var(--txt-primary);margin:0 0 2px;">' + resaltarBusqueda(order.id, _pedidosSearchTerm) + '</h3>'
+                      + '<p style="font-size:.82rem;color:var(--txt-secondary);margin:2px 0;">Proveedor: ' + resaltarBusqueda(order.supplier, _pedidosSearchTerm) + '</p>'
+                      + '<p style="font-size:.78rem;color:var(--txt-secondary);margin:2px 0;">Fecha: ' + escapeHtml(order.date) + '</p>';
+                if (order.deliveryDate) html += '<p style="font-size:.78rem;color:var(--txt-secondary);margin:2px 0;">Entrega: ' + escapeHtml(order.deliveryDate) + '</p>';
+                html += '</div><div style="display:flex;gap:8px;flex-shrink:0;">'
+                      + '<button data-sbx-principal onclick="shareOrderWhatsApp(\'' + escapeHtml(order.id) + '\')" class="ui-icono-btn" aria-label="Compartir pedido ' + escapeHtml(order.id) + ' por WhatsApp" title="Compartir por WhatsApp"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg></button>'
+                      + '<button onclick="deleteOrder(\'' + escapeHtml(order.id) + '\')" class="ui-icono-btn ui-icono-btn--peligro" aria-label="Eliminar pedido ' + escapeHtml(order.id) + '" title="Eliminar pedido"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>'
+                      + '</div></div>'
+                      + '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;"><thead><tr style="background:var(--accent-dim);">'
+                      + '<th style="padding:10px;text-align:left;font-size:.8rem;font-weight:600;color:var(--txt-primary);">Nombre de Producto</th>'
+                      + '<th style="padding:10px;text-align:center;font-size:.8rem;font-weight:600;color:var(--txt-primary);">Unidad de Medida</th>'
+                      + '<th style="padding:10px;text-align:center;font-size:.8rem;font-weight:600;color:var(--txt-primary);">Cantidad</th></tr></thead><tbody>';
                 order.products.forEach(p => {
-                    html += '<tr><td class="px-4 py-3 text-gray-900">' + escapeHtml(p.name) + '</td><td class="px-4 py-3 text-center text-gray-600">' + escapeHtml(p.unit) + '</td><td class="px-4 py-3 text-center font-semibold text-gray-900">' + p.quantity + '</td></tr>';
+                    html += '<tr style="border-top:1px solid var(--border-mid);"><td style="padding:10px;color:var(--txt-primary);">' + escapeHtml(p.name) + '</td>'
+                          + '<td style="padding:10px;text-align:center;color:var(--txt-secondary);">' + escapeHtml(p.unit) + '</td>'
+                          + '<td style="padding:10px;text-align:center;font-weight:600;color:var(--txt-primary);">' + p.quantity + '</td></tr>';
                 });
-                html += '</tbody></table></div><div class="mt-4 pt-4 border-t border-gray-200"><div class="text-right mb-2"><span class="text-lg font-bold text-gray-900">Total Productos: ' + (order.total || 0).toFixed(2) + '</span></div>';
-                if (order.note) html += '<div class="mt-3 p-3 bg-purple-50 rounded-xl"><p class="text-sm font-medium text-gray-600 mb-1">Nota:</p><p class="text-gray-900">' + escapeHtml(order.note) + '</p></div>';
-                html += '</div></div>';
+                html += '</tbody></table></div>'
+                      + '<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border-mid);text-align:right;">'
+                      + '<span style="font-size:1.05rem;font-weight:700;color:var(--txt-primary);">Total Productos: ' + (order.total || 0).toFixed(2) + '</span></div>';
+                if (order.note) html += '<div style="margin-top:10px;padding:10px 12px;border-radius:10px;background:var(--accent-dim);">'
+                      + '<p style="font-size:.82rem;font-weight:600;color:var(--txt-secondary);margin:0 0 3px;">Nota:</p>'
+                      + '<p style="color:var(--txt-primary);margin:0;">' + escapeHtml(order.note) + '</p></div>';
+                html += '</div>';
             });
             html += '</div>';
             html += BusquedaUI.centinela('pedidos', filteredOrders.length - lim);

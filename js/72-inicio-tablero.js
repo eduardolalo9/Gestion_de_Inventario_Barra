@@ -69,6 +69,19 @@
             });
 
             // Alertas y pedido sugerido: las MISMAS funciones que usan las tarjetas del catálogo.
+            //
+            // v5.26 (hallazgo del paquete de textos, documentado — es por
+            // diseño, no se cambia) — las tres cifras de abajo (limitado,
+            // advertencia, bajo) son MUTUAMENTE EXCLUYENTES: nivelAlertaProducto()
+            // (js/49-fisico-vs-sistema.js) devuelve el nivel MÁS SEVERO de cada
+            // producto, así que "Bajo mínimo" aquí cuenta solo el nivel más
+            // leve (ni advertencia ni limitado). El chip "Bajo mínimo (N)" del
+            // catálogo (js/80-buscador.js, _bajoMinimo()) es otra cosa a
+            // propósito: cuenta TODO lo que está debajo del mínimo, incluidos
+            // advertencia y limitado (el superconjunto). Dos preguntas
+            // distintas con el mismo nombre de etiqueta — no es un error de
+            // conteo, está explicado con detalle en el comentario de
+            // nivelAlertaProducto() en js/49.
             var provs = {};
             lista.forEach(function(p) {
                 var nivel = (typeof nivelAlertaProducto === 'function') ? nivelAlertaProducto(p) : null;

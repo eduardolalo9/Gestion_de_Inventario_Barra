@@ -54,6 +54,23 @@ const PRUEBAS = [
     'prueba-recetario2.js',          // RECETARIO-2 — importador de recetas desde Excel
     'prueba-fase10.js',              // FASE 10 — ventas del POS: permisos, reglas, parser
     'prueba-fase11a.js',             // FASE 11A — costeo por unidad y consumo teórico
+    'prueba-consumo-conversion.js',  // v5.26 — hallazgo #2: el consumo convierte ml/oz igual que el costeo
+    'prueba-huella-catalogo-grande.js', // v5.26 — hallazgo #6: la huella con >100 productos ya no queda ciega a precio/mínimo/proveedor/PV/conversión
+    'prueba-hallazgo4-xss-notificaciones.js', // v5.26 — hallazgo #4: XSS almacenado en Notificaciones (id sin escapar + regla permisiva)
+    'prueba-hallazgo5-escalada-admin.js', // v5.26 — hallazgo #5: escalada latente a ADMIN vía permissions.update/roles.update
+    'prueba-hallazgo3-respaldo-importar.js', // v5.26 — hallazgo #3: el respaldo previo a importar ahora incluye recetas/compras/ventas
+    'prueba-hallazgo7-importar-json.js', // v5.26 — hallazgo #7: importar JSON exige settings.update y respalda antes de aplicar
+    'prueba-hallazgo8-borrar-usuario.js', // v5.26 — hallazgo #8: borrar usuarios/{uid} ya no reactiva como BARTENDER activo
+    'prueba-hallazgo9-cuenta-activa.js', // v5.26 — hallazgo #9: desactivar cuenta ahora revoca acceso en el servidor, no solo en el cliente
+    'prueba-hallazgo10-deleteorder.js', // v5.26 — hallazgo #10: deleteOrder() exige isAdmin() igual que sus hermanos
+    'prueba-hallazgo11-receta-inactiva.js', // v5.26 — hallazgo #11: una receta desactivada ya no sigue consumiendo inventario
+    'prueba-hallazgo12-notificar-admin.js', // v5.26 — hallazgo #12: las solicitudes de ajuste ya dejan un rastro que SÍ le llega al admin
+    'prueba-hallazgo13-permisos-delegables.js', // v5.26 — hallazgo #13: inventory.create/closeGlobal y reports.export ya no prometen una delegación que nunca funcionó
+    'prueba-hallazgo14-roles-reales.js', // v5.26 — hallazgo #14: "Usuarios y permisos" lee roles/* real de Firestore, no el fallback del código
+    'prueba-hallazgo15-compras-almacen-permiso.js', // v5.26 — hallazgo #15: Almacén sin nombre ya no se pierde; purchases.import ya puede guardar lo que importa
+    'prueba-hallazgo16-cargar-ventas-semana.js', // v5.26 — hallazgo #16: Ventas se refresca sola al arrancar, al recuperar y en vivo entre dispositivos
+    'prueba-paquete-textos-interfaz.js', // v5.26 — paquete de textos e interfaz: los 8 detalles menores (Pedidos, fechas de ancla, pie de login, Escape en 3 modales, discrepancia documentada, tokens de tema y permiso de exportación)
+    'prueba-limpieza-codigo-muerto.js', // v5.26 — limpieza de código muerto: 4 funciones borradas (cero referencias reales), 4 conservadas (tenían prueba propia exigiéndolo) y la fuga de listener de Total publicado que esa verificación destapó
     'prueba-fase12.js',              // FASE 12 — folio #1001, anti-solapamiento y consistencia entre dispositivos
     'prueba-fisico-vs-sistema.js',   // FASE 11B (parte 1) — comparación físico vs. sistema
     'prueba-hotfix-4.22-movimientos.js', // HOTFIX 4.22 — recorte de movimientos y aviso de cuota

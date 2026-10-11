@@ -226,6 +226,15 @@
             };
             window.buscarActualizacion = function () { return revisar(true); };
             window.repararAplicacion  = reparar;
+
+            // v5.26 (hallazgo del paquete de textos) — pie del login: la
+            // misma versión real que ya lee versionPagina() (el ?v= del
+            // script 00-nucleo.js), no un número aparte que nadie actualiza.
+            document.addEventListener('DOMContentLoaded', function () {
+                var lv = document.getElementById('loginVersion');
+                var vp = versionPagina();
+                if (lv && vp) lv.textContent = 'BarInventory v' + vp + ' · Instituto ULinks';
+            });
         })();
     </script>
 
@@ -778,8 +787,8 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
     <!-- Utilidades locales (sustituyen a Tailwind CDN) + iconos locales
          (sustituyen a Font Awesome CDN). Va ANTES de estilos.css para que
          las reglas propias de la app sigan teniendo la última palabra. -->
-    <link rel="stylesheet" href="css/utilidades.css?v=5.25">
-    <link rel="stylesheet" href="css/estilos.css?v=5.25">
+    <link rel="stylesheet" href="css/utilidades.css?v=5.26">
+    <link rel="stylesheet" href="css/estilos.css?v=5.26">
 </head>
 <body class="min-h-screen">
 
@@ -837,7 +846,11 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
                 <div class="login-divider"></div>
                 <p class="login-footer">
                     Acceso restringido al personal autorizado<br>
-                    <span style="opacity:.7;">BarInventory v2.4 · Instituto ULinks</span>
+                    <!-- v5.26 (hallazgo del paquete de textos) — "v2.4" quedó
+                         fijo desde hace fases: la app ya va por la v5.x y esto
+                         nunca se actualizaba. loginVersion la llena el mismo
+                         versionPagina() que ya usa el pie de "Más". -->
+                    <span id="loginVersion" style="opacity:.7;">BarInventory · Instituto ULinks</span>
                 </p>
             </div>
         </div>
@@ -1212,6 +1225,12 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
                     <label for="recetaCategoria" class="block text-sm font-medium text-gray-600 mb-2">Categoría</label>
                     <input type="text" id="recetaCategoria" class="w-full px-3 py-2 bg-white text-gray-900 border border-gray-200 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Ej: Cocteles">
                 </div>
+                <div>
+                    <!-- v5.26 — sin este código la receta nunca se cruza con las ventas (consumoTeorico()
+                         busca por PV): una receta tecleada a mano se quedaba invisible para el consumo. -->
+                    <label for="recetaPv" class="block text-sm font-medium text-gray-600 mb-2">Código PV <span class="text-gray-400 font-normal">(del punto de venta — para descontar inventario al vender)</span></label>
+                    <input type="text" id="recetaPv" class="w-full px-3 py-2 bg-white text-gray-900 border border-gray-200 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Ej: PVB1000001" style="text-transform:uppercase;">
+                </div>
                 <label for="recetaActiva" style="display:flex;align-items:center;gap:10px;cursor:pointer;">
                     <input type="checkbox" id="recetaActiva" checked style="width:20px;height:20px;accent-color:var(--accent);cursor:pointer;">
                     <span class="text-sm font-medium text-gray-700">Activa (visible en el recetario)</span>
@@ -1252,47 +1271,51 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
     </div>
 
     <!-- Modal Pedido -->
+    <!-- v5.26 (hallazgo del paquete de textos) — era todo Tailwind con
+         colores fijos (bg-white, text-gray-900, gradientes morado/azul…),
+         ajeno al tema oscuro/Verde Esmeralda del resto de la app. Reescrito
+         con los mismos tokens var(--...) que usa cada otro modal. -->
     <div id="orderModal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[300] animate-fadeIn hidden" style="padding:12px;" role="dialog" aria-modal="true" aria-labelledby="orderModalTitle">
-        <div class="modal-box bg-white shadow-2xl max-w-4xl w-full p-5 animate-slideUp" style="border-radius:18px;max-height:calc(100dvh - 56px - 24px);overflow-y:auto;">
-            <div class="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-6"></div>
-            <h2 class="text-2xl font-bold text-gray-900 mb-6" id="orderModalTitle">Generar Pedido</h2>
+        <div class="modal-box animate-slideUp" style="background:var(--modal-bg);box-shadow:var(--shadow-modal);max-width:56rem;width:100%;padding:20px;border-radius:18px;max-height:calc(100dvh - 56px - 24px);overflow-y:auto;">
+            <div style="width:48px;height:5px;background:var(--border-mid);border-radius:999px;margin:0 auto 24px;"></div>
+            <h2 style="font-size:1.4rem;font-weight:700;color:var(--txt-primary);margin-bottom:20px;" id="orderModalTitle">Generar Pedido</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <div>
-                    <label for="orderSupplier" class="block text-sm font-medium text-gray-600 mb-2">Proveedor *</label>
-                    <input type="text" id="orderSupplier" class="w-full px-3 py-2 bg-white text-gray-900 border border-gray-200 rounded focus:ring-2 focus:ring-blue-500" placeholder="Nombre del proveedor">
+                    <label for="orderSupplier" style="display:block;font-size:.82rem;font-weight:600;color:var(--txt-secondary);margin-bottom:6px;">Proveedor *</label>
+                    <input type="text" id="orderSupplier" style="width:100%;padding:8px 10px;background:var(--surface);color:var(--txt-primary);border:1px solid var(--border-mid);border-radius:8px;font-family:inherit;" placeholder="Nombre del proveedor">
                 </div>
                 <div>
-                    <label for="orderDeliveryDate" class="block text-sm font-medium text-gray-600 mb-2">Fecha de Entrega (Opcional)</label>
-                    <input type="date" id="orderDeliveryDate" class="w-full px-3 py-2 bg-white text-gray-900 border border-gray-200 rounded focus:ring-2 focus:ring-blue-500">
+                    <label for="orderDeliveryDate" style="display:block;font-size:.82rem;font-weight:600;color:var(--txt-secondary);margin-bottom:6px;">Fecha de Entrega (Opcional)</label>
+                    <input type="date" id="orderDeliveryDate" style="width:100%;padding:8px 10px;background:var(--surface);color:var(--txt-primary);border:1px solid var(--border-mid);border-radius:8px;font-family:inherit;">
                 </div>
                 <div class="md:col-span-2">
-                    <label for="orderNote" class="block text-sm font-medium text-gray-600 mb-2">Nota (Opcional)</label>
-                    <textarea id="orderNote" class="w-full px-3 py-2 bg-white text-gray-900 border border-gray-200 rounded focus:ring-2 focus:ring-blue-500" placeholder="Agregar nota o comentarios" rows="2"></textarea>
+                    <label for="orderNote" style="display:block;font-size:.82rem;font-weight:600;color:var(--txt-secondary);margin-bottom:6px;">Nota (Opcional)</label>
+                    <textarea id="orderNote" style="width:100%;padding:8px 10px;background:var(--surface);color:var(--txt-primary);border:1px solid var(--border-mid);border-radius:8px;font-family:inherit;" placeholder="Agregar nota o comentarios" rows="2"></textarea>
                 </div>
             </div>
 
             <div class="mb-6">
-                <div class="flex items-center justify-between mb-3">
-                    <h3 class="font-semibold text-gray-900">Productos en el Pedido</h3>
-                    <span class="text-sm font-medium text-purple-600 bg-purple-50 px-3 py-1 rounded-lg" id="orderTotal">Total: 0</span>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                    <h3 style="font-weight:600;color:var(--txt-primary);margin:0;">Productos en el Pedido</h3>
+                    <span style="font-size:.82rem;font-weight:600;color:var(--accent);background:var(--accent-dim);padding:4px 10px;border-radius:8px;" id="orderTotal">Total: 0</span>
                 </div>
-                <div class="bg-gray-50 rounded-xl overflow-hidden border border-gray-200">
-                    <div class="overflow-x-auto">
-                        <table class="w-full">
-                            <thead class="bg-gradient-to-r from-purple-600 to-blue-600">
+                <div style="background:var(--surface);border-radius:12px;overflow:hidden;border:1px solid var(--border-mid);">
+                    <div style="overflow-x:auto;">
+                        <table style="width:100%;border-collapse:collapse;">
+                            <thead style="background:var(--accent-dim);">
                                 <tr>
-                                    <th class="px-4 py-3 text-left text-sm font-semibold text-white">Producto</th>
-                                    <th class="px-4 py-3 text-center text-sm font-semibold text-white">Unidad</th>
-                                    <th class="px-4 py-3 text-center text-sm font-semibold text-white">Cantidad</th>
-                                    <th class="px-4 py-3 text-center text-sm font-semibold text-white">Acciones</th>
+                                    <th style="padding:10px;text-align:left;font-size:.8rem;font-weight:600;color:var(--txt-primary);">Producto</th>
+                                    <th style="padding:10px;text-align:center;font-size:.8rem;font-weight:600;color:var(--txt-primary);">Unidad</th>
+                                    <th style="padding:10px;text-align:center;font-size:.8rem;font-weight:600;color:var(--txt-primary);">Cantidad</th>
+                                    <th style="padding:10px;text-align:center;font-size:.8rem;font-weight:600;color:var(--txt-primary);">Acciones</th>
                                 </tr>
                             </thead>
-                            <tbody id="orderProductsTable" class="divide-y divide-gray-200"></tbody>
+                            <tbody id="orderProductsTable"></tbody>
                         </table>
                     </div>
                 </div>
-                <div id="emptyCart" class="text-center py-8 text-gray-500 hidden">
-                    <svg class="w-12 h-12 mx-auto mb-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div id="emptyCart" style="text-align:center;padding:32px 0;color:var(--txt-muted);" class="hidden">
+                    <svg class="w-12 h-12 mx-auto mb-2" style="color:var(--txt-muted);" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path>
                     </svg>
                     <p>No hay productos en el carrito</p>
@@ -1342,7 +1365,11 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
                 <div class="ni-campo">
                     <label for="nuevoInvFecha">Fecha del recuento</label>
                     <input type="date" id="nuevoInvFecha" onchange="_pintarAvisoFechaNuevoInv()">
-                    <p class="ni-ayuda">Solo domingo o fin de mes: son los únicos días que cierran semana y permiten contabilizar después.</p>
+                    <!-- v5.26 (hallazgo del paquete de textos) — FASE 14 ya
+                         acepta cualquier fecha (ancla del Total para mitad de
+                         semana); el texto viejo decía "solo domingo o fin de
+                         mes", que dejó de ser cierto. -->
+                    <p class="ni-ayuda">Cualquier fecha: domingo o fin de mes cierran la semana; otra fecha se contabiliza como ancla del Total.</p>
                     <p id="nuevoInvAvisoFecha" style="font-size:.92rem;margin:0;line-height:1.5;font-weight:700;"></p>
                 </div>
 
@@ -1384,7 +1411,9 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
             <label for="regFechaRecuentoInput" style="display:block;font-size:.78rem;font-weight:600;color:var(--txt-secondary);margin-bottom:5px;">Fecha del recuento</label>
             <input type="date" id="regFechaRecuentoInput" onchange="_pintarAvisoFechaRegistrar()"
                 style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border-mid);background:var(--surface);color:var(--txt-primary);font-family:inherit;font-size:.86rem;">
-            <p style="font-size:.7rem;color:var(--txt-muted);margin:5px 0 0;">Solo domingo o fin de mes.</p>
+            <!-- v5.26 (hallazgo del paquete de textos) — mismo motivo que
+                 nuevoInventarioModal arriba: cualquier fecha se acepta. -->
+            <p style="font-size:.7rem;color:var(--txt-muted);margin:5px 0 0;">Cualquier fecha: domingo o fin de mes cierran la semana; otra se contabiliza como ancla del Total.</p>
             <p id="regFechaRecuentoAviso" style="font-size:.72rem;margin:6px 0 16px;line-height:1.5;font-weight:600;"></p>
 
             <div style="display:flex;gap:10px;">
@@ -1482,50 +1511,50 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
         </div>
     </div>
 
-        <script src="js/00-nucleo.js?v=5.25"></script>
-    <script src="js/03-ui-kit.js?v=5.25"></script><!-- BI UI KIT (rediseño R1) -->
-    <script src="js/05-busqueda-motor.js?v=5.25"></script>
-    <script src="js/06-busqueda-ui.js?v=5.25"></script>
-    <script src="js/10-multiusuario.js?v=5.25"></script>
-    <script src="js/15-ciclo-semanal.js?v=5.25"></script>
-    <script src="js/18-areas-config.js?v=5.25"></script>
-    <script src="js/20-persistencia.js?v=5.25"></script>
-    <script src="js/30-indexeddb.js?v=5.25"></script>
-    <script src="js/40-firestore.js?v=5.25"></script>
-    <script src="js/45-inventario-datos.js?v=5.25"></script>
-    <script src="js/46-arrastre.js?v=5.25"></script>
-    <script src="js/47-existencia.js?v=5.25"></script>
-    <script src="js/48-consumo-teorico.js?v=5.25"></script>
-    <script src="js/49-fisico-vs-sistema.js?v=5.25"></script>
-    <script src="js/50-roles-permisos.js?v=5.25"></script>
-    <script src="js/51-total-publicado.js?v=5.25"></script><!-- v5.19 -->
-    <script src="js/53-papelera.js?v=5.25"></script><!-- v5.19 -->
-    <script src="js/54-sync-vivo.js?v=5.25"></script><!-- v5.22 -->
-    <script src="js/60-arranque.js?v=5.25"></script>
-    <script src="js/70-conversion-render.js?v=5.25"></script>
-    <script src="js/71-posicion-conteo.js?v=5.25"></script>
-    <script src="js/72-inicio-tablero.js?v=5.25"></script><!-- v5.23 -->
-    <script src="js/75-auditoria-flujo.js?v=5.25"></script>
-    <script src="js/80-buscador.js?v=5.25"></script>
-    <script src="js/83-panel.js?v=5.25"></script>
-    <script src="js/85-ui-inventario-fisico.js?v=5.25"></script>
-    <script src="js/87-reconteo.js?v=5.25"></script>
-    <script src="js/88-compras.js?v=5.25"></script>
-    <script src="js/89-compras-detalle.js?v=5.25"></script>
-    <script src="js/90-ciclo-admin.js?v=5.25"></script>
-    <script src="js/91-recetario.js?v=5.25"></script>
-    <script src="js/92-recetario-importar.js?v=5.25"></script>
-    <script src="js/93-ventas.js?v=5.25"></script>
-    <script src="js/94-venta-turno.js?v=5.25"></script>
-    <script src="js/95-exportacion.js?v=5.25"></script>
-    <script src="js/96-importar.js?v=5.25"></script>
-    <script src="js/99-window-arranque.js?v=5.25"></script>
+        <script src="js/00-nucleo.js?v=5.26"></script>
+    <script src="js/03-ui-kit.js?v=5.26"></script><!-- BI UI KIT (rediseño R1) -->
+    <script src="js/05-busqueda-motor.js?v=5.26"></script>
+    <script src="js/06-busqueda-ui.js?v=5.26"></script>
+    <script src="js/10-multiusuario.js?v=5.26"></script>
+    <script src="js/15-ciclo-semanal.js?v=5.26"></script>
+    <script src="js/18-areas-config.js?v=5.26"></script>
+    <script src="js/20-persistencia.js?v=5.26"></script>
+    <script src="js/30-indexeddb.js?v=5.26"></script>
+    <script src="js/40-firestore.js?v=5.26"></script>
+    <script src="js/45-inventario-datos.js?v=5.26"></script>
+    <script src="js/46-arrastre.js?v=5.26"></script>
+    <script src="js/47-existencia.js?v=5.26"></script>
+    <script src="js/48-consumo-teorico.js?v=5.26"></script>
+    <script src="js/49-fisico-vs-sistema.js?v=5.26"></script>
+    <script src="js/50-roles-permisos.js?v=5.26"></script>
+    <script src="js/51-total-publicado.js?v=5.26"></script><!-- v5.19 -->
+    <script src="js/53-papelera.js?v=5.26"></script><!-- v5.19 -->
+    <script src="js/54-sync-vivo.js?v=5.26"></script><!-- v5.22 -->
+    <script src="js/60-arranque.js?v=5.26"></script>
+    <script src="js/70-conversion-render.js?v=5.26"></script>
+    <script src="js/71-posicion-conteo.js?v=5.26"></script>
+    <script src="js/72-inicio-tablero.js?v=5.26"></script><!-- v5.23 -->
+    <script src="js/75-auditoria-flujo.js?v=5.26"></script>
+    <script src="js/80-buscador.js?v=5.26"></script>
+    <script src="js/83-panel.js?v=5.26"></script>
+    <script src="js/85-ui-inventario-fisico.js?v=5.26"></script>
+    <script src="js/87-reconteo.js?v=5.26"></script>
+    <script src="js/88-compras.js?v=5.26"></script>
+    <script src="js/89-compras-detalle.js?v=5.26"></script>
+    <script src="js/90-ciclo-admin.js?v=5.26"></script>
+    <script src="js/91-recetario.js?v=5.26"></script>
+    <script src="js/92-recetario-importar.js?v=5.26"></script>
+    <script src="js/93-ventas.js?v=5.26"></script>
+    <script src="js/94-venta-turno.js?v=5.26"></script>
+    <script src="js/95-exportacion.js?v=5.26"></script>
+    <script src="js/96-importar.js?v=5.26"></script>
+    <script src="js/99-window-arranque.js?v=5.26"></script>
 
     </div><!-- /#appWrapper -->
 
     <!-- ══════════════════════════════════════════════════════
          AUTH — Lógica de autenticación Firebase
          ══════════════════════════════════════════════════════ -->
-        <script src="js/auth.js?v=5.25"></script>
+        <script src="js/auth.js?v=5.26"></script>
 </body>
 </html>

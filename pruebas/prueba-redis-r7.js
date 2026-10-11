@@ -200,7 +200,11 @@ chk('Los dos avisos de fecha siguen clasificando con clasificarRecuento() (no se
     /clasificarRecuento\(f\.value\)/.test(fNuevoInv) && /clasificarRecuento\(f\.value\)/.test(fRegistrar));
 chk('Las notificaciones y confirmaciones de este módulo conservan su emoji (texto plano, no interfaz)',
     /showNotification\('⚠️ No tienes permiso para editar el recetario'\)/.test(recJs) &&
-    /showNotification\('✅ Receta guardada/.test(recJs));
+    // v5.26 (hallazgo #1) — el aviso de guardado ahora distingue si la receta
+    // quedó con PV o sin él (showNotification(pv ? '✅ ...' : '⚠️ ...')), pero
+    // sigue siendo texto plano con su propio emoji, no iconografía de interfaz.
+    /'✅ Receta guardada — publica el recetario para que todos la vean'/.test(recJs) &&
+    /'⚠️ Receta guardada sin código PV: no descontará inventario al venderse'/.test(recJs));
 
 // ═══ Versión ═══════════════════════════════════════════════════════════════
 const vHtml = (html.match(/\?v=(\d+\.\d+)/) || [])[1];

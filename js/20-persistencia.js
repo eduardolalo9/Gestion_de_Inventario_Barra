@@ -424,7 +424,21 @@
                     inventarioConteo: inventarioConteo,
                     myAuditoriaConteo:myAuditoriaConteo,
                     auditoriaConteo:  auditoriaConteo,
-                    auditoriaStatus:  auditoriaStatus
+                    auditoriaStatus:  auditoriaStatus,
+                    // v5.26 (hallazgo #3, Cero Pérdida de Datos) — este respaldo se
+                    // llama JUSTO ANTES de importar recetario, compras y ventas
+                    // (ver confirmarImportacionRecetario/Compras/Ventas), pero hasta
+                    // ahora nunca guardaba esos tres datos: si una importación salía
+                    // mal, no había nada a lo que volver para la cosa que de verdad
+                    // se acababa de sobrescribir. confirmarImportacionRecetario()
+                    // muta `recetas` en memoria ANTES de guardar — es el caso más
+                    // directo de pérdida si el Excel traía basura.
+                    recetas:          recetas,
+                    compras:          compras,
+                    movimientos:      movimientos,
+                    ventas:           ventas,
+                    ventasSemanaId:   ventasSemanaId,
+                    ventasPeriodos:   ventasPeriodos
                 };
                 localStorage.setItem(key, JSON.stringify(snapshot));
 
@@ -501,9 +515,16 @@
                 const raw = localStorage.getItem(key);
                 if (!raw) { showNotification('❌ Respaldo no encontrado'); return; }
                 const data = JSON.parse(raw);
+                // v5.26 (hallazgo #3) — el aviso ahora dice TODO lo que trae el
+                // respaldo, no solo productos: quien restaura necesita saber que
+                // también va a pisar recetas/compras/ventas si el respaldo las trae.
+                const piezas = [Array.isArray(data.products) ? data.products.length + ' productos' : null];
+                if (Array.isArray(data.recetas))     piezas.push(data.recetas.length + ' recetas');
+                if (Array.isArray(data.compras))     piezas.push(data.compras.length + ' compras');
+                if (Array.isArray(data.ventas))      piezas.push(data.ventas.length + ' líneas de ventas');
                 showConfirm(
                     '¿Restaurar el respaldo "' + (data.etiqueta || key) + '" del ' + (data.ts ? new Date(data.ts).toLocaleString('es-MX') : '?') + '?\n\n' +
-                    'Se restaurarán ' + (Array.isArray(data.products) ? data.products.length : '?') + ' productos.\n' +
+                    'Se restaurarán ' + piezas.filter(Boolean).join(', ') + '.\n' +
                     'El estado actual se guardará como respaldo antes de restaurar.',
                     function() {
                         // Crear backup del estado actual antes de sobreescribir
@@ -513,6 +534,16 @@
                         if (data.myAuditoriaConteo)               myAuditoriaConteo = data.myAuditoriaConteo;
                         if (data.auditoriaConteo)                 auditoriaConteo   = data.auditoriaConteo;
                         if (data.auditoriaStatus)                 auditoriaStatus   = data.auditoriaStatus;
+                        // v5.26 (hallazgo #3) — simétrico con lo que ahora guarda
+                        // _crearBackupNombrado(); un respaldo viejo (anterior a
+                        // v5.26) simplemente no trae estas claves y se deja el
+                        // dato actual tal cual, sin pisarlo con undefined.
+                        if (Array.isArray(data.recetas))          recetas           = data.recetas;
+                        if (Array.isArray(data.compras))          compras           = data.compras;
+                        if (Array.isArray(data.movimientos))      movimientos       = data.movimientos;
+                        if (Array.isArray(data.ventas))           ventas            = data.ventas;
+                        if ('ventasSemanaId' in data)              ventasSemanaId    = data.ventasSemanaId;
+                        if (Array.isArray(data.ventasPeriodos))    ventasPeriodos    = data.ventasPeriodos;
                         saveToLocalStorage();
                         renderTab();
                         showNotification('✅ Respaldo restaurado: ' + (data.etiqueta || key));

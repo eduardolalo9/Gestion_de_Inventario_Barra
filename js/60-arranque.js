@@ -197,6 +197,17 @@
                                 console.warn('[Compras] cargarComprasIniciales silenciado:', err)
                             );
                         }
+                        // v5.26 (hallazgo #16) — cargarVentasSemana() (js/93)
+                        // existía desde FASE 10 pero nadie la llamaba: la
+                        // pestaña Ventas solo mostraba lo importado EN ESE
+                        // dispositivo, nunca lo que otro dispositivo ya había
+                        // subido a Firestore para la semana en curso. Mismo
+                        // patrón que cargarComprasIniciales() arriba.
+                        if (typeof cargarVentasSemana === 'function' && typeof semanaId === 'function') {
+                            cargarVentasSemana(semanaId(new Date())).catch(err =>
+                                console.warn('[Ventas] cargarVentasSemana silenciado:', err)
+                            );
+                        }
                         // FASE 14 — el ancla del Total (último corte contabilizado)
                         // y lo que se arrastra desde ella. Antes solo se pedía al
                         // abrir Inicio: el catálogo podía pintar el respaldo

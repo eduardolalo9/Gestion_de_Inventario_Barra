@@ -185,6 +185,16 @@
                 // Ventas o corte: cambia la base del Total → mismo recálculo de siempre.
                 if (typeof existenciaInvalidarInicial === 'function') existenciaInvalidarInicial();
                 if (typeof existenciaCargarInicial === 'function') existenciaCargarInicial(_svRepintar);
+                // v5.26 (hallazgo #16) — existenciaCargarInicial() recalcula el
+                // Total (incluida la ruta de arrastre, que lee ventas por su
+                // cuenta), pero NUNCA tocaba ventas/ventasPeriodos/ventasSemanaId
+                // (js/93), que es lo que la propia pestaña Ventas pinta. Sin
+                // esto, "se actualizó desde otro dispositivo" era cierto para
+                // el Total pero falso para la lista de Ventas.
+                if (motivos.ventas && typeof cargarVentasSemana === 'function' && typeof semanaId === 'function') {
+                    cargarVentasSemana(semanaId(new Date())).then(_svRepintar)
+                        .catch(function(e) { console.warn('[SyncVivo] Refrescar ventas:', e); });
+                }
             }
             var etiqueta = _svEtiqueta(motivos);
             if (etiqueta && typeof showNotification === 'function' && Date.now() - _syncVivo.ultimoAviso > SYNC_VIVO_AVISO_MS) {
@@ -286,6 +296,13 @@
             _syncVivo.ultimaRecuperacion = Date.now();
             if (typeof cargarComprasIniciales === 'function') {
                 cargarComprasIniciales().catch(function(e) { console.warn('[SyncVivo] Recuperar compras:', e); });
+            }
+            // v5.26 (hallazgo #16) — mismo motivo que cargarComprasIniciales
+            // arriba: la pestaña Ventas (ventas/ventasPeriodos/ventasSemanaId,
+            // js/93) no se refrescaba sola tras un hueco sin escucha.
+            if (typeof cargarVentasSemana === 'function' && typeof semanaId === 'function') {
+                cargarVentasSemana(semanaId(new Date())).then(_svRepintar)
+                    .catch(function(e) { console.warn('[SyncVivo] Recuperar ventas:', e); });
             }
             if (typeof existenciaInvalidarInicial === 'function') existenciaInvalidarInicial();
             if (typeof existenciaCargarInicial === 'function') existenciaCargarInicial(_svRepintar);

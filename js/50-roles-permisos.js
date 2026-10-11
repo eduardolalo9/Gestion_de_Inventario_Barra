@@ -175,13 +175,29 @@
             'permissions.update':    { nombre: 'Administrar permisos',         descripcion: 'Conceder o revocar permisos individuales a un usuario.',                       grupo: 'Usuarios y permisos', delegable: false, sensible: true,  efectivo: true  },
 
             // ── Inventario fisico ───────────────────────────────────────────
-            'inventory.create':      { nombre: 'Crear inventario',             descripcion: 'Abrir un inventario fisico nuevo para el ciclo.',                              grupo: 'Inventario fisico',   delegable: true,  sensible: true,  efectivo: true  },
+            // v5.26 (hallazgo #13) — delegable:false, NO true: la propia
+            // accion (abrirModalNuevoInventario, js/75) exige isAdmin() ADEMAS
+            // del permiso, y firestore.rules exige isAdminUser() para crear en
+            // inventories/{id} sin mirar hasPerm() en absoluto. Delegarlo por
+            // override jamas funciono: el boton no aparece, y si apareciera el
+            // servidor lo rechazaria. Corregido aqui, no alli, porque alli es
+            // donde realmente vive hoy — abrir un inventario fisico completo
+            // sigue siendo, por decision explicita, exclusivo del admin.
+            'inventory.create':      { nombre: 'Crear inventario',             descripcion: 'Abrir un inventario fisico nuevo para el ciclo.',                              grupo: 'Inventario fisico',   delegable: false, sensible: true,  efectivo: true  },
             'inventory.count':       { nombre: 'Contar',                       descripcion: 'Capturar cantidades en las areas asignadas.',                                  grupo: 'Inventario fisico',   delegable: true,  sensible: false, efectivo: true  },
             'inventory.viewOwn':     { nombre: 'Ver mi conteo',                descripcion: 'Consultar unicamente el conteo propio.',                                       grupo: 'Inventario fisico',   delegable: true,  sensible: false, efectivo: true  },
             'inventory.viewAll':     { nombre: 'Ver todos los conteos',        descripcion: 'Consultar la consolidacion y el conteo individual de cada persona. Rompe el conteo ciego: concedelo solo a supervision.', grupo: 'Inventario fisico', delegable: true, sensible: true, efectivo: true },
             'inventory.closeOwn':    { nombre: 'Finalizar conteo propio',      descripcion: 'Dar por terminado el conteo propio de un area.',                               grupo: 'Inventario fisico',   delegable: true,  sensible: false, efectivo: true  },
             'inventory.closeOther':  { nombre: 'Cerrar area completa',         descripcion: 'Marcar un area como terminada para TODAS las personas que cuentan en ella.',   grupo: 'Inventario fisico',   delegable: true,  sensible: true,  efectivo: true  },
-            'inventory.closeGlobal': { nombre: 'Cerrar inventario',            descripcion: 'Cerrar el inventario completo y congelar el historico.',                       grupo: 'Inventario fisico',   delegable: true,  sensible: true,  efectivo: true  },
+            // v5.26 (hallazgo #13) — delegable:false: la Rule de
+            // inventories/{id} exige isAdminUser() para la transicion a
+            // CERRADO (firestore.rules ~719), sin mirar hasPerm('inventory.
+            // closeGlobal'). cerrarInventarioFisico() (js/75) si usa solo
+            // hasPermission(), pero el boton que la dispara (js/85
+            // _renderZonaCerrarInventario) ya exigia isAdmin() tambien — ese
+            // doble candado del cliente SI coincide con el servidor; lo que no
+            // coincidia era la promesa del catalogo.
+            'inventory.closeGlobal': { nombre: 'Cerrar inventario',            descripcion: 'Cerrar el inventario completo y congelar el historico.',                       grupo: 'Inventario fisico',   delegable: false, sensible: true,  efectivo: true  },
             'inventory.reopenArea':  { nombre: 'Reabrir area',                 descripcion: 'Devolver un area cerrada al estado de captura.',                               grupo: 'Inventario fisico',   delegable: true,  sensible: true,  efectivo: true  },
             'inventory.post':        { nombre: 'Contabilizar inventario',      descripcion: 'Convertir el resultado de un inventario cerrado en el inventario inicial del siguiente ciclo. Es irreversible: el inicial no se puede corregir. Reservado a administracion.', grupo: 'Inventario fisico', delegable: true, sensible: true, efectivo: true },
             'inventory.export':      { nombre: 'Exportar inventario',          descripcion: 'Descargar el Excel del inventario.',                                           grupo: 'Inventario fisico',   delegable: true,  sensible: false, efectivo: true  },
@@ -206,7 +222,15 @@
 
             // ── Reportes y datos ────────────────────────────────────────────
             'reports.read':          { nombre: 'Ver reportes',                 descripcion: 'Consultar los reportes globales publicados.',                                  grupo: 'Reportes y datos',    delegable: true,  sensible: false, efectivo: true  },
-            'reports.export':        { nombre: 'Generar reportes',             descripcion: 'Generar y publicar el reporte global del inventario.',                         grupo: 'Reportes y datos',    delegable: true,  sensible: true,  efectivo: true  },
+            // v5.26 (hallazgo #13) — delegable:false: firestore.rules exige
+            // isAdminUser() para escribir en reportes/{id} (regla ~1184), sin
+            // mirar hasPerm() en absoluto. A diferencia de los dos anteriores,
+            // aqui el cliente (js/50 generarYPublicarReporte/resolverAjuste)
+            // NO tenia ningun isAdmin() de mas — solo hasPermission() — asi
+            // que un delegado SI veia el boton y SI lo intentaba: el servidor
+            // lo rechazaba con un error de permisos sin explicacion. Marcarlo
+            // no delegable deja de ofrecer un boton que nunca iba a funcionar.
+            'reports.export':        { nombre: 'Generar reportes',             descripcion: 'Generar y publicar el reporte global del inventario.',                         grupo: 'Reportes y datos',    delegable: false, sensible: true,  efectivo: true  },
             'data.exportFull':       { nombre: 'Exportar respaldo completo',   descripcion: 'Descargar el respaldo JSON con TODOS los datos, incluido el conteo individual de cada persona.', grupo: 'Reportes y datos', delegable: false, sensible: true, efectivo: true },
 
             // ── Configuracion ───────────────────────────────────────────────
@@ -971,7 +995,7 @@
             return _authzState.loaded && !!_authzState.permissions && _authzState.permissions.has('*');
         }
 
-        async function loadUserRole(uid) {
+        async function loadUserRole(uid, authMeta) {
             if (!_db || !uid) { currentUserRole = 'user'; _resetAuthzState(); applyRoleUI(); return; }
             currentUserUid = uid;
             let userData = null;
@@ -982,15 +1006,38 @@
                     userData = snap.data();
                     currentUserRole = userData.role || 'user';
                 } else {
-                    // Auto-creación de usuario nuevo: SIN CAMBIOS respecto al
-                    // comportamiento anterior — se sigue creando con role:'user'
-                    // (legacy). _roleCanonico('user') ya lo resuelve a
-                    // BARTENDER para efectos de permisos; no hay necesidad de
-                    // tocar este valor para lograrlo (ver entregable, decisión
-                    // documentada).
-                    await ref.set({ uid, role: 'user', creadoEn: Date.now() });
-                    currentUserRole = 'user';
-                    userData = { uid: uid, role: 'user' };
+                    // v5.26 (hallazgo #8, escalada/pérdida de control) — ANTES
+                    // esta rama auto-creaba SIEMPRE con role:'user' (BARTENDER
+                    // activo), sin distinguir un alta genuina de una cuenta que
+                    // YA existía y a la que le borraron usuarios/{uid}. Un admin
+                    // que borraba el documento para "dar de baja" a alguien
+                    // conseguía justo lo contrario: al siguiente inicio de
+                    // sesión, esta función la resucitaba sola con permisos de
+                    // BARTENDER por defecto, sin los overrides/áreas que tuviera
+                    // (esos sí se pierden para siempre al borrar el documento —
+                    // nunca se pueden recuperar — pero al menos ya no vuelven
+                    // permisos activos por accidente).
+                    //
+                    // user.metadata.creationTime === lastSignInTime SOLO en el
+                    // primer inicio de sesión de una cuenta de Firebase Auth
+                    // recién creada; en cualquier otro caso la cuenta YA
+                    // existía, así que un documento ausente significa que se
+                    // borró, no que nunca se creó. Sin esa distinción (llamadas
+                    // viejas a loadUserRole(uid), sin authMeta) se mantiene el
+                    // comportamiento anterior — alta genuina.
+                    const esPrimeraVezDeVerdad = !authMeta || !authMeta.creationTime || !authMeta.lastSignInTime
+                        || authMeta.creationTime === authMeta.lastSignInTime;
+                    if (esPrimeraVezDeVerdad) {
+                        await ref.set({ uid, role: 'user', creadoEn: Date.now() });
+                        currentUserRole = 'user';
+                        userData = { uid: uid, role: 'user' };
+                    } else {
+                        console.warn('[Roles] usuarios/' + uid + ' no existe pero la cuenta ya tenía sesiones previas — se recrea INACTIVA, no como BARTENDER activo.');
+                        await ref.set({ uid, role: 'user', status: 'inactivo', creadoEn: Date.now(),
+                                         notaSistema: 'Documento recreado tras no encontrarse — revisar y reactivar manualmente.' });
+                        currentUserRole = 'user';
+                        userData = { uid: uid, role: 'user', status: 'inactivo' };
+                    }
                 }
                 console.info('[Roles] Rol:', currentUserRole);
             } catch (e) {
@@ -1453,16 +1500,26 @@
                 }, function(err) { console.warn('[Notif] Error listener:', err); });
         }
 
-        function actualizarBadgeNotif() {
+        // v5.26 (hallazgo #12) — pintado del número de la campanita, separado
+        // del conteo en sí para poder reusarlo desde subscribeAjustesPendientes()
+        // (ver abajo): misma pastilla, dos fuentes distintas según el rol.
+        function _pintarBadgeNotif(n) {
             const badge = document.getElementById('sbNotifBadge');
             if (!badge) return;
-            const unread = _notificaciones.filter(function(n) { return !n.leido; }).length;
-            if (unread > 0) {
-                badge.textContent = unread > 9 ? '9+' : String(unread);
+            if (n > 0) {
+                badge.textContent = n > 9 ? '9+' : String(n);
                 badge.style.display = '';
             } else {
                 badge.style.display = 'none';
             }
+        }
+        function actualizarBadgeNotif() {
+            // El admin no escucha 'notificaciones' (ver _reconciliarListenersPorAutorizacion:
+            // apaga _unsubNotifs al entrar en modo admin), así que esta cuenta no le
+            // aplica — su campanita la alimenta subscribeAjustesPendientes().
+            if (isAdmin()) return;
+            const unread = _notificaciones.filter(function(n) { return !n.leido; }).length;
+            _pintarBadgeNotif(unread);
         }
 
         async function marcarNotifLeida(id) {
@@ -1499,6 +1556,19 @@
                     _ajustes = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
                     const pending = _ajustes.filter(function(a) { return a.estado === 'pendiente'; }).length;
                     if (pending > 0) showNotification('🔔 ' + pending + ' ajuste(s) pendiente(s) de aprobar');
+                    // v5.26 (hallazgo #12) — el toast de arriba es efímero: se
+                    // pierde si el admin no estaba mirando la pantalla en ese
+                    // instante. solicitarAjuste() además escribía una
+                    // notificación en 'notificaciones' con destinatarioUid:null
+                    // y broadcast:false — invisible SIEMPRE, ni para el admin ni
+                    // para nadie (ver _notificaciones, filtrado por n.broadcast ||
+                    // n.destinatarioUid === uid), y el admin ni siquiera escucha
+                    // esa colección (_reconciliarListenersPorAutorizacion la
+                    // apaga en modo admin). Un ajuste pendiente ahora deja un
+                    // rastro PERSISTENTE en la misma campanita del sidebar — no
+                    // solo el toast del momento — así que sigue ahí aunque el
+                    // admin estuviera desconectado cuando se solicitó.
+                    _pintarBadgeNotif(pending);
                     if (activeTab === 'ajustes') renderTab();
                 }, function(err) { console.warn('[Ajustes] Error listener:', err); });
         }
@@ -1522,7 +1592,17 @@
                     estado:           'pendiente',
                     creadoEn:         Date.now()
                 });
-                await crearNotificacion('ajuste', '📝 Ajuste solicitado: ' + productoNombre + ' — ' + motivo, null, false);
+                // v5.26 (hallazgo #12) — este crearNotificacion() con
+                // destinatarioUid:null y broadcast:false escribía un documento
+                // que NADIE iba a leer nunca: ni el admin (no escucha
+                // 'notificaciones' en ese modo — ver _reconciliarListenersPorAutorizacion),
+                // ni nadie más (el filtro de _notificaciones exige
+                // n.broadcast || n.destinatarioUid === uid, y ninguno de los
+                // dos se cumplía). El aviso real al admin es
+                // subscribeAjustesPendientes(), que ya corre en vivo mientras
+                // administra y ahora además deja la campanita encendida — se
+                // quita el escritura muerta en vez de mantener un rastro que
+                // no le llega a nadie.
                 showNotification('✅ Ajuste enviado al administrador');
             } catch (e) {
                 console.error('[Ajustes] Error:', e);
@@ -1554,7 +1634,14 @@
 
         // ── MÓDULO: REPORTES ──────────────────────────────────────────────
         async function generarYPublicarReporte() {
-            if (!hasPermission('reports.export')) return;
+            // v5.26 (hallazgo #13) — isAdmin() ademas de hasPermission(): la
+            // Rule de reportes/{id} exige isAdminUser() sin mirar hasPerm(),
+            // asi que un delegado que llegara a esta funcion (p. ej. si algun
+            // dia se expone el boton fuera del bloque isAdmin() que ya lo
+            // envuelve en 70/85) terminaria con un permission-denied del
+            // servidor despues de ver "Generando reporte global…". Mismo
+            // candado que ya tenian inventory.create e inventory.closeGlobal.
+            if (!isAdmin() || !hasPermission('reports.export')) return;
             showNotification('⏳ Generando reporte global…');
             try {
                 const AREAS = AREAS_CONTEO;
@@ -1720,7 +1807,8 @@
          * Pide confirmación antes de borrar y recarga la lista al terminar.
          */
         async function eliminarReporte(reporteId) {
-            if (!hasPermission('reports.export')) {
+            // v5.26 (hallazgo #13) — mismo candado doble que generarYPublicarReporte().
+            if (!isAdmin() || !hasPermission('reports.export')) {
                 showNotification('⚠️ No tienes permiso para eliminar reportes');
                 return;
             }
@@ -1809,11 +1897,19 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
                 html += '<div class="notif-wrap">';
                 _notificaciones.forEach(function(n) {
                     const ts = n.creadoEn ? new Date(n.creadoEn).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : '';
+                    // v5.26 (hallazgo #4, Cero Pérdida de Datos / XSS) — el id iba
+                    // crudo dentro de un onclick: un documento con un id elegido a
+                    // mano (p.ej. desde la consola del navegador, saltándose
+                    // crearNotificacion()) podía romper el atributo y ejecutar
+                    // código con la sesión de quien abriera esta pantalla. Mismo
+                    // candado que ya usa /ajustes: si no es el id alfanumérico
+                    // esperado, se descarta y el botón simplemente no se pinta.
+                    const idSeg = /^[A-Za-z0-9]{1,40}$/.test(String(n.id || '')) ? n.id : '';
                     html += '<div class="notif-item' + (n.leido ? '' : ' unread') + '">';
                     html += '<span class="notif-dot' + (n.leido ? ' read' : '') + '" aria-hidden="true"></span>';
                     html += '<span class="nt-icono">' + _notifIcono(n.tipo) + '</span>';
                     html += '<div class="notif-body"><div class="notif-text">' + escapeHtml(_notifTextoLimpio(n.texto)) + '</div><div class="notif-time ui-mono">' + ts + '</div></div>';
-                    if (!n.leido) html += '<button type="button" class="ui-link" onclick="marcarNotifLeida(\'' + n.id + '\')">Leído</button>';
+                    if (!n.leido && idSeg) html += '<button type="button" class="ui-link" onclick="marcarNotifLeida(\'' + idSeg + '\')">Leído</button>';
                     html += '</div>';
                 });
                 html += '</div>';
@@ -1936,6 +2032,24 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
             _permCargando = true;
             _permError    = null;
             try {
+                // v5.26 (hallazgo #14) — _rolesCache solo se mantiene VIVO
+                // para el rol del propio admin (_suscribirRolActual: "SOLO
+                // ese, nunca una suscripción a todos los roles"). Para los
+                // otros roles del catálogo, permisosEfectivos() caía al
+                // fallback ROLES_SISTEMA_DEFECTO (la constante del código) en
+                // vez del documento real roles/{roleId} — la pantalla podía
+                // mostrarle al admin unos permisos de Subjefe/Bartender que
+                // ya no coinciden con lo que ese rol tiene de verdad en
+                // Firestore (p. ej. tras "Actualizar roles de sistema" o una
+                // edición directa). Catálogo de roles CERRADO (siempre son
+                // estos tres) — resolverlos aquí es barato y deja la pantalla
+                // honesta antes de pintar ningún usuario.
+                const rolesAResolver = Object.keys(ROLES_SISTEMA_DEFECTO).filter(function(rid) {
+                    return rid !== _rolEscuchadoActualId; // ese ya lo mantiene vivo el listener propio
+                });
+                if (forzar) rolesAResolver.forEach(function(rid) { delete _rolesCache[rid]; });
+                await Promise.all(rolesAResolver.map(_resolverPermisosDeRol));
+
                 const snap = await _db.collection('usuarios').get();
                 const lista = [];
                 snap.forEach(function(d) {

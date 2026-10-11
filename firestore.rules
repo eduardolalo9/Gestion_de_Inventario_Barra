@@ -18,7 +18,15 @@
                function isAdminUser() {
                  return request.auth != null &&
                    exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) &&
-                   get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role in ['admin', 'ADMIN'];
+                   get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role in ['admin', 'ADMIN']
+                   // v5.26 (hallazgo #9) — sin esto, desactivar a un ADMIN
+                   // (status: 'inactivo') no le quitaba NADA: isAdminUser() solo
+                   // miraba 'role', nunca 'status', así que conservaba autoridad
+                   // total de administrador mientras su token de Firebase Auth
+                   // siguiera vivo. _cuentaActiva() se define más abajo pero las
+                   // funciones de reglas se resuelven por nombre, no por orden de
+                   // declaración, así que la referencia hacia adelante es válida.
+                   && _cuentaActiva();
                }
                // ══════════════════════════════════════════════════════════════
                //  FASE 2A — PERMISOS GRANULARES EN EL SERVIDOR
@@ -81,6 +89,19 @@
                // su token siguiera vivo. El valor por defecto es 'activo', así
                // que los usuarios que no tienen el campo no quedan bloqueados y
                // no hace falta migrar nada antes de desplegar esta regla.
+               //
+               // v5.26 (hallazgo #9) — ESCRITURA ya quedaba cubierta (hasPerm()
+               // la usa desde el fix original de arriba), pero LECTURA no: la
+               // mayoría de las colecciones de datos reales (catálogo, recetario,
+               // compras, movimientos, inventarios, notificaciones, ajustes,
+               // reportes…) solo exigían 'allow read: if request.auth != null;'
+               // — cualquier token vivo, activo o no, seguía leyendo todo. Y
+               // isAdminUser() tampoco miraba 'status': un ADMIN desactivado
+               // conservaba autoridad total. Desactivar una cuenta invalida el
+               // _authzState del cliente (PASO 7, más abajo en js/), pero eso es
+               // una cortesía de la interfaz, no una barrera — el servidor es
+               // quien de verdad decide. Ahora isAdminUser() y cada 'allow read'
+               // que antes solo pedía estar autenticado exigen _cuentaActiva().
                function _cuentaActiva() {
                  return request.auth != null &&
                    exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) &&
@@ -181,7 +202,20 @@
                  allow update: if request.auth != null && (
                                   // Admin puede cambiar cualquier campo
                                   isAdminUser()
-                                  || (request.auth.uid != uid && hasPerm('permissions.update'))
+                                  // v5.26 (hallazgo #5, escalada latente a ADMIN) — antes
+                                  // un delegado de permissions.update (que NO es admin)
+                                  // podía cambiar CUALQUIER campo del documento de OTRO
+                                  // usuario, 'role' incluido. La delegación de permisos
+                                  // se volvía así un atajo de un solo paso a ADMIN:
+                                  // bastaba elegir "Administrador" en el selector de rol
+                                  // (o escribirlo directo con el SDK) para cualquier
+                                  // cuenta, incluida una cómplice. Ahora la delegación
+                                  // solo alcanza lo que le corresponde — overrides y
+                                  // áreas —; 'role' y 'status' quedan exclusivos del
+                                  // admin real.
+                                  || (request.auth.uid != uid && hasPerm('permissions.update')
+                                      && !('role' in request.resource.data.diff(resource.data).affectedKeys())
+                                      && !('status' in request.resource.data.diff(resource.data).affectedKeys()))
                                   // Usuario solo puede actualizar si NO cambia role, permissionOverrides, status ni areasAsignadas
                                   || (request.auth.uid == uid
                                       && !('role' in request.resource.data.diff(resource.data).affectedKeys())
@@ -195,17 +229,33 @@
                // a cualquier autenticado (todo usuario necesita poder resolver
                // los permisos de SU PROPIO rol); escritura solo admin.
                match /roles/{roleId} {
-                 allow read:   if request.auth != null;
+                 allow read: if _cuentaActiva();
                  allow create: if isAdminUser() || hasPerm('roles.update');
                  // FASE 2A — la protección del comodín de ADMIN se conserva
                  // intacta: es la segunda capa que impide dejar el sistema sin
                  // ninguna autoridad administrativa.
+                 //
+                 // v5.26 (hallazgo #5, escalada latente a ADMIN) — un delegado
+                 // de roles.update (que NO es admin) podía escribir el comodín
+                 // '*' en CUALQUIER OTRO rol (BARTENDER, por ejemplo) — el
+                 // bloqueo de arriba solo protegía al rol 'ADMIN' en sí. Con
+                 // el comodín puesto en su propio rol, el delegado quedaba con
+                 // autoridad absoluta sin haber tocado 'usuarios/{uid}'. Por
+                 // la misma razón tampoco puede regalarle a otro rol las dos
+                 // delegaciones (roles.update / permissions.update): son la
+                 // llave que abre esta puerta, y repartirlas es la misma
+                 // escalada un paso más lejos. Solo un admin real puede
+                 // otorgar cualquiera de los tres.
                  allow update: if (isAdminUser() || hasPerm('roles.update')) &&
-                                  !(roleId == 'ADMIN' && !('*' in request.resource.data.permissions));
+                                  !(roleId == 'ADMIN' && !('*' in request.resource.data.permissions)) &&
+                                  (isAdminUser() ||
+                                    (!('*' in request.resource.data.permissions)
+                                     && !('roles.update' in request.resource.data.permissions)
+                                     && !('permissions.update' in request.resource.data.permissions)));
                  allow delete: if false; // los roles de sistema no se eliminan en esta etapa
                }
                match /catalogo/{docId} {
-                 allow read:  if request.auth != null;
+                 allow read: if _cuentaActiva();
                  // FASE 2A — catalog.publish en vez de "eres admin".
                  allow write: if hasPerm('catalog.publish');
                }
@@ -217,7 +267,7 @@
                // leer), solo estar autenticado. La escritura si exige
                // recipe.edit explicito.
                match /recetario/{docId} {
-                 allow read:  if request.auth != null;
+                 allow read: if _cuentaActiva();
                  allow write: if hasPerm('recipe.edit');
                }
                match /inventarioApp/{docId} {
@@ -270,7 +320,7 @@
                  // auditoriaStatus. Nótese que aquí se usa keys().hasOnly() y no
                  // diff(): en un create, 'resource' es null y diff() daría error
                  // de evaluación.
-                 allow read:   if request.auth != null;
+                 allow read: if _cuentaActiva();
                  allow create: if isAdminUser()
                                   || (request.auth != null
                                       && request.resource.data.keys()
@@ -399,13 +449,13 @@
                  // vaciaba su valor probatorio. Quien queda registrado en una
                  // diferencia de conteo no debe poder alterar ese registro.
                  match /conflictos/{conflictoId} {
-                   allow read:   if request.auth != null;
+                   allow read: if _cuentaActiva();
                    allow create: if _cuentaActiva();
                    allow update: if false;
                    allow delete: if isAdminUser();
                  }
                  match /cambios/{cambioId} {
-                   allow read:   if request.auth != null;
+                   allow read: if _cuentaActiva();
                    // FASE 7 (S3) — la autoría ya no se puede falsificar al
                    // crear: el uid del evento es el de quien escribe, o ninguno
                    // (evento encolado antes de que la sesión estuviera lista,
@@ -463,12 +513,12 @@
                      && d._updatedAt is int;
                  }
                  match /ordersChunks/{chunkId} {
-                   allow read:           if request.auth != null;
+                   allow read: if _cuentaActiva();
                    allow create, update: if _cuentaActiva() && _chunkValido(chunkId);
                    allow delete:         if isAdminUser();
                  }
                  match /inventoriesChunks/{chunkId} {
-                   allow read:           if request.auth != null;
+                   allow read: if _cuentaActiva();
                    allow create, update: if _cuentaActiva() && _chunkValido(chunkId);
                    allow delete:         if isAdminUser();
                  }
@@ -499,7 +549,7 @@
                  // la regla usa la MISMA convención que el cliente (versión
                  // ausente = 0), consistente en ambos lados.
                  match /stockAreas/{area}/productos/{productId} {
-                   allow read: if request.auth != null;
+                   allow read: if _cuentaActiva();
                    allow create: if request.auth != null
                      && _datosConteoValidos(request.resource.data)
                      && request.resource.data.version == 1;
@@ -626,7 +676,7 @@
                        || get(/databases/$(database)/documents/inventarioApp/$(docId)/inventories/$(prev)).data.estado != 'SINCRONIZADO';
                  }
                  match /inventories/{inventoryId} {
-                   allow read:   if request.auth != null;
+                   allow read: if _cuentaActiva();
                    allow create: if isAdminUser()
                                  && request.resource.data.inventoryId == inventoryId
                                  && request.resource.data.estado == 'SINCRONIZADO'
@@ -702,7 +752,7 @@
                    // Comprobado contra el emulador real, no deducido de la
                    // documentación (pruebas X1-X5 de run-rules-tests.js).
                    match /snapshotChunks/{chunkId} {
-                     allow read:   if request.auth != null;
+                     allow read: if _cuentaActiva();
                    //
                    // FASE 3 — hay que bloquear TAMBIÉN 'CONTABILIZADO'. Con la
                    // condición anterior, que solo miraba 'CERRADO', el snapshot
@@ -746,7 +796,7 @@
                  //  que historialCambios.
                  // ══════════════════════════════════════════════════════════
                  match /inventariosIniciales/{semanaId} {
-                   allow read:   if request.auth != null;
+                   allow read: if _cuentaActiva();
                    allow create: if hasPerm('inventory.post')
                                     && request.resource.data.semanaId == semanaId
                                     && request.resource.data.origen.inventoryId is string
@@ -815,7 +865,7 @@
                            && id == d.fecha + '_' + d.hora.split(':')[0] + d.hora.split(':')[1]);
                  }
                  match /anclasExistencia/{fecha} {
-                   allow read:   if request.auth != null;
+                   allow read: if _cuentaActiva();
                    allow create: if hasPerm('inventory.post')
                                     && request.resource.data.tipo in ['fin_de_mes', 'mitad_de_semana', 'importacion_excel']
                                     && _idAnclaValido(fecha, request.resource.data)
@@ -971,7 +1021,7 @@
                  //     permitido es a 1001 (migración, una sola vez);
                  //   · nunca se borra ni se le agregan otros campos.
                  match /contadores/inventarios {
-                   allow read:   if request.auth != null;
+                   allow read: if _cuentaActiva();
                    allow create: if isAdminUser()
                                  && request.resource.data.keys().hasOnly(['ultimoNumero'])
                                  && request.resource.data.ultimoNumero == 1001;
@@ -1012,7 +1062,17 @@
                // ══════════════════════════════════════════════════════════
                match /compras/{compraId} {
                  allow read:   if hasPerm('purchases.read');
-                 allow create: if hasPerm('purchases.create')
+                 // v5.26 (hallazgo #15, aprobado por Eduardo el 11-oct-2026) —
+                 // hasPerm('purchases.create') || hasPerm('purchases.import').
+                 // guardarCompra() (js/88) es la única función que escribe
+                 // aquí, y la usan dos flujos con dos permisos YA delegables:
+                 // "Capturar a mano" (purchases.create) y "confirmar
+                 // importación" al final de Importar desde Excel
+                 // (purchases.import, más sensible, pensado justo para esto).
+                 // Antes la regla solo aceptaba el primero: delegar SOLO
+                 // purchases.import dejaba leer el Excel y ver la vista
+                 // previa, pero el servidor rechazaba cada fila al confirmar.
+                 allow create: if (hasPerm('purchases.create') || hasPerm('purchases.import'))
                                   && request.resource.data.compraId == compraId
                                   && request.resource.data.fecha is string
                                   && request.resource.data.lineas is list
@@ -1021,8 +1081,11 @@
                  allow update, delete: if false;
                }
                match /movimientos/{movId} {
-                 allow read:   if request.auth != null;
-                 allow create: if hasPerm('purchases.create')
+                 allow read: if _cuentaActiva();
+                 // v5.26 (hallazgo #15) — mismo motivo que compras/{compraId}
+                 // arriba: _asientosDesdeCompra() escribe aquí dentro del
+                 // mismo batch que guardarCompra(), con el mismo permiso.
+                 allow create: if (hasPerm('purchases.create') || hasPerm('purchases.import'))
                                   && request.resource.data.movId == movId
                                   && request.resource.data.tipo == 'compra'
                                   && request.resource.data.productoId is string
@@ -1034,7 +1097,7 @@
                // es literal, no comodín, así que este folio necesita su
                // propia regla — no queda cubierto por aquel.
                match /contadores/compras {
-                 allow read:  if request.auth != null;
+                 allow read: if _cuentaActiva();
                  allow write: if hasPerm('purchases.create');
                }
                // Único documento mutable de la fase, y lo es a propósito: el
@@ -1042,7 +1105,7 @@
                // historia queda en las líneas de compra, que sí son
                // inmutables.
                match /costos/{docId} {
-                 allow read:  if request.auth != null;
+                 allow read: if _cuentaActiva();
                  allow write: if hasPerm('purchases.import') || hasPerm('purchases.create');
                }
                // FASE 7 (S2) — antes 'create' aceptaba cualquier documento de
@@ -1054,7 +1117,7 @@
                // El id debe ser el automático de add() (20 alfanuméricos):
                // un id elegido a mano podía romper el onclick del botón.
                match /ajustes/{ajusteId} {
-                 allow read:   if request.auth != null;
+                 allow read: if _cuentaActiva();
                  allow create: if _cuentaActiva()
                    && ajusteId.matches('[A-Za-z0-9]{20}')
                    && request.resource.data.keys().hasOnly(['productoId', 'productoNombre', 'motivo',
@@ -1091,8 +1154,38 @@
                // 'leido' es un campo compartido — ver crearNotificacion en
                // index.html). Convertir eso en estado por-usuario es un cambio
                // de modelo de datos, no de reglas, y no corresponde a esta fase.
+               //
+               // v5.26 (hallazgo #4, Cero Pérdida de Datos / XSS) — 'create'
+               // aceptaba CUALQUIER documento con CUALQUIER id de cualquier
+               // autenticado. Un id elegido a mano (p.ej. desde la consola del
+               // navegador, sin pasar por crearNotificacion()) rompía el
+               // onclick de marcarNotifLeida() en la pantalla de quien la
+               // recibiera — XSS almacenado que se ejecutaba con la sesión de
+               // esa persona (normalmente el admin, por las broadcast). Ahora,
+               // igual que /ajustes: el id debe ser el automático de add()
+               // (20 alfanuméricos) y el documento debe tener EXACTAMENTE la
+               // forma que escribe crearNotificacion(). Una notificación
+               // broadcast (a todo el personal) solo la puede crear el admin,
+               // para que ningún otro rol pueda spamear avisos falsos a todos.
                match /notificaciones/{notifId} {
-                 allow read, create: if request.auth != null;
+                 allow read: if _cuentaActiva();
+                 allow create: if request.auth != null
+                   && notifId.matches('[A-Za-z0-9]{20}')
+                   && request.resource.data.keys().hasOnly(['tipo', 'texto', 'broadcast',
+                        'destinatarioUid', 'remitenteUid', 'creadoEn', 'leido'])
+                   && request.resource.data.keys().hasAll(['tipo', 'texto', 'broadcast',
+                        'remitenteUid', 'creadoEn', 'leido'])
+                   && request.resource.data.tipo in ['catalogo', 'recetario', 'ajuste', 'reporte']
+                   && request.resource.data.texto is string
+                   && request.resource.data.texto.size() > 0
+                   && request.resource.data.texto.size() <= 500
+                   && request.resource.data.broadcast is bool
+                   && (request.resource.data.broadcast == false || isAdminUser())
+                   && (request.resource.data.get('destinatarioUid', null) == null
+                       || request.resource.data.destinatarioUid is string)
+                   && request.resource.data.remitenteUid == request.auth.uid
+                   && request.resource.data.creadoEn is int
+                   && request.resource.data.leido == false;
                  allow update: if request.auth != null
                                   && request.resource.data.diff(resource.data)
                                        .affectedKeys().hasOnly(['leido'])
@@ -1100,7 +1193,7 @@
                                       || resource.data.broadcast == true);
                }
                match /reportes/{reporteId} {
-                 allow read:  if request.auth != null;
+                 allow read: if _cuentaActiva();
                  allow write: if isAdminUser();
                }
                // FIX-SECURITY: Historial permanente de cambios de inventario.

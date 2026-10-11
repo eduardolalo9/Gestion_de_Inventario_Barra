@@ -116,14 +116,26 @@
         }
 
         /**
-         * _parsearCodigoNombre(cadena)
+         * _parsearCodigoNombre(cadena, soloDigitos)
          * El proveedor Y el almacén viajan en el Excel real como una sola
          * celda "código — nombre" (p.ej. "P00106 — VINOTECA MEXICO",
          * "12 — BARRA MOCHOMOS MONTERREY"), separados por un guion largo con
          * espacios. Si el separador no aparece, toda la cadena se guarda como
          * nombre y el código queda vacío — no se descarta la fila por esto.
+         *
+         * v5.26 (hallazgo #15) — EXCEPCIÓN para el Almacén: su código es
+         * siempre puramente numérico ("12"), y algún export lo trae SIN el
+         * " — nombre" (solo "12", o "12" con espacios). Sin esta excepción,
+         * _parsearExcelCompras() comparaba almacen.codigo ('') contra
+         * ALMACEN_BARRA_CODIGO ('12'), nunca coincidía, y la fila se
+         * descartaba en silencio como "de otro almacén" — perdiendo una
+         * compra real de la barra por un formato de celda más corto, no por
+         * pertenecer a otro almacén (D-2). Con soloDigitos:true, una cadena
+         * sin separador que son TODO dígitos se trata como código, no como
+         * nombre. El proveedor (letras + dígitos, "P00106") no pide esto y
+         * sigue exactamente igual que antes.
          */
-        function _parsearCodigoNombre(cadena) {
+        function _parsearCodigoNombre(cadena, soloDigitos) {
             var s = String(cadena == null ? '' : cadena).trim();
             var partes = s.split(/\s+—\s+/);
             if (partes.length >= 2) {
@@ -134,6 +146,7 @@
             if (partes.length >= 2) {
                 return { codigo: partes[0].trim(), nombre: partes.slice(1).join(' - ').trim() };
             }
+            if (soloDigitos && /^\d+$/.test(s)) return { codigo: s, nombre: '' };
             return { codigo: '', nombre: s };
         }
 
@@ -223,7 +236,17 @@
          * completos (ver _parsearExcelCompras para el camino de importación).
          */
         async function guardarCompra(compra) {
-            if (!hasPermission('purchases.create')) {
+            // v5.26 (hallazgo #15) — purchases.import TAMBIÉN habilita este
+            // guardado, no solo purchases.create. guardarCompra() es la
+            // única función que escribe en compras/movimientos, y la usan
+            // DOS flujos con DOS permisos ya delegables: "Capturar a mano"
+            // (purchases.create) y "confirmar importación" al final de
+            // Importar desde Excel (purchases.import). Antes, delegar solo
+            // purchases.import (más sensible, pensado para esto) dejaba leer
+            // el Excel y ver la vista previa, pero CADA fila fallaba aquí al
+            // confirmar — la importación nunca se completaba. Decisión de
+            // Eduardo (11-oct-2026): alinear, no exigir los dos a la vez.
+            if (!hasPermission('purchases.create') && !hasPermission('purchases.import')) {
                 return { ok: false, motivo: 'sin_permiso' };
             }
             if (!_db)              return { ok: false, motivo: 'sin_firestore' };
@@ -549,7 +572,7 @@
                     return;
                 }
 
-                const almacen = _parsearCodigoNombre(_findColCompras(fila, COLUMNAS_EXCEL_COMPRAS.almacen));
+                const almacen = _parsearCodigoNombre(_findColCompras(fila, COLUMNAS_EXCEL_COMPRAS.almacen), true);
                 if (almacen.codigo !== ALMACEN_BARRA_CODIGO) {
                     fueraDeAlcance++; // D-2: compra real, pero no de la barra
                     return;

@@ -49,7 +49,13 @@
                     // Cargar rol — usar window.loadUserRole para garantizar acceso cross-script
                     var _loadRole = window.loadUserRole || loadUserRole;
                     if (typeof _loadRole === 'function') {
-                        _loadRole(user.uid).catch(function(e) {
+                        // v5.26 (hallazgo #8) — loadUserRole() necesita distinguir un
+                        // alta genuina de una cuenta que YA existía y a la que le
+                        // borraron usuarios/{uid} (p.ej. un admin que creyó que
+                        // borrar el documento "daba de baja" a alguien). user.metadata
+                        // es lo único que trae esa distinción (creationTime vs
+                        // lastSignInTime); Firestore no la tiene si el documento ya no existe.
+                        _loadRole(user.uid, user.metadata).catch(function(e) {
                             console.warn('[Auth] Error cargando rol:', e);
                         });
                     } else {
@@ -66,6 +72,17 @@
                     if (typeof _unsubMyAuditoria === 'function') { _unsubMyAuditoria(); _unsubMyAuditoria = null; }
                     // v5.22 — las escuchas en vivo de compras, ventas y cortes tampoco sobreviven al logout.
                     if (typeof syncVivoDetener === 'function') syncVivoDetener();
+                    // v5.26 — limpieza de código muerto (encontrado al verificar
+                    // ceros-llamadores antes de borrar funciones sin uso): el
+                    // listener del Total publicado (js/51-total-publicado.js,
+                    // suscrito por totalPublicadoSuscribir() desde js/47 cuando
+                    // alguien ve el Total por arrastre) nunca se desuscribía en
+                    // NINGÚN punto del código — ni aquí ni en ningún otro lugar.
+                    // Es el mismo riesgo que ETAPA 14.1.1 ya corrigió para los
+                    // demás listeners: sin esto, el onSnapshot de un usuario
+                    // sigue escuchando y repintando después de su logout, con
+                    // el permiso y los datos de la sesión anterior.
+                    if (typeof totalPublicadoDesuscribir === 'function') totalPublicadoDesuscribir();
                     // ETAPA 14.1.1: limpiar también los listeners en tiempo
                     // real del contexto de autorización — nunca deben
                     // sobrevivir a un logout, ni seguir escuchando el doc del

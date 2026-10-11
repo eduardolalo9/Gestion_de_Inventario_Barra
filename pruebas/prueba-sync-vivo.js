@@ -254,8 +254,10 @@ const compra = (id, prod, cant, extra) => Object.assign({ compraId: id, semanaId
     const vH = (html.match(/\?v=([\d.]+)/) || [])[1], vS = (sw.match(/APP_VERSION = '([\d.]+)'/) || [])[1];
     chk('La versión de index.html y sw.js coincide', vH && vH === vS, vH + ' / ' + vS);
     chk('La versión avanzó (>= 5.22)', vS && Number(vS.split('.')[0]) >= 5 && Number(vS.split('.')[1]) >= 22, vS);
+    // v5.26 (hallazgo #9) — "cualquier cuenta activa" en anclasExistencia
+    // ahora es _cuentaActiva(), no un simple request.auth != null.
     chk('Las reglas no cambian: leer compras/ventas ya exige purchases.read / sales.read y los cortes cualquier cuenta activa',
-        /match \/compras\/\{compraId\} \{\s*allow read:\s+if hasPerm\('purchases\.read'\)/.test(leer('firestore.rules')) && /match \/anclasExistencia\/\{fecha\} \{\s*allow read:\s+if request\.auth != null/.test(leer('firestore.rules')));
+        /match \/compras\/\{compraId\} \{\s*allow read:\s+if hasPerm\('purchases\.read'\)/.test(leer('firestore.rules')) && /match \/anclasExistencia\/\{fecha\} \{\s*allow read:\s+if _cuentaActiva\(\)/.test(leer('firestore.rules')));
 
     console.log('\n  ── v5.22 · Compras, ventas y cortes en vivo entre dispositivos (estática) ──\n');
     casos.forEach(c => console.log('  ' + (c.ok ? '✅' : '❌') + '  ' + c.n.padEnd(104) + (c.ok ? '' : '  ← ' + c.d)));

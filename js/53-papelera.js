@@ -449,9 +449,10 @@
                  + ' ' + String(f.getHours()).padStart(2, '0') + ':' + String(f.getMinutes()).padStart(2, '0');
         }
 
-        function abrirPapelera() {
-            if (typeof switchTab === 'function') switchTab('papelera'); else { activeTab = 'papelera'; renderTab(); }
-        }
+        // v5.26 — limpieza de código muerto: abrirPapelera() se quitó de
+        // aquí — sin ningún punto de llamada en todo el repositorio. El
+        // sidebar entra a la papelera llamando switchTab('papelera')
+        // directo (ver #sbPapeleraBtn en index.html), no por este wrapper.
 
         function renderPapeleraTab() {
             if (!(typeof isAdmin === 'function' && isAdmin())) {
@@ -541,5 +542,4 @@
         window.papeleraRestaurar            = papeleraRestaurar;
         window.papeleraDescargar            = papeleraDescargar;
         window.papeleraPurgar               = papeleraPurgar;
-        window.abrirPapelera                = abrirPapelera;
         window.renderPapeleraTab            = renderPapeleraTab;

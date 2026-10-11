@@ -26,8 +26,24 @@ const mod = leer('js/72-inicio-tablero.js'), r70 = leer('js/70-conversion-render
 chk('index.html carga 72-inicio-tablero.js entre 71 y 75',
     html.indexOf('js/71-posicion-conteo.js') < html.indexOf('js/72-inicio-tablero.js') && html.indexOf('js/72-inicio-tablero.js') < html.indexOf('js/75-auditoria-flujo.js'));
 chk('sw.js precalienta el módulo con APP_VERSION', /'\.\/js\/72-inicio-tablero\.js\?v=' \+ APP_VERSION/.test(sw));
-chk('★ La versión es 5.25 en sw.js y en todos los ?v= de index.html',
-    /APP_VERSION = '5\.25'/.test(sw) && !/\?v=5\.2[0-4]/.test(html) && (html.match(/\?v=5\.25/g) || []).length >= 35);
+// v5.26 — esta prueba fijaba el número exacto "5.25": cualquier release
+// posterior (como esta misma, v5.26) la hacía fallar sin que el código
+// tuviera nada roto. Se compara por partes numéricas (igual que ya hacen
+// las pruebas de actualizaciones/v5.25) en vez de contra un string fijo.
+function _partesVersion(v) { return String(v).split('.').map(function(n) { return parseInt(n, 10) || 0; }); }
+function _versionGte(a, b) {
+    var pa = _partesVersion(a), pb = _partesVersion(b);
+    for (var i = 0; i < Math.max(pa.length, pb.length); i++) {
+        var da = pa[i] || 0, db = pb[i] || 0;
+        if (da !== db) return da > db;
+    }
+    return true;
+}
+var _mSw = /APP_VERSION = '(\d+\.\d+)'/.exec(sw);
+chk('★ sw.js y TODOS los ?v= de index.html comparten la misma versión, y es >= 5.25',
+    !!_mSw && _versionGte(_mSw[1], '5.25') &&
+    !(html.match(/\?v=(\d+\.\d+)/g) || []).some(function(m) { return m.replace('?v=', '') !== _mSw[1]; }) &&
+    (html.match(new RegExp('\\?v=' + _mSw[1].replace('.', '\\.'), 'g')) || []).length >= 35);
 chk('renderInicioTab pinta el tablero primero y el panel de siempre debajo',
     /renderInicioTablero\(\)/.test(r70) && /renderPanelInicio\(\{ sinInventario:/.test(r70));
 chk('El panel omite SU tarjeta de inventario solo cuando el tablero la muestra',
