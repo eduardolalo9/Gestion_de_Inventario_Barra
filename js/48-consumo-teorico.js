@@ -18,13 +18,18 @@
         //  (RECETARIO-2 corregido en FASE 10), así que aquí todas las líneas
         //  que hay son de barra.
         //
-        //  SIN CONVERSIÓN DE UNIDADES, igual que el Excel: la cantidad de la
-        //  receta ya viene en la unidad de inventario del insumo (0.06 PZA de
-        //  una botella). Cuando la UoM de la línea NO es la del insumo, el
-        //  número se calcula igual —para no divergir del Excel— pero la línea
-        //  se reporta en `avisos` para que una persona la revise. Son 65 líneas
-        //  reales de 1,416: una aceituna que se compra en KGS y cuya receta
-        //  pide PZA, por ejemplo.
+        //  v5.26 (hallazgo #2, aprobado por Eduardo el 11-oct-2026) — CON
+        //  CONVERSIÓN DE UNIDADES, como el costeo (costoLineaReceta ya lo
+        //  hacía con factorAUnidadProducto; el consumo no, y una receta de
+        //  "45 ml" descontaba 45 PIEZAS de un insumo que se cuenta en
+        //  botellas). Esto es una desviación deliberada del Excel original,
+        //  que no convertía nada: el Excel asumía que la cantidad de la
+        //  receta ya venía en la unidad de inventario del insumo, cosa que
+        //  dejó de ser cierto en cuanto el recetario empezó a capturarse en
+        //  ml/oz. Cuando la UoM no se puede interpretar (no es ml, oz, ni la
+        //  propia unidad del insumo, y el insumo no tiene conversion/capacidadMl)
+        //  se usa la cantidad tal cual —como antes— y la línea se reporta en
+        //  `avisos.uomDistinta` para que una persona la revise.
         //
         //  LO QUE NO HACE, a propósito: no decide el stock teórico ni la
         //  desviación ni el pedido sugerido. Solo entrega el consumo. Quien lo
@@ -116,9 +121,16 @@
             if (!listaVentas.length || !listaRecetas.length) return resultado;
 
             // Índices por código, para no recorrer los arreglos dentro del bucle.
+            //
+            // v5.26 (hallazgo #11) — una receta desactivada (r.activa === false,
+            // el mismo campo que ya usa el badge "Inactiva" del recetario) se
+            // excluye del índice a propósito: si todavía entra una venta con su
+            // PV (un trago descontinuado que alguien siguió cobrando), cae en la
+            // misma rama de abajo que "SKU sin receta" — se reporta en
+            // avisos.sinReceta, nunca se sigue descontando un consumo fantasma.
             var recetaPorPV = {};
             listaRecetas.forEach(function(r) {
-                if (r && r.pv) recetaPorPV[String(r.pv).trim().toUpperCase()] = r;
+                if (r && r.pv && r.activa !== false) recetaPorPV[String(r.pv).trim().toUpperCase()] = r;
             });
             var productoPorId = {};
             listaProd.forEach(function(p) { if (p && p.id) productoPorId[String(p.id)] = p; });
@@ -153,23 +165,28 @@
                             descripcion: ing.descripcionExcel || '(sin descripción)'
                         });
                     }
-                    if (prod && ing.uom && !vistosUom[pid]) {
+                    // v5.26 (hallazgo #2) — misma conversión que el costeo: una
+                    // línea en ml/oz se convierte a la unidad de inventario del
+                    // insumo antes de descontar. Si la UoM no se puede interpretar,
+                    // se usa la cantidad tal cual (como siempre) y se avisa, porque
+                    // ahí sí hay un número que alguien debe revisar.
+                    var factorConv = 1;
+                    if (prod && ing.uom) {
                         var f = (typeof factorAUnidadProducto === 'function') ? factorAUnidadProducto(ing.uom, prod) : 1;
-                        // Solo interesa avisar cuando la UoM NO es la del insumo
-                        // y aun así el Excel la trata como si lo fuera (factor 1).
-                        var mismaUnidad = String(ing.uom).trim().toLowerCase() === String(prod.unit || '').trim().toLowerCase();
-                        if (f === 1 && !mismaUnidad) {
-                            vistosUom[pid] = true;
-                            resultado.avisos.uomDistinta.push({
-                                productoId: pid, nombre: prod.name || pid,
-                                uomReceta: ing.uom, unidadProducto: prod.unit || '(sin unidad)'
-                            });
+                        if (f === null) {
+                            if (!vistosUom[pid]) {
+                                vistosUom[pid] = true;
+                                resultado.avisos.uomDistinta.push({
+                                    productoId: pid, nombre: prod.name || pid,
+                                    uomReceta: ing.uom, unidadProducto: prod.unit || '(sin unidad)'
+                                });
+                            }
+                        } else {
+                            factorConv = f;
                         }
                     }
 
-                    // El cálculo del Excel, literal: unidades vendidas × cantidad
-                    // de la receta, sin convertir nada.
-                    resultado.consumo[pid] = (resultado.consumo[pid] || 0) + unidades * cant;
+                    resultado.consumo[pid] = (resultado.consumo[pid] || 0) + unidades * cant * factorConv;
                     resultado.lineasCalculadas++;
                 });
             });

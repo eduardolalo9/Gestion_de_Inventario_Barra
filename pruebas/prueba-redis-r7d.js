@@ -27,7 +27,9 @@
  *     diálogos/avisos, mismo criterio que R1-R7c).
  *
  * No se tocó: permisos (hasPermission, permisosEfectivos, reglas de Firestore),
- * resolverAjuste, crearNotificacion, ni la lógica de sincronización.
+ * resolverAjuste, crearNotificacion, ni la lógica de sincronización. (La
+ * llamada de solicitarAjuste() a crearNotificacion('ajuste', ...) sí se quitó
+ * después, en v5.26/hallazgo #12 — era una escritura muerta; ver ese fix.)
  *
  *   node pruebas/prueba-redis-r7d.js
  * ═══════════════════════════════════════════════════════════════════════════
@@ -112,8 +114,14 @@ chk('El borde de cada fila de Físico vs Sistema usa --border-mid (antes --borde
 chk('★ El icono de un área sigue siendo dato del administrador (se guarda y se muestra tal cual)',
     /escapeHtml\(a\.icono \|\| '📍'\)/.test(piezas.renderAreasConteoAdmin) && /areaNuevaIcono/.test(piezas.renderAreasConteoAdmin));
 chk('★ El texto guardado de una notificación NO se modifica: se limpia solo al pintar',
-    /function _notifTextoLimpio\(/.test(roles) && /escapeHtml\(_notifTextoLimpio\(n\.texto\)\)/.test(piezas.renderNotificacionesTab) &&
-    /crearNotificacion\('ajuste', '📝 Ajuste solicitado: '/.test(roles));
+    // v5.26 (hallazgo #12) — la llamada a crearNotificacion('ajuste', '📝
+    // Ajuste solicitado: '...) que antes se citaba aquí era precisamente la
+    // escritura muerta que el fix quitó de solicitarAjuste() (nadie podía
+    // leerla: ni el admin, que no escucha 'notificaciones' en modo admin, ni
+    // nadie más, por el filtro n.broadcast || n.destinatarioUid === uid). Lo
+    // que este caso verifica — que el texto NO se reescribe al guardar, solo
+    // se limpia al pintar — sigue intacto y no depende de esa llamada.
+    /function _notifTextoLimpio\(/.test(roles) && /escapeHtml\(_notifTextoLimpio\(n\.texto\)\)/.test(piezas.renderNotificacionesTab));
 chk('El icono de la notificación sale del TIPO (ajuste, reporte, catálogo, recetario)',
     /ajuste: 'pen-to-square', reporte: 'file-chart-column', catalogo: 'boxes-stacked', recetario: 'book'/.test(roles));
 chk('showNotification conserva su emoji (texto plano de aviso)', /showNotification\(\\'⚠️ Selecciona un producto\\'\)/.test(roles));

@@ -2220,6 +2220,26 @@
             if (m) { m.classList.add('hidden'); document.body.classList.remove('modal-open'); }
         }
 
+        // v5.26 (hallazgo del paquete de textos) — Escape no cerraba ninguno
+        // de estos dos modales (sí la ficha de producto y el detalle de
+        // compra, mismo patrón: js/83-panel.js, js/89-compras-detalle.js).
+        // Guarda typeof document por el mismo motivo que js/91-recetario.js:
+        // alguna prueba podría cargar este archivo sin DOM.
+        if (typeof document !== 'undefined' && document.addEventListener) {
+            document.addEventListener('keydown', function(e) {
+                if (e.key !== 'Escape') return;
+                var mNuevo  = document.getElementById('nuevoInventarioModal');
+                var mFecha  = document.getElementById('regFechaRecuentoModal');
+                if (mFecha && !mFecha.classList.contains('hidden')) {
+                    e.stopPropagation();
+                    cerrarModalRegistrarFechaRecuento();
+                } else if (mNuevo && !mNuevo.classList.contains('hidden')) {
+                    e.stopPropagation();
+                    cerrarModalNuevoInventario();
+                }
+            }, true);
+        }
+
         function _pintarAvisoFechaRegistrar() {
             var el  = document.getElementById('regFechaRecuentoAviso');
             var f   = document.getElementById('regFechaRecuentoInput');

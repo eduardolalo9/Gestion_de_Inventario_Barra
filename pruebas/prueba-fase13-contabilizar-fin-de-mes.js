@@ -229,8 +229,11 @@ chk('El mesId se valida con formato YYYY-MM',
 chk('★ La lectura de dinero se restringe (no abierta a cualquier autenticado, a diferencia del inicial semanal)',
     /allow read:\s*if hasPerm\('inventory\.viewAll'\)/.test(bloqueCM),
     'lleva valorTotal — mismo criterio que ventas/compras, que también restringen lectura');
-chk('inventariosIniciales sigue abierto a cualquier autenticado (sin regresión)',
-    /allow read:\s*if request\.auth != null;/.test(bloqueReglas('match /inventariosIniciales/{semanaId} {')));
+chk('inventariosIniciales sigue abierto a cualquier cuenta activa (sin regresión)',
+    // v5.26 (hallazgo #9) — "cualquier autenticado" pasó a exigir además
+    // _cuentaActiva(); sigue sin exigir un permiso específico, que es lo
+    // que este chk realmente comprueba (a diferencia de compras/ventas).
+    /allow read:\s*if _cuentaActiva\(\);/.test(bloqueReglas('match /inventariosIniciales/{semanaId} {')));
 
 // ═══ 7 · contabilizarInventario — un solo batch, ambos destinos cuando toca ═
 const contab = extraer(flujo, 'contabilizarInventario') || '';

@@ -725,7 +725,14 @@
                     html += '<button type="button" class="bt bt--primario" onclick="generarYPublicarReporte()">';
                     html += '<i class="fa-solid fa-cloud-arrow-up"></i> Publicar Inventario Total para Todos los Usuarios';
                     html += '</button>';
-                } else {
+                } else if (hasPermission('inventory.export')) {
+                    // v5.26/hallazgo#32.8 — antes se mostraba a CUALQUIER
+                    // no-admin sin comprobar inventory.export: el Bartender
+                    // por defecto (ROLES_SISTEMA_DEFECTO en
+                    // js/50-roles-permisos.js) no tiene ese permiso, a
+                    // diferencia del Subjefe de Barra. Se oculta el botón en
+                    // vez de mostrarlo-y-rechazar, igual que el resto de la UI
+                    // gateada por permiso en esta pantalla (p.ej. línea 568).
                     html += '<button type="button" class="audit-export-btn" onclick="exportarExcelMiConteo()">';
                     html += '<i class="fa-solid fa-file-excel" style="font-size:1.1rem;"></i>';
                     html += 'DESCARGAR MI CONTEO (ÁREAS FINALIZADAS)';
@@ -2012,9 +2019,17 @@
             emptyCart.classList.add('hidden');
             let html = '';
             let total = 0;
+            // v5.26 (hallazgo del paquete de textos) — misma conversión de
+            // Tailwind fijo a tokens de tema que el resto de Pedidos; botón
+            // de icono con aria-label (antes solo un icono, sin texto para
+            // lectores de pantalla).
             cart.forEach(item => {
                 total += item.quantity;
-                html += '<tr><td class="px-4 py-3 text-gray-900">' + escapeHtml(item.name) + '</td><td class="px-4 py-3 text-center text-gray-600">' + escapeHtml(item.unit) + '</td><td class="px-4 py-3 text-center"><input type="number" value="' + item.quantity + '" min="0.01" step="0.01" onchange="updateCartQuantity(\'' + escapeHtml(item.id) + '\', this.value)" class="w-20 px-2 py-1 text-center bg-white text-gray-900 border border-gray-200 rounded focus:ring-2 focus:ring-purple-500 font-semibold"></td><td class="px-4 py-3 text-center"><button onclick="removeFromCart(\'' + escapeHtml(item.id) + '\')" class="p-2 bg-gradient-to-br from-red-500 to-orange-500 text-white rounded-xl hover:shadow-lg transition-all transform active:scale-95"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button></td></tr>';
+                html += '<tr style="border-top:1px solid var(--border-mid);">'
+                      + '<td style="padding:10px;color:var(--txt-primary);">' + escapeHtml(item.name) + '</td>'
+                      + '<td style="padding:10px;text-align:center;color:var(--txt-secondary);">' + escapeHtml(item.unit) + '</td>'
+                      + '<td style="padding:10px;text-align:center;"><input type="number" value="' + item.quantity + '" min="0.01" step="0.01" onchange="updateCartQuantity(\'' + escapeHtml(item.id) + '\', this.value)" aria-label="Cantidad de ' + escapeHtml(item.name) + '" style="width:72px;padding:6px;text-align:center;background:var(--surface);color:var(--txt-primary);border:1px solid var(--border-mid);border-radius:6px;font-weight:600;font-family:inherit;"></td>'
+                      + '<td style="padding:10px;text-align:center;"><button onclick="removeFromCart(\'' + escapeHtml(item.id) + '\')" class="ui-icono-btn ui-icono-btn--peligro" aria-label="Quitar ' + escapeHtml(item.name) + ' del pedido" title="Quitar del pedido"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button></td></tr>';
             });
             tbody.innerHTML = html;
             orderTotal.textContent = 'Total: ' + total.toFixed(2);
@@ -2091,6 +2106,13 @@
         }
 
         function deleteOrder(orderId) {
+            // v5.26 (hallazgo #10) — deleteOrder() era el único hermano de
+            // deleteAllOrders()/deleteAllInventories() sin el candado isAdmin()
+            // que el FIX-AUDIT ya les puso a esos dos: cualquier autenticado
+            // podía borrar CUALQUIER pedido individual (orders se sincroniza a
+            // Firestore vía ordersChunks, así que el borrado llegaba a todos
+            // los dispositivos). Mismo candado, por consistencia.
+            if (!isAdmin()) { showNotification('⚠️ Solo el administrador puede eliminar pedidos'); return; }
             showConfirm('¿Está seguro de eliminar este pedido?', function() {
                 orders = orders.filter(o => o.id !== orderId);
                 _marcarComoBorrado('pedido', orderId); // FIX-CONCURRENCIA: no resucitar en el próximo merge
@@ -2153,34 +2175,12 @@
             window.open(url, '_blank');
         }
 
-        function saveInventorySnapshot() {
-            if (products.length === 0) { showNotification('No hay productos para guardar en el inventario'); return; }
-            let maxInvNum = 0;
-            // FIX-CONCURRENCIA: regex sin fin de cadena ($) para tolerar el sufijo único
-            inventories.forEach(inv => { const m = inv.id.match(/^INV-(\d+)/); if (m) maxInvNum = Math.max(maxInvNum, parseInt(m[1], 10)); });
-            const snapshot = {
-                id: 'INV-' + String(maxInvNum + 1).padStart(3, '0') + '-' + _sufijoUnico(),
-                date: new Date().toLocaleString(),
-                area: selectedArea,
-                products: products.map(p => {
-                    const areaData = inventarioConteo[p.id] && inventarioConteo[p.id][selectedArea];
-                    // Guardar total convertido (enteras + puntos de abiertas)
-                    const totalConvertido = calcularTotalConAbiertas(p.id, selectedArea);
-                    return {
-                        id: p.id,
-                        name: p.name,
-                        stock: totalConvertido,   // total real con conversión oz→puntos
-                        abiertas: areaData ? areaData.abiertas : [],
-                        unit: p.unit,
-                        group: p.group || 'General'
-                    };
-                }),
-                totalProducts: products.reduce((sum, p) => sum + calcularTotalConAbiertas(p.id, selectedArea), 0)
-            };
-            inventories.push(snapshot);
-            saveToLocalStorage();
-            showNotification('Inventario de ' + areas[selectedArea] + ' guardado');
-        }
+        // v5.26 — limpieza de código muerto: saveInventorySnapshot() se quitó
+        // de aquí — sin ningún punto de llamada en todo el repositorio.
+        // Guardaba un "snapshot" de inventario en el arreglo legacy
+        // `inventories` (id INV-NNN-sufijo), un modelo anterior al
+        // Inventario Físico actual (colección inventarios de Firestore,
+        // con sesión, áreas y conteo por usuario) que lo sustituyó.
 
         // FIX 5 — Parseo robusto de números provenientes de Excel/CSV
         function parseExcelNumber(val) {

@@ -245,7 +245,9 @@ chk('Crear exige inventory.post, id válido (fecha o fecha_HHmm), tipo de ancla,
     /tipo in \['fin_de_mes', 'mitad_de_semana', 'importacion_excel'\]/.test(bloque) &&
     /origen\.inventoryId is string/.test(bloque) && /saldos is map/.test(bloque) &&
     /d\.fecha == id/.test(reglas) && /id == d\.fecha \+ '_' \+ d\.hora/.test(reglas));
-chk('Lectura para cualquier autenticado (solo cantidades, sin dinero, como el inicial)', /allow read:\s+if request\.auth != null;/.test(bloque));
+// v5.26 (hallazgo #9) — "cualquier autenticado" pasó a exigir además
+// _cuentaActiva(); sigue sin exigir un permiso específico de dinero.
+chk('Lectura para cualquier cuenta activa (solo cantidades, sin dinero, como el inicial)', /allow read:\s+if _cuentaActiva\(\);/.test(bloque));
 chk('★ La transición a CONTABILIZADO admite anclaDestino (si no, hasOnly tumba el batch entero)',
     /hasOnly\(\['estado','contabilizadoEn','contabilizadoPor','semanaDestino','mesDestino','anclaDestino'\]\)/.test(reglas));
 

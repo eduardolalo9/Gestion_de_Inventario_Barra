@@ -1043,8 +1043,7 @@
             }
             if (a.uomDistinta.length) {
                 html += '<div class="vt-nota vt-nota--info">'
-                      + '<i class="fa-solid fa-circle-info" aria-hidden="true"></i> ' + a.uomDistinta.length + ' insumo(s) con unidad de receta distinta a la del catálogo. Se calculan como hace el Excel '
-                      + '(sin convertir), pero conviene revisarlos: '
+                      + '<i class="fa-solid fa-circle-info" aria-hidden="true"></i> ' + a.uomDistinta.length + ' insumo(s) con una unidad de receta que no se pudo convertir a la del catálogo — se descuenta la cantidad tal cual, sin convertir, y conviene revisarlos: '
                       + escapeHtml(a.uomDistinta.slice(0, 3).map(function(x) { return x.nombre + ' (' + x.uomReceta + ' vs ' + x.unidadProducto + ')'; }).join(', '))
                       + (a.uomDistinta.length > 3 ? '…' : '') + '</div>';
             }
