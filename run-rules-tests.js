@@ -1431,6 +1431,91 @@ async function main() {
     });
 
     // ══════════════════════════════════════════════════════════════════
+    //  v5.27 — CANCELAR una compra (solo admin) y REINGRESAR una cancelada
+    //  ────────────────────────────────────────────────────────────────
+    //  Decisión de Eduardo (12-oct-2026): marcar, no borrar. El batch real
+    //  de cancelarCompra() (js/88) es: update de la compra + delete de sus
+    //  asientos. Sin el emulador en el entorno de desarrollo de Claude,
+    //  estas pruebas son la verificación pendiente de las reglas nuevas.
+    // ══════════════════════════════════════════════════════════════════
+
+    const cambiosCancelar = (uid, extra) => Object.assign({
+        cancelada: true, canceladaEn: Date.now(), canceladaPor: uid,
+        canceladaPorNombre: 'Eduardo', motivoCancelacion: 'Se importó con la fecha equivocada'
+    }, extra || {});
+
+    async function sembrarCompraActiva() {
+        await sembrarFase4(async (db) => {
+            await rutaCompra(db, 'sap-27615').set(compraDemo('sap-27615'));
+            await rutaMovimiento(db, 'compra_sap-27615_1180015').set(movimientoDemo('compra_sap-27615_1180015', 'sap-27615'));
+        });
+    }
+
+    await prueba('C15. ★ El admin cancela: update de la compra + delete de su asiento en un batch', async () => {
+        await sembrarCompraActiva();
+        const b = admin1.batch();
+        b.update(rutaCompra(admin1, 'sap-27615'), cambiosCancelar('admin1'));
+        b.delete(rutaMovimiento(admin1, 'compra_sap-27615_1180015'));
+        await assertSucceeds(b.commit());
+    });
+
+    await prueba('C16. ★ Quien tiene permisos de compras pero NO es admin no puede cancelar', async () => {
+        await sembrarCompraActiva();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await ctx.firestore().doc('usuarios/comprador1').set({
+                uid: 'comprador1', role: 'BARTENDER',
+                permissionOverrides: { 'purchases.read': 'allow', 'purchases.create': 'allow',
+                                       'purchases.import': 'allow', 'purchases.delete': 'allow' }
+            });
+        });
+        await assertFails(rutaCompra(comprador1, 'sap-27615').update(cambiosCancelar('comprador1')));
+    });
+
+    await prueba('C17. Cancelar no puede reescribir otros campos (importe, líneas, fechas)', async () => {
+        await sembrarCompraActiva();
+        await assertFails(rutaCompra(admin1, 'sap-27615').update(cambiosCancelar('admin1', { importe: 1 })));
+        await assertFails(rutaCompra(admin1, 'sap-27615').update(cambiosCancelar('admin1', { fecha: '2026-01-01' })));
+    });
+
+    await prueba('C18. Cancelar exige motivo (5-200) y canceladaPor = quien cancela', async () => {
+        await sembrarCompraActiva();
+        await assertFails(rutaCompra(admin1, 'sap-27615').update(cambiosCancelar('admin1', { motivoCancelacion: 'no' })));
+        await assertFails(rutaCompra(admin1, 'sap-27615').update(cambiosCancelar('otra-persona')));
+    });
+
+    await prueba('C19. ★ Un asiento de una compra ACTIVA no se puede borrar (ni siquiera el admin)', async () => {
+        await sembrarCompraActiva();
+        await assertFails(rutaMovimiento(admin1, 'compra_sap-27615_1180015').delete());
+    });
+
+    await prueba('C20. ★ Reingresar: una cancelada se sobrescribe con la versión nueva (con su rastro)', async () => {
+        await sembrarFase4(async (db) => {
+            await rutaCompra(db, 'sap-27615').set(compraDemo('sap-27615', cambiosCancelar('admin1')));
+        });
+        await assertSucceeds(rutaCompra(comprador1, 'sap-27615').set(compraDemo('sap-27615', {
+            cancelada: false, fechaIngreso: '2026-09-20',
+            cancelaciones: [{ canceladaEn: 1, canceladaPor: 'admin1', motivo: 'Se importó con la fecha equivocada' }]
+        })));
+    });
+
+    await prueba('C21. Reingresar sin el rastro de la cancelación se rechaza; y una ACTIVA no se sobrescribe', async () => {
+        await sembrarFase4(async (db) => {
+            await rutaCompra(db, 'sap-27615').set(compraDemo('sap-27615', cambiosCancelar('admin1')));
+            await rutaCompra(db, 'sap-27620').set(compraDemo('sap-27620'));
+        });
+        await assertFails(rutaCompra(comprador1, 'sap-27615').set(compraDemo('sap-27615', { cancelada: false })));
+        await assertFails(rutaCompra(comprador1, 'sap-27620').set(compraDemo('sap-27620', {
+            cancelada: false, cancelaciones: [{ canceladaEn: 1 }]
+        })));
+    });
+
+    await prueba('C22. fechaIngreso: si viene, debe ser AAAA-MM-DD', async () => {
+        await sembrarFase4();
+        await assertFails(rutaCompra(comprador1, 'sap-27615').set(compraDemo('sap-27615', { fechaIngreso: '20/09/2026' })));
+        await assertSucceeds(rutaCompra(comprador1, 'sap-27615').set(compraDemo('sap-27615', { fechaIngreso: '2026-09-20' })));
+    });
+
+    // ══════════════════════════════════════════════════════════════════
     //  FASE 5 (5B) — CONTEO DE AUDITORÍA HUÉRFANO
     //  ────────────────────────────────────────────────────────────────
     //  Mismo patrón de inmutabilidad que 'compras': id determinista

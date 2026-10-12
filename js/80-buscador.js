@@ -59,6 +59,26 @@
             ]
         });
 
+        // v5.27 — Compras: se busca sobre todo por PRODUCTO (pedido de Eduardo,
+        // 12-oct-2026): nombre del catálogo, código y la descripción de SAP de
+        // cada línea. Folio y Doc SAP como código exacto; proveedor pesa poco
+        // (para él está el selector de proveedor).
+        var _motorCompras = crearMotorBusqueda({
+            claves: [
+                { nombre: 'productos', peso: 3,
+                  obtener: function(c) {
+                      return (Array.isArray(c.lineas) ? c.lineas : []).map(function(l) {
+                          var p = (typeof products !== 'undefined' && Array.isArray(products))
+                              ? products.find(function(x) { return String(x.id) === String(l.productoId); }) : null;
+                          return (p ? (p.name || '') : '') + ' ' + (l.descripcionSap || '') + ' ' + (l.productoId || '');
+                      }).join(' ');
+                  } },
+                { nombre: 'folio',  peso: 2, codigo: true },
+                { nombre: 'docSap', peso: 2, codigo: true },
+                { nombre: 'proveedorNombre', peso: 1 }
+            ]
+        });
+
         // REDISEÑO — Recetario. El nombre manda igual que en el catálogo; el
         // PV (código único, solo existe si la receta vino de una importación
         // — ver RECETARIO-2) se trata como código exacto; la categoría pesa
@@ -299,6 +319,15 @@
                 if (d) _motorFvs.indexar(d.filas);
             },
             paso: 40
+        });
+
+        // v5.27 — Compras. _renderComprasResultados() vive en js/88-compras.js.
+        BusquedaUI.registrar('compras', {
+            obtenerConsulta: function() { return _comprasSearchTerm; },
+            alAplicar:  function(v) { _comprasSearchTerm = v; },
+            refrescar:  function() { return _pintarRegionBusqueda('compras', _renderComprasResultados()); },
+            precalentar: function() { _motorCompras.indexar(compras); },
+            paso: 30
         });
 
         // REDISEÑO — Recetario comparte el mismo buscador que Inicio: misma

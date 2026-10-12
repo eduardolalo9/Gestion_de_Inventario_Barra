@@ -427,7 +427,16 @@
             return (neg ? '-' : '') + '$' + Math.abs(n).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
         function _chipsFvs() {
-            return [{ id: 'solo_dif', etiqueta: 'Solo con diferencias' }];
+            return [
+                { id: 'solo_dif',   etiqueta: 'Solo con diferencias' },
+                // v5.27 — el orden predeterminado es menor → mayor; este chip lo invierte.
+                { id: 'orden_desc', etiqueta: 'Mayor diferencia primero' }
+            ];
+        }
+
+        /** 'menor_mayor' (predeterminado) | 'mayor_menor' (chip activo). */
+        function _fvsOrden() {
+            return BusquedaUI.filtroActivo('fvs', 'orden_desc') ? 'mayor_menor' : 'menor_mayor';
         }
 
         /** Aplica el chip "solo con diferencias" sobre las filas ya calculadas. */
@@ -441,6 +450,91 @@
             });
         }
 
+        // ── v5.27 — tarjetas tipo reconteo, con todas las áreas ──────────────
+
+        function _fvsAreasLista() {
+            return (typeof AREAS_CONTEO !== 'undefined' && AREAS_CONTEO.length) ? AREAS_CONTEO.slice() : ['almacen', 'barra1', 'barra2'];
+        }
+
+        function _fvsEtiquetaArea(a) {
+            if (typeof areasAuditoria !== 'undefined' && areasAuditoria && areasAuditoria[a]) return areasAuditoria[a];
+            if (typeof areas !== 'undefined' && areas && areas[a]) return areas[a];
+            return a;
+        }
+
+        function _fvsUsaBotella(p) {
+            return !!(p && typeof tieneConversion === 'function' && tieneConversion(p));
+        }
+
+        function _fvsFmtCant(p, n) {
+            if (typeof n !== 'number') return '—';
+            return _fvsUsaBotella(p) ? n.toFixed(2) : String(Math.round(n * 1000) / 1000);
+        }
+
+        function _fvsDesglose(p, reg) {
+            if (!reg) return 'sin contar';
+            if (_fvsUsaBotella(p)) {
+                var ab = (reg.abiertas || []).filter(function(v) { return v > 0; });
+                return (reg.enteras || 0) + ' ent' + (ab.length ? ' · ' + ab.length + ' ab' : '');
+            }
+            return (p && p.unit) ? String(p.unit) : '';
+        }
+
+        /**
+         * Solo administración corrige desde aquí (decisión de Eduardo,
+         * 12-oct-2026: corrección DIRECTA, sin pasar por el reconteo), y solo
+         * con el Inventario Físico abierto: un CERRADO es inmutable.
+         */
+        function _fvsPuedeCorregir() {
+            return typeof isAdmin === 'function' && isAdmin()
+                && typeof _inventarioActivo !== 'undefined' && !!_inventarioActivo
+                && typeof inventarioAbierto === 'function' && inventarioAbierto(_inventarioActivo)
+                && typeof _auditoriaSessionId !== 'undefined' && !!_auditoriaSessionId;
+        }
+
+        function _fvsTarjetaHtml(f, tol, editable) {
+            var p = (typeof products !== 'undefined' && Array.isArray(products)) ? products.find(function(x) { return x.id === f.id; }) : null;
+            var pendiente = f.estado === 'pendiente';
+            var tono = pendiente ? 'pendiente' : (f.diferencia < -tol ? 'faltante' : (f.diferencia > tol ? 'sobrante' : 'coincide'));
+            var etiqueta = { pendiente: 'Sin contar', faltante: 'Faltante', sobrante: 'Sobrante', coincide: 'Coincide' }[tono];
+            var areasL = _fvsAreasLista();
+            var h = '<div class="rc-card fvs-card fvs-card--' + tono + '" data-sbx-item>';
+            h += '<div class="rc-card__cab"><div style="min-width:0;flex:1;">';
+            h += '<div class="rc-card__nombre">' + resaltarBusqueda(f.nombre, _fvsSearchTerm) + '</div>';
+            h += '<div class="rc-card__sub">' + escapeHtml(String(f.id)) + (f.unidad ? ' · ' + escapeHtml(f.unidad) : '') + '</div>';
+            h += '</div>';
+            h += '<div class="fvs-dif fvs-dif--' + tono + '"><span class="fvs-dif__etq">' + etiqueta + '</span>';
+            if (!pendiente) {
+                h += '<span class="fvs-dif__val num">' + (f.diferencia > 0 ? '+' : '') + _fvsNum(f.diferencia) + '</span>'
+                   + '<span class="fvs-dif__neto num">' + _fvsMoneda(f.neto) + '</span>';
+            }
+            h += '</div></div>';
+
+            h += '<div class="rc-areas fvs-areas fvs-areas--n' + Math.min(areasL.length, 4) + '">';
+            areasL.forEach(function(area) {
+                var reg = f.areas ? f.areas[area] : null;
+                var cuerpo = '<span class="rc-area__nombre">' + escapeHtml(_fvsEtiquetaArea(area)) + '</span>'
+                           + '<span class="rc-area__valor num">' + (reg ? _fvsFmtCant(p, reg.total) : '—') + '</span>'
+                           + '<span class="rc-area__det">' + escapeHtml(_fvsDesglose(p, reg)) + '</span>';
+                if (editable && p) {
+                    h += '<button type="button" class="rc-area fvs-area" data-fvs-accion="editar"'
+                       + ' data-fvs-pid="' + escapeHtml(String(f.id)) + '" data-fvs-area="' + escapeHtml(area) + '"'
+                       + ' aria-label="Corregir ' + escapeHtml(f.nombre) + ' en ' + escapeHtml(_fvsEtiquetaArea(area)) + '">'
+                       + cuerpo + '<span class="fvs-area__lapiz" aria-hidden="true"><i class="fa-solid fa-pen"></i></span></button>';
+                } else {
+                    h += '<div class="rc-area fvs-area">' + cuerpo + '</div>';
+                }
+            });
+            h += '</div>';
+
+            h += '<div class="fvs-card__pie num">'
+               + '<span>Físico <b>' + (pendiente ? '—' : _fvsNum(f.fisico)) + '</b></span>'
+               + '<span>Sistema <b>' + _fvsNum(f.sistema) + '</b></span>'
+               + '</div>';
+            h += '</div>';
+            return h;
+        }
+
         function _renderFvsResultados() {
             var datos = fisicoVsSistemaCalcular();
             if (!datos) {
@@ -451,8 +545,9 @@
             }
             var tol = (typeof EXISTENCIA_TOLERANCIA === 'number') ? EXISTENCIA_TOLERANCIA : 0.001;
             var r = _buscarFvs(datos);
-            var filas = r.items;
             var lim = BusquedaUI.limite('fvs');
+            var orden = _fvsOrden();
+            var editable = _fvsPuedeCorregir();
             var html = '';
 
             html += '<dl class="if-datos" style="margin-bottom:10px;">';
@@ -470,34 +565,123 @@
                      +  'este inventario, "Sistema" pasa a ser inicial + compras − consumo teórico para ellos.</div></div>';
             }
 
-            if (filas.length === 0) {
+            html += '<p class="fvs-ayuda">' + (editable
+                ? '<i class="fa-solid fa-hand-pointer" aria-hidden="true"></i> Toca un área para corregir lo contado: se guarda al instante como conteo del administrador.'
+                : '<i class="fa-solid fa-eye" aria-hidden="true"></i> Solo lectura: las correcciones las hace administración con el inventario abierto.') + '</p>';
+
+            if (r.items.length === 0) {
                 return { html: html + BusquedaUI.vacio('fvs', 'productos'), coincidencias: 0, total: r.total };
             }
 
             html += BusquedaUI.resumen('fvs', r.coincidencias, r.total, 'producto', 'productos');
-            html += '<div style="margin-top:8px;">';
-            filas.slice(0, lim).forEach(function(f) {
-                html += '<div data-sbx-item style="padding:10px 12px;border:1px solid var(--border-mid);border-radius:var(--r-md);margin-bottom:8px;">';
-                html += '<div style="font-weight:700;font-size:.82rem;">' + resaltarBusqueda(f.nombre, _fvsSearchTerm) + '</div>';
-                if (f.estado === 'pendiente') {
-                    html += '<div style="font-size:.74rem;color:var(--txt-muted);margin-top:2px;"><i class="fa-solid fa-hourglass" aria-hidden="true"></i> Sin contar todavía · '
-                         +  'Sistema: ' + _fvsNum(f.sistema) + '</div>';
-                } else {
-                    var color = f.diferencia < -tol ? 'var(--danger)' : (f.diferencia > tol ? 'var(--ok)' : 'var(--txt-muted)');
-                    var etiqueta = f.diferencia < -tol ? 'Faltante' : (f.diferencia > tol ? 'Sobrante' : 'Coincide');
-                    html += '<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:.76rem;color:var(--txt-muted);margin-top:2px;font-family:var(--f-num);font-variant-numeric:tabular-nums;">'
-                         +  '<span>Físico: <b style="color:var(--txt-primary);">' + _fvsNum(f.fisico) + '</b></span>'
-                         +  '<span>Sistema: <b style="color:var(--txt-primary);">' + _fvsNum(f.sistema) + '</b></span>'
-                         +  '<span style="color:' + color + ';font-weight:700;">' + etiqueta + ': '
-                         +  (f.diferencia > 0 ? '+' : '') + _fvsNum(f.diferencia) + '</span>'
-                         +  '<span style="color:' + color + ';">' + _fvsMoneda(f.neto) + '</span>'
-                         +  '</div>';
-                }
-                html += '</div>';
+            html += '<div class="fvs-orden">Por grupo · diferencia ' + (orden === 'mayor_menor' ? 'mayor → menor' : 'menor → mayor') + '</div>';
+            var grupos = fisicoVsSistemaAgrupar(r.items, orden);
+            var pintadas = 0;
+            grupos.forEach(function(g) {
+                if (pintadas >= lim) return;
+                var netoG = g.neto < 0 ? 'var(--danger)' : (g.neto > 0 ? 'var(--ok)' : 'var(--txt-secondary)');
+                html += '<section class="fvs-grupo" aria-label="Grupo ' + escapeHtml(g.grupo) + '">';
+                html += '<div class="fvs-grupo__cab"><span class="fvs-grupo__nom">' + escapeHtml(g.grupo) + '</span>'
+                     +  '<span class="fvs-grupo__dat">' + g.contados + ' contado' + (g.contados === 1 ? '' : 's')
+                     +  (g.pendientes ? ' · ' + g.pendientes + ' sin contar' : '')
+                     +  ' · <b class="num" style="color:' + netoG + ';">' + _fvsMoneda(g.neto) + '</b></span></div>';
+                html += '<div class="fvs-grupo__lista">';
+                g.filas.forEach(function(f) {
+                    if (pintadas >= lim) return;
+                    html += _fvsTarjetaHtml(f, tol, editable);
+                    pintadas++;
+                });
+                html += '</div></section>';
             });
-            html += '</div>';
-            html += BusquedaUI.centinela('fvs', filas.length - lim);
+            html += BusquedaUI.centinela('fvs', r.items.length - lim);
             return { html: html, coincidencias: r.coincidencias, total: r.total };
+        }
+
+        // ── v5.27 — corrección DIRECTA desde la tarjeta ──────────────────────
+        //  Abre el MISMO modal de conteo de siempre (mismas validaciones:
+        //  decimales, negativos, notación científica, tope 9999), precargado
+        //  con el valor oficial vigente de ese almacén (la consolidación,
+        //  auditoriaConteo). Al guardar, saveInventarioModal() devuelve aquí
+        //  los valores y se escriben en el conteo propio del administrador,
+        //  que es la autoridad en la consolidación (_recalcAdminAggregatedConteo):
+        //  la misma vía probada que usa "Finalizar reconteo".
+        //  Exige conexión, como el reconteo: una corrección que solo vive en
+        //  el teléfono se perdería si alguien cierra el inventario antes.
+
+        function fvsEditarArea(pid, area) {
+            if (!_fvsPuedeCorregir()) {
+                showNotification('⚠️ Solo administración corrige, y solo con el Inventario Físico abierto');
+                return;
+            }
+            if (_fvsAreasLista().indexOf(area) === -1) return;
+            var p = products.find(function(x) { return x.id === pid; });
+            if (!p) { showNotification('⚠️ El producto ya no existe en el catálogo'); return; }
+            var d = (typeof auditoriaConteo !== 'undefined' && auditoriaConteo[pid]) ? auditoriaConteo[pid][area] : null;
+            var valor = d ? { enteras: d.enteras || 0, abiertas: (d.abiertas || []).slice() } : { enteras: 0, abiertas: [] };
+            openInventarioModal(pid, { fvs: { area: area, valor: valor } });
+        }
+
+        /** ¿Dos registros {enteras, abiertas} dicen lo mismo? (las abiertas en 0 no cuentan) */
+        function _fvsMismoConteo(a, b) {
+            var ea = (a && a.enteras) || 0, eb = (b && b.enteras) || 0;
+            if (Math.abs(ea - eb) > 0.0005) return false;
+            var aa = ((a && a.abiertas) || []).filter(function(v) { return v > 0; }).slice().sort(function(x, y) { return x - y; });
+            var ab = ((b && b.abiertas) || []).filter(function(v) { return v > 0; }).slice().sort(function(x, y) { return x - y; });
+            if (aa.length !== ab.length) return false;
+            for (var i = 0; i < aa.length; i++) if (Math.abs(aa[i] - ab[i]) > 0.0005) return false;
+            return true;
+        }
+
+        var _fvsGuardando = false;
+
+        async function fvsAplicarCorreccion(pid, area, enteras, abiertas) {
+            if (_fvsGuardando) return;
+            if (!_fvsPuedeCorregir()) {
+                showNotification('⚠️ El inventario ya no está abierto: no se puede corregir');
+                return;
+            }
+            if (!navigator.onLine) {
+                showNotification('📴 Sin conexión — la corrección tiene que llegar al servidor antes de que alguien cierre el inventario. No se guardó.');
+                return;
+            }
+            var antes = (typeof auditoriaConteo !== 'undefined' && auditoriaConteo[pid]) ? auditoriaConteo[pid][area] : null;
+            var nuevo = { enteras: enteras, abiertas: (abiertas || []).slice() };
+            if (_fvsMismoConteo(antes, nuevo)) {
+                showNotification('Sin cambios: coincide con lo contado');
+                return;
+            }
+            _fvsGuardando = true;
+            try {
+                if (!myAuditoriaConteo[pid]) myAuditoriaConteo[pid] = {};
+                myAuditoriaConteo[pid][area] = {
+                    enteras:   nuevo.enteras,
+                    abiertas:  nuevo.abiertas,
+                    _ts:       Date.now(),
+                    _fvs:      true      // marca de origen: corrección desde Físico vs Sistema
+                };
+                saveToLocalStorage();
+                showNotification('⏳ Guardando corrección…');
+                await syncMyAuditoriaToFirestore();
+                var p = products.find(function(x) { return x.id === pid; });
+                if (typeof _auditSyncPending !== 'undefined' && _auditSyncPending) {
+                    showNotification('⚠️ Corrección guardada en este dispositivo, pero no llegó al servidor. Revisa la conexión antes de cerrar el inventario.');
+                } else {
+                    showNotification('✅ Corregido: ' + ((p && p.name) || pid) + ' en ' + _fvsEtiquetaArea(area));
+                }
+            } finally {
+                _fvsGuardando = false;
+            }
+            renderTab();
+        }
+
+        if (typeof document !== 'undefined' && document.addEventListener) {
+            document.addEventListener('click', function(e) {
+                var el = e.target && e.target.closest ? e.target.closest('[data-fvs-accion]') : null;
+                if (!el || el.disabled) return;
+                if (el.getAttribute('data-fvs-accion') === 'editar') {
+                    fvsEditarArea(el.getAttribute('data-fvs-pid'), el.getAttribute('data-fvs-area'));
+                }
+            });
         }
 
         function renderFisicoVsSistema() {
@@ -512,7 +696,8 @@
                  +  '<i class="fa-solid fa-chevron-left" aria-hidden="true"></i> Volver</button>';
             html += '</div>';
             html += '<p class="pm-nota" style="margin:0 0 10px;">Suma lo contado en todas las áreas del inventario '
-                 +  'abierto y lo compara, producto por producto, contra lo que el sistema cree que hay.</p>';
+                 +  'abierto y lo compara, producto por producto, contra lo que el sistema cree que hay. '
+                 +  'Agrupado por grupo del catálogo y ordenado por diferencia.</p>';
             html += BusquedaUI.barra('fvs', {
                 placeholder: 'Buscar producto o código…',
                 etiqueta: 'Buscar en Físico vs Sistema',

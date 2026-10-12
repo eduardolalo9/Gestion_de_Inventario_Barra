@@ -91,9 +91,21 @@
             try { igual = JSON.stringify(lista[i]) === JSON.stringify(c); } catch (_) { igual = false; }
             if (igual) return false;
             lista[i] = c;                                   // la nube gana en un mismo folio
-            (asientos || []).forEach(function(m) {          // el libro solo CRECE: asientos nuevos, nunca se editan
+            // v5.27 — una compra ya puede CAMBIAR en el servidor (cancelarse, o
+            // reingresarse con otros datos). Antes el libro "solo crecía" y un
+            // asiento viejo se quedaba con sus valores de antes; ahora los de
+            // esa compra se quitan (en su lugar: `libro` es el arreglo global)
+            // y se vuelven a derivar. Una cancelada se queda sin ninguno.
+            for (var j = libro.length - 1; j >= 0; j--) {
+                if (libro[j] && libro[j].origen && libro[j].origen.compraId === c.compraId) libro.splice(j, 1);
+            }
+            (asientos || []).forEach(function(m) {
                 if (!libro.some(function(x) { return x.movId === m.movId; })) libro.push(m);
             });
+            // Y la caché del arrastre (lo leído de Firestore al cargar el ancla).
+            if (typeof existenciaOlvidarCompra === 'function') {
+                try { existenciaOlvidarCompra(c.compraId); } catch (_) {}
+            }
             return true;
         }
 

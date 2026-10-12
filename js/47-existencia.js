@@ -318,6 +318,35 @@
         }
 
         /**
+         * v5.27 — una compra cambió en el servidor (se CANCELÓ, o una cancelada
+         * se volvió a ingresar con otros datos). Hasta v5.26 eso no podía
+         * pasar (compras inmutables) y dos memorias lo daban por hecho:
+         *   · _existenciaArrastre.compras guarda los asientos leídos de
+         *     Firestore al cargar el ancla. arrastreEntradas() deduplica por
+         *     movId quedándose con el PRIMERO, que es justo el de esta caché:
+         *     sin purgarla, una compra cancelada seguiría sumando al Total
+         *     hasta recargar la app.
+         *   · Los memos se invalidan por longitud del libro ("el libro solo
+         *     crece"); una compra re-ingresada puede dejar la misma longitud
+         *     con otros valores.
+         * Por eso: se quitan los asientos de esa compra de la caché y se
+         * invalidan los tres memos. No relee nada de Firestore.
+         */
+        function existenciaOlvidarCompra(compraId) {
+            if (!compraId) return false;
+            var lista = Array.isArray(_existenciaArrastre.compras) ? _existenciaArrastre.compras : [];
+            var antes = lista.length;
+            _existenciaArrastre.compras = lista.filter(function(m) {
+                return !(m && m.origen && m.origen.compraId === compraId);
+            });
+            _existenciaArrastre.version = (_existenciaArrastre.version || 0) + 1;
+            _existenciaArrastreMemo = { clave: null, entradas: null, ventas: null, periodos: null, consumo: null };
+            _existenciaEntradasMemo = { semana: null, n: -1, mapa: null };
+            return _existenciaArrastre.compras.length !== antes;
+        }
+        if (typeof window !== 'undefined') window.existenciaOlvidarCompra = existenciaOlvidarCompra;
+
+        /**
          * FASE 14 — repinta la pestaña cuando llega el ancla, SOLO si la pantalla
          * muestra el Total (Inicio o Productos) y no hay un modal abierto: un
          * repintado a mitad de una captura de conteo movería la pantalla bajo

@@ -93,6 +93,11 @@
         // Resultado YA guardado (o con errores) de confirmarImportacionCompras(),
         // para la pantalla de incidencias (D-4).
         let _comprasImportResultado = null;
+        // v5.27 — lista de Compras: búsqueda por producto (barra unificada) y
+        // filtro por proveedor ('' = todos; si no, la clave de
+        // _claveProveedorCompra en js/88-compras.js).
+        let _comprasSearchTerm = '';
+        let _comprasFiltroProveedor = '';
         // RECETARIO-1 — bill of materials plano (sin sub-recetas, ver diseño
         // 2026-09-26 y verificación contra Excel 2026-09-27). Mismo patrón que
         // `products`: el admin edita este arreglo localmente y lo PUBLICA a
@@ -357,4 +362,4 @@
         let _detalleInventarioCerradoData = null; // registros de su snapshot ya cargados (cache de la vista actual)
         let auditoriaAreaActiva = null;
         let auditoriaStatus = estadoAreasVacio('pendiente');
-        let auditoriaConteo = {}; // admin: vista agregada de todos los usuarios
+        let auditoriaConteo = {}; // admin: vista agregada de todos los usuarios

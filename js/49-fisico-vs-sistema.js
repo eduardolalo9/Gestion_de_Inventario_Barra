@@ -28,6 +28,37 @@
         // ═════════════════════════════════════════════════════════════════════
 
         /**
+         * v5.27 — lo contado de un producto, ÁREA POR ÁREA (la tarjeta de
+         * Físico vs Sistema muestra cada almacén, como la del reconteo).
+         * Devuelve { tocado, areas: { area: { enteras, abiertas, total } | null } }.
+         * Un área sin dato es null (no {0}): misma regla de la cabecera.
+         */
+        function fvsConteoPorArea(prodId) {
+            var areasC = (typeof AREAS_CONTEO !== 'undefined' && AREAS_CONTEO.length) ? AREAS_CONTEO : ['almacen', 'barra1', 'barra2'];
+            var out = { tocado: false, areas: {} };
+            var reg = (typeof auditoriaConteo !== 'undefined' && auditoriaConteo) ? auditoriaConteo[prodId] : null;
+            var product = (typeof products !== 'undefined' && Array.isArray(products))
+                ? products.find(function(p) { return p.id === prodId; }) : null;
+            var botella = !!(product && typeof tieneConversion === 'function' && tieneConversion(product));
+            areasC.forEach(function(area) {
+                var d = reg ? reg[area] : null;
+                if (!d) { out.areas[area] = null; return; }
+                out.tocado = true;
+                var enteras = d.enteras || 0;
+                var suma = 0;
+                (d.abiertas || []).forEach(function(v) {
+                    suma += botella ? convertirOzAPuntos(v, product.capacidadMl, product.pesoBotellaLlenaOz) : (v || 0);
+                });
+                out.areas[area] = {
+                    enteras:  enteras,
+                    abiertas: Array.isArray(d.abiertas) ? d.abiertas.slice() : [],
+                    total:    Math.round((enteras + suma) * 1000) / 1000
+                };
+            });
+            return out;
+        }
+
+        /**
          * Suma, para un producto, lo que el agregado admin en vivo lleva en
          * TODAS las áreas del inventario en curso, convirtiendo botellas
          * abiertas a puntos con la misma fórmula que usa el resto de la app.
@@ -36,28 +67,10 @@
          * todavía (no 0 — ver nota de cabecera).
          */
         function fvsConteoFisicoProducto(prodId) {
-            if (typeof auditoriaConteo === 'undefined' || !auditoriaConteo || !auditoriaConteo[prodId]) return null;
-            var areasC = (typeof AREAS_CONTEO !== 'undefined' && AREAS_CONTEO.length) ? AREAS_CONTEO : ['almacen', 'barra1', 'barra2'];
-            var product = (typeof products !== 'undefined' && Array.isArray(products))
-                ? products.find(function(p) { return p.id === prodId; }) : null;
-            var tocado = false;
+            var r = fvsConteoPorArea(prodId);
+            if (!r.tocado) return null;
             var total = 0;
-            areasC.forEach(function(area) {
-                var d = auditoriaConteo[prodId][area];
-                if (!d) return;
-                tocado = true;
-                var enteras = d.enteras || 0;
-                var suma = 0;
-                if (product && typeof tieneConversion === 'function' && tieneConversion(product)) {
-                    (d.abiertas || []).forEach(function(oz) {
-                        suma += convertirOzAPuntos(oz, product.capacidadMl, product.pesoBotellaLlenaOz);
-                    });
-                } else {
-                    (d.abiertas || []).forEach(function(v) { suma += (v || 0); });
-                }
-                total += enteras + suma;
-            });
-            if (!tocado) return null;
+            Object.keys(r.areas).forEach(function(a) { if (r.areas[a]) total += r.areas[a].total; });
             return Math.round(total * 1000) / 1000;
         }
 
@@ -100,6 +113,7 @@
             var totalNeto = 0, totalFaltante = 0, totalSobrante = 0;
 
             (typeof products !== 'undefined' && Array.isArray(products) ? products : []).forEach(function(p) {
+                var porArea = fvsConteoPorArea(p.id);
                 var fisico = fvsConteoFisicoProducto(p.id);
                 var r = (typeof existenciaOficial === 'function') ? existenciaOficial(p, ent, ven) : null;
                 var sistema = redondear(r ? r.valor : 0);
@@ -111,7 +125,8 @@
                     filas.push({
                         id: p.id, nombre: p.name || p.id, estado: 'pendiente',
                         fisico: null, sistema: sistema, diferencia: null, neto: null,
-                        origenSistema: origen
+                        origenSistema: origen,
+                        grupo: p.group || 'General', unidad: p.unit || '', areas: porArea.areas
                     });
                     return;
                 }
@@ -126,7 +141,8 @@
                 filas.push({
                     id: p.id, nombre: p.name || p.id, estado: 'contado',
                     fisico: fisico, sistema: sistema, diferencia: dif, neto: neto,
-                    origenSistema: origen
+                    origenSistema: origen,
+                    grupo: p.group || 'General', unidad: p.unit || '', areas: porArea.areas
                 });
             });
 
@@ -149,6 +165,41 @@
                 totalSobrante: redondear(totalSobrante),
                 filas:         filas
             };
+        }
+
+        /**
+         * v5.27 — fisicoVsSistemaAgrupar(filas, orden) — capa pura.
+         * Pedido de Eduardo (12-oct-2026): "organizar por grupos, por
+         * diferencia de menor a mayor". Agrupa por el grupo del catálogo
+         * (orden alfabético) y, dentro de cada grupo, ordena lo contado por
+         * diferencia: 'menor_mayor' (predeterminado: el faltante más grande
+         * primero, el sobrante más grande al final) o 'mayor_menor'. Lo
+         * pendiente (sin contar) va al final de su grupo, por nombre.
+         * @returns [{ grupo, filas, contados, pendientes, neto }]
+         */
+        function fisicoVsSistemaAgrupar(filas, orden) {
+            var desc = orden === 'mayor_menor';
+            var mapa = {};
+            (filas || []).forEach(function(f) {
+                var g = f.grupo || 'General';
+                if (!mapa[g]) mapa[g] = { grupo: g, filas: [], contados: 0, pendientes: 0, neto: 0 };
+                mapa[g].filas.push(f);
+                if (f.estado === 'pendiente') mapa[g].pendientes++;
+                else { mapa[g].contados++; mapa[g].neto += (f.neto || 0); }
+            });
+            var porNombre = function(a, b) { return String(a.nombre).localeCompare(String(b.nombre), 'es'); };
+            return Object.keys(mapa).sort(function(a, b) { return a.localeCompare(b, 'es'); }).map(function(k) {
+                var g = mapa[k];
+                g.filas.sort(function(a, b) {
+                    var pa = a.estado === 'pendiente', pb = b.estado === 'pendiente';
+                    if (pa !== pb) return pa ? 1 : -1;
+                    if (pa) return porNombre(a, b);
+                    var d = desc ? (b.diferencia - a.diferencia) : (a.diferencia - b.diferencia);
+                    return d || porNombre(a, b);
+                });
+                g.neto = Math.round(g.neto * 100) / 100;
+                return g;
+            });
         }
 
         // ═════════════════════════════════════════════════════════════════════

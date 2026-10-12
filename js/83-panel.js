@@ -345,6 +345,7 @@
 
             var lineas = [];
             (typeof compras !== 'undefined' ? compras : []).forEach(function(c) {
+                if (c && c.cancelada === true) return;   // v5.27 — una entrada cancelada no es una compra
                 (Array.isArray(c.lineas) ? c.lineas : []).forEach(function(l) {
                     if (l.productoId === pid) lineas.push({ fecha: c.fecha || '', prov: c.proveedorNombre || '', cant: l.cantidadInventario || 0, costo: l.costoUnitario });
                 });
