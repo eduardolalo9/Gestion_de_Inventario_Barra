@@ -218,7 +218,13 @@
             'purchases.read':        { nombre: 'Ver compras',                  descripcion: 'Consultar la pestana de compras.',                                             grupo: 'Compras',             delegable: true,  sensible: false, efectivo: true  },
             'purchases.create':      { nombre: 'Registrar compras',            descripcion: 'Capturar una compra manualmente.',                                             grupo: 'Compras',             delegable: true,  sensible: false, efectivo: true  },
             'purchases.import':      { nombre: 'Importar compras',             descripcion: 'Cargar compras desde un archivo.',                                             grupo: 'Compras',             delegable: true,  sensible: true,  efectivo: true  },
-            'purchases.delete':      { nombre: 'Eliminar compras',             descripcion: 'Borrar registros de compra.',                                                  grupo: 'Compras',             delegable: false, sensible: true,  efectivo: false },
+            // v5.27 (decisión de Eduardo, 12-oct-2026) — el id se conserva
+            // (ya existía en el catálogo cerrado y en los roles guardados en
+            // Firestore), pero ahora SÍ hace algo: cancelar una entrada de
+            // compra (se marca cancelada y deja de sumar al Total; no se
+            // borra). Solo administración: delegable:false y las reglas
+            // exigen isAdminUser() además del permiso.
+            'purchases.delete':      { nombre: 'Cancelar entradas de compra',  descripcion: 'Cancelar una entrada ya ingresada: queda en el historial como cancelada y deja de sumar al Total.', grupo: 'Compras',             delegable: false, sensible: true,  efectivo: true  },
 
             // ── Reportes y datos ────────────────────────────────────────────
             'reports.read':          { nombre: 'Ver reportes',                 descripcion: 'Consultar los reportes globales publicados.',                                  grupo: 'Reportes y datos',    delegable: true,  sensible: false, efectivo: true  },

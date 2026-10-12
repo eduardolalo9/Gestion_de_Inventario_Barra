@@ -426,3 +426,101 @@ table { border-collapse: collapse; }
 .fa-folder-open    { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v1H5.4a2 2 0 00-1.9 1.4L2 18V7z'/%3E%3Cpath d='M3.5 18.5L5.4 11.4A2 2 0 017.3 10H21l-2 8.5a2 2 0 01-2 1.5H5.5a2 2 0 01-2-1.5z'/%3E%3C/svg%3E"); }
 .fa-eye            { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E"); }
 .fa-clock          { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 7v5l3.5 2'/%3E%3C/svg%3E"); }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   v5.27 — Compras (fecha de ingreso, duplicados, lista por día, filtro,
+   cancelación) y Físico vs Sistema (tarjetas por grupo con todas las áreas).
+   Vive aquí y no en estilos.css porque ésta ya está en su tope de peso
+   (prueba-redis-r8: 210 KB). Solo tokens: cero colores a mano.
+   ═══════════════════════════════════════════════════════════════════════ */
+.fa-ban            { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M5.7 5.7l12.6 12.6'/%3E%3C/svg%3E"); }
+.fa-truck          { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 6h11v10H2zM13 9h4l4 4v3h-8'/%3E%3Ccircle cx='6' cy='18' r='2'/%3E%3Ccircle cx='17' cy='18' r='2'/%3E%3C/svg%3E"); }
+.fa-hand-pointer   { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 11V4.5a1.5 1.5 0 013 0V10m0-1a1.5 1.5 0 013 0v1.5m0-1a1.5 1.5 0 013 0V12m0-.5a1.5 1.5 0 013 0V15a7 7 0 01-7 7h-1a7 7 0 01-5.4-2.6L4 16.5a1.6 1.6 0 012.4-2L9 17'/%3E%3C/svg%3E"); }
+.fa-calendar-check { --bi-icono: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='18' height='16' rx='2'/%3E%3Cpath d='M16 3v4M8 3v4M3 10h18M9 15.5l2 2 4-4'/%3E%3C/svg%3E"); }
+
+/* — Compras: fecha de ingreso (vista previa de la importación) — */
+.cp-fi { padding: 12px 14px; margin-bottom: 14px; border-radius: var(--r-lg); border: 2px solid var(--warn); background: var(--warn-dim); }
+.cp-fi--ok { border-color: var(--ok); background: var(--ok-dim); }
+.cp-fi__etq { display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--txt-primary); margin-bottom: 8px; }
+.cp-fi__req { font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding: 1px 7px; border-radius: 999px; background: var(--surface); color: var(--txt-secondary); }
+.cp-fi__fila { display: flex; gap: 8px; flex-wrap: wrap; }
+.cp-fi__input { flex: 1; min-width: 160px; min-height: 48px; padding: 0 12px; border-radius: var(--r-md); border: 1px solid var(--border-mid); background: var(--surface); color: var(--txt-primary); font: inherit; font-size: 1rem; }
+.cp-fi__input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.cp-fi__hoy { min-height: 48px; padding: 0 18px; border-radius: var(--r-md); border: 1px solid var(--accent); background: var(--card); color: var(--txt-primary); font: inherit; font-weight: 700; cursor: pointer; }
+.cp-fi__ayuda { margin-top: 8px; font-size: .78rem; line-height: 1.45; color: var(--txt-secondary); }
+.cp-fi__error { margin-top: 6px; font-size: .82rem; font-weight: 700; color: var(--danger); }
+
+/* — Compras: avisos y marcas de duplicado — */
+.cp-aviso { padding: 10px 12px; margin-bottom: 12px; border-radius: 10px; font-size: .82rem; line-height: 1.5; }
+.cp-aviso--info    { background: var(--info-dim);   color: var(--info); }
+.cp-aviso--warn    { background: var(--warn-dim);   color: var(--warn); }
+.cp-aviso--peligro { background: var(--danger-dim); color: var(--danger); font-weight: 700; }
+.cp-prev--bloqueada { opacity: .62; }
+.cp-dup { margin-top: 8px; padding: 7px 10px; border-radius: var(--r-md); font-size: .8rem; font-weight: 600; line-height: 1.4; }
+.cp-dup--bloq { background: var(--danger-dim); color: var(--danger); }
+.cp-dup--warn { background: var(--warn-dim);   color: var(--warn); }
+.cp-dup--info { background: var(--info-dim);   color: var(--info); }
+.cp-dup__opcion { display: flex; align-items: center; gap: 8px; min-height: 44px; margin-top: 4px; font-size: .84rem; color: var(--txt-primary); cursor: pointer; }
+.cp-dup__opcion input { width: 20px; height: 20px; accent-color: var(--accent); }
+
+/* — Compras: lista por fecha de ingreso, filtro y tarjeta cancelada — */
+.cp-nota-canceladas { margin: 0 0 12px; font-size: .8rem; color: var(--txt-secondary); }
+.cp-filtro { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 10px 0 12px; }
+.cp-filtro__etq { display: flex; align-items: center; gap: 6px; font-size: .82rem; font-weight: 700; color: var(--txt-secondary); }
+.cp-filtro__sel { flex: 1; min-width: 200px; min-height: 44px; padding: 0 10px; border-radius: var(--r-md); border: 1px solid var(--border-mid); background: var(--surface); color: var(--txt-primary); font: inherit; }
+.cp-filtro__sel:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.cp-dia { margin-bottom: 16px; }
+.cp-dia__cab { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; padding: 6px 2px 8px; border-bottom: 1px solid var(--border-mid); margin-bottom: 10px; }
+.cp-dia__fecha { display: flex; align-items: center; gap: 6px; font-weight: 800; font-size: .9rem; color: var(--txt-primary); }
+.cp-dia__tot { font-size: .78rem; color: var(--txt-secondary); font-variant-numeric: tabular-nums; }
+.cp-tarjeta__prov { font-weight: 700; }
+.cp-tarjeta.cp-tarjeta--cancelada { opacity: .72; border-style: dashed; }
+.cp-tarjeta--cancelada .cp-tarjeta__prov { text-decoration: line-through; }
+.cp-badge-cancelada { font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; padding: 2px 8px; border-radius: 999px; background: var(--danger-dim); color: var(--danger); }
+.cp-tarjeta__motivo { margin-top: 6px; font-size: .78rem; color: var(--danger); }
+.cp-coinc { margin-top: 8px; padding: 6px 8px; border-radius: var(--r-md); background: var(--accent-dim); }
+.cp-coinc__fila { display: flex; justify-content: space-between; gap: 10px; font-size: .8rem; color: var(--txt-primary); }
+.cp-coinc__mas { font-size: .74rem; color: var(--txt-secondary); }
+
+/* — Compras: detalle, estado cancelado y formulario de cancelación — */
+.cd-cancelada { margin: 4px 0 12px; padding: 10px 12px; border-radius: var(--r-md); background: var(--danger-dim); color: var(--danger); }
+.cd-cancelada__tit { font-weight: 800; margin-bottom: 4px; }
+.cd-cancelada__det { font-size: .8rem; line-height: 1.45; }
+.cd-cancelar { margin-top: 14px; padding-top: 12px; border-top: 2px dashed var(--border-mid); }
+.pm-btn.cd-cancelar__abrir { width: 100%; color: var(--danger); border-color: var(--danger); }
+.cd-cancelar__aviso { font-size: .8rem; line-height: 1.45; color: var(--warn); background: var(--warn-dim); padding: 8px 10px; border-radius: var(--r-md); margin-bottom: 10px; }
+.cd-cancelar__etq { display: block; font-size: .8rem; font-weight: 700; color: var(--txt-secondary); margin-bottom: 4px; }
+.cd-cancelar__txt { width: 100%; box-sizing: border-box; min-height: 80px; padding: 10px; border-radius: var(--r-md); border: 1px solid var(--border-mid); background: var(--surface); color: var(--txt-primary); font: inherit; resize: vertical; }
+.cd-cancelar__acc { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; margin-top: 10px; }
+.pm-btn.cd-cancelar__ok { background: var(--danger); border-color: var(--danger); color: var(--card); font-weight: 700; }
+.pm-btn.cd-cancelar__ok:disabled { opacity: .5; cursor: not-allowed; }
+
+/* — Físico vs Sistema: grupos y tarjetas tipo reconteo — */
+.fvs-ayuda { margin: 0 0 10px; font-size: .8rem; color: var(--txt-secondary); line-height: 1.45; }
+.fvs-orden { margin: 4px 0 10px; font-size: .74rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--txt-muted); }
+.fvs-grupo { margin-bottom: 18px; }
+.fvs-grupo__cab { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; padding: 6px 2px 8px; border-bottom: 1px solid var(--border-mid); margin-bottom: 10px; }
+.fvs-grupo__nom { font-weight: 800; font-size: .92rem; color: var(--txt-primary); }
+.fvs-grupo__dat { font-size: .76rem; color: var(--txt-secondary); }
+.fvs-grupo__lista { display: flex; flex-direction: column; gap: 10px; }
+.rc-card.fvs-card { border-left-width: 4px; }
+.rc-card.fvs-card--faltante { border-left-color: var(--danger); }
+.rc-card.fvs-card--sobrante { border-left-color: var(--ok); }
+.rc-card.fvs-card--coincide { border-left-color: var(--border-mid); }
+.rc-card.fvs-card--pendiente { border-left-color: transparent; opacity: .85; }
+.fvs-dif { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; text-align: right; flex-shrink: 0; }
+.fvs-dif__etq { font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+.fvs-dif__val { font-size: 1.05rem; font-weight: 800; }
+.fvs-dif__neto { font-size: .74rem; }
+.fvs-dif--faltante { color: var(--danger); }
+.fvs-dif--sobrante { color: var(--ok); }
+.fvs-dif--coincide, .fvs-dif--pendiente { color: var(--txt-muted); }
+.rc-areas.fvs-areas { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 8px; }
+.rc-areas.fvs-areas--n1 { grid-template-columns: minmax(0, 1fr); }
+.rc-areas.fvs-areas--n3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (min-width: 560px) { .rc-areas.fvs-areas--n4 { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.rc-area.fvs-area { position: relative; min-height: 64px; justify-content: center; }
+.fvs-area__lapiz { position: absolute; top: 5px; right: 6px; font-size: .62rem; color: var(--txt-muted); }
+.fvs-card__pie { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 8px; font-size: .78rem; color: var(--txt-secondary); font-variant-numeric: tabular-nums; }
+.fvs-card__pie b { color: var(--txt-primary); }
+.fvs-card .num, .fvs-grupo__dat .num, .cp-coinc .num { font-family: var(--f-num); }

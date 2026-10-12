@@ -71,6 +71,7 @@ const PRUEBAS = [
     'prueba-hallazgo16-cargar-ventas-semana.js', // v5.26 — hallazgo #16: Ventas se refresca sola al arrancar, al recuperar y en vivo entre dispositivos
     'prueba-paquete-textos-interfaz.js', // v5.26 — paquete de textos e interfaz: los 8 detalles menores (Pedidos, fechas de ancla, pie de login, Escape en 3 modales, discrepancia documentada, tokens de tema y permiso de exportación)
     'prueba-limpieza-codigo-muerto.js', // v5.26 — limpieza de código muerto: 4 funciones borradas (cero referencias reales), 4 conservadas (tenían prueba propia exigiéndolo) y la fuga de listener de Total publicado que esa verificación destapó
+    'prueba-v527-compras-fvs.js',    // v5.27 — Compras: cancelar (marca), fecha de ingreso, duplicados, lista por día/proveedor/producto; FvS por grupo con corrección directa
     'prueba-fase12.js',              // FASE 12 — folio #1001, anti-solapamiento y consistencia entre dispositivos
     'prueba-fisico-vs-sistema.js',   // FASE 11B (parte 1) — comparación físico vs. sistema
     'prueba-hotfix-4.22-movimientos.js', // HOTFIX 4.22 — recorte de movimientos y aviso de cuota

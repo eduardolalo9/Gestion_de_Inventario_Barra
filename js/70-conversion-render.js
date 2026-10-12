@@ -1185,6 +1185,10 @@ document.body.appendChild(overlay);
             // valor inicial y a dónde va al guardar (ver saveInventarioModal).
             const _rc = (opciones && opciones.reconteo) ? opciones.reconteo : null;
             _reconteoEdicion = _rc ? { prodId: productId, area: _rc.area } : null;
+            // v5.27 — Físico vs Sistema: mismo modal, corrección DIRECTA de un
+            // almacén (ver fvsAplicarCorreccion en js/85).
+            const _fv = (!_rc && opciones && opciones.fvs) ? opciones.fvs : null;
+            _fvsEdicion = _fv ? { prodId: productId, area: _fv.area } : null;
 
             // ── Seleccionar fuente de datos (auditoría o conteo regular) ──
             let areaKey, areaLabel, conteoSource;
@@ -1193,6 +1197,11 @@ document.body.appendChild(overlay);
                 areaLabel    = ((typeof areasAuditoria !== 'undefined' && areasAuditoria[areaKey]) || areas[areaKey] || areaKey) + ' · Reconteo';
                 conteoSource = { enteras: (_rc.valor && _rc.valor.enteras) || 0,
                                  abiertas: (_rc.valor && Array.isArray(_rc.valor.abiertas)) ? _rc.valor.abiertas.slice() : [] };
+            } else if (_fv) {
+                areaKey      = _fv.area;
+                areaLabel    = ((typeof areasAuditoria !== 'undefined' && areasAuditoria[areaKey]) || areas[areaKey] || areaKey) + ' · Corrección';
+                conteoSource = { enteras: (_fv.valor && _fv.valor.enteras) || 0,
+                                 abiertas: (_fv.valor && Array.isArray(_fv.valor.abiertas)) ? _fv.valor.abiertas.slice() : [] };
             } else if (isAuditoriaMode && auditoriaAreaActiva) {
                 areaKey   = auditoriaAreaActiva;
                 areaLabel = areasAuditoria[areaKey] || areaKey;
@@ -1389,7 +1398,7 @@ document.body.appendChild(overlay);
 
         /** Siguiente producto de la lista que se está contando (respeta búsqueda y filtros). */
         function _siguienteProductoConteo(idActual) {
-            if (!idActual || _reconteoEdicion || !isAuditoriaMode || !auditoriaAreaActiva) return null;
+            if (!idActual || _reconteoEdicion || !isAuditoriaMode || !auditoriaAreaActiva || _fvsEdicion) return null;
             try {
                 const conteoRef = puedeVerConteosAjenos() ? auditoriaConteo : myAuditoriaConteo;
                 const items = _buscarConteo(auditoriaAreaActiva, conteoRef).items;
@@ -1409,6 +1418,9 @@ document.body.appendChild(overlay);
             if (e.target && e.target.closest && e.target.closest('#inventarioModal')) inventarioModalTotalVivo();
         });
 
+        // v5.27 — { prodId, area } mientras el modal corrige desde Físico vs Sistema.
+        var _fvsEdicion = null;
+
         saveInventarioModal._auditSyncTimer = null; // timer de debounce para sync parcial de auditoría
 
         function closeInventarioModal() {
@@ -1420,6 +1432,7 @@ document.body.appendChild(overlay);
             isInventarioModalOpen = false;
             _reconteoEdicion = null;
             _guardarYSiguiente = false;
+            _fvsEdicion = null;
             disableAreaButtons(false);
         }
 
@@ -1530,6 +1543,15 @@ document.body.appendChild(overlay);
                 const _ctxRc = _reconteoEdicion;
                 closeInventarioModal();
                 _rcAplicarEdicion(_ctxRc.prodId, _ctxRc.area, enteras, abiertas);
+                return;
+            }
+
+            // ── v5.27 — FÍSICO VS SISTEMA: corrección directa de un almacén,
+            // con los valores ya validados exactamente igual que un conteo.
+            if (_fvsEdicion) {
+                const _ctxFv = _fvsEdicion;
+                closeInventarioModal();
+                fvsAplicarCorreccion(_ctxFv.prodId, _ctxFv.area, enteras, abiertas);
                 return;
             }
 

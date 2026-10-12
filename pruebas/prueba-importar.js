@@ -189,8 +189,12 @@ chk('El menú tiene "Importar desde Excel" y renderTab conoce la pestaña', /dat
 chk('index.html declara el input #impArchivo (xlsx, xls, csv)', /id="impArchivo" accept="\.xlsx,\.xls,\.csv"/.test(html));
 
 // ═══ 8 · Compras: la tarjeta abre el detalle ═════════════════════════════════
-chk('★ Cada tarjeta de compra es un botón accesible que abre el detalle', /class="cp-tarjeta" role="button" tabindex="0"[\s\S]{0,400}comprasVerDetalle\(/.test(comp.replace(/\r/g, '')));
-chk('El detalle es solo lectura (no escribe en Firestore ni en el dispositivo)', !/collection\(|\.set\(|saveToLocalStorage/.test(det.replace(/\/\/.*$/gm, '')));
+// v5.27 — la tarjeta suma la clase cp-tarjeta--cancelada cuando la entrada
+// está cancelada, así que la clase ya no es un literal fijo.
+chk('★ Cada tarjeta de compra es un botón accesible que abre el detalle', /class="cp-tarjeta' \+ \(cancel[\s\S]{0,80}role="button" tabindex="0"[\s\S]{0,600}comprasVerDetalle\(/.test(comp.replace(/\r/g, '')));
+// v5.27 — el detalle sigue sin escribir por su cuenta: el botón "Cancelar
+// esta entrada" (solo administración) delega TODO en cancelarCompra() (js/88).
+chk('El detalle no escribe por su cuenta (no toca Firestore ni el dispositivo; cancelar delega en js/88)', !/collection\(|\.set\(|saveToLocalStorage/.test(det.replace(/\/\/.*$/gm, '')));
 chk('Se cierra con X, con "Cerrar", tocando fuera o con Escape', /data-cd-cerrar/.test(det) && /e\.key === 'Escape'/.test(det) && /e\.target === wrap\.firstChild/.test(det));
 
 // ═══ 9 · Reglas, archivos y versión ══════════════════════════════════════════

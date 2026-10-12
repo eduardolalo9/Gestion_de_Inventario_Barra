@@ -15,6 +15,8 @@
         //       dice para que nadie lo tome por un histórico completo).
         //
         //  Solo lectura: no escribe nada, ni en Firestore ni en el dispositivo.
+        //  v5.27 — una excepción, y solo para administración: el botón
+        //  "Cancelar esta entrada", que delega TODO en cancelarCompra() (js/88).
         // ══════════════════════════════════════════════════════════════════════
 
         function _cdRed(n, d) {
@@ -55,7 +57,10 @@
             lineas.sort(function(a, b) { return String(a.nombre).localeCompare(String(b.nombre), 'es'); });
 
             var clave = _cdClaveProveedor(compra);
-            var mismas = (todas || []).filter(function(c) { return _cdClaveProveedor(c) === clave; });
+            // v5.27 — lo recibido del proveedor no incluye entradas canceladas.
+            var mismas = (todas || []).filter(function(c) {
+                return _cdClaveProveedor(c) === clave && !(c && c.cancelada === true);
+            });
             var acc = {};
             mismas.forEach(function(c) {
                 (Array.isArray(c.lineas) ? c.lineas : []).forEach(function(l) {
@@ -120,8 +125,14 @@
                   + '<div id="cd-titulo" class="pm-ficha__titulo">' + escapeHtml(d.proveedor) + '</div>'
                   + '<div class="pm-ficha__sub">' + (d.proveedorCodigo ? 'Código ' + escapeHtml(d.proveedorCodigo) + ' · ' : '')
                   + 'Folio ' + escapeHtml(String(c.folio || '—')) + (c.docSap ? ' · Doc SAP ' + escapeHtml(String(c.docSap)) : '')
-                  + ' · ' + escapeHtml(_cdFecha(c.fecha)) + '</div></div>'
+                  + '<br>Ingreso: <b>' + escapeHtml(_cdFecha(c.fechaIngreso || c.fecha)) + '</b>'
+                  + (c.fechaIngreso && c.fecha && c.fechaIngreso !== c.fecha ? ' · documento SAP del ' + escapeHtml(_cdFecha(c.fecha)) : '')
+                  + (c.fechaIngreso ? '' : ' <span class="cd-tag">sin fecha de ingreso registrada</span>')
+                  + '</div></div>'
                   + '<button type="button" class="pm-ficha__x" data-cd-cerrar aria-label="Cerrar"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></div>';
+
+            // ── v5.27 — estado de cancelación ───────────────────────────────
+            h += _cdHtmlCancelacion(c);
 
             // ── 1 · Esta entrada ───────────────────────────────────────────
             h += '<div class="pm-ficha__sec">Productos de esta entrada</div>'
@@ -165,6 +176,8 @@
                 });
                 h += '</ul>';
             }
+            // v5.27 — cancelar la entrada (solo administración, solo si sigue activa).
+            h += _cdHtmlFormCancelar(c);
             h += '<div class="pm-ficha__acc"><button type="button" class="pm-btn" data-cd-cerrar>Cerrar</button></div>';
             h += '</div></div>';
 
@@ -173,12 +186,117 @@
             wrap.setAttribute('data-compra', String(compraId));
             wrap.innerHTML = h;
             wrap.addEventListener('click', function(e) {
-                if (e.target === wrap.firstChild || (e.target.closest && e.target.closest('[data-cd-cerrar]'))) comprasCerrarDetalle();
+                if (e.target === wrap.firstChild || (e.target.closest && e.target.closest('[data-cd-cerrar]'))) { comprasCerrarDetalle(); return; }
+                var acc = e.target.closest ? e.target.closest('[data-cd-accion]') : null;
+                if (!acc || acc.disabled) return;
+                var tipo = acc.getAttribute('data-cd-accion');
+                if (tipo === 'pedir-cancelar') _cdMostrarFormCancelar(wrap, true);
+                else if (tipo === 'no-cancelar') _cdMostrarFormCancelar(wrap, false);
+                else if (tipo === 'confirmar-cancelar') _cdConfirmarCancelar(wrap, String(compraId));
             });
             document.body.appendChild(wrap);
             document.body.classList.add('modal-open');
             var x = wrap.querySelector('.pm-ficha__x');
             if (x) x.focus();
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        //  v5.27 — CANCELAR LA ENTRADA DESDE EL DETALLE
+        //  La lógica (y sus guardas) vive en cancelarCompra() (js/88); aquí
+        //  solo se pide el motivo y se informa el resultado.
+        // ══════════════════════════════════════════════════════════════════
+
+        function _cdFechaHora(ms) {
+            if (typeof ms !== 'number') return '—';
+            var f = new Date(ms);
+            return f.toLocaleDateString('es-MX') + ' ' + String(f.getHours()).padStart(2, '0') + ':' + String(f.getMinutes()).padStart(2, '0');
+        }
+
+        function _cdHtmlCancelacion(c) {
+            var h = '';
+            if (c && c.cancelada === true) {
+                h += '<div class="cd-cancelada" role="status">'
+                   + '<div class="cd-cancelada__tit"><i class="fa-solid fa-ban" aria-hidden="true"></i> Entrada CANCELADA — no suma al Total</div>'
+                   + '<div class="cd-cancelada__det">' + escapeHtml(_cdFechaHora(c.canceladaEn))
+                   + (c.canceladaPorNombre ? ' · ' + escapeHtml(c.canceladaPorNombre) : '') + '</div>'
+                   + '<div class="cd-cancelada__det">Motivo: ' + escapeHtml(c.motivoCancelacion || '—') + '</div>'
+                   + '<div class="cd-cancelada__det">Si se vuelve a importar, se reingresa con los datos del archivo.</div>'
+                   + '</div>';
+            }
+            var prev = (c && Array.isArray(c.cancelaciones)) ? c.cancelaciones : [];
+            if (prev.length) {
+                h += '<div class="pm-card__sub">Se canceló y se volvió a ingresar ' + prev.length + (prev.length === 1 ? ' vez' : ' veces')
+                   + '. Última cancelación: ' + escapeHtml(_cdFechaHora(prev[prev.length - 1].canceladaEn))
+                   + (prev[prev.length - 1].motivo ? ' — ' + escapeHtml(prev[prev.length - 1].motivo) : '') + '</div>';
+            }
+            return h;
+        }
+
+        function _cdHtmlFormCancelar(c) {
+            if (!c || c.cancelada === true) return '';
+            if (typeof puedeCancelarCompras !== 'function' || !puedeCancelarCompras()) return '';
+            var min = (typeof MOTIVO_CANCELACION_MIN === 'number') ? MOTIVO_CANCELACION_MIN : 5;
+            var max = (typeof MOTIVO_CANCELACION_MAX === 'number') ? MOTIVO_CANCELACION_MAX : 200;
+            return '<div class="cd-cancelar">'
+                 + '<button type="button" class="pm-btn cd-cancelar__abrir" data-cd-accion="pedir-cancelar">'
+                 + '<i class="fa-solid fa-ban" aria-hidden="true"></i> Cancelar esta entrada</button>'
+                 + '<div class="cd-cancelar__form" hidden>'
+                 + '<div class="cd-cancelar__aviso"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> '
+                 + 'La entrada deja de sumar al Total en todos los dispositivos y se quitan sus movimientos. '
+                 + 'Queda en el historial como cancelada. Si después importas el mismo documento, se vuelve a ingresar.</div>'
+                 + '<label class="cd-cancelar__etq" for="cd-motivo">Motivo (obligatorio, mínimo ' + min + ' caracteres)</label>'
+                 + '<textarea id="cd-motivo" class="cd-cancelar__txt" rows="3" maxlength="' + max + '" '
+                 + 'placeholder="Ej. Se importó con la fecha equivocada / la mercancía no llegó"></textarea>'
+                 + '<div class="cd-cancelar__acc">'
+                 + '<button type="button" class="pm-btn" data-cd-accion="no-cancelar">No cancelar</button>'
+                 + '<button type="button" class="pm-btn cd-cancelar__ok" data-cd-accion="confirmar-cancelar">Confirmar cancelación</button>'
+                 + '</div></div></div>';
+        }
+
+        function _cdMostrarFormCancelar(wrap, mostrar) {
+            var form = wrap.querySelector('.cd-cancelar__form');
+            var abrir = wrap.querySelector('.cd-cancelar__abrir');
+            if (!form) return;
+            form.hidden = !mostrar;
+            if (abrir) abrir.hidden = !!mostrar;
+            if (mostrar) { var t = wrap.querySelector('#cd-motivo'); if (t) t.focus(); }
+        }
+
+        var _CD_MENSAJES_CANCELAR = {
+            sin_permiso:      'Solo administración puede cancelar entradas de compra',
+            motivo_corto:     'Escribe el motivo de la cancelación (mínimo 5 caracteres)',
+            sin_firestore:    'Sin conexión con la base de datos',
+            sin_conexion:     'Sin conexión — cancelar exige estar en línea para que todos los dispositivos vean lo mismo',
+            no_existe:        'Esa entrada ya no existe en el servidor',
+            permiso_denegado: 'El servidor rechazó la cancelación (permiso)',
+            error_red:        'Error de red — no se canceló nada; inténtalo de nuevo',
+            error:            'No se pudo cancelar — no se modificó nada'
+        };
+
+        async function _cdConfirmarCancelar(wrap, compraId) {
+            var t = wrap.querySelector('#cd-motivo');
+            var motivo = t ? t.value : '';
+            var btn = wrap.querySelector('.cd-cancelar__ok');
+            if (btn) btn.disabled = true;
+            var res;
+            try {
+                res = await cancelarCompra(compraId, motivo);
+            } catch (e) {
+                console.error('[Compras] cancelarCompra lanzó:', e);
+                res = { ok: false, motivo: 'error' };
+            }
+            if (!res.ok) {
+                if (btn) btn.disabled = false;
+                showNotification('⚠️ ' + (_CD_MENSAJES_CANCELAR[res.motivo] || _CD_MENSAJES_CANCELAR.error));
+                if (res.motivo === 'motivo_corto' && t) t.focus();
+                return;
+            }
+            showNotification(res.motivo === 'ya_cancelada'
+                ? 'ℹ️ Esa entrada ya estaba cancelada (desde otro dispositivo)'
+                : '✅ Entrada cancelada — ya no suma al Total');
+            if (typeof renderTab === 'function' && typeof activeTab !== 'undefined' && activeTab === 'compras') renderTab();
+            // Se reabre para que se vea el estado nuevo.
+            comprasVerDetalle(compraId);
         }
 
         function comprasCerrarDetalle() {
