@@ -261,7 +261,11 @@
 
             if (!(opciones && opciones.sinInventario)) h += _panelEstadoInventario();
 
-            h += _panelExistenciaSemana();
+            // v5.28 (pedido de Eduardo, 15-oct-2026) — la tarjeta "Origen del
+            // Total" ya no se pinta en Inicio. _panelExistenciaSemana() se
+            // conserva (pruebas de FASE 14/16 la verifican y puede volver a
+            // usarse en otra pantalla); los avisos del arrastre siguen en la
+            // ficha de cada producto ("Desde el último corte").
             h += '</section>';
             return h;
         }

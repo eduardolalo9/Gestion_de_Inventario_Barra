@@ -93,8 +93,11 @@ chk('La tarjeta de conteo conserva su criterio hasData y suma Capturado/Pendient
 const panel = leer('js/83-panel.js'), bloque24 = css.slice(css.indexOf('v5.24 · Encabezado compacto'));
 chk('★ v5.24 · El panel ya no arma "Bajo mínimo — existencia / mínimo", "Productos por grupo" ni "Comparación de existencias"',
     !/Bajo mínimo — existencia|Productos por grupo|Comparación de existencias|_panelComparacion|_panelBarras|pm-grafs/.test(panel));
-chk('El panel conserva sus indicadores, "Origen del Total" y la ficha del producto',
-    /_panelTile\(/.test(panel) && /_panelExistenciaSemana\(\)/.test(panel) && /function abrirFichaProducto/.test(panel));
+// v5.28 — "Origen del Total" ya no se pinta en Inicio (pedido de Eduardo);
+// la función se conserva para las pruebas de FASE 14/16.
+chk('El panel conserva sus indicadores y la ficha del producto; "Origen del Total" ya no se pinta en Inicio',
+    /_panelTile\(/.test(panel) && /function _panelExistenciaSemana\(/.test(panel)
+    && !/h \+= _panelExistenciaSemana\(\)/.test(panel) && /function abrirFichaProducto/.test(panel));
 chk('★ v5.24 · El CSS del encabezado y de la tarjeta usa solo tokens (cero colores hex)', bloque24.length > 500 && !/#[0-9a-fA-F]{3,8}\b/.test(bloque24) && !/rgba?\(/.test(bloque24));
 chk('v5.24 · El encabezado lleva su marca (cuadro latón) y el título', /class="hd-logo"/.test(html) && /<h1[^>]*>BarInventory<\/h1>/.test(html));
 chk('v5.24 · La tarjeta de producto conserva sus atributos funcionales (buscador, ficha, carrito)',

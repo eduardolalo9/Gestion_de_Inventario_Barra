@@ -102,10 +102,10 @@
             const esCerrado = !inventarioAbierto(inv);
             const esContab  = inv.estado === 'CONTABILIZADO';
             const badge = !esCerrado
-                ? '<span class="pm-estado pm-estado--abierto pm-estado--cab"><span class="audit-live-dot" aria-hidden="true"></span> INVENTARIO BARRA SINCRONIZADO</span>'
+                ? '<span class="pm-estado pm-estado--abierto pm-estado--cab"><span class="audit-live-dot" aria-hidden="true"></span> <span class="if-badge-pre">INVENTARIO BARRA </span>SINCRONIZADO</span>'
                 : (esContab
-                    ? '<span class="pm-estado pm-estado--contab pm-estado--cab"><i class="fa-solid fa-book" aria-hidden="true"></i> INVENTARIO BARRA CONTABILIZADO</span>'
-                    : '<span class="pm-estado pm-estado--cerrado pm-estado--cab"><i class="fa-solid fa-lock" aria-hidden="true"></i> INVENTARIO BARRA CERRADO</span>');
+                    ? '<span class="pm-estado pm-estado--contab pm-estado--cab"><i class="fa-solid fa-book" aria-hidden="true"></i> <span class="if-badge-pre">INVENTARIO BARRA </span>CONTABILIZADO</span>'
+                    : '<span class="pm-estado pm-estado--cerrado pm-estado--cab"><i class="fa-solid fa-lock" aria-hidden="true"></i> <span class="if-badge-pre">INVENTARIO BARRA </span>CERRADO</span>');
 
             // Artículos contados = productos con al menos una entrada de conteo
             // de ALGÚN usuario (unión, no suma) — dato ya en memoria.
@@ -126,8 +126,8 @@
 
             // ── 2. Datos: una fila por dato ─────────────────────────────────
             html += '<dl class="if-datos">';
-            var dato = function(etiqueta, valor, claseValor) {
-                return '<div class="if-dato"><dt>' + etiqueta + '</dt><dd' + (claseValor ? ' class="' + claseValor + '"' : '') + '>' + valor + '</dd></div>';
+            var dato = function(etiqueta, valor, claseValor, claseDato) {
+                return '<div class="if-dato' + (claseDato ? ' ' + claseDato : '') + '"><dt>' + etiqueta + '</dt><dd' + (claseValor ? ' class="' + claseValor + '"' : '') + '>' + valor + '</dd></div>';
             };
             // R7: lo que el formulario dejó escrito — se lee a la defensiva: los
             // inventarios anteriores a R7 no tienen estos campos.
@@ -135,12 +135,12 @@
                 var _cl = (typeof clasificarRecuento === 'function') ? clasificarRecuento(inv.fechaRecuento) : null;
                 html += dato('Recuento',
                     escapeHtml(inv.fechaRecuento)
-                    + (_cl && typeof etiquetaSemana === 'function' ? ' · ' + escapeHtml(etiquetaSemana(inv.fechaRecuento)) : '')
+                    + (_cl && typeof etiquetaSemana === 'function' ? '<span class="if-dato__semana"> · ' + escapeHtml(etiquetaSemana(inv.fechaRecuento)) + '</span>' : '')
                     + (_cl && _cl.cierraSemana ? ' · <span style="color:var(--ok);font-weight:700;">cierra semana</span>' : '')
                     // FASE 13 — el corte de fin de mes es una condición aparte
                     // (puede darse sola o junto con "cierra semana"), así que
                     // lleva su propio indicador en vez de pisar al anterior.
-                    + (_cl && _cl.esCorteMensual ? ' · <span style="color:var(--book);font-weight:700;">corte de mes</span>' : ''));
+                    + (_cl && _cl.esCorteMensual ? ' · <span style="color:var(--book);font-weight:700;">corte de mes</span>' : ''), '', 'if-dato--recuento');
             } else {
                 // H-40 (hotfix 4.9): inventarios anteriores a R7/FASE 3 no tienen
                 // fechaRecuento y, tal cual, nunca se podrán contabilizar.
@@ -155,7 +155,7 @@
             if (Array.isArray(inv.warehousesSnapshot) && inv.warehousesSnapshot.length) {
                 html += dato('Áreas', escapeHtml(inv.warehousesSnapshot.map(function(a) {
                     return (typeof areasAuditoria !== 'undefined' && areasAuditoria[a]) ? areasAuditoria[a] : a;
-                }).join(', ')));
+                }).join(', ')), '', 'if-dato--areas');
             }
             // Cuántas personas tienen algo contado: es el dato que el admin mira
             // antes de cerrar (cerrar con gente contando pierde su trabajo).
@@ -197,7 +197,7 @@
                 acc += _ifBtn('bt--secundario', '<i class="fa-solid fa-file-chart-column" aria-hidden="true"></i> Físico vs Sistema',
                     'onclick="auditoriaView=\'fisico_vs_sistema\'; renderTab();"');
             }
-            if (acc) html += '<div class="bt-pila">' + acc + '</div>';
+            if (acc) html += '<div class="bt-pila bt-pila--rejilla">' + acc + '</div>';
 
             html += _renderSiguientePasoInventario(inv);
             html += '</div>';
@@ -811,7 +811,10 @@
             const statusRef = isAdmin() ? auditoriaStatus : myAuditoriaStatus;
 
             // FASE 10B — una sola columna (ver cabecera de _renderInventarioFisicoHeader).
-            let html = '<div class="audit-screen if-pantalla">';
+            // v5.28 (pedido de Eduardo, 16-oct-2026) — mismo diseño, más compacto:
+            // if-pantalla--compacta reduce márgenes y tipografía y oculta lo que
+            // repite información (css/utilidades.css). No cambia ninguna acción.
+            let html = '<div class="audit-screen if-pantalla if-pantalla--compacta">';
 
             // ── 1-3. Estado, datos y acciones del Inventario Físico ─────────
             html += _renderInventarioFisicoHeader();
@@ -823,9 +826,11 @@
             // cerrado): dos botones iguales en una pantalla chica es justo lo
             // que se pidió quitar. La guarda de ETAPA 15 sigue en
             // abrirModalNuevoInventario() y en auditoriaResetear().
-            html += '<div class="if-card">';
-            html += '<div><p class="audit-header-title" style="font-size:1.1rem;">Auditoría Física Ciega</p>';
-            html += '<p class="audit-header-sub" style="font-size:.92rem;line-height:1.5;margin-top:4px;">' + (isAdmin()
+            html += '<div class="if-card if-card--avance">';
+            // v5.28 — compacto: título chico; el texto de ayuda solo para quien
+            // cuenta (al administrador no le aporta nada).
+            html += '<div><p class="audit-header-title if-avance__titulo">Auditoría Física Ciega</p>';
+            html += '<p class="audit-header-sub if-avance__ayuda' + (isAdmin() ? ' if-sub--admin' : '') + '">' + (isAdmin()
                 ? 'Panel de administrador — puedes ver todos los conteos y gestionar la sesión.'
                 : 'Cuenta tu área y finaliza. Solo tú ves tu conteo; el admin lo revisa al final.') + '</p></div>';
             html += '<div class="if-avance">';
@@ -929,9 +934,10 @@
                 const faltantes = AREAS_CONTEO
                     .filter(a => statusRef[a] !== 'completada')
                     .map(a => areasAuditoria[a]).join(', ');
-                html += '<div class="if-card" style="text-align:center;gap:6px;">';
-                html += '<p style="font-size:.92rem;color:var(--txt-secondary);margin:0;">El botón de exportación aparecerá cuando completes todas las áreas.</p>';
-                html += '<p style="font-size:.92rem;color:var(--txt-secondary);margin:0;">Pendiente: <strong style="color:var(--amber);">' + faltantes + '</strong></p>';
+                // v5.28 — compacto: el mismo aviso en una tarjeta de una o dos líneas.
+                html += '<div class="if-card if-card--nota">';
+                html += '<p class="if-nota__txt"><i class="fa-solid fa-hourglass" aria-hidden="true"></i> El botón de exportación aparecerá cuando completes todas las áreas.</p>';
+                html += '<p class="if-nota__txt">Pendiente: <strong>' + faltantes + '</strong></p>';
                 html += '</div>';
             }
 
@@ -983,7 +989,7 @@
                 )
             );
 
-            let html = '<div class="if-card">';
+            let html = '<div class="if-card if-card--usuarios">';
 
             // ── Cabecera del panel con indicador EN VIVO ────────────────────
             html += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">';

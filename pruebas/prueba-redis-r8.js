@@ -71,12 +71,14 @@ const bytes = Buffer.byteLength(css);
 chk('estilos.css pesa menos de 210 KB (presupuesto)', bytes < 210 * 1024, Math.round(bytes / 1024) + ' KB');
 
 // ═══ Encabezado ═══════════════════════════════════════════
-chk('Los botones del encabezado salen de un solo constructor _hdBtn()', /function _hdBtn\(/.test(j70) && (j70.match(/_hdBtn\(/g) || []).length >= 6);   // v5.18: sin los 3 de importar
+// v5.28 — las acciones de Productos bajaron a su barra propia (_productosBarraAcciones): quedan 3 usos de _hdBtn.
+chk('Los botones del encabezado salen de un solo constructor _hdBtn()', /function _hdBtn\(/.test(j70) && (j70.match(/_hdBtn\(/g) || []).length >= 4);   // v5.18: sin los 3 de importar
 const fnHeader = (j70.match(/function updateHeaderActions\(\)[\s\S]*?\n        }\n/) || [''])[0];
 chk('updateHeaderActions ya no usa utilidades Tailwind ni degradados', fnHeader && !/bg-gradient|from-purple|from-red|text-xs sm:text-base|px-3 sm:px-6/.test(fnHeader), fnHeader.length + ' chars');
-chk('"Eliminar todos" conserva nombre accesible aunque en celular solo muestre el icono', /_hdBtn\('deleteAllProducts\(\)'[^)]*'Eliminar todos los productos'\)/.test(fnHeader));
+const fnBarra = (j70.match(/function _productosBarraAcciones\(\)[\s\S]*?\n        }\n/) || [''])[0];
+chk('"Eliminar todos" conserva nombre accesible aunque solo muestre el icono (v5.28: en la barra de Productos)', /deleteAllProducts\(\)"[\s\S]{0,60}aria-label="Eliminar todos los productos"/.test(fnBarra));
 // v5.18 — los botones de importar (catálogo, recetario, ventas) se movieron al módulo Importar desde Excel.
-chk('Acciones intactas: openProductModal, publicarCatalogoFirestore, deleteAllProducts, recetas, Excel', ['openProductModal()', 'publicarCatalogoFirestore()', 'deleteAllProducts()', 'openRecetaModal()', 'publicarRecetarioFirestore()', 'exportarAuditoriaExcel()'].every(a => fnHeader.includes(a)));
+chk('Acciones intactas: openProductModal, publicarCatalogoFirestore, deleteAllProducts (barra de Productos), recetas, Excel', ['openProductModal()', 'publicarCatalogoFirestore()', 'deleteAllProducts()'].every(a => fnBarra.includes(a)) && ['openRecetaModal()', 'publicarRecetarioFirestore()', 'exportarAuditoriaExcel()'].every(a => fnHeader.includes(a)));
 chk('v5.18 · el encabezado ya no importa nada: catálogo, recetario y ventas se importan desde el módulo',
     !["document.getElementById('fileInput').click()", 'recetarioImportarExcel()', 'ventasImportarExcel()'].some(a => fnHeader.includes(a)));
 chk('CSS .hd-btn: 44 px y colores por token (sin hex)', /\.hd-btn\s*\{[^}]*min-height:\s*44px/.test(css) && !/\.hd-btn[^{]*\{[^}]*#[0-9a-f]{3,6}/i.test(sinComentarios));

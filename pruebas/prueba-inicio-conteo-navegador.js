@@ -106,14 +106,23 @@ const PUERTO = process.env.PUERTO || '8080';
   await irInicio();
 
   // Generar pedido sugerido
+  // v5.28 (pedido de Eduardo, 15-oct-2026) — la tarjeta ya no genera de golpe:
+  // "Revisar" abre la pantalla Pedido sugerido (todo lo sugerido llega
+  // marcado) y ahí "Generar pedido" agrega al carrito la cantidad sugerida de
+  // CADA producto con la misma función de siempre (addToCart) y abre el
+  // pedido. La pantalla, con su resumen, hace de confirmación.
   const antes = await p.evaluate(() => ({ cart: cart.length, ped: pedidoSugeridoProducto(products[0]) }));
   await p.evaluate(() => { window.openOrderModal = function () { window.__abrioPedido = true; }; document.querySelector('.it-pedido .it-btn').click(); });
   await p.waitForTimeout(150);
-  const gen = await p.evaluate(() => ({ cart: cart.map(c => [c.id, c.quantity]), msg: window.__confirm, abrio: !!window.__abrioPedido,
+  chk('v5.28 · "Revisar" abre la pantalla Pedido sugerido', await p.evaluate(() => activeTab === 'pedido_sugerido' && !!document.querySelector('.ps-pie__btn')));
+  await p.evaluate(() => document.querySelector('.ps-pie__btn').click());
+  await p.waitForTimeout(150);
+  const gen = await p.evaluate(() => ({ cart: cart.map(c => [c.id, c.quantity]), abrio: !!window.__abrioPedido,
                                          esperado: products.map(p => [p.id, pedidoSugeridoProducto(p)]).filter(x => typeof x[1] === 'number' && x[1] > 0) }));
-  chk('★ "Generar" pide confirmación y agrega al carrito la cantidad sugerida de CADA producto (la misma función de siempre)',
-      /Se agregarán al carrito/.test(gen.msg || '') && antes.cart === 0 && gen.cart.length === gen.esperado.length && gen.esperado.every(e => gen.cart.some(c => c[0] === e[0] && c[1] === e[1])), JSON.stringify(gen));
+  chk('★ "Generar pedido" agrega al carrito la cantidad sugerida de CADA producto (la misma función de siempre)',
+      antes.cart === 0 && gen.cart.length === gen.esperado.length && gen.esperado.every(e => gen.cart.some(c => c[0] === e[0] && c[1] === e[1])), JSON.stringify(gen));
   chk('Después de generar abre el pedido', gen.abrio === true);
+  await irInicio();
   await p.evaluate(() => { cart = []; });
 
   // ══ A2 · v5.24: ENCABEZADO Y TARJETA DE PRODUCTO COMPACTOS ═══════════════

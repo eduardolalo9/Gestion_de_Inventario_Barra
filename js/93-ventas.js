@@ -921,72 +921,444 @@
             return html + '</div>';
         }
 
+        // ══════════════════════════════════════════════════════════════════════
+        //  v5.28 — VENTAS SEMANALES (rediseño, decisión de Eduardo 15-oct-2026)
+        //  ────────────────────────────────────────────────────────────────────
+        //  Mismo look del resto de los módulos rediseñados: cabecera con volver,
+        //  pills de periodo con flechas < >, buscador, Importar / Exportar,
+        //  estado vacío, 3 KPIs y "Top productos" con "Ver todo".
+        //
+        //  Lo que NO cambia (Cero Pérdida de Datos):
+        //  · Importar sigue siendo el importador de Parrot de siempre (vista
+        //    previa, fechas, bloqueo de duplicados, regla create-only).
+        //  · Los globales `ventas`, `ventasPeriodos` y `ventasSemanaId` siguen
+        //    siendo la SEMANA ACTIVA: los usan el Total, el consumo teórico y
+        //    la sincronización en vivo. Ver otra semana o el mes NO los toca:
+        //    se lee aparte (leerPeriodosVentasSemana / consulta por mes) a un
+        //    estado de pantalla (_vs.datos) que solo sirve para mirar.
+        //  · Sin tickets: el reporte "Detalle" de Parrot no los trae. Los KPIs
+        //    son Venta neta, Artículos vendidos y Precio promedio por artículo
+        //    COBRADO (venta neta ÷ (artículos − cortesías − regalos 2x1)).
+        // ══════════════════════════════════════════════════════════════════════
+
+        var _vs = {
+            vista:    'semana',   // 'semana' | 'mes'
+            semana:   null,       // null = la semana activa (ventasSemanaId)
+            mes:      null,       // 'YYYY-MM' cuando vista === 'mes'
+            datos:    {},         // clave → { estado, lineas, periodos, ts, motivo }
+            verTodo:  false,
+            ayuda:    false,
+            busqueda: ''
+        };
+        var VENTAS_VISTA_TTL_MS = 120000;   // 2 min: lo leído de otra semana caduca solo
+        var VENTAS_TOP_N = 5;
+
+        /** Semana que se está mirando (id = lunes 'YYYY-MM-DD'). */
+        function _vsSemanaVista() {
+            return _vs.semana || ventasSemanaId || semanaId(new Date());
+        }
+        function _vsEsActiva() {
+            return _vs.vista === 'semana' && (!_vs.semana || _vs.semana === ventasSemanaId);
+        }
+        function _vsClave() {
+            if (_vs.vista === 'mes') return 'mes:' + _vs.mes;
+            return _vsEsActiva() ? 'activa' : 'semana:' + _vsSemanaVista();
+        }
+
+        /**
+         * ventasResumen(lineas) — capa de negocio, pura. KPIs del periodo:
+         *   ventaNeta       suma de Venta neta del reporte
+         *   articulos       unidades vendidas (incluye cortesías y regalos 2x1:
+         *                   salieron de la barra igual)
+         *   regalos         cortesías + promos 2x1 (a $0)
+         *   cobrados        articulos − regalos
+         *   precioPromedio  ventaNeta ÷ cobrados (null si no hubo cobrados o el
+         *                   archivo no traía Venta neta)
+         *   productos       SKU distintos con al menos una unidad
+         */
+        function ventasResumen(lineas) {
+            var r = { ventaNeta: 0, articulos: 0, regalos: 0, cobrados: 0, precioPromedio: null, productos: 0, conImporte: false };
+            (lineas || []).forEach(function(l) {
+                if (!l) return;
+                var n = Number(l.cantidad) || 0;
+                if (n > 0) r.productos++;
+                r.articulos += n;
+                if (typeof l.ventaNeta === 'number' && isFinite(l.ventaNeta)) { r.ventaNeta += l.ventaNeta; if (l.ventaNeta !== 0) r.conImporte = true; }
+                var p = ventaPartesLinea(l);
+                r.regalos += p.cortesia + p.promo;
+            });
+            r.ventaNeta = Math.round(r.ventaNeta * 100) / 100;
+            r.articulos = Math.round(r.articulos * 1000) / 1000;
+            r.regalos   = Math.round(r.regalos * 1000) / 1000;
+            r.cobrados  = Math.round(Math.max(0, r.articulos - r.regalos) * 1000) / 1000;
+            r.precioPromedio = (r.cobrados > 0 && r.conImporte) ? Math.round(r.ventaNeta / r.cobrados * 100) / 100 : null;
+            return r;
+        }
+        window.ventasResumen = ventasResumen;
+
+        /** Top por venta neta (desempate: cantidad, luego nombre). No muta la lista. */
+        function ventasTopProductos(lineas) {
+            return (lineas || []).slice().sort(function(a, b) {
+                var d = (Number(b.ventaNeta) || 0) - (Number(a.ventaNeta) || 0);
+                if (d) return d;
+                d = (Number(b.cantidad) || 0) - (Number(a.cantidad) || 0);
+                if (d) return d;
+                return String(a.nombre || a.sku).localeCompare(String(b.nombre || b.sku), 'es');
+            });
+        }
+        window.ventasTopProductos = ventasTopProductos;
+
+        /** Rango de días 'YYYY-MM-01'..'YYYY-MM-último' de un mes 'YYYY-MM'. */
+        function ventasRangoMes(mes) {
+            var m = /^(\d{4})-(\d{2})$/.exec(String(mes || ''));
+            if (!m) return null;
+            var y = Number(m[1]), mm = Number(m[2]);
+            if (mm < 1 || mm > 12) return null;
+            var ultimo = new Date(y, mm, 0).getDate();
+            return { inicio: m[1] + '-' + m[2] + '-01', fin: m[1] + '-' + m[2] + '-' + (ultimo < 10 ? '0' : '') + ultimo };
+        }
+        window.ventasRangoMes = ventasRangoMes;
+
+        /** Etiqueta corta de la pill: '12–18 oct 2026' / '29 sep – 5 oct 2026'. */
+        function ventasEtiquetaCorta(semana) {
+            var l = inicioSemana(semana), d = finSemana(semana);
+            if (!l || !d) return '—';
+            var mc = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+            if (l.getMonth() === d.getMonth()) return l.getDate() + '–' + d.getDate() + ' ' + mc[l.getMonth()] + ' ' + d.getFullYear();
+            return l.getDate() + ' ' + mc[l.getMonth()] + ' – ' + d.getDate() + ' ' + mc[d.getMonth()] + ' ' + d.getFullYear();
+        }
+        function _vsEtiquetaMes(mes) {
+            var m = /^(\d{4})-(\d{2})$/.exec(String(mes || ''));
+            if (!m) return '—';
+            var meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+            return meses[Number(m[2]) - 1] + ' ' + m[1];
+        }
+
+        /** Datos del periodo que se mira. La semana activa sale de memoria; lo demás, de Firestore. */
+        function _vsDatos() {
+            if (_vsEsActiva()) return { estado: 'ok', lineas: ventas || [], periodos: ventasPeriodos || [], activa: true };
+            var clave = _vsClave();
+            var d = _vs.datos[clave];
+            if (d && d.estado === 'ok' && (Date.now() - d.ts) > VENTAS_VISTA_TTL_MS) d = null;
+            if (!d) { _vsCargar(clave); d = _vs.datos[clave]; }
+            return d;
+        }
+
+        async function _ventasLeerMes(mes) {
+            if (!_db) throw new Error('sin conexión a Firestore');
+            var r = ventasRangoMes(mes);
+            if (!r) throw new Error('mes inválido');
+            var snap = await _docPrincipal().collection('ventas')
+                .where('fechaInicio', '>=', r.inicio).where('fechaInicio', '<=', r.fin).get();
+            var out = [];
+            snap.forEach(function(doc) { out.push({ id: doc.id, data: doc.data() || {} }); });
+            return out;
+        }
+
+        function _vsCargar(clave) {
+            _vs.datos[clave] = { estado: 'cargando', lineas: [], periodos: [], ts: Date.now() };
+            if (!_db) { _vs.datos[clave] = { estado: 'error', lineas: [], periodos: [], ts: Date.now(), motivo: 'Sin conexión: solo se puede ver la semana activa.' }; return; }
+            var lectura = clave.indexOf('mes:') === 0 ? _ventasLeerMes(clave.slice(4)) : leerPeriodosVentasSemana(clave.slice(7));
+            lectura.then(function(docs) {
+                _vs.datos[clave] = {
+                    estado: 'ok', ts: Date.now(),
+                    lineas: _ventasAgregarLineas(docs.map(function(x) { return (x.data || {}).lineas; })),
+                    periodos: docs.map(function(x) { return _ventasPeriodoDeDoc(x.id, x.data); })
+                        .sort(function(a, b) { return a.inicio < b.inicio ? -1 : (a.inicio > b.inicio ? 1 : 0); })
+                };
+            }).catch(function(e) {
+                console.warn('[Ventas] No se pudo leer ' + clave + ':', e);
+                _vs.datos[clave] = { estado: 'error', lineas: [], periodos: [], ts: Date.now(), motivo: 'No se pudieron leer las ventas de este periodo. Revisa la conexión e inténtalo de nuevo.' };
+            }).then(function() {
+                if (typeof activeTab !== 'undefined' && activeTab === 'ventas' && _vsClave() === clave && typeof renderTab === 'function') renderTab();
+            });
+        }
+
+        /** Flechas < >: mueve una semana (o un mes en la vista Mes). Nunca pasa de hoy. */
+        function ventasMoverPeriodo(delta) {
+            delta = delta < 0 ? -1 : 1;
+            if (_vs.vista === 'mes') {
+                var m = /^(\d{4})-(\d{2})$/.exec(_vs.mes || '');
+                if (!m) return;
+                var f = new Date(Number(m[1]), Number(m[2]) - 1 + delta, 1);
+                var nuevo = f.getFullYear() + '-' + (f.getMonth() < 9 ? '0' : '') + (f.getMonth() + 1);
+                var hoy = fechaISOLocal(new Date()).slice(0, 7);
+                if (nuevo > hoy) return;
+                _vs.mes = nuevo;
+            } else {
+                var s = delta < 0 ? semanaAnterior(_vsSemanaVista()) : semanaSiguiente(_vsSemanaVista());
+                if (!s || s > semanaId(new Date())) return;
+                _vs.semana = (s === ventasSemanaId) ? null : s;
+            }
+            _vs.verTodo = false;
+            renderTab();
+        }
+        function ventasVerSemanaActiva() { _vs.vista = 'semana'; _vs.semana = null; _vs.verTodo = false; renderTab(); }
+        function ventasVerSemanaAnterior() {
+            _vs.vista = 'semana';
+            _vs.semana = semanaAnterior(ventasSemanaId || semanaId(new Date()));
+            _vs.verTodo = false; renderTab();
+        }
+        function ventasVerMes() {
+            if (_vs.vista === 'mes') { ventasVerSemanaActiva(); return; }
+            _vs.vista = 'mes';
+            _vs.mes = String(_vsSemanaVista()).slice(0, 7);
+            _vs.verTodo = false; renderTab();
+        }
+        function ventasRecargarVista() { delete _vs.datos[_vsClave()]; renderTab(); }
+        function ventasToggleVerTodo() { _vs.verTodo = !_vs.verTodo; if (typeof BusquedaUI !== 'undefined') BusquedaUI.refrescar('ventas', { sinAnimacion: true }); }
+        function ventasToggleAyuda() { _vs.ayuda = !_vs.ayuda; renderTab(); }
+        function ventasImportarDesdeModulo() {
+            if (!hasPermission('sales.import')) { showNotification('⚠️ No tienes permiso para importar ventas'); return; }
+            _vs.datos = {};   // lo importado debe verse al volver
+            if (typeof importarElegirArchivo === 'function') importarElegirArchivo('ventas'); else ventasImportarExcel();
+        }
+
+        /** Exporta a .xlsx lo que se está mirando (semana o mes). Solo lectura. */
+        function ventasExportarExcel() {
+            if (!hasPermission('sales.read')) { showNotification('⚠️ No tienes acceso a las ventas'); return; }
+            var d = _vsDatos();
+            if (!d || d.estado !== 'ok' || !d.lineas.length) { showNotification('ℹ️ No hay ventas que exportar en este periodo'); return; }
+            if (typeof XLSX === 'undefined') { showNotification('⏳ Cargando librería Excel… intenta en unos segundos'); return; }
+            var r = ventasResumen(d.lineas);
+            var esMes = _vs.vista === 'mes';
+            var etiqueta = esMes ? _vsEtiquetaMes(_vs.mes) : etiquetaSemana(_vsSemanaVista());
+            var filas = ventasTopProductos(d.lineas).map(function(l) {
+                var p = ventaPartesLinea(l);
+                return [l.sku, l.nombre || '', l.tipo || '', Number(l.cantidad) || 0, p.cortesia, p.promo,
+                        (typeof l.ventaNeta === 'number') ? l.ventaNeta : ''];
+            });
+            var wb = XLSX.utils.book_new();
+            var ws = XLSX.utils.aoa_to_sheet([['SKU', 'Producto', 'Tipo', 'Cantidad', 'Cortesía', 'Regalo 2x1', 'Venta neta']].concat(filas));
+            ws['!cols'] = [{ wch: 12 }, { wch: 34 }, { wch: 16 }, { wch: 10 }, { wch: 10 }, { wch: 11 }, { wch: 12 }];
+            XLSX.utils.book_append_sheet(wb, ws, 'Ventas');
+            var res = XLSX.utils.aoa_to_sheet([
+                ['Periodo', etiqueta],
+                ['Días con ventas', ventasCoberturaSemana(d.periodos).length],
+                ['Venta neta', r.ventaNeta],
+                ['Artículos vendidos', r.articulos],
+                ['Cortesías y regalos 2x1', r.regalos],
+                ['Precio promedio por artículo cobrado', r.precioPromedio === null ? '' : r.precioPromedio],
+                ['Productos distintos', r.productos],
+                ['Exportado', new Date().toLocaleString('es-MX')]
+            ]);
+            res['!cols'] = [{ wch: 36 }, { wch: 40 }];
+            XLSX.utils.book_append_sheet(wb, res, 'Resumen');
+            var nombre = 'ventas_' + (esMes ? 'mes_' + _vs.mes : 'semana_' + _vsSemanaVista()) + '.xlsx';
+            XLSX.writeFile(wb, nombre);
+            showNotification('✅ Ventas exportadas: ' + nombre);
+        }
+
+        function _vsMoneda(n) {
+            return '$' + (Number(n) || 0).toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+        }
+        function _vsNum(n) { return (Math.round((Number(n) || 0) * 1000) / 1000).toLocaleString('es-MX'); }
+
+        function _vsFila(l) {
+            var n = Number(l.cantidad) || 0;
+            var p = ventaPartesLinea(l);
+            var cobr = Math.max(0, n - p.cortesia - p.promo);
+            var tieneImp = typeof l.ventaNeta === 'number';
+            var prom = (tieneImp && cobr > 0) ? (l.ventaNeta / cobr) : null;
+            return '<li class="vs-fila">'
+                 + '<div class="vs-fila__izq">'
+                 + (l.tipo ? '<span class="vs-pill">' + escapeHtml(l.tipo) + '</span>' : '')
+                 + '<span class="vs-fila__nom">' + escapeHtml(l.nombre || l.sku) + '</span>'
+                 + '<span class="vs-fila__sku">' + escapeHtml(l.sku) + _ventasEtiquetaRegalo(l) + '</span>'
+                 + '</div>'
+                 + '<div class="vs-fila__der">'
+                 + '<span class="vs-fila__imp num">' + (tieneImp ? _vsMoneda(l.ventaNeta) : '—') + '</span>'
+                 + '<span class="vs-fila__cant num">' + _vsNum(n) + ' u.' + (prom !== null ? ' · ' + _vsMoneda(Math.round(prom * 100) / 100) + ' c/u' : '') + '</span>'
+                 + '</div></li>';
+        }
+
+        /** Región del buscador: microcopy + top productos (o coincidencias). */
+        function _renderVentasResultados() {
+            var d = _vsDatos();
+            var base = (d && d.estado === 'ok') ? d.lineas : [];
+            var lista = ventasTopProductos(base);
+            var filtrando = !!(_vs.busqueda && _vs.busqueda.trim());
+            if (filtrando && typeof _motorVentas !== 'undefined') {
+                var hallados = _motorVentas.buscar(base, _vs.busqueda).items;
+                var orden = {};
+                lista.forEach(function(l, i) { orden[l.sku] = i; });
+                lista = hallados.slice().sort(function(a, b) { return orden[a.sku] - orden[b.sku]; });
+            }
+            var r = ventasResumen(lista);
+            var h = '<div class="vs-micro"><span>' + lista.length + ' producto' + (lista.length === 1 ? '' : 's')
+                  + ' • ' + _vsNum(r.articulos) + ' artículo' + (r.articulos === 1 ? '' : 's') + '</span>'
+                  + (filtrando ? '<span class="vs-micro__der">de ' + base.length + '</span>' : '') + '</div>';
+            if (!base.length) return { html: h, coincidencias: 0, total: 0 };   // el estado vacío lo pinta renderVentasTab
+            if (!lista.length) {
+                h += '<div class="vs-vacio vs-vacio--chico"><div class="vs-vacio__t">Sin coincidencias</div>'
+                   + '<div class="vs-vacio__s">Prueba con otra palabra o con el SKU.</div></div>';
+                return { html: h, coincidencias: 0, total: base.length };
+            }
+            var mostrar = (filtrando || _vs.verTodo) ? lista : lista.slice(0, VENTAS_TOP_N);
+            h += '<section class="vs-top" aria-labelledby="vsTopTit">'
+               + '<div class="vs-top__cab"><h3 id="vsTopTit" class="vs-top__tit">' + (filtrando ? 'Coincidencias' : 'Top productos vendidos') + '</h3>'
+               + ((!filtrando && lista.length > VENTAS_TOP_N)
+                    ? '<button type="button" class="vs-link" onclick="ventasToggleVerTodo()" aria-expanded="' + _vs.verTodo + '">'
+                      + (_vs.verTodo ? 'Ver menos' : 'Ver todo (' + lista.length + ')') + '</button>' : '')
+               + '</div><ol class="vs-lista">' + mostrar.map(_vsFila).join('') + '</ol></section>';
+            return { html: h, coincidencias: lista.length, total: base.length };
+        }
+        window._renderVentasResultados = _renderVentasResultados;
+
+        function _vsPeriodoPills() {
+            var esMes = _vs.vista === 'mes';
+            var activa = _vsEsActiva();
+            var anterior = !esMes && !activa && _vs.semana === semanaAnterior(ventasSemanaId || semanaId(new Date()));
+            var etiqueta = esMes ? _vsEtiquetaMes(_vs.mes) : ventasEtiquetaCorta(_vsSemanaVista());
+            var tope = esMes ? (_vs.mes >= fechaISOLocal(new Date()).slice(0, 7)) : (_vsSemanaVista() >= semanaId(new Date()));
+            return '<div class="vs-periodo" role="group" aria-label="Periodo">'
+                 + '<button type="button" class="vs-flecha" onclick="ventasMoverPeriodo(-1)" aria-label="' + (esMes ? 'Mes anterior' : 'Semana anterior a la mostrada') + '">'
+                 + '<i class="fa-solid fa-chevron-left" aria-hidden="true"></i></button>'
+                 + '<button type="button" class="mc-pill mc-pill--on vs-periodo__actual" onclick="ventasVerSemanaActiva()" aria-label="' + escapeHtml(esMes ? _vsEtiquetaMes(_vs.mes) : etiquetaSemana(_vsSemanaVista())) + (activa ? ' (semana activa)' : '. Volver a la semana activa') + '">'
+                 + '<i class="fa-solid fa-calendar-days" aria-hidden="true"></i> ' + escapeHtml(etiqueta) + '</button>'
+                 + '<button type="button" class="vs-flecha" onclick="ventasMoverPeriodo(1)" aria-label="' + (esMes ? 'Mes siguiente' : 'Semana siguiente') + '"' + (tope ? ' disabled' : '') + '>'
+                 + '<i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button>'
+                 + '</div>'
+                 + '<div class="vs-pills" role="group" aria-label="Atajos de periodo">'
+                 + '<button type="button" class="mc-pill' + (anterior ? ' mc-pill--on' : '') + '" aria-pressed="' + anterior + '" onclick="ventasVerSemanaAnterior()">Semana anterior</button>'
+                 + '<button type="button" class="mc-pill' + (esMes ? ' mc-pill--on' : '') + '" aria-pressed="' + esMes + '" onclick="ventasVerMes()">Mes</button>'
+                 + '</div>';
+        }
+
+        function _vsKpis(d) {
+            var r = ventasResumen(d.lineas);
+            return '<div class="vs-kpis">'
+                 + '<div class="vs-kpi"><span class="vs-kpi__ico"><i class="fa-solid fa-chart-line" aria-hidden="true"></i></span>'
+                 + '<span class="vs-kpi__lbl">Venta neta</span><span class="vs-kpi__val num">' + (r.conImporte ? _vsMoneda(r.ventaNeta) : '—') + '</span></div>'
+                 + '<div class="vs-kpi"><span class="vs-kpi__ico"><i class="fa-solid fa-ticket" aria-hidden="true"></i></span>'
+                 + '<span class="vs-kpi__lbl">Artículos vendidos</span><span class="vs-kpi__val num">' + _vsNum(r.articulos) + '</span>'
+                 + (r.regalos > 0 ? '<span class="vs-kpi__sub">' + _vsNum(r.regalos) + ' de regalo</span>' : '') + '</div>'
+                 + '<div class="vs-kpi"><span class="vs-kpi__ico"><i class="fa-solid fa-receipt" aria-hidden="true"></i></span>'
+                 + '<span class="vs-kpi__lbl">Precio promedio</span><span class="vs-kpi__val num">' + (r.precioPromedio === null ? '—' : _vsMoneda(r.precioPromedio)) + '</span>'
+                 + '<span class="vs-kpi__sub">por artículo cobrado</span></div>'
+                 + '</div>';
+        }
+
         function renderVentasTab() {
             if (!hasPermission('sales.read')) {
                 return '<div class="vt-vacio"><p><i class="fa-solid fa-lock" aria-hidden="true"></i> No tienes acceso a las ventas.</p></div>';
             }
             if (typeof ventasImportView === 'undefined') ventasImportView = 'lista';
             if (ventasImportView === 'vista_previa' && _ventasImportPendiente) {
+                _vs.datos = {};
                 return '<div class="vt-wrap">' + renderVistaPreviaVentas(_ventasImportPendiente) + '</div>';
             }
             if (ventasImportView === 'incidencias' && _ventasImportResultado) {
+                _vs.datos = {};
                 return '<div class="vt-wrap">' + renderIncidenciasVentas(_ventasImportResultado) + '</div>';
             }
 
             var puedeImportar = hasPermission('sales.import');
-            var html = '<div class="vt-wrap">';
+            var d = _vsDatos();
+            var esMes = _vs.vista === 'mes';
+            var hayDatos = d.estado === 'ok' && d.lineas.length > 0;
+            var estadoSync = (typeof _syncEnabled !== 'undefined' && !_syncEnabled) ? 'pendiente' : 'ok';
 
-            if (!ventas.length) {
-                html += '<div class="vt-vacio">'
-                      + '<p><i class="fa-solid fa-file-chart-column" aria-hidden="true"></i> Todavía no hay ventas cargadas'
-                      + (ventasSemanaId ? ' para la ' + escapeHtml(etiquetaSemana(ventasSemanaId)) : '') + '. '
-                      + (puedeImportar ? 'Impórtalas desde el reporte del POS con el botón de arriba.'
-                                       : 'El administrador todavía no las importa.')
-                      + '</p></div></div>';
+            var html = '<div class="vt-wrap vs-pantalla">';
+            html += moduloCabecera('Ventas Semanales', "switchTab('inicio')", estadoSync);
+            html += _vsPeriodoPills();
+            html += BusquedaUI.barra('ventas', { placeholder: 'Buscar por producto o SKU', etiqueta: 'Buscar en las ventas' });
+            html += '<div class="vs-acciones">'
+                  + (puedeImportar ? '<button type="button" class="vs-btn vs-btn--primario" onclick="ventasImportarDesdeModulo()">'
+                                   + '<span class="vs-btn__circulo"><i class="fa-solid fa-file-arrow-up" aria-hidden="true"></i></span> Importar Ventas</button>' : '')
+                  + '<button type="button" class="vs-btn vs-btn--secundario" onclick="ventasExportarExcel()"' + (hayDatos ? '' : ' disabled') + '>'
+                  + '<i class="fa-solid fa-download" aria-hidden="true"></i> Exportar</button>'
+                  + '</div>';
+
+            if (!_vsEsActiva()) {
+                html += '<div class="vs-aviso" role="status"><i class="fa-solid fa-circle-info" aria-hidden="true"></i> '
+                      + 'Solo consulta. El Total y el consumo teórico usan la <b>' + escapeHtml(ventasSemanaId ? etiquetaSemana(ventasSemanaId) : 'semana activa') + '</b>.'
+                      + (esMes ? ' El mes suma los periodos que <b>inician</b> en él.' : '')
+                      + ' <button type="button" class="vs-link" onclick="ventasVerSemanaActiva()">Ir a la semana activa</button></div>';
+            }
+
+            if (d.estado === 'cargando') {
+                html += '<div class="vs-vacio" role="status" aria-live="polite"><i class="fa-solid fa-arrows-rotate fa-spin" aria-hidden="true"></i>'
+                      + '<div class="vs-vacio__t">Cargando ventas…</div></div></div>';
+                return html;
+            }
+            if (d.estado === 'error') {
+                html += '<div class="vs-vacio" role="alert"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>'
+                      + '<div class="vs-vacio__t">No disponible</div><div class="vs-vacio__s">' + escapeHtml(d.motivo || '') + '</div>'
+                      + (_db ? '<button type="button" class="vs-link" onclick="ventasRecargarVista()">Reintentar</button>' : '') + '</div></div>';
                 return html;
             }
 
-            var unidades = Math.round(ventas.reduce(function(a, l) { return a + (l.cantidad || 0); }, 0) * 1000) / 1000;
-            var cubiertos = ventasCoberturaSemana(ventasPeriodos || []);
-            html += '<div class="vt-panel vt-panel--resumen">'
-                  + '<div class="vt-panel__tit">Ventas de la ' + escapeHtml(ventasSemanaId ? etiquetaSemana(ventasSemanaId) : '—') + '</div>'
-                  + '<div class="vt-ayuda">'
-                  + '<b>' + ventas.length + '</b> SKU · <b>' + unidades + '</b> unidades vendidas</div>';
-            if (ventasPeriodos && ventasPeriodos.length && ventasSemanaId) {
-                html += '<div class="vt-subtit">Días cargados: ' + cubiertos.length + ' de 7</div>'
-                      + _ventasTiraSemana(ventasSemanaId, cubiertos)
-                      + '<div class="vt-ayuda">Periodos: '
-                      + escapeHtml(ventasPeriodos.map(function(x) { return _ventasTextoRango(x.inicio, x.fin); }).join(' · ')) + '</div>';
-                if (cubiertos.length < 7) {
+            if (!hayDatos) {
+                var periodoTxt = esMes ? 'el mes de ' + _vsEtiquetaMes(_vs.mes).toLowerCase() : 'la ' + etiquetaSemana(_vsSemanaVista());
+                html += BusquedaUI.region('ventas', _renderVentasResultados().html);
+                html += '<div class="vs-vacio">'
+                      + '<span class="vs-vacio__ico"><i class="fa-solid fa-chart-line" aria-hidden="true"></i></span>'
+                      + '<div class="vs-vacio__t">' + (esMes ? 'Sin ventas este mes' : 'Sin ventas esta semana') + '</div>'
+                      + '<div class="vs-vacio__s">Todavía no hay ventas cargadas para ' + escapeHtml(periodoTxt) + '. '
+                      + (puedeImportar ? 'Impórtalas desde el reporte del POS (Parrot, hoja "Detalle") con <b>Importar Ventas</b>.'
+                                       : 'El administrador todavía no las importa.') + '</div>'
+                      + '</div>'
+                      + '<div class="vs-total"><span>Venta neta <b class="num">$0</b></span>'
+                      + (puedeImportar ? '<button type="button" class="mc-pill" onclick="ventasToggleAyuda()" aria-expanded="' + _vs.ayuda + '">Cómo importar</button>' : '')
+                      + '</div>';
+                if (_vs.ayuda && puedeImportar) {
+                    html += '<ol class="vs-ayuda">'
+                          + '<li>En Parrot descarga el reporte de ventas por producto (.xlsx); la app lee la hoja <b>"Detalle"</b>.</li>'
+                          + '<li>Toca <b>Importar Ventas</b> y elige el archivo.</li>'
+                          + '<li>Indica las fechas que cubre (para un solo día, la misma fecha en inicio y fin) y confirma.</li>'
+                          + '<li>Una fecha ya cargada no se puede volver a subir: el sistema la bloquea.</li>'
+                          + '</ol>';
+                }
+                html += '</div>';
+                return html;
+            }
+
+            html += _vsKpis(d);
+
+            // Días cargados (semana): la misma tira de siempre.
+            if (!esMes && d.periodos && d.periodos.length) {
+                var semanaVista = _vsSemanaVista();
+                var cubiertos = ventasCoberturaSemana(d.periodos);
+                html += '<div class="vs-dias">'
+                      + '<div class="vs-dias__cab"><span>Días cargados</span><b class="num">' + cubiertos.length + ' de 7</b></div>'
+                      + _ventasTiraSemana(semanaVista, cubiertos)
+                      + '<div class="vt-ayuda">Periodos: ' + escapeHtml(d.periodos.map(function(x) { return _ventasTextoRango(x.inicio, x.fin); }).join(' · ')) + '</div>';
+                if (cubiertos.length < 7 && d.activa) {
                     html += '<div class="vt-msg vt-msg--aviso"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> Faltan ' + (7 - cubiertos.length) + ' día(s) de esta semana: '
                           + 'el consumo teórico de abajo es parcial.</div>';
                 }
+                html += '</div>';
+            } else if (esMes) {
+                html += '<div class="vs-dias"><div class="vs-dias__cab"><span>Días con ventas en el mes</span><b class="num">' + ventasCoberturaSemana(d.periodos).length + '</b></div>'
+                      + '<div class="vt-ayuda">' + d.periodos.length + ' periodo' + (d.periodos.length === 1 ? '' : 's') + ' importado' + (d.periodos.length === 1 ? '' : 's') + '</div></div>';
+            }
+
+            html += BusquedaUI.region('ventas', _renderVentasResultados().html);
+
+            // Solo la semana activa: consumo teórico (FASE 11A) y cortesías (v5.19), sin cambios.
+            if (d.activa) {
+                html += _renderConsumoTeorico();
+                if (typeof ventaCortesiasAnalizar === 'function' && typeof renderCortesiasVenta === 'function') {
+                    html += renderCortesiasVenta(ventaCortesiasAnalizar(ventas, { productos: (typeof products !== 'undefined') ? products : [] }), {
+                        notaHistorica: 'En ventas importadas antes del 6-oct-2026, una promo 2x1 que comparte SKU con la venta normal no se puede separar (sí está en el consumo).'
+                    });
+                }
             }
             html += '</div>';
-
-            // ── FASE 11A — consumo teórico calculado con el recetario ────────
-            html += _renderConsumoTeorico();
-
-            // ── v5.19 — cortesías y promos 2x1 de la semana, con su costo ──
-            if (typeof ventaCortesiasAnalizar === 'function' && typeof renderCortesiasVenta === 'function') {
-                html += renderCortesiasVenta(ventaCortesiasAnalizar(ventas, { productos: (typeof products !== 'undefined') ? products : [] }), {
-                    notaHistorica: 'En ventas importadas antes del 6-oct-2026, una promo 2x1 que comparte SKU con la venta normal no se puede separar (sí está en el consumo).'
-                });
-            }
-
-            var ordenadas = ventas.slice().sort(function(a, b) { return (b.cantidad || 0) - (a.cantidad || 0); });
-            html += '<table class="vt-tabla vt-tabla--lista">';
-            ordenadas.forEach(function(l) {
-                html += '<tr>'
-                      + '<td>' + escapeHtml(l.nombre || l.sku) + _ventasEtiquetaRegalo(l)
-                      + '<div class="vt-sku">' + escapeHtml(l.sku) + '</div></td>'
-                      + '<td class="vt-num">' + (l.cantidad || 0) + '</td>'
-                      + '</tr>';
-            });
-            html += '</table></div>';
             return html;
         }
         window.renderVentasTab = renderVentasTab;
+        window.ventasMoverPeriodo = ventasMoverPeriodo;
+        window.ventasVerSemanaActiva = ventasVerSemanaActiva;
+        window.ventasVerSemanaAnterior = ventasVerSemanaAnterior;
+        window.ventasVerMes = ventasVerMes;
+        window.ventasRecargarVista = ventasRecargarVista;
+        window.ventasToggleVerTodo = ventasToggleVerTodo;
+        window.ventasToggleAyuda = ventasToggleAyuda;
+        window.ventasImportarDesdeModulo = ventasImportarDesdeModulo;
+        window.ventasExportarExcel = ventasExportarExcel;
+        window.ventasEtiquetaCorta = ventasEtiquetaCorta;
 
         /**
          * _renderConsumoTeorico()

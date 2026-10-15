@@ -57,7 +57,7 @@ const PUERTO = process.env.PUERTO || '8080';
       rail:       t.querySelectorAll('.grp-pill').length,
       chips:      !!t.querySelector('[id^="sbx-chips"], .sbx-chip'),
       productos:  t.querySelectorAll('.prd-card').length,
-      btnProducto: [...t.querySelectorAll('button')].some(b => /Producto/.test(b.textContent)),
+      btnProducto: [...t.querySelectorAll('button')].some(b => /^\s*\+?\s*Producto\s*$/.test(b.textContent)),
       btnExcel:   [...t.querySelectorAll('button')].some(b => /Excel/.test(b.textContent)),
       btnBorrar:  [...t.querySelectorAll('button')].some(b => /Eliminar todos/.test(b.textContent)),
       sincro:     /sincronizaci/i.test(t.innerText),
@@ -71,10 +71,13 @@ const PUERTO = process.env.PUERTO || '8080';
   chk('★ Conserva la LISTA DE PRODUCTOS en Inicio (decisión de Eduardo)',
       partes.productos === 3, 'tarjetas: ' + partes.productos);
   // v5.18 — "Excel" (importaba sin validar) se mudó al módulo Importar desde Excel.
-  chk('Conserva los botones de administración (Producto, Eliminar todos); "Excel" se mudó al módulo Importar',
-      partes.btnProducto && !partes.btnExcel && partes.btnBorrar, JSON.stringify(partes));
-  chk('Conserva la tarjeta de sincronización y la de reportes',
-      partes.sincro && partes.reportes);
+  // v5.28 (pedido de Eduardo, 15-oct-2026) — "+ Producto", "Eliminar todos
+  // los productos" y "Reportes publicados" salen de Inicio. Agregar y
+  // Eliminar viven en la barra de Productos; "Excel" sigue en Importar.
+  chk('v5.28 · Inicio ya no tiene "+ Producto" ni "Eliminar todos"; "Excel" sigue en el módulo Importar',
+      !partes.btnProducto && !partes.btnExcel && !partes.btnBorrar, JSON.stringify(partes));
+  chk('Conserva la tarjeta de sincronización; v5.28 · sin "Reportes publicados"',
+      partes.sincro && !partes.reportes, JSON.stringify(partes));
 
   // ── B · La tarjeta de producto, con el sistema ─────────────────────────
   const card = await p.evaluate(() => {

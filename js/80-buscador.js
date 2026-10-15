@@ -321,6 +321,55 @@
             paso: 40
         });
 
+        // v5.28 — Pedido sugerido (js/73): nombre, código y proveedor.
+        var _motorPedidoSugerido = crearMotorBusqueda({
+            claves: [
+                { nombre: 'nombre',    peso: 3 },
+                { nombre: 'id',        peso: 2, codigo: true },
+                { nombre: 'proveedor', peso: 1 }
+            ]
+        });
+        BusquedaUI.registrar('pedsug', {
+            obtenerConsulta: function() { return (typeof _ps !== 'undefined') ? _ps.busqueda : ''; },
+            alAplicar:  function(v) { if (typeof _ps !== 'undefined') _ps.busqueda = v; },
+            refrescar:  function() { return _pintarRegionBusqueda('pedsug', _renderPedidoSugeridoResultados()); },
+            paso: 200
+        });
+
+        // v5.28 — Gestión de equipo (js/50): correo, nombre y rol.
+        var _motorEquipo = crearMotorBusqueda({
+            claves: [
+                { nombre: 'email',       peso: 3 },
+                { nombre: 'displayName', peso: 3 },
+                { nombre: 'rol', peso: 1, obtener: function(u) {
+                    var rid = (typeof _roleCanonico === 'function') ? _roleCanonico(u.role) : (u.role || '');
+                    var r = (typeof ROLES_SISTEMA_DEFECTO !== 'undefined' && ROLES_SISTEMA_DEFECTO[rid]) ? ROLES_SISTEMA_DEFECTO[rid].nombre : '';
+                    return rid + ' ' + r + ' ' + (u.status === 'inactivo' ? 'inactiva' : 'activa');
+                } }
+            ]
+        });
+        BusquedaUI.registrar('equipo', {
+            obtenerConsulta: function() { return (typeof _equipoBusqueda !== 'undefined') ? _equipoBusqueda : ''; },
+            alAplicar:  function(v) { if (typeof _equipoBusqueda !== 'undefined') _equipoBusqueda = v; },
+            refrescar:  function() { return _pintarRegionBusqueda('equipo', _renderEquipoResultados()); },
+            paso: 200
+        });
+
+        // v5.28 — Ventas Semanales (js/93): nombre, SKU y tipo.
+        var _motorVentas = crearMotorBusqueda({
+            claves: [
+                { nombre: 'nombre', peso: 3 },
+                { nombre: 'sku',    peso: 2, codigo: true },
+                { nombre: 'tipo',   peso: 1 }
+            ]
+        });
+        BusquedaUI.registrar('ventas', {
+            obtenerConsulta: function() { return (typeof _vs !== 'undefined') ? _vs.busqueda : ''; },
+            alAplicar:  function(v) { if (typeof _vs !== 'undefined') _vs.busqueda = v; },
+            refrescar:  function() { return _pintarRegionBusqueda('ventas', _renderVentasResultados()); },
+            paso: 200
+        });
+
         // v5.27 — Compras. _renderComprasResultados() vive en js/88-compras.js.
         BusquedaUI.registrar('compras', {
             obtenerConsulta: function() { return _comprasSearchTerm; },

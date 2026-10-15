@@ -166,8 +166,10 @@ const PUERTO = process.env.PUERTO || '8080';
       };
     });
     chk(T + '★ Permisos: sin emoji ni style="…"', pr.emoji === '' && pr.estilos === 0, JSON.stringify(pr).slice(0, 220));
-    chk(T + '★ Los selectores de usuario y rol ya tienen fondo real (antes: tokens inexistentes) y miden ≥ 44 px',
-        pr.selBg && pr.selBg !== 'rgba(0, 0, 0, 0)' && pr.rolBg && pr.rolBg !== 'rgba(0, 0, 0, 0)' && pr.selAlto >= 44 && pr.rolAlto >= 44, JSON.stringify([pr.selBg, pr.rolBg, pr.selAlto]));
+    // v5.28 — el selector de usuario se sustituyó por la lista de tarjetas de
+    // "Gestión de equipo"; en el detalle queda el selector de rol.
+    chk(T + '★ El selector de rol tiene fondo real y mide ≥ 44 px',
+        pr.rolBg && pr.rolBg !== 'rgba(0, 0, 0, 0)' && pr.rolAlto >= 44, JSON.stringify([pr.rolBg, pr.rolAlto]));
     chk(T + '★ Cada permiso es una fila ≥ 48 px con casilla de 24 px', pr.filas > 10 && pr.filaMin >= 48 && pr.cb && pr.cb[0] >= 24 && pr.cb[1] >= 24, JSON.stringify([pr.filas, pr.filaMin, pr.cb]));
     chk(T + 'Las etiquetas de estado ("Del rol", "Asignado"…) se ven con palabra y contraste ≥ 3', pr.badges.length >= 1 && pr.coloresBadge.every(x => x >= 3), JSON.stringify([pr.badges, pr.coloresBadge]));
     chk(T + 'Los iconos de Permisos tienen ancho real', pr.sinIcono === 0, String(pr.sinIcono));

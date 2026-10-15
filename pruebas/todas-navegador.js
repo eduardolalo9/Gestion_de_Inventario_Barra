@@ -67,6 +67,7 @@ const PRUEBAS = [
     'prueba-corte-total-navegador.js',  // v5.21 — corte de existencias con el reporte de SBO
     'prueba-sync-vivo-navegador.js',    // v5.22 — compras, ventas y cortes en vivo
     'prueba-inicio-conteo-navegador.js', // v5.23 — diseño de Inicio y Conteo
+    'prueba-v528-navegador.js',      // v5.28 — rediseño de Productos, Pedido sugerido, Inventario, Equipo y Ventas a 360/390 px
     'prueba-conteo-compacto-navegador.js', // v5.11 — vista compacta del Conteo, en pantalla
     'prueba-tema-esmeralda-navegador.js', // v5.25 — Verde Esmeralda: barra oscura, fuentes, pasteles, tablet, migración de tema
     'prueba-actualizaciones-navegador.js', // v5.12 — despliegue simulado: detecta, avisa, actualiza con un toque, conserva datos

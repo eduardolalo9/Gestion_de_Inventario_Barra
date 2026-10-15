@@ -49,7 +49,8 @@ const PUERTO = process.env.PUERTO || '8080';
 
   await p.evaluate(() => { document.documentElement.setAttribute('data-theme', 'dark'); activeTab = 'inicio'; renderTab(); });
   await p.waitForTimeout(300);
-  const panel = await p.evaluate(() => document.getElementById('tabContent').innerText);
+  // v5.28 — la tarjeta ya no se pinta en Inicio; se prueba la función que la arma.
+  const panel = await p.evaluate(() => { const d = document.createElement('div'); d.innerHTML = _panelExistenciaSemana(); document.body.appendChild(d); const t = d.innerText; d.remove(); return t; });
   chk('★ Inicio explica el origen del Total: tarjeta "Origen del Total" con el ancla',
       /Origen del Total/.test(panel) && /Recuento de mitad de semana/.test(panel), panel.slice(0, 400));
   chk('…y avisa los días de ventas que faltan desde el corte (ayer no está cargado)', /Faltan 1 día\(s\) de ventas/.test(panel), '');
