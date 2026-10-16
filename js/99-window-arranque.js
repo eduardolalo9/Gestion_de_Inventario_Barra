@@ -1,4 +1,17 @@
         function importFullData(event) {
+            // v5.26 (hallazgo #7, Cero Pérdida de Datos) — esta función reemplaza
+            // TODO el estado local (catálogo, pedidos, inventarios, auditoría…) con
+            // lo que venga en el JSON, y hasta ahora no pedía ningún permiso: el
+            // botón "Importar datos" del menú lateral es visible para cualquier
+            // autenticado (a diferencia de "Panel Admin"/"Papelera", que sí se
+            // ocultan), así que cualquier bartender podía borrar el inventario de
+            // todos con un archivo cualquiera. Mismo candado que ya usa
+            // restaurarBackup() para la misma clase de operación.
+            if (!hasPermission('settings.update')) {
+                showNotification('⚠️ No tienes permiso para importar datos');
+                event.target.value = '';
+                return;
+            }
             const file = event.target.files[0];
             if (!file) return;
             const reader = new FileReader();
@@ -11,6 +24,12 @@
                         return;
                     }
                     showConfirm('¿Estás seguro de reemplazar todos los datos actuales con los del archivo?', function() {
+                        // v5.26 (hallazgo #7) — antes no quedaba ningún respaldo
+                        // previo: si el JSON traía basura, no había forma de volver
+                        // al estado de antes salvo que otro dispositivo aún no
+                        // hubiera sincronizado. Mismo patrón que cada import de
+                        // Excel (recetario/compras/ventas): respaldar justo antes.
+                        if (typeof _crearBackupNombrado === 'function') _crearBackupNombrado('pre_importacion_json_' + Date.now());
                         products = data.products;
                         orders = data.orders;
                         inventories = data.inventories;

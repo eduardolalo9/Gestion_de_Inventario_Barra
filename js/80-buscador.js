@@ -59,6 +59,26 @@
             ]
         });
 
+        // v5.27 — Compras: se busca sobre todo por PRODUCTO (pedido de Eduardo,
+        // 12-oct-2026): nombre del catálogo, código y la descripción de SAP de
+        // cada línea. Folio y Doc SAP como código exacto; proveedor pesa poco
+        // (para él está el selector de proveedor).
+        var _motorCompras = crearMotorBusqueda({
+            claves: [
+                { nombre: 'productos', peso: 3,
+                  obtener: function(c) {
+                      return (Array.isArray(c.lineas) ? c.lineas : []).map(function(l) {
+                          var p = (typeof products !== 'undefined' && Array.isArray(products))
+                              ? products.find(function(x) { return String(x.id) === String(l.productoId); }) : null;
+                          return (p ? (p.name || '') : '') + ' ' + (l.descripcionSap || '') + ' ' + (l.productoId || '');
+                      }).join(' ');
+                  } },
+                { nombre: 'folio',  peso: 2, codigo: true },
+                { nombre: 'docSap', peso: 2, codigo: true },
+                { nombre: 'proveedorNombre', peso: 1 }
+            ]
+        });
+
         // REDISEÑO — Recetario. El nombre manda igual que en el catálogo; el
         // PV (código único, solo existe si la receta vino de una importación
         // — ver RECETARIO-2) se trata como código exacto; la categoría pesa
@@ -299,6 +319,64 @@
                 if (d) _motorFvs.indexar(d.filas);
             },
             paso: 40
+        });
+
+        // v5.28 — Pedido sugerido (js/73): nombre, código y proveedor.
+        var _motorPedidoSugerido = crearMotorBusqueda({
+            claves: [
+                { nombre: 'nombre',    peso: 3 },
+                { nombre: 'id',        peso: 2, codigo: true },
+                { nombre: 'proveedor', peso: 1 }
+            ]
+        });
+        BusquedaUI.registrar('pedsug', {
+            obtenerConsulta: function() { return (typeof _ps !== 'undefined') ? _ps.busqueda : ''; },
+            alAplicar:  function(v) { if (typeof _ps !== 'undefined') _ps.busqueda = v; },
+            refrescar:  function() { return _pintarRegionBusqueda('pedsug', _renderPedidoSugeridoResultados()); },
+            paso: 200
+        });
+
+        // v5.28 — Gestión de equipo (js/50): correo, nombre y rol.
+        var _motorEquipo = crearMotorBusqueda({
+            claves: [
+                { nombre: 'email',       peso: 3 },
+                { nombre: 'displayName', peso: 3 },
+                { nombre: 'rol', peso: 1, obtener: function(u) {
+                    var rid = (typeof _roleCanonico === 'function') ? _roleCanonico(u.role) : (u.role || '');
+                    var r = (typeof ROLES_SISTEMA_DEFECTO !== 'undefined' && ROLES_SISTEMA_DEFECTO[rid]) ? ROLES_SISTEMA_DEFECTO[rid].nombre : '';
+                    return rid + ' ' + r + ' ' + (u.status === 'inactivo' ? 'inactiva' : 'activa');
+                } }
+            ]
+        });
+        BusquedaUI.registrar('equipo', {
+            obtenerConsulta: function() { return (typeof _equipoBusqueda !== 'undefined') ? _equipoBusqueda : ''; },
+            alAplicar:  function(v) { if (typeof _equipoBusqueda !== 'undefined') _equipoBusqueda = v; },
+            refrescar:  function() { return _pintarRegionBusqueda('equipo', _renderEquipoResultados()); },
+            paso: 200
+        });
+
+        // v5.28 — Ventas Semanales (js/93): nombre, SKU y tipo.
+        var _motorVentas = crearMotorBusqueda({
+            claves: [
+                { nombre: 'nombre', peso: 3 },
+                { nombre: 'sku',    peso: 2, codigo: true },
+                { nombre: 'tipo',   peso: 1 }
+            ]
+        });
+        BusquedaUI.registrar('ventas', {
+            obtenerConsulta: function() { return (typeof _vs !== 'undefined') ? _vs.busqueda : ''; },
+            alAplicar:  function(v) { if (typeof _vs !== 'undefined') _vs.busqueda = v; },
+            refrescar:  function() { return _pintarRegionBusqueda('ventas', _renderVentasResultados()); },
+            paso: 200
+        });
+
+        // v5.27 — Compras. _renderComprasResultados() vive en js/88-compras.js.
+        BusquedaUI.registrar('compras', {
+            obtenerConsulta: function() { return _comprasSearchTerm; },
+            alAplicar:  function(v) { _comprasSearchTerm = v; },
+            refrescar:  function() { return _pintarRegionBusqueda('compras', _renderComprasResultados()); },
+            precalentar: function() { _motorCompras.indexar(compras); },
+            paso: 30
         });
 
         // REDISEÑO — Recetario comparte el mismo buscador que Inicio: misma

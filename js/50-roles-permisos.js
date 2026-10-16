@@ -4,8 +4,9 @@
             if (!navigator.onLine) {
                 const bar = document.createElement('div');
                 bar.id = 'networkStatus';
-                bar.style.cssText = 'position:fixed;bottom:80px;left:0;right:0;background:#f59e0b;color:#fff;text-align:center;padding:6px;font-size:13px;font-weight:600;z-index:9999;';
-                bar.textContent = '⚠️ Sin conexión — los datos están guardados localmente';
+                bar.className = 'net-aviso';
+                bar.setAttribute('role', 'status');
+                bar.innerHTML = '<i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> <span>Sin conexión — los datos están guardados localmente</span>';
                 document.body.appendChild(bar);
                 updateCloudSyncBadge('offline');
             } else {
@@ -174,13 +175,29 @@
             'permissions.update':    { nombre: 'Administrar permisos',         descripcion: 'Conceder o revocar permisos individuales a un usuario.',                       grupo: 'Usuarios y permisos', delegable: false, sensible: true,  efectivo: true  },
 
             // ── Inventario fisico ───────────────────────────────────────────
-            'inventory.create':      { nombre: 'Crear inventario',             descripcion: 'Abrir un inventario fisico nuevo para el ciclo.',                              grupo: 'Inventario fisico',   delegable: true,  sensible: true,  efectivo: true  },
+            // v5.26 (hallazgo #13) — delegable:false, NO true: la propia
+            // accion (abrirModalNuevoInventario, js/75) exige isAdmin() ADEMAS
+            // del permiso, y firestore.rules exige isAdminUser() para crear en
+            // inventories/{id} sin mirar hasPerm() en absoluto. Delegarlo por
+            // override jamas funciono: el boton no aparece, y si apareciera el
+            // servidor lo rechazaria. Corregido aqui, no alli, porque alli es
+            // donde realmente vive hoy — abrir un inventario fisico completo
+            // sigue siendo, por decision explicita, exclusivo del admin.
+            'inventory.create':      { nombre: 'Crear inventario',             descripcion: 'Abrir un inventario fisico nuevo para el ciclo.',                              grupo: 'Inventario fisico',   delegable: false, sensible: true,  efectivo: true  },
             'inventory.count':       { nombre: 'Contar',                       descripcion: 'Capturar cantidades en las areas asignadas.',                                  grupo: 'Inventario fisico',   delegable: true,  sensible: false, efectivo: true  },
             'inventory.viewOwn':     { nombre: 'Ver mi conteo',                descripcion: 'Consultar unicamente el conteo propio.',                                       grupo: 'Inventario fisico',   delegable: true,  sensible: false, efectivo: true  },
             'inventory.viewAll':     { nombre: 'Ver todos los conteos',        descripcion: 'Consultar la consolidacion y el conteo individual de cada persona. Rompe el conteo ciego: concedelo solo a supervision.', grupo: 'Inventario fisico', delegable: true, sensible: true, efectivo: true },
             'inventory.closeOwn':    { nombre: 'Finalizar conteo propio',      descripcion: 'Dar por terminado el conteo propio de un area.',                               grupo: 'Inventario fisico',   delegable: true,  sensible: false, efectivo: true  },
             'inventory.closeOther':  { nombre: 'Cerrar area completa',         descripcion: 'Marcar un area como terminada para TODAS las personas que cuentan en ella.',   grupo: 'Inventario fisico',   delegable: true,  sensible: true,  efectivo: true  },
-            'inventory.closeGlobal': { nombre: 'Cerrar inventario',            descripcion: 'Cerrar el inventario completo y congelar el historico.',                       grupo: 'Inventario fisico',   delegable: true,  sensible: true,  efectivo: true  },
+            // v5.26 (hallazgo #13) — delegable:false: la Rule de
+            // inventories/{id} exige isAdminUser() para la transicion a
+            // CERRADO (firestore.rules ~719), sin mirar hasPerm('inventory.
+            // closeGlobal'). cerrarInventarioFisico() (js/75) si usa solo
+            // hasPermission(), pero el boton que la dispara (js/85
+            // _renderZonaCerrarInventario) ya exigia isAdmin() tambien — ese
+            // doble candado del cliente SI coincide con el servidor; lo que no
+            // coincidia era la promesa del catalogo.
+            'inventory.closeGlobal': { nombre: 'Cerrar inventario',            descripcion: 'Cerrar el inventario completo y congelar el historico.',                       grupo: 'Inventario fisico',   delegable: false, sensible: true,  efectivo: true  },
             'inventory.reopenArea':  { nombre: 'Reabrir area',                 descripcion: 'Devolver un area cerrada al estado de captura.',                               grupo: 'Inventario fisico',   delegable: true,  sensible: true,  efectivo: true  },
             'inventory.post':        { nombre: 'Contabilizar inventario',      descripcion: 'Convertir el resultado de un inventario cerrado en el inventario inicial del siguiente ciclo. Es irreversible: el inicial no se puede corregir. Reservado a administracion.', grupo: 'Inventario fisico', delegable: true, sensible: true, efectivo: true },
             'inventory.export':      { nombre: 'Exportar inventario',          descripcion: 'Descargar el Excel del inventario.',                                           grupo: 'Inventario fisico',   delegable: true,  sensible: false, efectivo: true  },
@@ -201,11 +218,25 @@
             'purchases.read':        { nombre: 'Ver compras',                  descripcion: 'Consultar la pestana de compras.',                                             grupo: 'Compras',             delegable: true,  sensible: false, efectivo: true  },
             'purchases.create':      { nombre: 'Registrar compras',            descripcion: 'Capturar una compra manualmente.',                                             grupo: 'Compras',             delegable: true,  sensible: false, efectivo: true  },
             'purchases.import':      { nombre: 'Importar compras',             descripcion: 'Cargar compras desde un archivo.',                                             grupo: 'Compras',             delegable: true,  sensible: true,  efectivo: true  },
-            'purchases.delete':      { nombre: 'Eliminar compras',             descripcion: 'Borrar registros de compra.',                                                  grupo: 'Compras',             delegable: false, sensible: true,  efectivo: false },
+            // v5.27 (decisión de Eduardo, 12-oct-2026) — el id se conserva
+            // (ya existía en el catálogo cerrado y en los roles guardados en
+            // Firestore), pero ahora SÍ hace algo: cancelar una entrada de
+            // compra (se marca cancelada y deja de sumar al Total; no se
+            // borra). Solo administración: delegable:false y las reglas
+            // exigen isAdminUser() además del permiso.
+            'purchases.delete':      { nombre: 'Cancelar entradas de compra',  descripcion: 'Cancelar una entrada ya ingresada: queda en el historial como cancelada y deja de sumar al Total.', grupo: 'Compras',             delegable: false, sensible: true,  efectivo: true  },
 
             // ── Reportes y datos ────────────────────────────────────────────
             'reports.read':          { nombre: 'Ver reportes',                 descripcion: 'Consultar los reportes globales publicados.',                                  grupo: 'Reportes y datos',    delegable: true,  sensible: false, efectivo: true  },
-            'reports.export':        { nombre: 'Generar reportes',             descripcion: 'Generar y publicar el reporte global del inventario.',                         grupo: 'Reportes y datos',    delegable: true,  sensible: true,  efectivo: true  },
+            // v5.26 (hallazgo #13) — delegable:false: firestore.rules exige
+            // isAdminUser() para escribir en reportes/{id} (regla ~1184), sin
+            // mirar hasPerm() en absoluto. A diferencia de los dos anteriores,
+            // aqui el cliente (js/50 generarYPublicarReporte/resolverAjuste)
+            // NO tenia ningun isAdmin() de mas — solo hasPermission() — asi
+            // que un delegado SI veia el boton y SI lo intentaba: el servidor
+            // lo rechazaba con un error de permisos sin explicacion. Marcarlo
+            // no delegable deja de ofrecer un boton que nunca iba a funcionar.
+            'reports.export':        { nombre: 'Generar reportes',             descripcion: 'Generar y publicar el reporte global del inventario.',                         grupo: 'Reportes y datos',    delegable: false, sensible: true,  efectivo: true  },
             'data.exportFull':       { nombre: 'Exportar respaldo completo',   descripcion: 'Descargar el respaldo JSON con TODOS los datos, incluido el conteo individual de cada persona.', grupo: 'Reportes y datos', delegable: false, sensible: true, efectivo: true },
 
             // ── Configuracion ───────────────────────────────────────────────
@@ -970,7 +1001,7 @@
             return _authzState.loaded && !!_authzState.permissions && _authzState.permissions.has('*');
         }
 
-        async function loadUserRole(uid) {
+        async function loadUserRole(uid, authMeta) {
             if (!_db || !uid) { currentUserRole = 'user'; _resetAuthzState(); applyRoleUI(); return; }
             currentUserUid = uid;
             let userData = null;
@@ -981,15 +1012,38 @@
                     userData = snap.data();
                     currentUserRole = userData.role || 'user';
                 } else {
-                    // Auto-creación de usuario nuevo: SIN CAMBIOS respecto al
-                    // comportamiento anterior — se sigue creando con role:'user'
-                    // (legacy). _roleCanonico('user') ya lo resuelve a
-                    // BARTENDER para efectos de permisos; no hay necesidad de
-                    // tocar este valor para lograrlo (ver entregable, decisión
-                    // documentada).
-                    await ref.set({ uid, role: 'user', creadoEn: Date.now() });
-                    currentUserRole = 'user';
-                    userData = { uid: uid, role: 'user' };
+                    // v5.26 (hallazgo #8, escalada/pérdida de control) — ANTES
+                    // esta rama auto-creaba SIEMPRE con role:'user' (BARTENDER
+                    // activo), sin distinguir un alta genuina de una cuenta que
+                    // YA existía y a la que le borraron usuarios/{uid}. Un admin
+                    // que borraba el documento para "dar de baja" a alguien
+                    // conseguía justo lo contrario: al siguiente inicio de
+                    // sesión, esta función la resucitaba sola con permisos de
+                    // BARTENDER por defecto, sin los overrides/áreas que tuviera
+                    // (esos sí se pierden para siempre al borrar el documento —
+                    // nunca se pueden recuperar — pero al menos ya no vuelven
+                    // permisos activos por accidente).
+                    //
+                    // user.metadata.creationTime === lastSignInTime SOLO en el
+                    // primer inicio de sesión de una cuenta de Firebase Auth
+                    // recién creada; en cualquier otro caso la cuenta YA
+                    // existía, así que un documento ausente significa que se
+                    // borró, no que nunca se creó. Sin esa distinción (llamadas
+                    // viejas a loadUserRole(uid), sin authMeta) se mantiene el
+                    // comportamiento anterior — alta genuina.
+                    const esPrimeraVezDeVerdad = !authMeta || !authMeta.creationTime || !authMeta.lastSignInTime
+                        || authMeta.creationTime === authMeta.lastSignInTime;
+                    if (esPrimeraVezDeVerdad) {
+                        await ref.set({ uid, role: 'user', creadoEn: Date.now() });
+                        currentUserRole = 'user';
+                        userData = { uid: uid, role: 'user' };
+                    } else {
+                        console.warn('[Roles] usuarios/' + uid + ' no existe pero la cuenta ya tenía sesiones previas — se recrea INACTIVA, no como BARTENDER activo.');
+                        await ref.set({ uid, role: 'user', status: 'inactivo', creadoEn: Date.now(),
+                                         notaSistema: 'Documento recreado tras no encontrarse — revisar y reactivar manualmente.' });
+                        currentUserRole = 'user';
+                        userData = { uid: uid, role: 'user', status: 'inactivo' };
+                    }
                 }
                 console.info('[Roles] Rol:', currentUserRole);
             } catch (e) {
@@ -1154,13 +1208,15 @@
         function applyRoleUI() {
             const badge = document.getElementById('sbRoleBadge');
             if (badge) {
-                badge.textContent = isAdmin() ? '👑 Admin' : '👤 Usuario';
+                badge.innerHTML = isAdmin() ? '<i class="fa-solid fa-user-shield" aria-hidden="true"></i> Admin' : '<i class="fa-solid fa-user" aria-hidden="true"></i> Usuario';
                 badge.className   = 'role-badge ' + (isAdmin() ? 'admin' : 'user');
             }
             const sep = document.getElementById('sbAdminSep');
             const btn = document.getElementById('sbAdminBtn');
             if (sep) sep.style.display = isAdmin() ? '' : 'none';
             if (btn) btn.style.display  = isAdmin() ? '' : 'none';
+            const pap = document.getElementById('sbPapeleraBtn');   // v5.19
+            if (pap) pap.style.display  = isAdmin() ? '' : 'none';
             renderTab();
         }
 
@@ -1183,9 +1239,47 @@
             }
         }
 
+        // ── v5.28 — ¿hay cambios del catálogo sin publicar? ───────────────
+        // Pedido de Eduardo (15-oct-2026): el botón Publicar de Productos se
+        // ve gris mientras el catálogo de este teléfono es igual al publicado
+        // y verde cuando hay cambios pendientes. La huella usa solo campos del
+        // CATÁLOGO: stock/stockByArea y campos internos (_x) cambian al contar
+        // y no son "cambios por publicar".
+        var CATALOGO_HUELLA_LS = 'inventarioApp_catalogPublicadoHuella';
+
+        function catalogoHuella(lista) {
+            var txt = (Array.isArray(lista) ? lista : []).map(function(p) {
+                if (!p) return '';
+                return Object.keys(p).filter(function(k) {
+                    return k.charAt(0) !== '_' && k !== 'stock' && k !== 'stockByArea';
+                }).sort().map(function(k) {
+                    var v = p[k];
+                    return k + '=' + (v !== null && typeof v === 'object' ? JSON.stringify(v) : String(v));
+                }).join('|');
+            }).sort().join('\n');
+            var h = 0x811c9dc5;                       // FNV-1a 32 bits: barato y suficiente para comparar
+            for (var i = 0; i < txt.length; i++) {
+                h ^= txt.charCodeAt(i);
+                h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+            }
+            return (Array.isArray(lista) ? lista.length : 0) + ':' + h.toString(16);
+        }
+
+        function _catalogoRecordarPublicado(lista) {
+            try { localStorage.setItem(CATALOGO_HUELLA_LS, catalogoHuella(lista)); } catch (_) {}
+        }
+
+        /** true si el catálogo local difiere del último publicado que vio este teléfono (o no se sabe). */
+        function catalogoTieneCambiosSinPublicar() {
+            var guardada = null;
+            try { guardada = localStorage.getItem(CATALOGO_HUELLA_LS); } catch (_) {}
+            if (!guardada) return (typeof products !== 'undefined' && products.length > 0);
+            return guardada !== catalogoHuella(typeof products !== 'undefined' ? products : []);
+        }
+
         // ── MÓDULO: CATÁLOGO (admin publica, usuarios reciben) ────────────
         async function publicarCatalogoFirestore() {
-            if (!_db || !hasPermission('catalog.publish')) return;
+            if (!_db || !hasPermission('catalog.publish')) return false;
             try {
                 await _db.collection('catalogo').doc('productos').set({
                     productos:        products,
@@ -1193,11 +1287,15 @@
                     publicadoEn:      Date.now(),
                     version:          Date.now()
                 });
+                _catalogoRecordarPublicado(products);   // v5.28 — Publicar vuelve a gris
                 await crearNotificacion('catalogo', 'Admin publicó catálogo actualizado (' + products.length + ' productos)', null, true);
                 showNotification('✅ Catálogo publicado a todos los usuarios');
+                if (typeof activeTab !== 'undefined' && activeTab === 'productos' && typeof renderTab === 'function') renderTab();
+                return true;    // v5.18 — el módulo Importar necesita saber si se publicó
             } catch (e) {
                 console.error('[Catalogo] Error publicando:', e);
                 showNotification('❌ Error al publicar catálogo');
+                return false;
             }
         }
 
@@ -1238,6 +1336,8 @@
                     if (!snap.exists) return;
                     const data = snap.data();
                     if (!Array.isArray(data.productos)) return;
+                    // v5.28 — esto ES lo publicado: base para "cambios sin publicar".
+                    _catalogoRecordarPublicado(data.productos);
                     // Solo actualizar si la versión del servidor es más nueva
                     const serverVersion = data.version || 0;
                     const localVersion  = parseInt(localStorage.getItem('inventarioApp_catalogVersion') || '0', 10);
@@ -1288,6 +1388,8 @@
                     if (!snap.exists) return;
                     const data = snap.data();
                     if (!Array.isArray(data.productos)) return;
+                    // v5.28 — esto ES lo publicado: base para "cambios sin publicar".
+                    _catalogoRecordarPublicado(data.productos);
                     const serverVersion = data.version || 0;
                     const localVersion  = parseInt(localStorage.getItem('inventarioApp_catalogVersion') || '0', 10);
                     if (serverVersion <= localVersion) return; // ya lo tenemos (incluye el caso "yo mismo lo publiqué")
@@ -1448,16 +1550,26 @@
                 }, function(err) { console.warn('[Notif] Error listener:', err); });
         }
 
-        function actualizarBadgeNotif() {
+        // v5.26 (hallazgo #12) — pintado del número de la campanita, separado
+        // del conteo en sí para poder reusarlo desde subscribeAjustesPendientes()
+        // (ver abajo): misma pastilla, dos fuentes distintas según el rol.
+        function _pintarBadgeNotif(n) {
             const badge = document.getElementById('sbNotifBadge');
             if (!badge) return;
-            const unread = _notificaciones.filter(function(n) { return !n.leido; }).length;
-            if (unread > 0) {
-                badge.textContent = unread > 9 ? '9+' : String(unread);
+            if (n > 0) {
+                badge.textContent = n > 9 ? '9+' : String(n);
                 badge.style.display = '';
             } else {
                 badge.style.display = 'none';
             }
+        }
+        function actualizarBadgeNotif() {
+            // El admin no escucha 'notificaciones' (ver _reconciliarListenersPorAutorizacion:
+            // apaga _unsubNotifs al entrar en modo admin), así que esta cuenta no le
+            // aplica — su campanita la alimenta subscribeAjustesPendientes().
+            if (isAdmin()) return;
+            const unread = _notificaciones.filter(function(n) { return !n.leido; }).length;
+            _pintarBadgeNotif(unread);
         }
 
         async function marcarNotifLeida(id) {
@@ -1494,6 +1606,19 @@
                     _ajustes = snap.docs.map(function(d) { return Object.assign({ id: d.id }, d.data()); });
                     const pending = _ajustes.filter(function(a) { return a.estado === 'pendiente'; }).length;
                     if (pending > 0) showNotification('🔔 ' + pending + ' ajuste(s) pendiente(s) de aprobar');
+                    // v5.26 (hallazgo #12) — el toast de arriba es efímero: se
+                    // pierde si el admin no estaba mirando la pantalla en ese
+                    // instante. solicitarAjuste() además escribía una
+                    // notificación en 'notificaciones' con destinatarioUid:null
+                    // y broadcast:false — invisible SIEMPRE, ni para el admin ni
+                    // para nadie (ver _notificaciones, filtrado por n.broadcast ||
+                    // n.destinatarioUid === uid), y el admin ni siquiera escucha
+                    // esa colección (_reconciliarListenersPorAutorizacion la
+                    // apaga en modo admin). Un ajuste pendiente ahora deja un
+                    // rastro PERSISTENTE en la misma campanita del sidebar — no
+                    // solo el toast del momento — así que sigue ahí aunque el
+                    // admin estuviera desconectado cuando se solicitó.
+                    _pintarBadgeNotif(pending);
                     if (activeTab === 'ajustes') renderTab();
                 }, function(err) { console.warn('[Ajustes] Error listener:', err); });
         }
@@ -1517,7 +1642,17 @@
                     estado:           'pendiente',
                     creadoEn:         Date.now()
                 });
-                await crearNotificacion('ajuste', '📝 Ajuste solicitado: ' + productoNombre + ' — ' + motivo, null, false);
+                // v5.26 (hallazgo #12) — este crearNotificacion() con
+                // destinatarioUid:null y broadcast:false escribía un documento
+                // que NADIE iba a leer nunca: ni el admin (no escucha
+                // 'notificaciones' en ese modo — ver _reconciliarListenersPorAutorizacion),
+                // ni nadie más (el filtro de _notificaciones exige
+                // n.broadcast || n.destinatarioUid === uid, y ninguno de los
+                // dos se cumplía). El aviso real al admin es
+                // subscribeAjustesPendientes(), que ya corre en vivo mientras
+                // administra y ahora además deja la campanita encendida — se
+                // quita el escritura muerta en vez de mantener un rastro que
+                // no le llega a nadie.
                 showNotification('✅ Ajuste enviado al administrador');
             } catch (e) {
                 console.error('[Ajustes] Error:', e);
@@ -1549,7 +1684,14 @@
 
         // ── MÓDULO: REPORTES ──────────────────────────────────────────────
         async function generarYPublicarReporte() {
-            if (!hasPermission('reports.export')) return;
+            // v5.26 (hallazgo #13) — isAdmin() ademas de hasPermission(): la
+            // Rule de reportes/{id} exige isAdminUser() sin mirar hasPerm(),
+            // asi que un delegado que llegara a esta funcion (p. ej. si algun
+            // dia se expone el boton fuera del bloque isAdmin() que ya lo
+            // envuelve en 70/85) terminaria con un permission-denied del
+            // servidor despues de ver "Generando reporte global…". Mismo
+            // candado que ya tenian inventory.create e inventory.closeGlobal.
+            if (!isAdmin() || !hasPermission('reports.export')) return;
             showNotification('⏳ Generando reporte global…');
             try {
                 const AREAS = AREAS_CONTEO;
@@ -1715,19 +1857,30 @@
          * Pide confirmación antes de borrar y recarga la lista al terminar.
          */
         async function eliminarReporte(reporteId) {
-            if (!hasPermission('reports.export')) {
+            // v5.26 (hallazgo #13) — mismo candado doble que generarYPublicarReporte().
+            if (!isAdmin() || !hasPermission('reports.export')) {
                 showNotification('⚠️ No tienes permiso para eliminar reportes');
                 return;
             }
             if (!_db) { showNotification('❌ Sin conexión a base de datos'); return; }
-            showConfirm('¿Eliminar este reporte publicado?\n\nEsta acción no se puede deshacer. Los usuarios ya no podrán descargarlo.', async function() {
+            showConfirm('¿Eliminar este reporte publicado?\n\nLos usuarios ya no podrán descargarlo. Queda una copia en la Papelera (administración puede restaurarlo).', async function() {
                 try {
-                    await _db.collection('reportes').doc(reporteId).delete();
-                    showNotification('🗑️ Reporte eliminado correctamente');
+                    // v5.19 — PAPELERA: copia del reporte y borrado en el MISMO
+                    // batch. Si la copia no se puede escribir, no se borra.
+                    const repRef = _db.collection('reportes').doc(reporteId);
+                    const repSnap = await repRef.get();
+                    const batch = _db.batch();
+                    if (repSnap.exists && typeof papeleraRegistroReporte === 'function') {
+                        const reg = papeleraRegistroReporte(reporteId, repSnap.data(), { uidActor: currentUserUid });
+                        batch.set(_db.collection('inventarioApp').doc(FIRESTORE_DOC_ID).collection('papelera').doc(reg.id), reg.data);
+                    }
+                    batch.delete(repRef);
+                    await batch.commit();
+                    showNotification('🗑️ Reporte eliminado (queda una copia en la Papelera)');
                     // Refrescar la lista de reportes en pantalla
                     const el = document.getElementById('historiaReportesList');
                     if (el) {
-                        el.innerHTML = '<span style="color:var(--txt-muted);font-size:.79rem;">Actualizando…</span>';
+                        el.innerHTML = '<p class="ui-nota">Actualizando…</p>';
                         setTimeout(function() { renderTab(); }, 300);
                     }
                 } catch (e) {
@@ -1769,24 +1922,44 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
     }
 }
         // ── RENDER: NOTIFICACIONES ─────────────────────────────────────────
+        // R7d — el icono sale del TIPO de la notificación, no de un emoji dentro
+        // del texto. Las notificaciones ya guardadas en Firestore (y las que
+        // todavía se crean con emoji) se limpian solo al pintarlas: el dato
+        // guardado no se modifica.
+        function _notifIcono(tipo) {
+            var mapa = { ajuste: 'pen-to-square', reporte: 'file-chart-column', catalogo: 'boxes-stacked', recetario: 'book' };
+            return '<i class="fa-solid fa-' + (mapa[tipo] || 'bell') + '" aria-hidden="true"></i>';
+        }
+        function _notifTextoLimpio(texto) {
+            return String(texto == null ? '' : texto).replace(/^[\s\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B50}\uFE0F\u200D]+/u, '');
+        }
         function renderNotificacionesTab() {
             let html = '<div class="max-w-2xl mx-auto">';
-            html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">';
-            html += '<h2 style="font-size:1rem;font-weight:600;color:var(--txt-primary)">🔔 Notificaciones</h2>';
+            html += '<div class="ui-cab">';
+            html += '<h2 class="ui-titulo"><i class="fa-solid fa-bell" aria-hidden="true"></i> Notificaciones</h2>';
             if (_notificaciones.some(function(n) { return !n.leido; })) {
-                html += '<button onclick="marcarTodasLeidas()" style="font-size:.75rem;color:var(--accent);background:none;border:none;cursor:pointer;min-height:auto;font-family:inherit;">Marcar todas leídas</button>';
+                html += '<button type="button" class="ui-link" onclick="marcarTodasLeidas()">Marcar todas leídas</button>';
             }
             html += '</div>';
             if (_notificaciones.length === 0) {
-                html += '<div class="adm-card" style="text-align:center;padding:32px;color:var(--txt-muted);">Sin notificaciones nuevas</div>';
+                html += '<div class="ui-vacio ui-vacio--caja"><i class="fa-solid fa-bell" aria-hidden="true"></i>Sin notificaciones nuevas</div>';
             } else {
                 html += '<div class="notif-wrap">';
                 _notificaciones.forEach(function(n) {
                     const ts = n.creadoEn ? new Date(n.creadoEn).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : '';
+                    // v5.26 (hallazgo #4, Cero Pérdida de Datos / XSS) — el id iba
+                    // crudo dentro de un onclick: un documento con un id elegido a
+                    // mano (p.ej. desde la consola del navegador, saltándose
+                    // crearNotificacion()) podía romper el atributo y ejecutar
+                    // código con la sesión de quien abriera esta pantalla. Mismo
+                    // candado que ya usa /ajustes: si no es el id alfanumérico
+                    // esperado, se descarta y el botón simplemente no se pinta.
+                    const idSeg = /^[A-Za-z0-9]{1,40}$/.test(String(n.id || '')) ? n.id : '';
                     html += '<div class="notif-item' + (n.leido ? '' : ' unread') + '">';
-                    html += '<span class="notif-dot' + (n.leido ? ' read' : '') + '"></span>';
-                    html += '<div class="notif-body"><div class="notif-text">' + escapeHtml(n.texto) + '</div><div class="notif-time">' + ts + '</div></div>';
-                    if (!n.leido) html += '<button onclick="marcarNotifLeida(\'' + n.id + '\')" style="font-size:.7rem;color:var(--accent);background:none;border:none;cursor:pointer;min-height:auto;white-space:nowrap;font-family:inherit;">Leído</button>';
+                    html += '<span class="notif-dot' + (n.leido ? ' read' : '') + '" aria-hidden="true"></span>';
+                    html += '<span class="nt-icono">' + _notifIcono(n.tipo) + '</span>';
+                    html += '<div class="notif-body"><div class="notif-text">' + escapeHtml(_notifTextoLimpio(n.texto)) + '</div><div class="notif-time ui-mono">' + ts + '</div></div>';
+                    if (!n.leido && idSeg) html += '<button type="button" class="ui-link" onclick="marcarNotifLeida(\'' + idSeg + '\')">Leído</button>';
                     html += '</div>';
                 });
                 html += '</div>';
@@ -1805,29 +1978,28 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
 
             // Formulario para solicitar ajuste (solo usuarios)
             if (!isAdmin()) {
-                html += '<div class="adm-card" style="margin-bottom:16px;">';
-                html += '<h3>📝 Solicitar ajuste de producto</h3>';
-                html += '<select id="ajusteProductoSel" style="width:100%;margin-bottom:8px;padding:8px;border-radius:6px;border:1px solid var(--border-mid);background:var(--surface);color:var(--txt-primary);font-family:inherit;font-size:.82rem;">';
+                html += '<div class="adm-card aj-nuevo">';
+                html += '<h3><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i> Solicitar ajuste de producto</h3>';
+                html += '<select id="ajusteProductoSel" class="ui-campo" aria-label="Producto">';
                 html += '<option value="">— Selecciona un producto —</option>';
                 products.forEach(function(p) { html += '<option value="' + escapeHtml(p.id) + '">' + escapeHtml(p.name) + '</option>'; });
                 html += '</select>';
-                html += '<textarea id="ajusteMotivoTxt" placeholder="Motivo del ajuste (ej. conteo real vs sistema)" rows="3" style="width:100%;margin-bottom:8px;padding:8px;border-radius:6px;border:1px solid var(--border-mid);background:var(--surface);color:var(--txt-primary);font-family:inherit;font-size:.82rem;resize:vertical;"></textarea>';
-                html += '<input type="number" id="ajusteCantidadIn" placeholder="Cantidad sugerida (opcional)" min="0" step="0.01" style="width:100%;margin-bottom:10px;padding:8px;border-radius:6px;border:1px solid var(--border-mid);background:var(--surface);color:var(--txt-primary);font-family:inherit;font-size:.82rem;">';
+                html += '<textarea id="ajusteMotivoTxt" class="ui-campo" placeholder="Motivo del ajuste (ej. conteo real vs sistema)" aria-label="Motivo del ajuste" rows="3"></textarea>';
+                html += '<input type="number" id="ajusteCantidadIn" class="ui-campo" placeholder="Cantidad sugerida (opcional)" aria-label="Cantidad sugerida" min="0" step="0.01" inputmode="decimal">';
                 html += '<button class="adm-btn primary" onclick="(function(){var s=document.getElementById(\'ajusteProductoSel\');var m=document.getElementById(\'ajusteMotivoTxt\');var c=document.getElementById(\'ajusteCantidadIn\');if(!s.value){showNotification(\'⚠️ Selecciona un producto\');return;}var p=products.find(function(x){return x.id===s.value;});solicitarAjuste(s.value,p?p.name:s.value,m.value,(c.value.trim()===\'\'?null:parseFloat(c.value)));m.value=\'\';c.value=\'\';s.value=\'\';})()">';
-                html += '<i class="fa-solid fa-paper-plane"></i> Enviar solicitud</button>';
+                html += '<i class="fa-solid fa-paper-plane" aria-hidden="true"></i> Enviar solicitud</button>';
                 html += '</div>';
             }
 
-            html += '<div class="adm-card" style="padding:14px 16px;">';
-            html += '<h3 style="font-size:.82rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--txt-secondary);margin-bottom:12px;display:flex;align-items:center;gap:6px;">';
-            html += isAdmin() ? '🔧 Ajustes pendientes' : '🔧 Mis solicitudes';
+            html += '<div class="adm-card">';
+            html += '<h3 class="ui-titulo--seccion"><i class="fa-solid fa-list-check" aria-hidden="true"></i> ';
+            html += isAdmin() ? 'Ajustes pendientes' : 'Mis solicitudes';
             html += '</h3>';
 
             const lista = isAdmin() ? _ajustes : _ajustes.filter(function(a) { return a.solicitanteUid === currentUserUid; });
 
             if (lista.length === 0) {
-                html += '<div class="adm-card" style="text-align:center;padding:32px 24px;">'
-                      + '<p style="font-size:.82rem;color:var(--txt-muted);">Sin ajustes pendientes</p></div>';
+                html += '<div class="ui-vacio"><i class="fa-solid fa-circle-check" aria-hidden="true"></i>Sin ajustes pendientes</div>';
             } else {
                 lista.forEach(function(a) {
                     const ts = a.creadoEn ? new Date(a.creadoEn).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : '';
@@ -1843,7 +2015,7 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
                     html += '<div class="ajuste-meta">' + escapeHtml(a.productoNombre || a.productoId) + ' · ' + escapeHtml(ts) + ' · <b>' + estado + '</b></div>';
                     html += '<div class="ajuste-desc">' + escapeHtml(a.motivo || '') + (sug !== null ? ' (Sugerido: ' + escapeHtml(String(sug)) + ')' : '') + '</div>';
                     if (isAdmin() && estado === 'pendiente' && idSeg) {
-                        html += '<div class="ajuste-btns"><button class="ajuste-btn ok" onclick="resolverAjuste(\'' + idSeg + '\',\'aprobado\')">✅ Aprobar</button><button class="ajuste-btn nok" onclick="resolverAjuste(\'' + idSeg + '\',\'rechazado\')">❌ Rechazar</button></div>';
+                        html += '<div class="ajuste-btns"><button type="button" class="ajuste-btn ok" onclick="resolverAjuste(\'' + idSeg + '\',\'aprobado\')"><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Aprobar</button><button type="button" class="ajuste-btn nok" onclick="resolverAjuste(\'' + idSeg + '\',\'rechazado\')"><i class="fa-solid fa-xmark" aria-hidden="true"></i> Rechazar</button></div>';
                     }
                     html += '</div>';
                 });
@@ -1910,6 +2082,24 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
             _permCargando = true;
             _permError    = null;
             try {
+                // v5.26 (hallazgo #14) — _rolesCache solo se mantiene VIVO
+                // para el rol del propio admin (_suscribirRolActual: "SOLO
+                // ese, nunca una suscripción a todos los roles"). Para los
+                // otros roles del catálogo, permisosEfectivos() caía al
+                // fallback ROLES_SISTEMA_DEFECTO (la constante del código) en
+                // vez del documento real roles/{roleId} — la pantalla podía
+                // mostrarle al admin unos permisos de Subjefe/Bartender que
+                // ya no coinciden con lo que ese rol tiene de verdad en
+                // Firestore (p. ej. tras "Actualizar roles de sistema" o una
+                // edición directa). Catálogo de roles CERRADO (siempre son
+                // estos tres) — resolverlos aquí es barato y deja la pantalla
+                // honesta antes de pintar ningún usuario.
+                const rolesAResolver = Object.keys(ROLES_SISTEMA_DEFECTO).filter(function(rid) {
+                    return rid !== _rolEscuchadoActualId; // ese ya lo mantiene vivo el listener propio
+                });
+                if (forzar) rolesAResolver.forEach(function(rid) { delete _rolesCache[rid]; });
+                await Promise.all(rolesAResolver.map(_resolverPermisosDeRol));
+
                 const snap = await _db.collection('usuarios').get();
                 const lista = [];
                 snap.forEach(function(d) {
@@ -2272,59 +2462,105 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
         // ── Render de la pantalla ──────────────────────────────────────────
         function _permBadgeEstado(estado) {
             const mapa = {
-                comodin:  ['Todos', 'var(--green)'],
-                heredado: ['Del rol', 'var(--txt-muted)'],
-                asignado: ['Asignado', 'var(--blue)'],
-                revocado: ['Revocado', 'var(--red)'],
-                ninguno:  ['—', 'var(--txt-muted)']
+                comodin:  ['Todos', 'comodin'],
+                heredado: ['Del rol', 'heredado'],
+                asignado: ['Asignado', 'asignado'],
+                revocado: ['Revocado', 'revocado'],
+                ninguno:  ['—', 'ninguno']
             };
             const m = mapa[estado] || mapa.ninguno;
-            return '<span style="font-size:.65rem;font-weight:600;color:' + m[1] + ';">' + m[0] + '</span>';
+            return '<span class="pr-estado pr-estado--' + m[1] + '">' + m[0] + '</span>';
         }
+
+        // ══════════════════════════════════════════════════════════════════
+        //  v5.28 — GESTIÓN DE EQUIPO (rediseño de "Usuarios y permisos")
+        //  Decisión de Eduardo (15-oct-2026): mismo estilo que Pedido
+        //  sugerido — cabecera, buscador y una tarjeta por persona con rol,
+        //  estado y acceso a sus permisos. La LÓGICA de permisos no cambia:
+        //  tocar una tarjeta llama a permSeleccionarUsuario() de siempre y el
+        //  editor de abajo (rol, estado, áreas, permisos, Guardar) es el mismo.
+        // ══════════════════════════════════════════════════════════════════
+        function _equipoIniciales(u) {
+            var base = String((u && (u.displayName || u.email || u.uid)) || '?').trim();
+            var partes = base.split(/[\s@._-]+/).filter(Boolean);
+            return ((partes[0] || '?').charAt(0) + ((partes[1] || '').charAt(0) || '')).toUpperCase();
+        }
+
+        function _equipoRolPill(u) {
+            var rid = _roleCanonico(u.role);
+            var nom = (ROLES_SISTEMA_DEFECTO[rid] && ROLES_SISTEMA_DEFECTO[rid].nombre) || rid;
+            return '<span class="eq-rol eq-rol--' + escapeHtml(String(rid).toLowerCase()) + '">' + escapeHtml(nom) + '</span>';
+        }
+
+        function _equipoTarjeta(u) {
+            var inactivo = u.status === 'inactivo';
+            var nOv = Object.keys(_sanitizarOverrides(u.permissionOverrides) || {}).length;
+            return '<button type="button" class="eq-card' + (inactivo ? ' eq-card--inactiva' : '') + '" data-sbx-item'
+                 + ' onclick="permSeleccionarUsuario(this.getAttribute(\'data-uid\'))" data-uid="' + escapeHtml(u.uid) + '"'
+                 + ' aria-label="Ver permisos de ' + escapeHtml(u.email || u.displayName || u.uid) + '">'
+                 + '<span class="eq-avatar" aria-hidden="true">' + escapeHtml(_equipoIniciales(u)) + '</span>'
+                 + '<span class="eq-card__info"><span class="eq-card__nom">' + escapeHtml(u.displayName || u.email || u.uid) + '</span>'
+                 + (u.displayName && u.email ? '<span class="eq-card__mail">' + escapeHtml(u.email) + '</span>' : '')
+                 + '<span class="eq-card__pills">' + _equipoRolPill(u)
+                 + '<span class="eq-estado eq-estado--' + (inactivo ? 'inactiva' : 'activa') + '">' + (inactivo ? 'Inactiva' : 'Activa') + '</span>'
+                 + (nOv ? '<span class="eq-ajustes">' + nOv + ' ajuste' + (nOv === 1 ? '' : 's') + '</span>' : '')
+                 + '</span></span>'
+                 + '<i class="fa-solid fa-chevron-right eq-card__flecha" aria-hidden="true"></i></button>';
+        }
+
+        function _renderEquipoResultados() {
+            var lista = (_permUsuarios || []).slice().sort(function(a, b) {
+                var ia = a.status === 'inactivo', ib = b.status === 'inactivo';
+                if (ia !== ib) return ia ? 1 : -1;
+                return String(a.email || a.uid).localeCompare(String(b.email || b.uid), 'es');
+            });
+            var q = (typeof _equipoBusqueda !== 'undefined') ? _equipoBusqueda : '';
+            var items = (q && typeof _motorEquipo !== 'undefined') ? _motorEquipo.buscar(lista, q).items : lista;
+            var activas = lista.filter(function(u) { return u.status !== 'inactivo'; }).length;
+            var h = '<div class="ps-micro"><span>' + lista.length + ' persona' + (lista.length === 1 ? '' : 's') + ' • ' + activas + ' activa' + (activas === 1 ? '' : 's') + '</span>'
+                  + '<button type="button" class="ps-micro__sel" onclick="_cargarUsuariosParaPermisos(true)"><i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i> Recargar</button></div>';
+            if (!items.length) {
+                h += '<div class="ps-vacio"><i class="fa-solid fa-users" aria-hidden="true"></i><div class="ps-vacio__t">'
+                   + (q ? 'Sin coincidencias' : 'Sin usuarios') + '</div></div>';
+            } else {
+                h += '<div class="eq-lista">' + items.map(_equipoTarjeta).join('') + '</div>';
+            }
+            return { html: h, coincidencias: items.length, total: lista.length };
+        }
+
+        function permVolverALista() {
+            _permUidSel = null;
+            _permEdicion = null;
+            renderTab();
+        }
+        window.permVolverALista = permVolverALista;
 
         function renderUsuariosPermisosTab() {
             if (!hasPermission('permissions.read')) {
-                return '<p style="color:var(--txt-muted)">Acceso restringido</p>';
+                return '<p class="ui-nota">Acceso restringido</p>';
             }
-            let html = '<div class="max-w-2xl mx-auto">';
-            html += '<div class="adm-card">';
-            html += '<button class="adm-btn" style="margin-bottom:10px" onclick="cerrarUsuariosPermisos()">'
-                  + '<i class="fa-solid fa-arrow-left"></i> Volver al panel</button>';
-            html += '<h3>🔐 Usuarios y permisos</h3>';
+            let html = '<div class="max-w-2xl mx-auto eq-pantalla">';
+            var enDetalle = !!(_permUidSel && _permEdicion);
+            html += (typeof moduloCabecera === 'function')
+                ? moduloCabecera('Gestión de equipo', enDetalle ? 'permVolverALista()' : 'cerrarUsuariosPermisos()', 'ok')
+                : '<button type="button" class="adm-btn" onclick="cerrarUsuariosPermisos()">Volver al panel</button>';
 
             if (_permCargando && !_permUsuarios) {
-                html += '<p style="color:var(--txt-muted);font-size:.85rem">Cargando usuarios…</p></div></div>';
+                html += '<p class="ui-nota"><i class="fa-solid fa-hourglass" aria-hidden="true"></i> Cargando usuarios…</p></div>';
                 return html;
             }
             if (_permError) {
-                html += '<p style="color:var(--red);font-size:.85rem">' + escapeHtml(_permError) + '</p>';
+                html += '<p class="ui-nota ui-nota--error"><i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i> ' + escapeHtml(_permError) + '</p>';
                 html += '<button class="adm-btn" onclick="_cargarUsuariosParaPermisos(true)">Reintentar</button>';
-                html += '</div></div>';
+                html += '</div>';
                 return html;
             }
 
-            // ── Selector de usuario ─────────────────────────────────────────
-            html += '<label style="display:block;font-size:.75rem;color:var(--txt-muted);margin-bottom:4px">Usuario</label>';
-            html += '<select id="permUserSel" onchange="permSeleccionarUsuario(this.value)" '
-                  + 'style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);'
-                  + 'background:var(--bg-card);color:var(--txt);margin-bottom:10px">';
-            html += '<option value="">— Selecciona un usuario —</option>';
-            (_permUsuarios || []).forEach(function(u) {
-                const etiqueta = (u.email || u.displayName || u.uid) +
-                                 '  ·  ' + _roleCanonico(u.role) +
-                                 ((u.status === 'inactivo') ? '  ·  INACTIVO' : '');
-                html += '<option value="' + escapeHtml(u.uid) + '"' +
-                        (u.uid === _permUidSel ? ' selected' : '') + '>' +
-                        escapeHtml(etiqueta) + '</option>';
-            });
-            html += '</select>';
-            html += '<button class="adm-btn" onclick="_cargarUsuariosParaPermisos(true)">'
-                  + '<i class="fa-solid fa-arrows-rotate"></i> Recargar lista</button>';
-            html += '</div>';
-
-            if (!_permUidSel || !_permEdicion) {
-                html += '<div class="adm-card"><p style="color:var(--txt-muted);font-size:.85rem">'
-                      + 'Selecciona un usuario para ver y modificar sus permisos.</p></div></div>';
+            // ── Lista de personas ───────────────────────────────────────────
+            if (!enDetalle) {
+                html += BusquedaUI.barra('equipo', { placeholder: 'Buscar por nombre, correo o rol', etiqueta: 'Buscar en el equipo' });
+                html += BusquedaUI.region('equipo', _renderEquipoResultados().html);
+                html += '</div>';
                 return html;
             }
 
@@ -2333,33 +2569,36 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
             const base = _permUsuarioPorUid(_permUidSel);
 
             // ── Rol, estado y áreas ─────────────────────────────────────────
+            // v5.28 — resumen de la persona arriba del editor (mismo editor de siempre).
+            html += '<div class="eq-resumen"><span class="eq-avatar eq-avatar--g" aria-hidden="true">' + escapeHtml(_equipoIniciales(base)) + '</span>'
+                  + '<span class="eq-card__info"><span class="eq-card__nom">' + escapeHtml(base.displayName || base.email || base.uid) + '</span>'
+                  + (base.displayName && base.email ? '<span class="eq-card__mail">' + escapeHtml(base.email) + '</span>' : '')
+                  + '<span class="eq-card__pills">' + _equipoRolPill(base) + '</span></span></div>';
             html += '<div class="adm-card">';
-            html += '<h3>👤 ' + escapeHtml(base.email || base.displayName || base.uid) + '</h3>';
-            html += '<label style="display:block;font-size:.75rem;color:var(--txt-muted);margin:6px 0 4px">Rol base</label>';
-            html += '<select onchange="permCambiarRol(this.value)" '
-                  + 'style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);'
-                  + 'background:var(--bg-card);color:var(--txt)">';
+            html += '<h3><i class="fa-solid fa-user" aria-hidden="true"></i> Rol y cuenta</h3>';
+            html += '<label class="ui-etiqueta" for="permRolSel">Rol base</label>';
+            html += '<select id="permRolSel" class="ui-campo" onchange="permCambiarRol(this.value)">';
             Object.keys(ROLES_SISTEMA_DEFECTO).forEach(function(rid) {
                 html += '<option value="' + rid + '"' + (rid === _permEdicion.roleId ? ' selected' : '') + '>'
                       + escapeHtml(ROLES_SISTEMA_DEFECTO[rid].nombre) + ' (' + rid + ')</option>';
             });
             html += '</select>';
 
-            html += '<div class="adm-stat" style="margin-top:8px"><span>Estado de la cuenta</span>'
-                  + '<b style="color:' + (_permEdicion.status === 'inactivo' ? 'var(--red)' : 'var(--green)') + '">'
+            html += '<div class="adm-stat"><span>Estado de la cuenta</span>'
+                  + '<b class="' + (_permEdicion.status === 'inactivo' ? 'ui-malo' : 'ui-ok') + '">'
                   + (_permEdicion.status === 'inactivo' ? 'Inactiva' : 'Activa') + '</b></div>';
-            html += '<button class="adm-btn ' + (_permEdicion.status === 'inactivo' ? 'success' : 'warn') + '" '
+            html += '<button type="button" class="adm-btn ' + (_permEdicion.status === 'inactivo' ? 'success' : 'warn') + '" '
                   + 'onclick="permToggleEstado()">'
                   + (_permEdicion.status === 'inactivo' ? 'Reactivar cuenta' : 'Desactivar cuenta') + '</button>';
 
-            html += '<h3 style="margin-top:14px">📍 Áreas autorizadas</h3>';
-            html += '<p style="font-size:.72rem;color:var(--txt-muted);margin:0 0 6px">'
+            html += '<h3 class="ui-fila--sep"><i class="fa-solid fa-location-dot" aria-hidden="true"></i> Áreas autorizadas</h3>';
+            html += '<p class="ui-nota ui-nota--chica">'
                   + (_permEdicion.areas === null
                       ? 'Sin restricción: puede contar en todas las áreas.'
                       : 'Restringido a las áreas marcadas.') + '</p>';
             AREAS_CONTEO.forEach(function(a) {
                 const marcada = (_permEdicion.areas === null) || (_permEdicion.areas.indexOf(a) !== -1);
-                html += '<label style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:.85rem;cursor:pointer">'
+                html += '<label class="pr-area">'
                       + '<input type="checkbox" ' + (marcada ? 'checked' : '') + ' '
                       + 'onchange="permToggleArea(\'' + escapeHtml(a) + '\')"> '
                       + escapeHtml(areasAuditoria[a] || a) + '</label>';
@@ -2368,9 +2607,9 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
 
             // ── Permisos efectivos, agrupados ───────────────────────────────
             html += '<div class="adm-card">';
-            html += '<h3>✅ Permisos</h3>';
+            html += '<h3><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Permisos</h3>';
             if (efec.comodin) {
-                html += '<p style="font-size:.78rem;color:var(--green);margin:0 0 8px">'
+                html += '<p class="ui-nota ui-ok">'
                       + 'Este usuario es administrador: tiene autoridad absoluta sobre todos los permisos '
                       + 'y ninguna casilla individual puede degradarlo. Para limitarlo, cámbiale el rol.</p>';
             }
@@ -2386,8 +2625,7 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
                 .concat(Object.keys(porGrupo).filter(function(g) { return PERMISOS_GRUPOS_ORDEN.indexOf(g) === -1; }));
 
             grupos.forEach(function(g) {
-                html += '<h4 style="margin:12px 0 4px;font-size:.8rem;color:var(--txt-muted);'
-                      + 'text-transform:uppercase;letter-spacing:.04em">' + escapeHtml(g) + '</h4>';
+                html += '<h4 class="pr-grupo">' + escapeHtml(g) + '</h4>';
                 porGrupo[g].forEach(function(p) {
                     const meta   = permisoMeta(p);
                     const estado = efec.estados[p];
@@ -2400,31 +2638,29 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
                     else if (!meta.efectivo)                           bloqueo = 'Sin efecto todavía en esta versión';
                     else if (!meta.delegable && efec.roleId !== 'ADMIN') bloqueo = 'No delegable fuera de administración';
 
-                    html += '<label style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;'
-                          + 'border-bottom:1px solid var(--border);' + (bloqueo ? 'opacity:.55;' : 'cursor:pointer;') + '">';
-                    html += '<input type="checkbox" style="margin-top:3px" ' + (tiene ? 'checked' : '')
+                    html += '<label class="pr-fila' + (bloqueo ? ' pr-fila--bloqueada' : '') + '">';
+                    html += '<input type="checkbox" ' + (tiene ? 'checked' : '')
                           + (bloqueo ? ' disabled' : '')
                           + ' onchange="permToggle(\'' + escapeHtml(p) + '\')">';
-                    html += '<span style="flex:1;min-width:0">';
-                    html += '<span style="font-size:.85rem;font-weight:600">' + escapeHtml(meta.nombre) + '</span> '
+                    html += '<span class="pr-fila__cuerpo">';
+                    html += '<span class="pr-fila__nombre">' + escapeHtml(meta.nombre) + '</span> '
                           + _permBadgeEstado(estado);
-                    if (meta.sensible) html += ' <span style="font-size:.62rem;color:var(--amber)">⚠️ sensible</span>';
-                    html += '<br><span style="font-size:.72rem;color:var(--txt-muted)">'
-                          + escapeHtml(meta.descripcion) + '</span>';
+                    if (meta.sensible) html += ' <span class="pr-estado ui-aviso-estado"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> sensible</span>';
+                    html += '<span class="pr-fila__desc">' + escapeHtml(meta.descripcion) + '</span>';
                     if (bloqueo) {
-                        html += '<br><span style="font-size:.68rem;color:var(--amber)">🔒 ' + escapeHtml(bloqueo) + '</span>';
+                        html += '<span class="pr-fila__aviso"><i class="fa-solid fa-lock" aria-hidden="true"></i> ' + escapeHtml(bloqueo) + '</span>';
                     }
-                    html += '<br><code style="font-size:.62rem;color:var(--txt-muted);opacity:.7">' + escapeHtml(p) + '</code>';
+                    html += '<code class="pr-fila__cod">' + escapeHtml(p) + '</code>';
                     html += '</span></label>';
                 });
             });
             html += '</div>';
 
             html += '<div class="adm-card">';
-            html += '<button class="adm-btn success" onclick="permGuardar()">'
-                  + '<i class="fa-solid fa-floppy-disk"></i> Guardar cambios</button>';
-            html += '<button class="adm-btn" onclick="permSeleccionarUsuario(\'' + escapeHtml(_permUidSel) + '\')">'
-                  + '<i class="fa-solid fa-rotate-left"></i> Descartar cambios</button>';
+            html += '<button type="button" class="adm-btn success" onclick="permGuardar()">'
+                  + '<i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Guardar cambios</button>';
+            html += '<button type="button" class="adm-btn" onclick="permSeleccionarUsuario(\'' + escapeHtml(_permUidSel) + '\')">'
+                  + '<i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Descartar cambios</button>';
             html += '</div>';
 
             html += '</div>';
@@ -2432,18 +2668,20 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
         }
         window.renderUsuariosPermisosTab = renderUsuariosPermisosTab;
 
+        let _equipoBusqueda = '';   // v5.28 — buscador de Gestión de equipo
+
         // Subvista activa dentro de la pestaña Admin: 'panel' | 'permisos'
         let _adminSubvista = 'panel';
 
         function renderAdminTab() {
-            if (!isAdmin()) return '<p style="color:var(--txt-muted)">Acceso restringido</p>';
+            if (!isAdmin()) return '<p class="ui-nota">Acceso restringido</p>';
             if (_adminSubvista === 'permisos') return renderUsuariosPermisosTab();
             const pendAjustes = _ajustes.filter(function(a) { return a.estado === 'pendiente'; }).length;
             let html = '<div class="max-w-2xl mx-auto">';
             html += '<div class="adm-card">';
-            html += '<h3>👑 Panel de Administración</h3>';
+            html += '<h3><i class="fa-solid fa-user-shield" aria-hidden="true"></i> Panel de Administración</h3>';
             html += '<div class="adm-stat"><span>Productos en catálogo</span><b>' + products.length + '</b></div>';
-            html += '<div class="adm-stat"><span>Ajustes pendientes</span><b style="color:var(--amber)">' + pendAjustes + '</b></div>';
+            html += '<div class="adm-stat"><span>Ajustes pendientes</span><b class="' + (pendAjustes > 0 ? 'ui-aviso-estado' : '') + '">' + pendAjustes + '</b></div>';
             html += '<div class="adm-stat"><span>Conteos multi-dispositivo</span><b>' + (Object.keys(auditoriaConteo).length) + ' productos</b></div>';
             html += '</div>';
 
@@ -2452,21 +2690,21 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
             // completa de Configuración (Usuarios/Roles/Sucursales/
             // Almacenes) es una etapa posterior, fuera de este alcance.
             html += '<div class="adm-card">';
-            html += '<h3>🔐 Roles y Permisos</h3>';
+            html += '<h3><i class="fa-solid fa-user-shield" aria-hidden="true"></i> Roles y Permisos</h3>';
             html += '<div class="adm-stat"><span>Tu rol resuelto</span><b>' + escapeHtml(_authzState.roleId || '—') + '</b></div>';
             html += '<div class="adm-stat"><span>Rol legacy en Firestore</span><b>' + escapeHtml(_authzState.legacyRole || '—') + '</b></div>';
             html += '<div class="adm-stat"><span>Permisos activos</span><b>' + (_authzState.permissions ? (_authzState.permissions.has('*') ? 'Todos (*)' : _authzState.permissions.size) : 0) + '</b></div>';
-            html += '<button class="adm-btn primary" onclick="abrirUsuariosPermisos()"><i class="fa-solid fa-user-shield"></i> Usuarios y permisos</button>';
-            html += '<button class="adm-btn warn" onclick="migrarRolesExistentes()"><i class="fa-solid fa-arrows-rotate"></i> Migrar roles legacy a nuevo modelo</button>';
-            html += '<button class="adm-btn" onclick="sincronizarRolesSistema()"><i class="fa-solid fa-code-branch"></i> Actualizar roles de sistema</button>';
+            html += '<button type="button" class="adm-btn" onclick="abrirUsuariosPermisos()"><i class="fa-solid fa-user-shield" aria-hidden="true"></i> Usuarios y permisos</button>';
+            html += '<button type="button" class="adm-btn warn" onclick="migrarRolesExistentes()"><i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i> Migrar roles legacy a nuevo modelo</button>';
+            html += '<button type="button" class="adm-btn" onclick="sincronizarRolesSistema()"><i class="fa-solid fa-code-branch" aria-hidden="true"></i> Actualizar roles de sistema</button>';
             html += '</div>';
 
             // Acciones admin
             html += '<div class="adm-card">';
-            html += '<h3>⚡ Acciones</h3>';
-            html += '<button class="adm-btn success" onclick="publicarCatalogoFirestore()"><i class="fa-solid fa-cloud-arrow-up"></i> Publicar catálogo a usuarios</button>';
-            html += '<button class="adm-btn primary" onclick="generarYPublicarReporte()"><i class="fa-solid fa-file-chart-column"></i> Generar y publicar reporte global</button>';
-            html += '<button class="adm-btn warn" onclick="switchTab(\'ajustes\')"><i class="fa-solid fa-list-check"></i> Revisar ajustes (' + pendAjustes + ' pendientes)</button>';
+            html += '<h3><i class="fa-solid fa-bolt" aria-hidden="true"></i> Acciones</h3>';
+            html += '<button type="button" class="adm-btn success" onclick="publicarCatalogoFirestore()"><i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i> Publicar catálogo a usuarios</button>';
+            html += '<button type="button" class="adm-btn primary" onclick="generarYPublicarReporte()"><i class="fa-solid fa-file-chart-column" aria-hidden="true"></i> Generar y publicar reporte global</button>';
+            html += '<button type="button" class="adm-btn" onclick="switchTab(\'ajustes\')"><i class="fa-solid fa-list-check" aria-hidden="true"></i> Revisar ajustes (' + pendAjustes + ' pendientes)</button>';
             html += '</div>';
 
             // ── D6 · CANDADO LOCAL DE CAPTURA ───────────────────────────
@@ -2476,29 +2714,29 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
             if (typeof estadoCandadoLocal === 'function') {
                 const cand = estadoCandadoLocal();
                 html += '<div class="adm-card">';
-                html += '<h3>🔐 Candado local de captura</h3>';
-                html += '<p style="font-size:.72rem;color:var(--txt-muted);margin:0 0 8px">'
+                html += '<h3><i class="fa-solid fa-lock" aria-hidden="true"></i> Candado local de captura</h3>';
+                html += '<p class="ui-nota ui-nota--chica">'
                       + 'Candado propio de ESTE dispositivo. No es el estado del Inventario '
                       + 'Físico ni afecta al histórico ni a otros aparatos.</p>';
-                html += '<div class="adm-stat"><span>Estado en este dispositivo</span><b style="color:'
-                      + (cand.bloqueado ? 'var(--red)' : 'var(--green)') + '">'
+                html += '<div class="adm-stat"><span>Estado en este dispositivo</span><b class="'
+                      + (cand.bloqueado ? 'ui-malo' : 'ui-ok') + '">'
                       + escapeHtml(cand.estado || '—') + '</b></div>';
                 if (cand.bloqueado) {
                     html += '<div class="adm-stat"><span>Bloqueado desde</span><b>'
                           + (cand.cerradoTs ? escapeHtml(new Date(cand.cerradoTs).toLocaleString()) : '—')
                           + '</b></div>';
-                    html += '<p style="font-size:.72rem;color:var(--red);margin:6px 0">'
-                          + '⚠️ Este dispositivo no puede guardar conteos mientras el candado esté cerrado.</p>';
-                    html += '<button class="adm-btn warn" onclick="desbloquearCandadoLocal()">'
-                          + '<i class="fa-solid fa-unlock"></i> Desbloquear captura en este dispositivo</button>';
+                    html += '<p class="ui-nota ui-nota--error">'
+                          + '<i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> Este dispositivo no puede guardar conteos mientras el candado esté cerrado.</p>';
+                    html += '<button type="button" class="adm-btn warn" onclick="desbloquearCandadoLocal()">'
+                          + '<i class="fa-solid fa-unlock" aria-hidden="true"></i> Desbloquear captura en este dispositivo</button>';
                 }
                 html += '</div>';
             }
 
             // Reportes publicados
             html += '<div class="adm-card">';
-            html += '<h3>📊 Reportes publicados</h3>';
-            html += '<div id="adminReportesList"><p style="color:var(--txt-muted);font-size:.8rem;">Cargando reportes…</p></div>';
+            html += '<h3><i class="fa-solid fa-file-chart-column" aria-hidden="true"></i> Reportes publicados</h3>';
+            html += '<div id="adminReportesList"><p class="ui-nota"><i class="fa-solid fa-hourglass" aria-hidden="true"></i> Cargando reportes…</p></div>';
             html += '</div>';
             html += '</div>';
 
@@ -2509,14 +2747,14 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
                     .then(function(snap) {
                         const el = document.getElementById('adminReportesList');
                         if (!el) return;
-                        if (snap.empty) { el.innerHTML = '<p style="color:var(--txt-muted);font-size:.8rem;">Sin reportes aún</p>'; return; }
+                        if (snap.empty) { el.innerHTML = '<p class="ui-nota">Sin reportes aún</p>'; return; }
                         let rhtml = '';
                         snap.docs.forEach(function(d) {
                             const r = d.data();
                             rhtml += '<div class="rep-card">';
-                            rhtml += '<div class="rep-card-title">📊 ' + escapeHtml(r.fecha || d.id) + '</div>';
-                            rhtml += '<div class="rep-card-meta">' + (r.totalProductos || 0) + ' productos</div>';
-                            rhtml += '<button class="adm-btn primary" style="margin:0" onclick="descargarReporte(\'' + d.id + '\')"><i class="fa-solid fa-download"></i> Descargar Excel</button>';
+                            rhtml += '<div class="rep-card-title"><i class="fa-solid fa-file-chart-column" aria-hidden="true"></i> ' + escapeHtml(r.fecha || d.id) + '</div>';
+                            rhtml += '<div class="rep-card-meta ui-mono">' + (r.totalProductos || 0) + ' productos</div>';
+                            rhtml += '<button type="button" class="adm-btn" onclick="descargarReporte(\'' + d.id + '\')"><i class="fa-solid fa-download" aria-hidden="true"></i> Descargar Excel</button>';
                             rhtml += '</div>';
                         });
                         el.innerHTML = rhtml;

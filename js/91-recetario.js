@@ -269,6 +269,7 @@
 
             document.getElementById('recetaNombre').value = '';
             document.getElementById('recetaCategoria').value = '';
+            document.getElementById('recetaPv').value = '';
             document.getElementById('recetaActiva').checked = true;
             document.getElementById('recetaMetodo').value = '';
             document.getElementById('recetaCristaleria').value = '';
@@ -284,6 +285,7 @@
                     title.textContent = 'Editar receta';
                     document.getElementById('recetaNombre').value = receta.nombre || '';
                     document.getElementById('recetaCategoria').value = receta.categoria || '';
+                    document.getElementById('recetaPv').value = receta.pv || '';
                     document.getElementById('recetaActiva').checked = receta.activa !== false;
                     document.getElementById('recetaMetodo').value = receta.metodo || '';
                     document.getElementById('recetaCristaleria').value = receta.cristaleria || '';
@@ -311,6 +313,23 @@
             _recetaEditIngredientes = [];
         }
         window.closeRecetaModal = closeRecetaModal;
+
+        // v5.26 (hallazgo del paquete de textos) — Escape no cerraba este
+        // modal (sí la ficha de producto y el detalle de compra, que ya
+        // tienen el mismo patrón: js/83-panel.js, js/89-compras-detalle.js).
+        // Guarda typeof document: varias pruebas cargan este archivo en una
+        // sandbox vm sin DOM (solo para probar consumoTeorico()/conversión),
+        // y antes de este listener el archivo nunca tocaba `document` en
+        // tiempo de carga — mismo patrón que js/06-busqueda-ui.js.
+        if (typeof document !== 'undefined' && document.addEventListener) {
+            document.addEventListener('keydown', function(e) {
+                var modal = document.getElementById('recetaModal');
+                if (e.key === 'Escape' && modal && !modal.classList.contains('hidden')) {
+                    e.stopPropagation();
+                    closeRecetaModal();
+                }
+            }, true);
+        }
 
         // El picker de insumo es un <input list> nativo contra un <datalist> con
         // TODOS los productos del catálogo — no existe un componente de
@@ -429,6 +448,20 @@
             }
             if (ingredientesValidos.length === 0) { showNotification('⚠️ Agrega al menos un ingrediente'); return; }
 
+            // v5.26 (hallazgo #1) — el PV es lo que consumoTeorico() usa para
+            // encontrar esta receta cuando se vende: sin él, la receta queda
+            // invisible para el cruce con ventas aunque se vea bien en la lista.
+            var pv = (document.getElementById('recetaPv').value || '').trim().toUpperCase();
+            if (pv) {
+                var chocaCon = recetas.find(function(r) {
+                    return r.pv && String(r.pv).trim().toUpperCase() === pv && r.id !== editingRecetaId;
+                });
+                if (chocaCon) {
+                    showNotification('⚠️ El código PV "' + pv + '" ya lo usa "' + (chocaCon.nombre || chocaCon.id) + '"');
+                    return;
+                }
+            }
+
             var categoria   = (document.getElementById('recetaCategoria').value || '').trim();
             var activa      = document.getElementById('recetaActiva').checked;
             var metodo      = (document.getElementById('recetaMetodo').value || '').trim();
@@ -442,6 +475,7 @@
                 if (!receta) { showNotification('❌ La receta ya no existe — probablemente otro admin la eliminó'); closeRecetaModal(); return; }
                 receta.nombre = nombre;
                 receta.categoria = categoria;
+                receta.pv = pv;
                 receta.activa = activa;
                 receta.ingredientes = ingredientesValidos;
                 receta.metodo = metodo;
@@ -453,7 +487,7 @@
                 receta.actualizadoEn = now;
             } else {
                 recetas.push({
-                    id: _generarRecetaId(), nombre: nombre, categoria: categoria, activa: activa,
+                    id: _generarRecetaId(), nombre: nombre, categoria: categoria, pv: pv, activa: activa,
                     ingredientes: ingredientesValidos, metodo: metodo, cristaleria: cristaleria,
                     hielo: hielo, decoracion: decoracion, _v: 1,
                     creadoPor: currentUserUid, creadoEn: now, actualizadoPor: currentUserUid, actualizadoEn: now
@@ -462,7 +496,9 @@
             saveToLocalStorage();
             closeRecetaModal();
             if (typeof activeTab !== 'undefined' && activeTab === 'recetario') renderTab();
-            showNotification('✅ Receta guardada — publica el recetario para que todos la vean');
+            if (typeof consumoTeoricoInvalidar === 'function') consumoTeoricoInvalidar(); // el PV pudo cambiar: el cruce con ventas debe recalcularse
+            showNotification(pv ? '✅ Receta guardada — publica el recetario para que todos la vean'
+                                 : '⚠️ Receta guardada sin código PV: no descontará inventario al venderse');
         }
         window.saveRecetaModal = saveRecetaModal;
 
@@ -571,6 +607,9 @@
                 html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">';
                 html += '<p style="font-weight:700;color:var(--txt-primary);margin:0;">' + resaltarBusqueda(receta.nombre || '(sin nombre)', _recetarioSearchTerm) + '</p>';
                 if (!receta.activa) html += '<span style="font-size:.68rem;background:var(--card-high);color:var(--txt-muted);padding:2px 8px;border-radius:999px;white-space:nowrap;">Inactiva</span>';
+                // v5.26 (hallazgo #1) — sin PV esta receta no descuenta inventario al venderse: visible
+                // de un vistazo, no solo al entrar a la ficha.
+                else if (puedeEditar && !receta.pv) html += '<span style="font-size:.68rem;background:var(--warn-dim);color:var(--warn);padding:2px 8px;border-radius:999px;white-space:nowrap;">Sin PV</span>';
                 html += '</div>';
                 if (receta.categoria) html += '<p style="font-size:.78rem;color:var(--txt-secondary);margin:4px 0 0;">' + resaltarBusqueda(receta.categoria, _recetarioSearchTerm) + '</p>';
                 html += '<p style="font-size:.78rem;color:var(--txt-secondary);margin:6px 0 0;">' +

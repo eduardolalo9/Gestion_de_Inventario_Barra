@@ -1,0 +1,230 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   v5.30 — TEMA CRISTAL EN TODA LA APP
+   ───────────────────────────────────────────────────────────────────────────
+   Pedido de Eduardo (16-oct-2026): las tarjetas de cristal de Inicio en TODA
+   la app, sobre un fondo fijo más elegante que se vea desenfocado detrás de
+   las tarjetas. Decisiones:
+     · Tema OSCURO  = "Midnight Bar" (la paleta que Eduardo dio para Inicio).
+     · Tema CLARO   = "Cristal claro": marfil con destellos dorado/salvia y
+                      tarjetas de cristal blanco. Acento BRONCE (el dorado
+                      sobre blanco da 2.2:1; el bronce #7A5A1E da 5.5:1+).
+   El botón de tema sigue cambiando entre los dos. Reemplaza a v5.29
+   (tema-inicio.css, que era solo para Inicio).
+
+   Cómo funciona (mismo sistema de tokens de estilos.css): esta hoja carga
+   DESPUÉS de estilos.css y redefine los VALORES de los tokens (:root para el
+   oscuro, html[data-theme="light"] para el claro). Toda la app se re-tematiza
+   sin tocar lógica. Los hex y rgba a mano viven SOLO en esos dos bloques;
+   las reglas de abajo usan tokens.
+
+   Fondo fijo: una capa body::before (position: fixed) con destellos suaves.
+   Las tarjetas son translúcidas y lo desenfocan con backdrop-filter.
+
+   Rendimiento / batería: el desenfoque se limita a tarjetas, encabezado,
+   barra inferior y modales (no a botones, filas de tabla ni chips). Con
+   "reducir transparencia" del sistema, o en navegadores sin backdrop-filter,
+   las tarjetas pasan a casi opacas y sin desenfoque.
+
+   Contraste verificado (WCAG AA 4.5:1) sobre la tarjeta compuesta encima del
+   punto más claro del fondo:
+     oscuro: texto 14.5 · secundario 6.5 · tenue 5.0 · dorado 7.1 · rojo 6.7
+     claro : texto 13.7 · secundario 7.1 · tenue 5.3 · bronce 5.5
+     pastillas Bajo / OK (texto blanco): 5.2 · botón bronce (texto blanco): 6.4
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── TOKENS · OSCURO "MIDNIGHT BAR" ───────────────────────────────────── */
+:root {
+    --bg:             #0E1210;
+    --surface:        rgba(20, 25, 21, .60);
+    --card:           rgba(26, 31, 28, .62);
+    --card-high:      rgba(34, 40, 36, .78);
+    --card-solida:    rgba(22, 27, 24, .94);
+    --border:         rgba(200, 169, 106, .09);
+    --border-mid:     rgba(200, 169, 106, .15);
+    --border-strong:  rgba(200, 169, 106, .30);
+    --vidrio-brillo:  rgba(247, 245, 240, .06);
+    --vidrio-sombra:  0 8px 24px rgba(0, 0, 0, .35);
+    --vidrio-blur:    blur(14px) saturate(140%);
+    --scrim:          rgba(5, 7, 6, .70);
+    --accent:         #C8A96A;
+    --accent-hover:   #D6BB82;
+    --accent-on:      #0E1210;
+    --accent-container: rgba(200, 169, 106, .20);
+    --accent-dim:     rgba(200, 169, 106, .12);
+    --accent-dim2:    rgba(200, 169, 106, .20);
+    --green:          #9CC79C;  --green-dim: rgba(156, 199, 156, .14);  --green-text: #9CC79C;
+    --red:            #E8937D;  --red-dim:   rgba(232, 147, 125, .14);  --red-text:   #E8937D;
+    --amber:          #E0B865;  --amber-dim: rgba(224, 184, 101, .14);
+    --sky:            #8FB8D8;  --sky-dim:   rgba(143, 184, 216, .14);
+    --ok: var(--green);   --ok-dim: var(--green-dim);
+    --warn: var(--amber); --warn-dim: var(--amber-dim);
+    --danger: var(--red); --danger-dim: var(--red-dim);
+    --info: var(--sky);   --info-dim: var(--sky-dim);
+    --brass: var(--accent); --brass-hover: var(--accent-hover); --brass-on: var(--accent-on); --brass-dim: var(--accent-dim);
+    --txt-primary:    #F7F5F0;
+    --txt-secondary:  #A8A5A0;
+    --txt-muted:      #93908A;
+    --shadow-card:    var(--vidrio-sombra);
+    --modal-bg:       var(--card-solida);
+    --pastilla-bajo:  #A25A3C;
+    --pastilla-ok:    #557555;
+    --pastilla-txt:   #FFFFFF;
+    --hero-bg: var(--card-high); --hero-fg: var(--txt-primary); --hero-fg-2: var(--txt-secondary);
+    --hero-linea: var(--border-mid); --hero-seg: var(--border-mid);
+    --hero-ok-bg: var(--pastilla-ok); --hero-ok-fg: var(--pastilla-txt);
+    --hero-warn-bg: var(--pastilla-bajo); --hero-warn-fg: var(--pastilla-txt);
+    --sombra-hero: var(--vidrio-sombra);
+    --sombra-barra: 0 -1px 0 var(--border-mid), 0 -8px 24px rgba(0, 0, 0, .30);
+    /* Barra lateral: Midnight en ambos temas (antes era Noche Profunda en ambos) */
+    --sidebar:        #121713;
+    --sidebar-2:      #1A201C;
+    --sidebar-line:   #2A2F27;
+    --sidebar-fg:     #F7F5F0;
+    --sidebar-muted:  #A8A5A0;
+    --sidebar-sep:    #93908A;
+    --sidebar-active: #C8A96A;
+    --sidebar-active-fg: #0E1210;
+    /* Fondo fijo: destellos dorado, verde botella y cobre sobre casi negro */
+    --fondo-cristal:
+        radial-gradient(60% 45% at 12% 8%, rgba(200, 169, 106, .16), transparent 70%),
+        radial-gradient(55% 45% at 92% 38%, rgba(47, 107, 79, .30), transparent 70%),
+        radial-gradient(70% 50% at 30% 100%, rgba(120, 72, 48, .22), transparent 70%),
+        linear-gradient(160deg, #141A16 0%, #0E1210 55%, #0B0E0C 100%);
+}
+
+/* ── TOKENS · CLARO "CRISTAL CLARO" (acento bronce) ───────────────────── */
+html[data-theme="light"] {
+    --bg:             #F3EFE6;
+    --surface:        rgba(255, 255, 255, .55);
+    --card:           rgba(255, 255, 255, .62);
+    --card-high:      rgba(255, 255, 255, .80);
+    --card-solida:    rgba(255, 255, 255, .95);
+    --border:         rgba(60, 48, 24, .08);
+    --border-mid:     rgba(60, 48, 24, .14);
+    --border-strong:  rgba(60, 48, 24, .26);
+    --vidrio-brillo:  rgba(255, 255, 255, .75);
+    --vidrio-sombra:  0 8px 24px rgba(60, 48, 24, .10);
+    --scrim:          rgba(30, 26, 18, .45);
+    --accent:         #7A5A1E;
+    --accent-hover:   #66491A;
+    --accent-on:      #FFFFFF;
+    --accent-container: rgba(122, 90, 30, .14);
+    --accent-dim:     rgba(122, 90, 30, .09);
+    --accent-dim2:    rgba(122, 90, 30, .16);
+    --brass: var(--accent); --brass-hover: var(--accent-hover); --brass-on: var(--accent-on); --brass-dim: var(--accent-dim);
+    --txt-primary:    #1E2420;
+    --txt-secondary:  #4A514C;
+    --txt-muted:      #5E645F;
+    --shadow-card:    var(--vidrio-sombra);
+    --modal-bg:       var(--card-solida);
+    --hero-bg: var(--card-high); --hero-fg: var(--txt-primary); --hero-fg-2: var(--txt-secondary);
+    --hero-linea: var(--border-mid); --hero-seg: var(--border-mid);
+    --hero-ok-bg: var(--pastilla-ok); --hero-ok-fg: var(--pastilla-txt);
+    --hero-warn-bg: #FFECB9; --hero-warn-fg: #6F4100;
+    --sombra-hero: var(--vidrio-sombra);
+    --sombra-barra: 0 -1px 0 var(--border-mid), 0 -8px 24px rgba(60, 48, 24, .08);
+    --fondo-cristal:
+        radial-gradient(60% 45% at 10% 6%, rgba(217, 185, 122, .45), transparent 70%),
+        radial-gradient(55% 45% at 95% 35%, rgba(143, 181, 154, .40), transparent 70%),
+        radial-gradient(70% 50% at 25% 100%, rgba(226, 196, 176, .45), transparent 70%),
+        linear-gradient(160deg, #F7F3EA 0%, #F3EFE6 55%, #EDE8DC 100%);
+}
+
+/* Sin desenfoque disponible, o si el sistema pide reducir transparencia:
+   tarjetas casi opacas (se leen igual, sin depender del blur). */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    :root, html[data-theme="light"] { --card: var(--card-solida); --surface: var(--card-solida); }
+}
+@media (prefers-reduced-transparency: reduce) {
+    :root, html[data-theme="light"] { --card: var(--card-solida); --surface: var(--card-solida); --vidrio-blur: none; }
+}
+
+/* ── FONDO FIJO ───────────────────────────────────────────────────────── */
+body::before {
+    content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background: var(--fondo-cristal);
+}
+
+/* ── CRISTAL: tarjetas y paneles de todas las pantallas ───────────────── */
+:is(.it-inv, .it-alerta, .it-pedido, .it-modulo, .pm-tile, .pm-card, .pm-inv, .prd-card, .sync-card, .sbx-vacio,
+    .if-card, .adm-card, .ajuste-card, .act-banner, .audit-area-card, .audit-compare-panel, .audit-user-panel, .inv-card,
+    .eq-card, .eq-resumen, .mc-cab, .pa-barra, .ps-card, .ps-vacio, .ps-pie, .rc-card, .rc-hist, .rc-res, .rc-resumen,
+    .rep-card, .notif-wrap, .ui-vacio--caja, .bi-card--acento, .vs-kpi, .vs-top, .vs-dias, .vs-total, .vs-vacio,
+    .vt-panel, .vt-sim__kpi, .login-card, .bi-card, .imp-sec, .cmp-kpi, .cmp-vacio) {
+    background: var(--card);
+    border: 1px solid var(--border-mid);
+    box-shadow: inset 0 1px 0 var(--vidrio-brillo), var(--vidrio-sombra);
+    -webkit-backdrop-filter: var(--vidrio-blur);
+    backdrop-filter: var(--vidrio-blur);
+}
+/* Aparte: con dos clases, dentro de :is() subiría la especificidad de TODA la
+   lista y taparía los ajustes de abajo (.it-inv, .pm-tile--critico…). */
+.bg-white.rounded-xl, .bg-white.rounded-2xl {
+    border: 1px solid var(--border-mid);
+    box-shadow: inset 0 1px 0 var(--vidrio-brillo), var(--vidrio-sombra);
+    -webkit-backdrop-filter: var(--vidrio-blur);
+    backdrop-filter: var(--vidrio-blur);
+}
+.it-inv { background: var(--hero-bg); border-color: var(--border-strong); }
+
+/* Encabezado y barra inferior: cristal sobre el contenido que pasa debajo */
+html[data-theme] body .sticky.top-0, html body .sticky.top-0 {
+    background: var(--surface);
+    -webkit-backdrop-filter: var(--vidrio-blur);
+    backdrop-filter: var(--vidrio-blur);
+}
+#bottomTabBar, html[data-theme="light"] #bottomTabBar {
+    background: var(--card-high);
+    -webkit-backdrop-filter: var(--vidrio-blur);
+    backdrop-filter: var(--vidrio-blur);
+}
+
+/* Modales: cristal casi opaco (encima del velo se leen como siempre) */
+.modal-box, .modal-box.bg-white, .inv-modal, #inventarioModal > div, #orderModal > div, #productModal > div {
+    background: var(--modal-bg);
+    border: 1px solid var(--border-mid);
+    -webkit-backdrop-filter: var(--vidrio-blur);
+    backdrop-filter: var(--vidrio-blur);
+}
+.sbx__recientes { background: var(--card-solida); }
+/* estilos.css fija .bg-white y la caja de los modales con !important (deuda
+   conocida): aquí también hace falta para que queden casi opacos. */
+.modal-box.bg-white,
+html[data-theme] #productModal > div, html[data-theme] #orderModal > div, html[data-theme] #inventarioModal > div {
+    background: var(--modal-bg) !important;
+}
+
+/* ── Tarjeta de inventario: cifra grande, medidor y botón con el acento ── */
+.it-inv .it-inv__grande { color: var(--accent); }
+.it-inv .it-medidor__seg--on { background: var(--accent); }
+.it-inv .it-btn--primario { background: var(--accent); color: var(--accent-on); border-color: var(--accent); }
+.it-inv .it-btn--primario:hover { background: var(--accent-hover); }
+.it-inv .it-btn:focus-visible { outline-color: var(--accent); }
+
+/* ── Cifras del dashboard: dinero con el acento, alertas en su color ──── */
+.pm-tile--dinero .pm-tile__val { color: var(--accent); }
+.pm-tile__ico, .it-modulo i { color: var(--accent); }
+.pm-tile--critico { border-color: var(--danger); }
+.pm-tile--critico .pm-tile__val { color: var(--danger); }
+.it-alerta--danger { border-color: var(--danger); }
+.it-alerta--warn { border-color: var(--warn); }
+
+/* ── Pastillas sólidas: "Limitado" terracota y "OK" salvia, texto blanco ── */
+.bi-badge--danger { background: var(--pastilla-bajo); color: var(--pastilla-txt); }
+.bi-badge--ok, .audit-done-badge { background: var(--pastilla-ok); border-color: var(--pastilla-ok); color: var(--pastilla-txt); }
+
+/* ── Selección con el acento (grupos y chips) ─────────────────────────── */
+.grp-pill--active, html[data-theme="light"] .grp-pill--active { background: var(--accent); border-color: var(--accent); color: var(--accent-on); }
+.sbx-chip, html[data-theme="light"] .sbx-chip { background: var(--card); border-color: var(--border-mid); color: var(--txt-primary); }
+.sbx-chip--on, html[data-theme="light"] .sbx-chip--on { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+html[data-theme="light"] .sbx__input, html[data-theme="light"] .sbx__input:focus, html[data-theme="light"] .sbx--texto .sbx__input { background: var(--card-high); border-color: var(--border-mid); }
+html[data-theme="light"] .sbx--sticky, .sbx--sticky { background: var(--surface); -webkit-backdrop-filter: var(--vidrio-blur); backdrop-filter: var(--vidrio-blur); }
+html[data-theme="light"] .sbx-vacio { background: var(--card); border-color: var(--border-mid); }
+
+/* ── Barra lateral: el destino activo en dorado con texto oscuro ──────── */
+#sidebar .sb-item.sb-active, html[data-theme="light"] #sidebar .sb-item.sb-active { background: var(--sidebar-active); color: var(--sidebar-active-fg); }
+#sidebar .sb-item.sb-active .sb-ico { color: var(--sidebar-active-fg); }
+
+/* La hora de una notificación sin leer va sobre un tinte dorado: con el texto
+   tenue daba 4.48:1; con el secundario pasa holgado. */
+.notif-time { color: var(--txt-secondary); }

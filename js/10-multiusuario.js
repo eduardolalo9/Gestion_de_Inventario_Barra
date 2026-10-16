@@ -94,6 +94,14 @@
             // pero detecta cualquier adición, renombrado, eliminación o cambio de unidad).
             // El inventarioConteo sigue serializándose completo (es el dato más crítico
             // y generalmente es el más pequeño: solo tiene productos con conteo activo).
+            //
+            // v5.26 (hallazgo #6, Cero Pérdida de Datos) — id+name+unit+group se quedaba
+            // CIEGO a un cambio de precio, mínimo, proveedor, PV o conversión: con 431
+            // productos, editar uno de esos campos no movía la huella y el cambio nunca
+            // se subía solo (quedaba esperando a que alguien tocara "Sincronizar ahora").
+            // Se agrega `_v`: saveProduct() lo sube en CADA edición (altas, bajas y
+            // cambios de cualquier campo — ver js/85-ui-inventario-fisico.js), así que
+            // cubre todo sin tener que enumerar cada propiedad aquí.
             const now = Date.now();
             // FIX-5: Throttle reducido 300ms → 50ms para no perder syncs en conteos rápidos
     if (_computeDataHash._lastTs && (now - _computeDataHash._lastTs) < 50) {
@@ -102,12 +110,12 @@
             _computeDataHash._lastTs = now;
             try {
                 // FIX-2: huella de productos cubre TODO el catálogo sin serialización completa.
-                // id+name+unit captura: altas, bajas, renombres, cambios de unidad.
-                // Para >100 productos esto es ~5× más rápido que JSON.stringify y
-                // cubre el 100% de las propiedades críticas del catálogo.
+                // id+name+unit+group+_v captura: altas, bajas, renombres, cambios de unidad
+                // y cualquier otro campo (vía _v, que sube en cada edición).
+                // Para >100 productos esto es ~5× más rápido que JSON.stringify.
                 const prodFingerprint = products.length > 100
                     ? products.map(function(p) {
-                          return (p.id || '') + '|' + (p.name || '') + '|' + (p.unit || '') + '|' + (p.group || '');
+                          return (p.id || '') + '|' + (p.name || '') + '|' + (p.unit || '') + '|' + (p.group || '') + '|' + (p._v || 0);
                       }).join('§')  // § evita colisiones con valores que contengan |
                     : JSON.stringify(products);
 

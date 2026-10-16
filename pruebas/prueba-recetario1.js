@@ -21,8 +21,10 @@
  *      devuelve un total parcial disfrazado de completo.
  *   5. Persistencia local: recetas viaja por localStorage e IndexedDB igual
  *      que products/compras (guardado y restaurado en ambas ramas de carga).
- *   6. Decisiones confirmadas 2026-09-27: SIN bloqueo de PV duplicado, SIN
- *      lista cerrada de UoM.
+ *   6. Decisiones confirmadas 2026-09-27: SIN bloqueo de nombre duplicado,
+ *      SIN lista cerrada de UoM. (El bloqueo de PV duplicado SÍ se agregó
+ *      después, en v5.26/hallazgo #1 — el editor manual no tenía campo PV en
+ *      absoluto hasta esa fecha; ver el chk correspondiente más abajo.)
  *   7. Integración en la UI: pestaña enrutada, botón de navegación, script
  *      declarado en el orden correcto (ver prueba-integridad-split.js).
  *
@@ -87,8 +89,11 @@ const mReglasRec = /match \/recetario\/\{docId\} \{([\s\S]*?)\n\s*\}/.exec(regla
 chk('firestore.rules define match /recetario/{docId}', !!mReglasRec);
 if (mReglasRec) {
     const b = mReglasRec[1];
-    chk('Recetario: lectura para cualquier autenticado (no exige recipe.read)',
-        /allow read:\s*if request\.auth != null;/.test(b));
+    chk('Recetario: lectura para cualquier autenticado con cuenta activa (no exige recipe.read)',
+        // v5.26 (hallazgo #9) — ya no basta un token vivo: la cuenta tiene
+        // que estar activa (ver firestore.rules, _cuentaActiva()). Sigue sin
+        // exigir recipe.read, que es lo que este chk realmente comprueba.
+        /allow read:\s*if _cuentaActiva\(\);/.test(b));
     chk('Recetario: escritura exige recipe.edit explícito',
         /allow write:\s*if hasPerm\(\'recipe\.edit\'\);/.test(b));
 }
@@ -138,11 +143,24 @@ chk('loadFromLocalStorage restaura recetas desde LS',
 chk('SIN bloqueo de nombre duplicado en el editor manual (decisión del propietario)',
     !/nombre duplicad/i.test(soloCodigoVivo(receta)) &&
     !/recetas\.some\(function\(r\) \{ return r\.nombre/.test(receta));
-chk('★ receta.nombre es el nombre visible; receta.pv es el código (RECETARIO-2, corrección de nomenclatura)',
+chk('receta.nombre sigue siendo el nombre visible (RECETARIO-2, corrección de nomenclatura)',
     /receta\.nombre = nombre;/.test(receta) &&
-    /nombre: nombre, categoria: categoria/.test(receta) &&
-    !/receta\.pv = pv;/.test(receta) &&
-    !/id: _generarRecetaId\(\), pv: pv/.test(receta));
+    /nombre: nombre, categoria: categoria/.test(receta));
+// v5.26 (hallazgo #1) — RECETARIO-2 dejó el editor manual A PROPÓSITO sin
+// campo de código: por eso el chk de arriba decía "SIN bloqueo de PV
+// duplicado" (no había PV que duplicar). Ese mismo vacío es justo lo que el
+// consolidado de hallazgos marcó como CRÍTICO el 11-oct-2026: consumoTeorico()
+// cruza ventas con recetas por `pv` (ver prueba-fase11a.js), así que una
+// receta tecleada a mano quedaba invisible para el consumo aunque estuviera
+// perfecta. Eduardo aprobó corregirlo ("corregir todos los puntos empezando
+// con lo más crítico") — el editor ahora SÍ tiene PV, y SÍ bloquea duplicados
+// (a diferencia del nombre, que nunca se bloqueó y sigue sin bloquearse).
+chk('★ v5.26 (hallazgo #1) · El editor manual ahora sí guarda receta.pv — ya no queda invisible para el consumo',
+    /receta\.pv = pv;/.test(receta) &&
+    /id: _generarRecetaId\(\), nombre: nombre, categoria: categoria, pv: pv/.test(receta));
+chk('★ Y bloquea un PV duplicado entre recetas (a diferencia del nombre, que sigue sin bloquearse)',
+    /chocaCon = recetas\.find\(function\(r\) \{/.test(receta) &&
+    /showNotification\('⚠️ El código PV/.test(receta));
 chk('SIN lista cerrada de UoM (texto libre, coincide con el Excel real)',
     !/UOM_VALIDAS/.test(receta) && !/uom.*\[.*'ml'.*'oz'.*'pza'/i.test(receta));
 

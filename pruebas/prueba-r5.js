@@ -117,7 +117,7 @@ chk('Cada fila muestra el ID del producto', /escapeHtml\(product\.id\)/.test(tab
 chk('Se marca qué productos se cuentan en oz',
     /usaOz\s*\?\s*' · <span style="color:var\(--accent\)">oz<\/span>'/.test(tab));
 chk('El stock por debajo del mínimo se resalta',
-    /bajoMin[\s\S]{0,200}?color:#f87171/.test(tab),
+    /bajoMin[\s\S]{0,200}?color:var\(--danger\)/.test(tab),   // R7d: antes #f87171 a mano
     'es la señal que dispara una compra');
 
 // ═══ 4 · Buscador ════════════════════════════════════════════════════════

@@ -16,7 +16,8 @@
  *   P17  El inicial conserva la referencia a su inventario de origen.
  *   F5   Dos inventarios distintos no pueden ocupar la misma semana.
  *   F7   La conversión usa los datos CONGELADOS, no el catálogo actual.
- *   F8   Un recuento que no cae en domingo no se contabiliza.
+ *   F8   Un recuento que no cae en domingo no genera inicial semanal (FASE 14: genera
+ *        solo el ancla del Total).
  *   F12  Un producto sin contar NO entra al inicial (corrección 4-oct-2026).
  *
  * ── CÓMO EJECUTAR ──
@@ -68,6 +69,8 @@ function montarApp(db, uid, opciones) {
     const confirmaciones = [];
 
     const ciclo  = fs.readFileSync(path.join(RAIZ, 'js/15-ciclo-semanal.js'), 'utf8');
+    // FASE 14 — anclaDesdeCierre() (fin de mes entre semana y mitad de semana).
+    const arrastre = fs.readFileSync(path.join(RAIZ, 'js/46-arrastre.js'), 'utf8');
     const flujo  = fs.readFileSync(path.join(RAIZ, 'js/75-auditoria-flujo.js'), 'utf8');
     const firest = fs.readFileSync(path.join(RAIZ, 'js/40-firestore.js'), 'utf8');
 
@@ -156,7 +159,7 @@ function montarApp(db, uid, opciones) {
     };
     deps.window = deps;
 
-    const montar = new Function('deps', 'with (deps) {\n' + ciclo + '\n' + conv + '\n' + firest + '\n' + flujo +
+    const montar = new Function('deps', 'with (deps) {\n' + ciclo + '\n' + arrastre + '\n' + conv + '\n' + firest + '\n' + flujo +
         '\n; return { contabilizarInventario: contabilizarInventario,' +
         '            _saldosDesdeSnapshot: _saldosDesdeSnapshot,' +
         '            _readChunkedSubcollection: _readChunkedSubcollection,' +
@@ -436,8 +439,11 @@ async function main() {
     await appMiercoles.contabilizar('inv-5', 105);
     chk('F8 · un recuento en miércoles NO genera inicial',
         (await contarIniciales()) === 0);
-    chk('F8 · y el motivo se explica, no se deja un botón mudo',
-        appMiercoles._avisos.some(a => /DOMINGO/i.test(a)),
+    // FASE 14 (decisión de Eduardo, 5-oct-2026): el miércoles ya no se bloquea —
+    // se contabiliza solo como ANCLA del Total. Lo que F8 sigue protegiendo es
+    // que NO genere un inicial semanal (eso es exclusivo del domingo).
+    chk('F8 · FASE 14 — en su lugar genera el ancla del Total, y lo dice',
+        appMiercoles._avisos.some(a => /ancla del Total 2026-09-16/.test(a)),
         'avisos: ' + appMiercoles._avisos.join(' | '));
 
     // ═══════════════════════════════════════════════════════════════════

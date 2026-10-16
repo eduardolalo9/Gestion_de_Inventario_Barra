@@ -66,10 +66,14 @@ const PUERTO = process.env.PUERTO || '8080';
   // ── Inventario ABIERTO (admin) ──────────────────────────────────────────
   await montar('SINCRONIZADO'); await p.waitForTimeout(250);
   let m = await p.evaluate(MEDIDAS);
-  chk('★ Todos los botones de la pantalla miden al menos 48 px de alto (pulgar)', m.length >= 6 && m.every(b => b.h >= 48), JSON.stringify(m.filter(b => b.h < 48)));
+  chk('★ Todos los botones de la pantalla miden al menos 48 px de alto (pulgar)', m.length >= 6 && m.every(b => Math.round(b.h) >= 48), JSON.stringify(m.filter(b => Math.round(b.h) < 48)));   // v5.30: redondeo (47.99997 px es 48)
   chk('★ Todos los botones tienen texto de al menos 14 px (antes 11–12 px)', m.every(b => b.fs >= 14), JSON.stringify(m.filter(b => b.fs < 14)));
-  chk('Las acciones principales ocupan todo el ancho (una columna, no una fila apretada)',
-      m.filter(b => /Reconteo$|Reconteos|Historial|Cerrar Inventario/.test(b.t)).every(b => b.w >= 300), JSON.stringify(m.map(b => [b.t, Math.round(b.w)])));
+  // v5.28 (pedido de Eduardo, 16-oct-2026: "más compacto") — las 4 acciones
+  // del encabezado van en rejilla de 2 columnas (cada una ~la mitad del
+  // ancho, 48 px de alto); "Cerrar Inventario Físico" sigue a lo ancho.
+  chk('Acciones del encabezado en rejilla de 2 (cada una >= 45 % del ancho) y "Cerrar Inventario" a lo ancho',
+      m.filter(b => /Reconteo$|Reconteos|Historial/.test(b.t)).every(b => b.w >= b.wp * 0.45) && m.filter(b => /Cerrar Inventario/.test(b.t)).every(b => b.w >= 300),
+      JSON.stringify(m.map(b => [b.t, Math.round(b.w)])));
   const c = await p.evaluate(CONTRASTE);
   chk('★ Contraste de todos los botones ≥ 4.5:1 (WCAG AA) — antes "Cerrar" era 1.7:1', c.every(x => x.r >= 4.5), JSON.stringify(c.filter(x => x.r < 4.5)));
   const orden = await p.evaluate(() => {
@@ -95,7 +99,11 @@ const PUERTO = process.env.PUERTO || '8080';
     });
     return bs;
   });
-  chk('★ Entre botones apilados hay al menos 10 px (no se tocan dos a la vez)', huecos.length > 0 && huecos.every(h => h >= 10), JSON.stringify(huecos));
+  // v5.28 — en la rejilla de 2, dos botones del mismo renglón dan un "hueco"
+  // vertical negativo (-48): no están apilados. Entre renglones y entre
+  // columnas se exigen los mismos 10 px.
+  const hCol = await p.evaluate(() => { const g = document.querySelector('#tabContent .bt-pila--rejilla'); return g ? parseFloat(getComputedStyle(g).columnGap) : 10; });
+  chk('★ Entre botones hay al menos 10 px, apilados o lado a lado (no se tocan dos a la vez)', huecos.length > 0 && huecos.every(h => h >= 10 || h <= -40) && hCol >= 10, JSON.stringify([huecos, hCol]));
   chk('No hay desplazamiento horizontal en un teléfono de 390 px',
       await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), '');
   chk('"Cerrar área para todos" y "Reabrir" ya no son enlaces diminutos dentro de la tarjeta del área',
@@ -116,7 +124,7 @@ const PUERTO = process.env.PUERTO || '8080';
   // ── Inventario CERRADO: siguiente paso con botones grandes ──────────────
   await montar('CERRADO'); await p.waitForTimeout(250);
   m = await p.evaluate(MEDIDAS);
-  const aLoAncho = (b) => b.h >= 48 && b.w >= b.wp - 1;   // ocupa su contenedor
+  const aLoAncho = (b) => Math.round(b.h) >= 48 && b.w >= b.wp - 1;   // ocupa su contenedor (v5.30: alto redondeado)
   chk('Con el inventario cerrado: "Contabilizar" y "Crear el siguiente" son botones grandes y apilados',
       m.some(b => /Contabilizar/.test(b.t) && aLoAncho(b)) && m.some(b => /Crear el siguiente/.test(b.t) && aLoAncho(b)),
       JSON.stringify(m.map(b => [b.t, Math.round(b.h), Math.round(b.w), Math.round(b.wp)])));

@@ -11,7 +11,7 @@ const PUERTO = process.env.PUERTO || '8080';
 
 (async () => {
   const nav = await chromium.launch(require('./_lanzar-navegador')());
-  const p = await (await nav.newContext({ viewport: { width: 390, height: 844 } })).newPage();
+  const p = await require('./_tema-oscuro')(await nav.newContext({ viewport: { width: 390, height: 844 } })).newPage();
   const errs = []; p.on('pageerror', e => errs.push(String(e).slice(0, 200)));
   await p.goto('http://127.0.0.1:' + PUERTO + '/index.html', { waitUntil: 'load' });
   await p.evaluate(async () => {
@@ -81,8 +81,9 @@ const PUERTO = process.env.PUERTO || '8080';
   });
   chk('Hay exactamente un destino activo, y es Inicio',
       activo.destino === 'inicio' && activo.cuantosActivos === 1, JSON.stringify(activo));
-  chk('★ El destino activo es latón calculado (no un azul heredado)',
-      activo.colorTexto === 'rgb(232, 181, 92)' && activo.colorIcono === 'rgb(232, 181, 92)',
+  // v5.30 — tema oscuro Midnight: el acento es dorado.
+  chk('★ El destino activo usa el acento calculado (v5.30: dorado) (no un azul heredado)',
+      activo.colorTexto === 'rgb(200, 169, 106)' && activo.colorIcono === 'rgb(200, 169, 106)',
       JSON.stringify(activo));
   chk('★ El activo lleva aria-current="page" (el color solo no informa)',
       activo.aria === 'page', 'aria-current: ' + activo.aria);
@@ -142,8 +143,9 @@ const PUERTO = process.env.PUERTO || '8080';
     return { fondo: cs.backgroundColor, alto: b.getBoundingClientRect().height,
              tocables: [...b.querySelectorAll('button')].every(x => x.getBoundingClientRect().height >= 44) };
   });
-  chk('La barra inferior usa la superficie del tema (#15181D), no un color fijo',
-      barra.fondo === 'rgb(21, 24, 29)', 'fondo: ' + barra.fondo);
+  // v5.30 — barra inferior en cristal (card-high translúcida del tema).
+  chk('La barra inferior usa la superficie de cristal del tema, no un color fijo',
+      barra.fondo === 'rgba(34, 40, 36, 0.78)', 'fondo: ' + barra.fondo);
   chk('Todos sus controles son táctiles (≥ 44 px)', barra.tocables, 'alto barra: ' + barra.alto);
 
   // ── G · El glosario de estados usa los badges del kit ──────────────────
@@ -169,7 +171,7 @@ const PUERTO = process.env.PUERTO || '8080';
   chk('"Contabilizado" usa el lila del estado contable, no el morado de Tailwind',
       glos.colorContab === 'rgb(201, 160, 232)', 'color: ' + glos.colorContab);
   chk('Un estado desconocido sale en gris, con su texto tal cual',
-      glos.textos[2] === 'LO_QUE_SEA' && glos.desconocido === 'rgb(180, 176, 170)',
+      glos.textos[2] === 'LO_QUE_SEA' && glos.desconocido === 'rgb(168, 165, 160)',   // v5.30: secundario Midnight
       JSON.stringify(glos));
 
   chk('Sin errores de JS en toda la prueba', errs.length === 0, errs.join(' | '));

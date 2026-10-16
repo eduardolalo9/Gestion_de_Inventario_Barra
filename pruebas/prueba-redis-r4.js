@@ -66,7 +66,8 @@ const modal = html.slice(html.indexOf('id="inventarioModal"'),
 });
 [
     ['closeInventarioModal()', 'cerrar'],
-    ['saveInventarioModal()',  'guardar'],
+    ['inventarioGuardarYSiguiente()',  'guardar (v5.23: "Guardar y siguiente", que llama a saveInventarioModal())'],
+    ['inventarioModalPaso(',   'el paso ± de las botellas enteras (v5.23)'],
     ['addAbiertaInModal()',    'añadir otra botella abierta'],
     ['_sanearEntradaEntero(this)',  'saneado de enteros'],
     ['_sanearEntradaDecimal(this)', 'saneado de decimales']
@@ -85,7 +86,7 @@ chk('No se añadió captura en línea a la tarjeta',
 
 // ═══ 2 · LA CIFRA, EN MONO TABULAR ═════════════════════════════════════════
 chk('★ El campo numérico del modal es mono tabular',
-    /\.inv-modal__num\s*\{[^}]*IBM Plex Mono/.test(esti) &&
+    /\.inv-modal__num\s*\{[^}]*var\(--f-num\)/.test(esti) &&
     /\.inv-modal__num\s*\{[^}]*tabular-nums/.test(esti));
 chk('★ El campo numérico es grande y táctil',
     /\.inv-modal__num\s*\{[^}]*font-size:\s*1\.3\d+rem/.test(esti) &&

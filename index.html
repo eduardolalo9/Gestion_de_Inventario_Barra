@@ -5,12 +5,12 @@
     <!-- FIX #15: viewport como primer meta, antes de cualquier script, para que el
          navegador calcule el viewport correcto antes de ejecutar ningún código. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="theme-color" content="#0d1321" media="(prefers-color-scheme: dark)">
-    <meta name="theme-color" content="#0f2040" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#101E18" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#F5F7F6" media="(prefers-color-scheme: light)">
     <!-- FIX #1: CSP movida ANTES de cualquier <script> para que el navegador
          aplique la política desde el inicio de la evaluación del documento.
          Una CSP después de scripts ya ejecutados no los restringe retroactivamente. -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://www.gstatic.com https://kit.fontawesome.com https://use.fontawesome.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://use.fontawesome.com https://kit.fontawesome.com; font-src https://fonts.gstatic.com https://cdnjs.cloudflare.com https://use.fontawesome.com https://kit.fontawesome.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://firestore.googleapis.com https://securetoken.googleapis.com https://identitytoolkit.googleapis.com https://firebase.googleapis.com https://storage.googleapis.com; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://www.gstatic.com https://kit.fontawesome.com https://use.fontawesome.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://use.fontawesome.com https://kit.fontawesome.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com https://use.fontawesome.com https://kit.fontawesome.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://firestore.googleapis.com https://securetoken.googleapis.com https://identitytoolkit.googleapis.com https://firebase.googleapis.com https://storage.googleapis.com; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self';">
     <link rel="manifest" href="manifest.json">
     <meta name="mobile-web-app-capable" content="yes">
     <!-- FIX-iOS: apple-mobile-web-app-capable activa modo standalone en iPhone/iPad -->
@@ -23,43 +23,219 @@
         // Evitar FOUC (Flash Of Unstyled Content): aplicar tema antes de renderizar
         (function() {
             try {
-                var t = localStorage.getItem('inventarioApp_theme') || 'dark';
+                // v5.25 — la marca nueva (Verde Esmeralda) es el tema CLARO. Una sola
+                // vez por dispositivo se pasa al tema nuevo; después, el que cada
+                // quien elija con el botón de tema se respeta.
+                var t = localStorage.getItem('inventarioApp_theme');
+                if (localStorage.getItem('inventarioApp_temaMarca') !== 'esmeralda') {
+                    t = 'light';
+                    localStorage.setItem('inventarioApp_temaMarca', 'esmeralda');
+                    localStorage.setItem('inventarioApp_theme', 'light');
+                }
+                if (t !== 'dark' && t !== 'light') t = 'light';
                 document.documentElement.setAttribute('data-theme', t);
             } catch(_) {
-                document.documentElement.setAttribute('data-theme', 'dark');
+                document.documentElement.setAttribute('data-theme', 'light');
             }
         })();
     </script>
 
-    <!-- FIX ICONS: Generar íconos PWA dinámicamente via Canvas (evita 404 del manifest) -->
+    <!-- v5.20 — ICONO DE LA APP (archivos reales en icons/; antes se dibujaba
+         una "B" azul con Canvas en cada carga) -->
+    <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+    <link rel="icon" type="image/png" sizes="48x48" href="icons/favicon-48.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/barinventory-192.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+
+    <!-- ══════════════════════════════════════════════════════════
+         v5.12 — ACTUALIZACIONES QUE SÍ LLEGAN (y se ven)
+         ──────────────────────────────────────────────────────────
+         Antes: la versión nueva avisaba con un toast de pocos segundos y
+         hacía falta abrir la app dos veces para verla. Ahora:
+          · aviso fijo "Nueva versión X lista · Actualizar" (no se va solo);
+          · la versión de la PÁGINA y la del SERVICE WORKER se comparan al
+            abrir: si el SW ya trae una más nueva, se avisa;
+          · se busca actualización al abrir, al volver a la app y cada 30 min
+            (una petición diminuta a sw.js, sin caché — casi sin datos);
+          · el pie de "Más" dice la versión real y tiene "Buscar
+            actualización" y "Reparar".
+         Nada se recarga solo: un conteo a medias no se pierde por una
+         actualización. Recargar es decisión de quien toca "Actualizar".
+         ══════════════════════════════════════════════════════════ -->
     <script>
-    (function generatePWAIcons() {
-        function makeIcon(size) {
-            var c = document.createElement('canvas');
-            c.width = c.height = size;
-            var ctx = c.getContext('2d');
-            ctx.fillStyle = '#0A84FF';
-            try { ctx.roundRect(0, 0, size, size, size * 0.22); }
-            catch(_) { ctx.rect(0, 0, size, size); } // fallback: sin roundRect
-            ctx.fill();
-            ctx.fillStyle = '#FFFFFF';
-            ctx.font = 'bold ' + Math.round(size * 0.52) + 'px system-ui,sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('B', size / 2, size / 2 + size * 0.03);
-            return c.toDataURL('image/png');
-        }
-        try {
-            var link192 = document.createElement('link');
-            link192.rel = 'icon'; link192.type = 'image/png';
-            link192.href = makeIcon(192);
-            document.head.appendChild(link192);
-            var appleLink = document.createElement('link');
-            appleLink.rel = 'apple-touch-icon';
-            appleLink.href = makeIcon(180);
-            document.head.appendChild(appleLink);
-        } catch(e) { /* canvas no disponible */ }
-    })();
+        (function () {
+            var INTERVALO_MS = 30 * 60 * 1000;   // revisión periódica con la app visible
+            var MIN_ENTRE_REVISIONES_MS = 5 * 60 * 1000;
+            var _reg = null, _ultimaRevision = 0, _avisada = null;
+
+            // "5.10" > "5.9" — comparar por partes numéricas, nunca como decimal
+            // (leído como número decimal, 5.10 vale 5.1: el defecto que ya costó una prueba).
+            function comparar(a, b) {
+                var x = String(a || '0').split('.'), y = String(b || '0').split('.');
+                for (var i = 0; i < Math.max(x.length, y.length); i++) {
+                    var d = (parseInt(x[i], 10) || 0) - (parseInt(y[i], 10) || 0);
+                    if (d) return d < 0 ? -1 : 1;
+                }
+                return 0;
+            }
+            function versionPagina() {
+                var sc = document.querySelector('script[src*="00-nucleo.js"]');
+                var m = sc && /[?&]v=([^&]+)/.exec(sc.getAttribute('src'));
+                return m ? m[1] : null;
+            }
+            function versionInstalada() {   // la del Service Worker activo (nombre de su caché)
+                if (!window.caches || !caches.keys) return Promise.resolve(null);
+                return caches.keys().then(function (ks) {
+                    var vs = ks.filter(function (k) { return /^barinventory-v/.test(k); })
+                               .map(function (k) { return k.replace('barinventory-v', ''); });
+                    vs.sort(comparar);
+                    return vs.length ? vs[vs.length - 1] : null;
+                }).catch(function () { return null; });
+            }
+            function versionPublicada() {   // la que HAY AHORA en el servidor (sw.js sin caché)
+                return fetch('./sw.js?chk=' + Date.now(), { cache: 'no-store' }).then(function (r) {
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    return r.text();
+                }).then(function (t) {
+                    var m = /APP_VERSION\s*=\s*'([^']+)'/.exec(t);
+                    return m ? m[1] : null;
+                });
+            }
+            function aviso(txt) { if (typeof showNotification === 'function') showNotification(txt); }
+
+            function pintarEtiqueta(instalada) {
+                var el = document.getElementById('sbVersion');
+                var vp = versionPagina();
+                if (!el || !vp) return;
+                var pend = instalada && comparar(instalada, vp) > 0;
+                el.textContent = 'BarInventory · versión ' + vp + (pend ? ' · actualización ' + instalada + ' lista' : '');
+                el.classList.toggle('sb-version--pendiente', !!pend);
+            }
+
+            function mostrarBanner(vNueva) {
+                if (_avisada === vNueva && !document.getElementById('actBanner')) return;  // la descartaron
+                _avisada = vNueva;
+                if (document.getElementById('actBanner')) return;
+                var d = document.createElement('div');
+                d.id = 'actBanner'; d.className = 'act-banner'; d.setAttribute('role', 'status');
+                d.innerHTML = '<span class="act-banner__txt"><i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i> Nueva versión <b class="num">' + vNueva + '</b> lista</span>'
+                            + '<button type="button" class="act-banner__btn" id="actBannerBtn">Actualizar</button>'
+                            + '<button type="button" class="act-banner__x" id="actBannerX" aria-label="Más tarde">Luego</button>';
+                document.body.appendChild(d);
+                document.getElementById('actBannerBtn').addEventListener('click', aplicar);
+                document.getElementById('actBannerX').addEventListener('click', function () {
+                    d.remove();   // se vuelve a ofrecer en la próxima revisión (30 min) o al reabrir la app
+                });
+            }
+
+            // Recargar con la versión nueva. Pide al SW que se actualice, espera a que
+            // tome el control (máx. 8 s) y recarga. Con el HTML "red primero" del SW,
+            // aun si no alcanzara a activarse, la recarga trae el index.html nuevo.
+            function aplicar() {
+                var btn = document.getElementById('actBannerBtn');
+                if (btn) { btn.disabled = true; btn.textContent = 'Actualizando…'; }
+                var listo = false;
+                function recargar() { if (listo) return; listo = true; location.reload(); }
+                try {
+                    var esperar = new Promise(function (res) {
+                        if (!navigator.serviceWorker) return res();
+                        navigator.serviceWorker.addEventListener('controllerchange', function () { res(); }, { once: true });
+                        setTimeout(res, 8000);
+                    });
+                    (_reg ? _reg.update() : Promise.resolve()).catch(function () {})
+                        .then(function () { return esperar; }).then(recargar, recargar);
+                } catch (_) { recargar(); }
+            }
+
+            // Revisión: ¿hay algo más nuevo que lo que está corriendo?
+            function revisar(manual) {
+                _ultimaRevision = Date.now();
+                if (!navigator.onLine) {
+                    if (manual) aviso('📴 Sin conexión — no se puede buscar actualización');
+                    return Promise.resolve(null);
+                }
+                var vp = versionPagina();
+                return Promise.all([versionPublicada().catch(function () { return null; }), versionInstalada()])
+                    .then(function (r) {
+                        var pub = r[0], inst = r[1];
+                        pintarEtiqueta(inst);
+                        var masNueva = [pub, inst].filter(Boolean).sort(comparar).pop();
+                        if (vp && masNueva && comparar(masNueva, vp) > 0) {
+                            if (_reg) _reg.update().catch(function () {});
+                            mostrarBanner(masNueva);
+                            if (manual) aviso('🔄 Hay una versión nueva (' + masNueva + ') — toca "Actualizar"');
+                        } else if (manual) {
+                            aviso(pub ? '✅ Ya tienes la última versión (' + vp + ')'
+                                      : '⚠️ No se pudo consultar el servidor — intenta de nuevo');
+                        }
+                        return masNueva;
+                    });
+            }
+
+            // Reparar: borra la copia local de la aplicación (archivos, NO datos) y la
+            // baja otra vez. localStorage e IndexedDB — conteos, pendientes de subir,
+            // sesión — no se tocan. Es el recurso para un teléfono "atascado" en una
+            // versión vieja.
+            function reparar() {
+                var hacer = function () {
+                    aviso('🔧 Reparando… la app se reiniciará');
+                    var tareas = [];
+                    if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+                        tareas.push(navigator.serviceWorker.getRegistrations().then(function (rs) {
+                            return Promise.all(rs.map(function (r) { return r.unregister(); }));
+                        }));
+                    }
+                    if (window.caches && caches.keys) {
+                        tareas.push(caches.keys().then(function (ks) {
+                            return Promise.all(ks.filter(function (k) { return /^barinventory-/.test(k); })
+                                                 .map(function (k) { return caches.delete(k); }));
+                        }));
+                    }
+                    Promise.all(tareas).catch(function () {}).then(function () {
+                        location.replace(location.pathname + '?r=' + Date.now());
+                    });
+                };
+                var msg = 'Se borrará la copia de la aplicación guardada en este teléfono y se bajará de nuevo.\n\n'
+                        + 'Tus conteos y datos NO se borran. Necesitas conexión a internet.\n\n¿Continuar?';
+                if (typeof showConfirm === 'function') showConfirm(msg, hacer); else if (window.confirm(msg)) hacer();
+            }
+
+            window.BIActualizaciones = {
+                iniciar: function (registration) {
+                    _reg = registration;
+                    // Un SW nuevo tomó el control: esta página quedó vieja.
+                    if (navigator.serviceWorker) {
+                        navigator.serviceWorker.addEventListener('controllerchange', function () {
+                            versionInstalada().then(function (inst) {
+                                pintarEtiqueta(inst);
+                                var vp = versionPagina();
+                                if (inst && vp && comparar(inst, vp) > 0) mostrarBanner(inst);
+                            });
+                        });
+                    }
+                    setTimeout(function () { revisar(false); }, 4000);
+                    document.addEventListener('visibilitychange', function () {
+                        if (document.visibilityState === 'visible' && Date.now() - _ultimaRevision > MIN_ENTRE_REVISIONES_MS) revisar(false);
+                    });
+                    setInterval(function () {
+                        if (document.visibilityState === 'visible') revisar(false);
+                    }, INTERVALO_MS);
+                },
+                revisar: revisar, aplicar: aplicar, reparar: reparar,
+                _comparar: comparar, _versionPagina: versionPagina
+            };
+            window.buscarActualizacion = function () { return revisar(true); };
+            window.repararAplicacion  = reparar;
+
+            // v5.26 (hallazgo del paquete de textos) — pie del login: la
+            // misma versión real que ya lee versionPagina() (el ?v= del
+            // script 00-nucleo.js), no un número aparte que nadie actualiza.
+            document.addEventListener('DOMContentLoaded', function () {
+                var lv = document.getElementById('loginVersion');
+                var vp = versionPagina();
+                if (lv && vp) lv.textContent = 'BarInventory v' + vp + ' · Instituto ULinks';
+            });
+        })();
     </script>
 
     <!-- ══════════════════════════════════════════════════════════
@@ -78,48 +254,12 @@
                     .then(function(registration) {
                         console.info('[SW] Registrado con scope:', registration.scope);
 
-                        // FIX-ICONS: Los iconos del manifest (icons/icon-192.png y icon-512.png)
-                        // no existen como archivos físicos. Los generamos aquí via Canvas y los
-                        // enviamos al SW para que los cachée y los sirva cuando el navegador los
-                        // solicite al validar la instalabilidad de la PWA.
-                        navigator.serviceWorker.ready.then(function(reg) {
-                            if (!reg.active) return;
-                            try {
-                                function _makeIconPng(size) {
-                                    var c = document.createElement('canvas');
-                                    c.width = c.height = size;
-                                    var ctx = c.getContext('2d');
-                                    ctx.fillStyle = '#0A84FF';
-                                    try { ctx.roundRect(0, 0, size, size, size * 0.22); }
-                                    catch(_) { ctx.rect(0, 0, size, size); }
-                                    ctx.fill();
-                                    ctx.fillStyle = '#FFFFFF';
-                                    ctx.font = 'bold ' + Math.round(size * 0.52) + 'px system-ui,sans-serif';
-                                    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                                    ctx.fillText('B', size / 2, size / 2 + size * 0.03);
-                                    return c.toDataURL('image/png');
-                                }
-                                reg.active.postMessage({
-                                    type:    'CACHE_ICONS',
-                                    icon192: _makeIconPng(192),
-                                    icon512: _makeIconPng(512)
-                                });
-                            } catch(e) { console.warn('[SW] No se pudieron cachear íconos PWA:', e); }
-                        });
+                        // v5.20 — los íconos del manifest son archivos reales en
+                        // icons/: ya no se generan con Canvas ni se mandan al SW.
 
-                        // Detectar actualizaciones del SW (nueva versión deployada)
-                        registration.addEventListener('updatefound', function() {
-                            var newWorker = registration.installing;
-                            newWorker.addEventListener('statechange', function() {
-                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                    // Nueva versión disponible — notificar al usuario
-                                    console.info('[SW] Nueva versión disponible. Recarga para actualizar.');
-                                    if (typeof showNotification === "function") {
-                                        showNotification('🔄 Nueva versión disponible — recarga la página');
-                                    }
-                                }
-                            });
-                        });
+                        // v5.12 — la detección de versión nueva vive en el módulo
+                        // de actualizaciones (más abajo): un aviso que NO se va solo.
+                        if (window.BIActualizaciones) window.BIActualizaciones.iniciar(registration);
                     })
                     .catch(function(err) {
                         // El SW es una mejora progresiva; su fallo no bloquea la app.
@@ -146,11 +286,8 @@
         })();
     </script>
     <meta name="description" content="Sistema de control de inventario para barra — gestión de productos, pedidos y conteo físico.">
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%A6%3C/text%3E%3C/svg%3E"><!-- BUG-FIX m2: favicon URL-encoded -->
     <title>BarInventory — Control de Inventario</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- v5.25 — las tipografías (Manrope y DM Sans) viven en fonts/ y se declaran en la hoja de estilos principal: sin Google Fonts, funcionan sin conexión. -->
     <!-- ══════════════════════════════════════════════════════════
          REDISEÑO R1 (v5.0) — TAILWIND Y FONT AWESOME YA NO VIENEN DE UN CDN
          ──────────────────────────────────────────────────────────
@@ -650,8 +787,9 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
     <!-- Utilidades locales (sustituyen a Tailwind CDN) + iconos locales
          (sustituyen a Font Awesome CDN). Va ANTES de estilos.css para que
          las reglas propias de la app sigan teniendo la última palabra. -->
-    <link rel="stylesheet" href="css/utilidades.css?v=5.10">
-    <link rel="stylesheet" href="css/estilos.css?v=5.10">
+    <link rel="stylesheet" href="css/utilidades.css?v=5.30">
+    <link rel="stylesheet" href="css/estilos.css?v=5.30">
+    <link rel="stylesheet" href="css/tema-cristal.css?v=5.30"><!-- v5.30 — tema cristal (claro bronce / oscuro Midnight) en toda la app; va DESPUÉS de estilos.css -->
 </head>
 <body class="min-h-screen">
 
@@ -671,7 +809,7 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
             <!-- ── Brand header ── -->
             <div class="login-brand-header">
                 <div class="login-brand-row">
-                    <div class="login-brand-icon" role="img" aria-label="BarInventory">🍸</div>
+                    <img class="login-brand-icon" src="icons/barinventory-192.png" alt="BarInventory" width="56" height="56">
                     <div class="login-brand-text">
                         <div class="login-brand-name">BarInventory</div>
                         <div class="login-brand-sub">Sistema de Control de Inventario</div>
@@ -709,7 +847,11 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
                 <div class="login-divider"></div>
                 <p class="login-footer">
                     Acceso restringido al personal autorizado<br>
-                    <span style="opacity:.7;">BarInventory v2.4 · Instituto ULinks</span>
+                    <!-- v5.26 (hallazgo del paquete de textos) — "v2.4" quedó
+                         fijo desde hace fases: la app ya va por la v5.x y esto
+                         nunca se actualizaba. loginVersion la llena el mismo
+                         versionPagina() que ya usa el pie de "Más". -->
+                    <span id="loginVersion" style="opacity:.7;">BarInventory · Instituto ULinks</span>
                 </p>
             </div>
         </div>
@@ -732,9 +874,11 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
     <input type="file" id="fileInputVentas" accept=".xlsx,.xls,.xlsm,.csv" class="hidden">
     <!-- Input oculto para importar respaldo JSON -->
     <input type="file" id="importDataInput" accept=".json" class="hidden">
+    <!-- v5.18 — módulo Importar desde Excel: catálogo y corte de existencias -->
+    <input type="file" id="impArchivo" accept=".xlsx,.xls,.csv" class="hidden" aria-label="Archivo a importar">
 
     <!-- Overlay -->
-    <div id="sbOverlay" onclick="sbClose()"></div>
+    <div id="sbOverlay" onclick="sbClose()" aria-hidden="true"></div>
 
     <!-- FIX #9: <nav> nativo en lugar de <div role="navigation"> — semántica HTML5 correcta -->
     <nav id="sidebar" aria-label="Menú principal">
@@ -777,6 +921,11 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
                 <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 17l6-6 4 4 8-8m0 0h-5m5 0v5"/></svg>
                 Ventas
             </button>
+            <!-- v5.18 — todas las importaciones de Excel viven en este módulo -->
+            <button type="button" class="sb-item" data-sb-tab="importar" onclick="importarSeccion = null; switchTab('importar'); sbClose()">
+                <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                Importar desde Excel
+            </button>
             <button type="button" class="sb-item" data-sb-tab="historia" onclick="switchTab('historia'); sbClose()">
                 <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                 Historia
@@ -795,6 +944,11 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
             <button type="button" id="sbAdminBtn" class="sb-item" data-sb-tab="admin" onclick="switchTab('admin'); sbClose()" style="display:none">
                 <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
                 Panel Admin
+            </button>
+            <!-- v5.19 — papelera de servidor (solo administración) -->
+            <button type="button" id="sbPapeleraBtn" class="sb-item" data-sb-tab="papelera" onclick="switchTab('papelera'); sbClose()" style="display:none">
+                <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7h16M10 11v6M14 11v6M6 7l.9 12.1A2 2 0 008.9 21h6.2a2 2 0 002-1.9L18 7M9 7V4h6v3"/></svg>
+                Papelera
             </button>
 
             <p class="sb-sep">Respaldo</p>
@@ -818,20 +972,16 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
         </div>
         <div id="sbFoot">
             <div id="sbVersion" class="sb-version" aria-label="Versión instalada"></div>
+            <div class="sb-act">
+                <button type="button" class="sb-act__btn" onclick="buscarActualizacion()"><i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i> Buscar actualización</button>
+                <button type="button" class="sb-act__btn sb-act__btn--tenue" onclick="repararAplicacion()">Reparar</button>
+            </div>
             <div style="display:flex;align-items:center;gap:5px;padding:0 10px 5px;overflow:hidden;">
                 <span id="sbUserEmail" style="font-size:.66rem;color:var(--txt-muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
                 <span id="sbRoleBadge" class="role-badge"></span>
             </div>
             <!-- Badge de estado de sincronización con la nube -->
-            <div id="cloudSyncBadge"
-                 style="display:flex;align-items:center;justify-content:center;
-                        font-family:'IBM Plex Sans',sans-serif;font-size:.68rem;font-weight:600;
-                        padding:5px 10px;border-radius:8px;margin-bottom:8px;
-                        border:1px solid rgba(80,81,106,0.4);
-                        color:#8b8ca8;background:rgba(80,81,106,0.12);
-                        transition:all .3s ease;">
-                ☁️ Sin Firebase
-            </div>
+            <div id="cloudSyncBadge" class="sy-insignia" role="status" data-sync="none"><i class="fa-solid fa-circle-info" aria-hidden="true"></i><span>Sin Firebase</span></div>
             <button type="button" onclick="toggleTheme(); sbClose();" class="sb-item" style="width:100%;margin-bottom:6px;" id="sbThemeBtn">
                 <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
@@ -852,15 +1002,17 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
     <!-- Header -->
     <div class="sticky top-0 z-50 shadow-sm animate-fadeIn">
         <div class="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 py-2 sm:py-2.5">
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-3 hd-fila-cab">
                 <button type="button" id="hamburgerBtn" onclick="sbOpen()" aria-label="Abrir menú" aria-expanded="false">
                     <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 6h16M4 12h16M4 18h16"/>
                     </svg>
                 </button>
+                <!-- v5.24 — marca compacta: cuadro latón con el icono + nombre -->
+                <span class="hd-logo" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h14l-6 8v6h3M11 18H8"/></svg></span>
                 <h1 class="flex-1 text-base font-bold text-white truncate">BarInventory</h1>
                 <button type="button" id="themeToggleBtn" onclick="toggleTheme()" aria-label="Cambiar tema" title="Modo claro / oscuro"
-                    style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);cursor:pointer;transition:background .18s ease,transform .14s;color:#fff;flex-shrink:0;">
+                    style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:10px;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);cursor:pointer;transition:background .18s ease,transform .14s;color:#fff;flex-shrink:0;">
                     <svg id="themeIconMoon" width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
                     </svg>
@@ -870,7 +1022,7 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
                 </button>
                 <!-- Semáforo de sincronización Firebase: verde=ok, amarillo=subiendo, rojo=error/offline -->
                 <div id="syncDot" data-state="none" title="Sin Firebase" aria-label="Estado de sincronización"></div>
-                <div id="headerActions" class="flex gap-2 sm:gap-3 flex-shrink-0"></div>
+                <div id="headerActions" class="hd-acciones"></div>
             </div>
         </div>
     </div>
@@ -969,8 +1121,8 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
                      Guardar. -->
                 <div style="background:var(--card-high);border:1px solid var(--border-mid);border-radius:14px;padding:14px 16px 10px;">
                     <!-- FIX #5: 'Syne' no está en el <link> de Google Fonts → el navegador cae a
-                         sans-serif del sistema rompiendo la tipografía. Sustituido por IBM Plex Sans. -->
-                    <p style="font-family:'IBM Plex Sans',sans-serif;font-size:0.72rem;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:var(--accent);margin-bottom:10px;"><i class="fa-solid fa-bottle" aria-hidden="true"></i> Conteo de botella en oz</p>
+                         sans-serif del sistema rompiendo la tipografía. Sustituido por la tipografía del tema (DM Sans). -->
+                    <p style="font-family:var(--f-body);font-size:0.72rem;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:var(--accent);margin-bottom:10px;"><i class="fa-solid fa-bottle" aria-hidden="true"></i> Conteo de botella en oz</p>
 
                     <!-- R1 (regla 14) — La casilla decide COMO se cuenta el producto.
                          Marcada:    botellas enteras + botella abierta pesada en oz.
@@ -1053,8 +1205,8 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
                     <p id="productPVAviso" class="text-xs mt-2" style="color:var(--txt-muted)">Déjalo vacío si el producto no se vende tal cual en el punto de venta.</p>
                 </div>
                 <div class="flex gap-3 mt-6 pt-4" style="position:sticky;bottom:0;background:var(--modal-bg);padding-bottom:4px;z-index:1;">
-                    <button type="button" onclick="closeProductModal()" style="flex:1;height:40px;border-radius:9999px;border:none;background:transparent;color:var(--txt-secondary);font-family:'IBM Plex Sans',sans-serif;font-size:.875rem;font-weight:500;cursor:pointer;transition:background .18s ease;" onmouseover="this.style.background='var(--border-mid)'" onmouseout="this.style.background='transparent'">Cancelar</button>
-                    <button type="button" onclick="saveProduct()" style="flex:1;height:40px;border-radius:9999px;border:none;background:var(--accent);color:var(--accent-on);font-family:'IBM Plex Sans',sans-serif;font-size:.875rem;font-weight:500;cursor:pointer;box-shadow:var(--shadow-card);" >Guardar</button>
+                    <button type="button" onclick="closeProductModal()" style="flex:1;height:44px;border-radius:9999px;border:none;background:transparent;color:var(--txt-secondary);font-family:var(--f-body);font-size:.875rem;font-weight:500;cursor:pointer;transition:background .18s ease;" onmouseover="this.style.background='var(--border-mid)'" onmouseout="this.style.background='transparent'">Cancelar</button>
+                    <button type="button" onclick="saveProduct()" style="flex:1;height:44px;border-radius:9999px;border:none;background:var(--accent);color:var(--accent-on);font-family:var(--f-body);font-size:.875rem;font-weight:500;cursor:pointer;box-shadow:var(--shadow-card);" >Guardar</button>
                 </div>
             </div>
         </div>
@@ -1073,6 +1225,12 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
                 <div>
                     <label for="recetaCategoria" class="block text-sm font-medium text-gray-600 mb-2">Categoría</label>
                     <input type="text" id="recetaCategoria" class="w-full px-3 py-2 bg-white text-gray-900 border border-gray-200 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Ej: Cocteles">
+                </div>
+                <div>
+                    <!-- v5.26 — sin este código la receta nunca se cruza con las ventas (consumoTeorico()
+                         busca por PV): una receta tecleada a mano se quedaba invisible para el consumo. -->
+                    <label for="recetaPv" class="block text-sm font-medium text-gray-600 mb-2">Código PV <span class="text-gray-400 font-normal">(del punto de venta — para descontar inventario al vender)</span></label>
+                    <input type="text" id="recetaPv" class="w-full px-3 py-2 bg-white text-gray-900 border border-gray-200 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Ej: PVB1000001" style="text-transform:uppercase;">
                 </div>
                 <label for="recetaActiva" style="display:flex;align-items:center;gap:10px;cursor:pointer;">
                     <input type="checkbox" id="recetaActiva" checked style="width:20px;height:20px;accent-color:var(--accent);cursor:pointer;">
@@ -1106,55 +1264,59 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
                 </div>
 
                 <div class="flex gap-3 mt-6 pt-4" style="position:sticky;bottom:0;background:var(--modal-bg);padding-bottom:4px;z-index:1;">
-                    <button type="button" onclick="closeRecetaModal()" style="flex:1;height:40px;border-radius:9999px;border:none;background:transparent;color:var(--txt-secondary);font-family:'IBM Plex Sans',sans-serif;font-size:.875rem;font-weight:500;cursor:pointer;">Cancelar</button>
-                    <button type="button" onclick="saveRecetaModal()" style="flex:1;height:40px;border-radius:9999px;border:none;background:var(--accent);color:var(--accent-on);font-family:'IBM Plex Sans',sans-serif;font-size:.875rem;font-weight:500;cursor:pointer;box-shadow:var(--shadow-card);">Guardar</button>
+                    <button type="button" onclick="closeRecetaModal()" style="flex:1;height:44px;border-radius:9999px;border:none;background:transparent;color:var(--txt-secondary);font-family:var(--f-body);font-size:.875rem;font-weight:500;cursor:pointer;">Cancelar</button>
+                    <button type="button" onclick="saveRecetaModal()" style="flex:1;height:44px;border-radius:9999px;border:none;background:var(--accent);color:var(--accent-on);font-family:var(--f-body);font-size:.875rem;font-weight:500;cursor:pointer;box-shadow:var(--shadow-card);">Guardar</button>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Modal Pedido -->
+    <!-- v5.26 (hallazgo del paquete de textos) — era todo Tailwind con
+         colores fijos (bg-white, text-gray-900, gradientes morado/azul…),
+         ajeno al tema oscuro/Verde Esmeralda del resto de la app. Reescrito
+         con los mismos tokens var(--...) que usa cada otro modal. -->
     <div id="orderModal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[300] animate-fadeIn hidden" style="padding:12px;" role="dialog" aria-modal="true" aria-labelledby="orderModalTitle">
-        <div class="modal-box bg-white shadow-2xl max-w-4xl w-full p-5 animate-slideUp" style="border-radius:18px;max-height:calc(100dvh - 56px - 24px);overflow-y:auto;">
-            <div class="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-6"></div>
-            <h2 class="text-2xl font-bold text-gray-900 mb-6" id="orderModalTitle">Generar Pedido</h2>
+        <div class="modal-box animate-slideUp" style="background:var(--modal-bg);box-shadow:var(--shadow-modal);max-width:56rem;width:100%;padding:20px;border-radius:18px;max-height:calc(100dvh - 56px - 24px);overflow-y:auto;">
+            <div style="width:48px;height:5px;background:var(--border-mid);border-radius:999px;margin:0 auto 24px;"></div>
+            <h2 style="font-size:1.4rem;font-weight:700;color:var(--txt-primary);margin-bottom:20px;" id="orderModalTitle">Generar Pedido</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <div>
-                    <label for="orderSupplier" class="block text-sm font-medium text-gray-600 mb-2">Proveedor *</label>
-                    <input type="text" id="orderSupplier" class="w-full px-3 py-2 bg-white text-gray-900 border border-gray-200 rounded focus:ring-2 focus:ring-blue-500" placeholder="Nombre del proveedor">
+                    <label for="orderSupplier" style="display:block;font-size:.82rem;font-weight:600;color:var(--txt-secondary);margin-bottom:6px;">Proveedor *</label>
+                    <input type="text" id="orderSupplier" style="width:100%;padding:8px 10px;background:var(--surface);color:var(--txt-primary);border:1px solid var(--border-mid);border-radius:8px;font-family:inherit;" placeholder="Nombre del proveedor">
                 </div>
                 <div>
-                    <label for="orderDeliveryDate" class="block text-sm font-medium text-gray-600 mb-2">Fecha de Entrega (Opcional)</label>
-                    <input type="date" id="orderDeliveryDate" class="w-full px-3 py-2 bg-white text-gray-900 border border-gray-200 rounded focus:ring-2 focus:ring-blue-500">
+                    <label for="orderDeliveryDate" style="display:block;font-size:.82rem;font-weight:600;color:var(--txt-secondary);margin-bottom:6px;">Fecha de Entrega (Opcional)</label>
+                    <input type="date" id="orderDeliveryDate" style="width:100%;padding:8px 10px;background:var(--surface);color:var(--txt-primary);border:1px solid var(--border-mid);border-radius:8px;font-family:inherit;">
                 </div>
                 <div class="md:col-span-2">
-                    <label for="orderNote" class="block text-sm font-medium text-gray-600 mb-2">Nota (Opcional)</label>
-                    <textarea id="orderNote" class="w-full px-3 py-2 bg-white text-gray-900 border border-gray-200 rounded focus:ring-2 focus:ring-blue-500" placeholder="Agregar nota o comentarios" rows="2"></textarea>
+                    <label for="orderNote" style="display:block;font-size:.82rem;font-weight:600;color:var(--txt-secondary);margin-bottom:6px;">Nota (Opcional)</label>
+                    <textarea id="orderNote" style="width:100%;padding:8px 10px;background:var(--surface);color:var(--txt-primary);border:1px solid var(--border-mid);border-radius:8px;font-family:inherit;" placeholder="Agregar nota o comentarios" rows="2"></textarea>
                 </div>
             </div>
 
             <div class="mb-6">
-                <div class="flex items-center justify-between mb-3">
-                    <h3 class="font-semibold text-gray-900">Productos en el Pedido</h3>
-                    <span class="text-sm font-medium text-purple-600 bg-purple-50 px-3 py-1 rounded-lg" id="orderTotal">Total: 0</span>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                    <h3 style="font-weight:600;color:var(--txt-primary);margin:0;">Productos en el Pedido</h3>
+                    <span style="font-size:.82rem;font-weight:600;color:var(--accent);background:var(--accent-dim);padding:4px 10px;border-radius:8px;" id="orderTotal">Total: 0</span>
                 </div>
-                <div class="bg-gray-50 rounded-xl overflow-hidden border border-gray-200">
-                    <div class="overflow-x-auto">
-                        <table class="w-full">
-                            <thead class="bg-gradient-to-r from-purple-600 to-blue-600">
+                <div style="background:var(--surface);border-radius:12px;overflow:hidden;border:1px solid var(--border-mid);">
+                    <div style="overflow-x:auto;">
+                        <table style="width:100%;border-collapse:collapse;">
+                            <thead style="background:var(--accent-dim);">
                                 <tr>
-                                    <th class="px-4 py-3 text-left text-sm font-semibold text-white">Producto</th>
-                                    <th class="px-4 py-3 text-center text-sm font-semibold text-white">Unidad</th>
-                                    <th class="px-4 py-3 text-center text-sm font-semibold text-white">Cantidad</th>
-                                    <th class="px-4 py-3 text-center text-sm font-semibold text-white">Acciones</th>
+                                    <th style="padding:10px;text-align:left;font-size:.8rem;font-weight:600;color:var(--txt-primary);">Producto</th>
+                                    <th style="padding:10px;text-align:center;font-size:.8rem;font-weight:600;color:var(--txt-primary);">Unidad</th>
+                                    <th style="padding:10px;text-align:center;font-size:.8rem;font-weight:600;color:var(--txt-primary);">Cantidad</th>
+                                    <th style="padding:10px;text-align:center;font-size:.8rem;font-weight:600;color:var(--txt-primary);">Acciones</th>
                                 </tr>
                             </thead>
-                            <tbody id="orderProductsTable" class="divide-y divide-gray-200"></tbody>
+                            <tbody id="orderProductsTable"></tbody>
                         </table>
                     </div>
                 </div>
-                <div id="emptyCart" class="text-center py-8 text-gray-500 hidden">
-                    <svg class="w-12 h-12 mx-auto mb-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div id="emptyCart" style="text-align:center;padding:32px 0;color:var(--txt-muted);" class="hidden">
+                    <svg class="w-12 h-12 mx-auto mb-2" style="color:var(--txt-muted);" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path>
                     </svg>
                     <p>No hay productos en el carrito</p>
@@ -1162,8 +1324,8 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
             </div>
 
             <div class="flex gap-3" style="position:sticky;bottom:0;background:var(--modal-bg);padding-top:12px;padding-bottom:4px;z-index:1;">
-                <button type="button" onclick="closeOrderModal()" style="flex:1;height:40px;border-radius:9999px;border:none;background:transparent;color:var(--txt-secondary);font-family:'IBM Plex Sans',sans-serif;font-size:.875rem;font-weight:500;cursor:pointer;transition:background .18s ease;" onmouseover="this.style.background='var(--border-mid)'" onmouseout="this.style.background='transparent'">Cancelar</button>
-                <button type="button" onclick="createOrder()" style="flex:1;height:40px;border-radius:9999px;border:none;background:var(--ok-dim);color:var(--green);font-family:'IBM Plex Sans',sans-serif;font-size:.875rem;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">
+                <button type="button" onclick="closeOrderModal()" style="flex:1;height:44px;border-radius:9999px;border:none;background:transparent;color:var(--txt-secondary);font-family:var(--f-body);font-size:.875rem;font-weight:500;cursor:pointer;transition:background .18s ease;" onmouseover="this.style.background='var(--border-mid)'" onmouseout="this.style.background='transparent'">Cancelar</button>
+                <button type="button" onclick="createOrder()" style="flex:1;height:44px;border-radius:9999px;border:none;background:var(--ok-dim);color:var(--green);font-family:var(--f-body);font-size:.875rem;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path>
                     </svg>
@@ -1204,7 +1366,11 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
                 <div class="ni-campo">
                     <label for="nuevoInvFecha">Fecha del recuento</label>
                     <input type="date" id="nuevoInvFecha" onchange="_pintarAvisoFechaNuevoInv()">
-                    <p class="ni-ayuda">Solo domingo o fin de mes: son los únicos días que cierran semana y permiten contabilizar después.</p>
+                    <!-- v5.26 (hallazgo del paquete de textos) — FASE 14 ya
+                         acepta cualquier fecha (ancla del Total para mitad de
+                         semana); el texto viejo decía "solo domingo o fin de
+                         mes", que dejó de ser cierto. -->
+                    <p class="ni-ayuda">Cualquier fecha: domingo o fin de mes cierran la semana; otra fecha se contabiliza como ancla del Total.</p>
                     <p id="nuevoInvAvisoFecha" style="font-size:.92rem;margin:0;line-height:1.5;font-weight:700;"></p>
                 </div>
 
@@ -1246,7 +1412,9 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
             <label for="regFechaRecuentoInput" style="display:block;font-size:.78rem;font-weight:600;color:var(--txt-secondary);margin-bottom:5px;">Fecha del recuento</label>
             <input type="date" id="regFechaRecuentoInput" onchange="_pintarAvisoFechaRegistrar()"
                 style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border-mid);background:var(--surface);color:var(--txt-primary);font-family:inherit;font-size:.86rem;">
-            <p style="font-size:.7rem;color:var(--txt-muted);margin:5px 0 0;">Solo domingo o fin de mes.</p>
+            <!-- v5.26 (hallazgo del paquete de textos) — mismo motivo que
+                 nuevoInventarioModal arriba: cualquier fecha se acepta. -->
+            <p style="font-size:.7rem;color:var(--txt-muted);margin:5px 0 0;">Cualquier fecha: domingo o fin de mes cierran la semana; otra se contabiliza como ancla del Total.</p>
             <p id="regFechaRecuentoAviso" style="font-size:.72rem;margin:6px 0 16px;line-height:1.5;font-weight:600;"></p>
 
             <div style="display:flex;gap:10px;">
@@ -1278,14 +1446,25 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
     <div id="inventarioModal" class="fixed inset-0 flex items-center justify-center z-[300] animate-fadeIn hidden" style="padding:12px;background:var(--scrim);" role="dialog" aria-modal="true" aria-labelledby="inventarioModalTitle">
         <div class="modal-box max-w-sm w-full animate-slideUp inv-modal" style="max-height:calc(100dvh - 56px - 24px);overflow-y:auto;">
             <div class="inv-modal__grabber" aria-hidden="true"></div>
-            <h2 class="inv-modal__titulo" id="inventarioModalTitle">Contar botellas</h2>
-            <p class="inv-modal__sub" id="inventarioModalSubtitle"></p>
+            <!-- v5.23 (diseño Conteo) — cabecera: monograma + producto + cerrar -->
+            <div class="inv-modal__cab">
+                <span id="inventarioModalMono" class="inv-modal__mono" aria-hidden="true"></span>
+                <div class="inv-modal__ident">
+                    <h2 class="inv-modal__titulo" id="inventarioModalTitle">Contar botellas</h2>
+                    <p class="inv-modal__sub" id="inventarioModalSubtitle"></p>
+                </div>
+                <button type="button" onclick="closeInventarioModal()" class="inv-modal__cerrar" aria-label="Cerrar sin guardar"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+            </div>
             <!-- R1 (regla 14) — MODO BOTELLA: enteras + abiertas en oz.
                  Solo visible cuando el producto tiene habilitado el conteo en oz. -->
             <div id="inv_bloqueBotella">
             <div class="inv-modal__campo">
                 <label for="inv_enteras" class="inv-modal__etq"><i class="fa-solid fa-bottle" aria-hidden="true"></i> Botellas enteras</label>
-                <input type="text" id="inv_enteras" inputmode="numeric" value="0" oninput="_sanearEntradaEntero(this)" class="inv-modal__num">
+                <div class="inv-paso">
+                    <button type="button" class="inv-paso__btn" onclick="inventarioModalPaso(-1)" aria-label="Quitar una botella entera"><i class="fa-solid fa-minus" aria-hidden="true"></i></button>
+                    <input type="text" id="inv_enteras" inputmode="numeric" value="0" oninput="_sanearEntradaEntero(this)" class="inv-modal__num">
+                    <button type="button" class="inv-paso__btn inv-paso__btn--mas" onclick="inventarioModalPaso(1)" aria-label="Agregar una botella entera"><i class="fa-solid fa-plus" aria-hidden="true"></i></button>
+                </div>
             </div>
             <div class="inv-modal__campo">
                 <!-- FIX #7: <label> requiere atributo "for" para asociarse al input. Se usa
@@ -1316,48 +1495,68 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
             <!-- R1 (regla 16) — El selector "Motivo del cambio" se eliminó por completo.
                  El historial sigue registrando cada cambio, pero no se le pide al
                  bartender que justifique un conteo: frenaba la captura sin aportar. -->
+            <!-- v5.23 (diseño Conteo) — el total del área, en vivo mientras se escribe. -->
+            <div class="inv-total" id="inv_totalCard" aria-live="polite">
+                <div class="inv-total__txt">
+                    <p class="inv-total__etq">Total del área</p>
+                    <p class="inv-total__det" id="inv_totalDetalle"></p>
+                </div>
+                <div class="inv-total__cifra">
+                    <span class="num inv-total__n" id="inv_totalValor">0</span>
+                    <span class="inv-total__u" id="inv_totalUnidad">botellas</span>
+                </div>
+            </div>
             <div class="inv-modal__acciones">
-                <button type="button" onclick="closeInventarioModal()" class="inv-modal__btn inv-modal__btn--fantasma">Cancelar</button>
-                <button type="button" onclick="saveInventarioModal()" class="inv-modal__btn inv-modal__btn--primario">Guardar</button>
+                <button type="button" onclick="inventarioGuardarYSiguiente()" class="inv-modal__btn inv-modal__btn--primario" id="inv_guardarBtn"><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Guardar y siguiente</button>
             </div>
         </div>
     </div>
 
-        <script src="js/00-nucleo.js?v=5.10"></script>
-    <script src="js/03-ui-kit.js?v=5.10"></script><!-- BI UI KIT (rediseño R1) -->
-    <script src="js/05-busqueda-motor.js?v=5.10"></script>
-    <script src="js/06-busqueda-ui.js?v=5.10"></script>
-    <script src="js/10-multiusuario.js?v=5.10"></script>
-    <script src="js/15-ciclo-semanal.js?v=5.10"></script>
-    <script src="js/18-areas-config.js?v=5.10"></script>
-    <script src="js/20-persistencia.js?v=5.10"></script>
-    <script src="js/30-indexeddb.js?v=5.10"></script>
-    <script src="js/40-firestore.js?v=5.10"></script>
-    <script src="js/45-inventario-datos.js?v=5.10"></script>
-    <script src="js/47-existencia.js?v=5.10"></script>
-    <script src="js/48-consumo-teorico.js?v=5.10"></script>
-    <script src="js/49-fisico-vs-sistema.js?v=5.10"></script>
-    <script src="js/50-roles-permisos.js?v=5.10"></script>
-    <script src="js/60-arranque.js?v=5.10"></script>
-    <script src="js/70-conversion-render.js?v=5.10"></script>
-    <script src="js/75-auditoria-flujo.js?v=5.10"></script>
-    <script src="js/80-buscador.js?v=5.10"></script>
-    <script src="js/83-panel.js?v=5.10"></script>
-    <script src="js/85-ui-inventario-fisico.js?v=5.10"></script>
-    <script src="js/87-reconteo.js?v=5.10"></script>
-    <script src="js/88-compras.js?v=5.10"></script>
-    <script src="js/90-ciclo-admin.js?v=5.10"></script>
-    <script src="js/91-recetario.js?v=5.10"></script>
-    <script src="js/92-recetario-importar.js?v=5.10"></script>
-    <script src="js/93-ventas.js?v=5.10"></script>
-    <script src="js/95-exportacion.js?v=5.10"></script>
-    <script src="js/99-window-arranque.js?v=5.10"></script>
+        <script src="js/00-nucleo.js?v=5.30"></script>
+    <script src="js/03-ui-kit.js?v=5.30"></script><!-- BI UI KIT (rediseño R1) -->
+    <script src="js/05-busqueda-motor.js?v=5.30"></script>
+    <script src="js/06-busqueda-ui.js?v=5.30"></script>
+    <script src="js/10-multiusuario.js?v=5.30"></script>
+    <script src="js/15-ciclo-semanal.js?v=5.30"></script>
+    <script src="js/18-areas-config.js?v=5.30"></script>
+    <script src="js/20-persistencia.js?v=5.30"></script>
+    <script src="js/30-indexeddb.js?v=5.30"></script>
+    <script src="js/40-firestore.js?v=5.30"></script>
+    <script src="js/45-inventario-datos.js?v=5.30"></script>
+    <script src="js/46-arrastre.js?v=5.30"></script>
+    <script src="js/47-existencia.js?v=5.30"></script>
+    <script src="js/48-consumo-teorico.js?v=5.30"></script>
+    <script src="js/49-fisico-vs-sistema.js?v=5.30"></script>
+    <script src="js/50-roles-permisos.js?v=5.30"></script>
+    <script src="js/51-total-publicado.js?v=5.30"></script><!-- v5.19 -->
+    <script src="js/53-papelera.js?v=5.30"></script><!-- v5.19 -->
+    <script src="js/54-sync-vivo.js?v=5.30"></script><!-- v5.22 -->
+    <script src="js/60-arranque.js?v=5.30"></script>
+    <script src="js/70-conversion-render.js?v=5.30"></script>
+    <script src="js/71-posicion-conteo.js?v=5.30"></script>
+    <script src="js/72-inicio-tablero.js?v=5.30"></script><!-- v5.23 -->
+    <script src="js/73-pedido-sugerido.js?v=5.30"></script><!-- v5.28 -->
+    <script src="js/75-auditoria-flujo.js?v=5.30"></script>
+    <script src="js/80-buscador.js?v=5.30"></script>
+    <script src="js/83-panel.js?v=5.30"></script>
+    <script src="js/85-ui-inventario-fisico.js?v=5.30"></script>
+    <script src="js/87-reconteo.js?v=5.30"></script>
+    <script src="js/88-compras.js?v=5.30"></script>
+    <script src="js/89-compras-detalle.js?v=5.30"></script>
+    <script src="js/90-ciclo-admin.js?v=5.30"></script>
+    <script src="js/91-recetario.js?v=5.30"></script>
+    <script src="js/92-recetario-importar.js?v=5.30"></script>
+    <script src="js/93-ventas.js?v=5.30"></script>
+    <script src="js/94-venta-turno.js?v=5.30"></script>
+    <script src="js/95-exportacion.js?v=5.30"></script>
+    <script src="js/96-importar.js?v=5.30"></script>
+    <script src="js/99-window-arranque.js?v=5.30"></script>
 
     </div><!-- /#appWrapper -->
 
     <!-- ══════════════════════════════════════════════════════
          AUTH — Lógica de autenticación Firebase
          ══════════════════════════════════════════════════════ -->
-        <script src="js/auth.js?v=5.10"></script>
+        <script src="js/auth.js?v=5.30"></script>
 </body>
 </html>
