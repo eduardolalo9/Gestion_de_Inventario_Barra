@@ -363,6 +363,9 @@
         function renderTab() {
             updateHeaderActions();
             const content = document.getElementById('tabContent');
+            // v5.29 — Inicio con el estilo "Midnight Bar" (css/tema-inicio.css):
+            // la clase solo cambia tokens de color dentro de #mainContent.
+            document.documentElement.classList.toggle('vista-inicio', activeTab === 'inicio');
 
             // FIX 4: capturar estado antes del re-render
             const scrollY  = window.scrollY || window.pageYOffset;

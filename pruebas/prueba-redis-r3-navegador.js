@@ -173,8 +173,9 @@ const PUERTO = process.env.PUERTO || '8080';
   // 1.70 con mínimo 3: por debajo de ⅔ del mínimo (2) pero por encima de la
   // mitad (1.5) → "Advertencia producto bajo", en ámbar. No "Limitado": ese
   // umbral es < 1.5. (La primera versión de esta prueba lo calculó mal.)
-  chk('ACEITUNA (1.70 de mínimo 3) sale como "Advertencia producto bajo", en ámbar del tema',
-      badges.texto === 'Advertencia producto bajo' && badges.color === 'rgb(240, 180, 41)',
+  // v5.29 — Inicio usa la paleta "Midnight Bar" (css/tema-inicio.css): su ámbar es #E0B865.
+  chk('ACEITUNA (1.70 de mínimo 3) sale como "Advertencia producto bajo", en ámbar del tema de Inicio',
+      badges.texto === 'Advertencia producto bajo' && badges.color === 'rgb(224, 184, 101)',
       JSON.stringify(badges));
 
   // ── D · El pedido sugerido conserva su cantidad y su acción ────────────
@@ -205,7 +206,8 @@ const PUERTO = process.env.PUERTO || '8080';
   const limpio = await p.evaluate(() => {
     const t = document.getElementById('tabContent');
     return {
-      blancos: [...t.querySelectorAll('*')].filter(el => getComputedStyle(el).backgroundColor === 'rgb(255, 255, 255)' && !el.closest('.it-inv')).length,
+      // v5.29 — el punto decorativo de la pastilla sólida (texto blanco) es blanco a propósito.
+      blancos: [...t.querySelectorAll('*')].filter(el => getComputedStyle(el).backgroundColor === 'rgb(255, 255, 255)' && !el.closest('.it-inv') && !el.classList.contains('bi-badge__punto')).length,
       grpActivo: (() => {
         const a = t.querySelector('.grp-pill--active');
         return a ? getComputedStyle(a).backgroundColor : null;
@@ -214,8 +216,9 @@ const PUERTO = process.env.PUERTO || '8080';
   });
   chk('★ Ni un elemento con fondo blanco en toda la pantalla de Inicio',
       limpio.blancos === 0, 'blancos: ' + limpio.blancos);
-  chk('El grupo activo del rail se pinta en esmeralda sólido',
-      limpio.grpActivo === 'rgb(84, 195, 152)', 'color: ' + limpio.grpActivo);
+  // v5.29 — en Inicio el acento es el dorado de "Midnight Bar" (#C8A96A).
+  chk('El grupo activo del rail se pinta en el acento sólido de Inicio (dorado)',
+      limpio.grpActivo === 'rgb(200, 169, 106)', 'color: ' + limpio.grpActivo);
 
   chk('Sin errores de JS en toda la prueba', errs.length === 0, errs.join(' | '));
   await nav.close();

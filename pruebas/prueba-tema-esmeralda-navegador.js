@@ -43,7 +43,8 @@ const lum = s => { const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(s || ''); if 
     chk(T + '★ La barra lateral es Noche Profunda (#101E18) en este tema', m.sbBg === 'rgb(16, 30, 24)', m.sbBg);
     chk(T + 'Sus textos son claros sobre fondo oscuro (luminancia > .6)', lum(m.sbItem) > 0.6 && lum(m.sbMuted) > 0.45, m.sbItem + ' / ' + m.sbMuted);
     chk(T + '★ El destino activo es esmeralda #10664A con texto blanco', m.sbActivoBg === 'rgb(16, 102, 74)' && m.sbActivoColor === 'rgb(255, 255, 255)', m.sbActivoBg + ' / ' + m.sbActivoColor);
-    chk(T + '★ La tarjeta principal es verde (#10664A en claro, más oscura en el oscuro) con texto blanco', m.heroBg && lum(m.heroBg) < 0.4 && m.heroBg !== 'rgba(0, 0, 0, 0)' && m.heroColor === 'rgb(255, 255, 255)', m.heroBg + ' / ' + m.heroColor);
+    // v5.29 (pedido de Eduardo, 16-oct-2026) — Inicio en "Midnight Bar": la tarjeta principal es cristal oscuro con texto marfil.
+    chk(T + '★ La tarjeta principal es cristal oscuro (Midnight Bar) con texto marfil', m.heroBg && lum(m.heroBg) < 0.2 && m.heroBg !== 'rgba(0, 0, 0, 0)' && m.heroColor === 'rgb(247, 245, 240)', m.heroBg + ' / ' + m.heroColor);
     chk(T + '★ El encabezado mide 48 px', m.hd === 48, String(m.hd));
     chk(T + '★ Títulos en Manrope y cuerpo en DM Sans', /Manrope/.test(m.h1Fuente) && /DM Sans/.test(m.cuerpo), m.h1Fuente + ' | ' + m.cuerpo);
     chk(T + '★ Las fuentes propias se descargan del servidor (no caen a la del sistema)', m.fuentesOk && m.fuentesOk.some(f => /Manrope/.test(f)) && m.fuentesOk.some(f => /DM Sans/.test(f)), JSON.stringify(m.fuentesOk));

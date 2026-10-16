@@ -271,7 +271,8 @@ chk('Ventas: flechas y botones de 44 px o más', /\.vs-flecha \{[^}]*width: 44px
 chk('Ventas: todos sus íconos están en el kit', (ven.slice(ven.indexOf('v5.28 — VENTAS SEMANALES')).match(/fa-[a-z-]+/g) || [])
     .filter(i => i !== 'fa-solid' && i !== 'fa-spin').every(i => new RegExp('\\.' + i + '\\s*[,{ ]').test(css)));
 chk('Ventas: buscador registrado (nombre, SKU, tipo)', /registrar\('ventas'/.test(busc) && /_motorVentas/.test(busc));
-chk('Versión: index.html y sw.js en 5.28', /APP_VERSION\s*=\s*'5\.28'/.test(sw) && !/\?v=5\.27/.test(idx));
+// v5.29 — sin fijar el número exacto: basta con que sea 5.28 o posterior.
+chk('Versión: index.html y sw.js en 5.28 o posterior', (() => { const m = /APP_VERSION\s*=\s*'5\.(\d+)'/.exec(sw); return !!m && Number(m[1]) >= 28; })() && !/\?v=5\.27/.test(idx));
 
 function terminar() {
     console.log('\n  ── v5.28 · Rediseño de módulos ──\n');

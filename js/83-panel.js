@@ -252,9 +252,9 @@
                     { clase: k.bajo.length ? 'pm-tile--critico' : 'pm-tile--ok',
                       accion: k.bajo.length ? 'panelVerBajoMinimo()' : null });
             h += _panelTile('fa-coins', k.conPrecio ? _panelMoneda(k.valor) : '—', 'Valor en existencia',
-                    { sub: k.conPrecio < k.productos ? (k.productos - k.conPrecio) + ' sin precio' : null });
+                    { clase: 'pm-tile--dinero', sub: k.conPrecio < k.productos ? (k.productos - k.conPrecio) + ' sin precio' : null });
             h += _panelTile('fa-receipt', k.comprasN ? _panelMoneda(k.comprasImp) : '0', 'Compras esta semana',
-                    { sub: k.comprasN + ' documento' + (k.comprasN === 1 ? '' : 's'), accion: "switchTab('compras')" });
+                    { clase: 'pm-tile--dinero', sub: k.comprasN + ' documento' + (k.comprasN === 1 ? '' : 's'), accion: "switchTab('compras')" });
             h += _panelTile('fa-cart-shopping', k.carrito, 'En carrito', { accion: 'openOrderModal()' });
             h += _panelTile('fa-clipboard-list', k.pedidos, 'Pedidos', { accion: "switchTab('pedidos')" });
             h += '</div>';
