@@ -85,26 +85,29 @@ async function abrir(nav, ancho) {
       }
     }
     if (ancho === 390) {
-      // Encabezado de Productos (admin) en celular: la fila de acciones baja a su renglón y cabe entera.
-      await p.evaluate(() => { document.documentElement.setAttribute('data-theme', 'dark'); activeTab = 'productos'; renderTab(); });
+      // v5.28 (pedido de Eduardo, 15-oct-2026) — las acciones de Productos
+      // dejan el encabezado y van en la barra .pa-barra arriba de la lista:
+      // Agregar, Importar, Publicar y Eliminar (círculo aislado con divisor).
+      await p.evaluate(() => { document.documentElement.setAttribute('data-theme', 'dark'); activeTab = 'productos'; renderTab(); updateHeaderActions(); });
       await p.waitForTimeout(300);
       const h = await p.evaluate(() => {
-        const bs = [...document.querySelectorAll('#headerActions .hd-btn')]; const rects = bs.map(b => b.getBoundingClientRect());
-        const ha = document.getElementById('headerActions').getBoundingClientRect(); const hb = document.getElementById('hamburgerBtn').getBoundingClientRect();
-        return { n: bs.length, dentro: rects.every(r => r.left >= 0 && r.right <= innerWidth), altos: rects.map(r => Math.round(r.height)), bajo: ha.top >= hb.bottom - 1,
-          nombres: bs.map(b => (b.getAttribute('aria-label') || b.innerText || '').trim()), peligro: !!document.querySelector('#headerActions .hd-btn--peligro'), sw: document.documentElement.scrollWidth };
+        const bs = [...document.querySelectorAll('.pa-barra button')]; const rects = bs.map(b => b.getBoundingClientRect());
+        return { n: bs.length, dentro: rects.every(r => r.left >= 0 && r.right <= innerWidth), altos: rects.map(r => Math.round(r.height)),
+          desbordan: bs.filter(b => b.scrollWidth > b.clientWidth + 1).map(b => b.className),
+          nombres: bs.map(b => (b.getAttribute('aria-label') || b.innerText || '').trim()), encabezado: document.querySelectorAll('#headerActions .hd-btn').length,
+          sw: document.documentElement.scrollWidth };
       });
-      // v5.18 — "Importar Excel" se mudó al módulo Importar desde Excel: quedan 3 acciones.
-      chk('Productos (admin, 390 px): 3 acciones (Agregar, Publicar, Eliminar todos), todas dentro de la pantalla', h.n === 3 && h.dentro && !h.nombres.some(n => /importar/i.test(n)), JSON.stringify(h));
-      chk('Las acciones bajan a su propio renglón (no empujan el título ni desbordan)', h.bajo && h.sw <= 390, JSON.stringify(h));
-      chk('Todas las acciones miden ≥44 px y tienen nombre accesible', h.altos.every(a => a >= 44) && h.nombres.every(n => n.length > 0), JSON.stringify(h));
-      chk('"Eliminar todos" es el único botón de peligro y conserva su nombre completo', h.peligro && h.nombres.some(n => /eliminar todos/i.test(n)), '');
+      chk('Productos (admin, 390 px): 4 acciones (Agregar, Importar, Publicar, Eliminar), todas dentro de la pantalla', h.n === 4 && h.dentro && h.sw <= 390
+          && /Agregar/.test(h.nombres[0]) && /Importar/.test(h.nombres[1]) && /Publicar/.test(h.nombres[2]), JSON.stringify(h));
+      chk('Ningún botón de la barra recorta su texto y todos miden >= 44 px; el encabezado ya no las repite', h.desbordan.length === 0 && h.altos.every(a => a >= 44) && h.encabezado === 0, JSON.stringify(h));
+      chk('"Eliminar todos los productos" es un círculo de 44 px con su nombre completo en aria-label',
+          h.nombres[3] === 'Eliminar todos los productos' && await p.evaluate(() => { const r = document.querySelector('.pa-eliminar').getBoundingClientRect(); return Math.round(r.width) === 44 && Math.round(r.height) === 44; }), '');
     }
     if (ancho >= 820) {
       await p.evaluate(() => { activeTab = 'productos'; renderTab(); });
       await p.waitForTimeout(250);
-      const una = await p.evaluate(() => { const a = [...document.querySelectorAll('#headerActions .hd-btn')].map(b => Math.round(b.getBoundingClientRect().top)); return new Set(a).size === 1 && a.length === 3; });
-      chk('[' + ancho + '] las 3 acciones van en una sola fila', una, '');
+      const una = await p.evaluate(() => { const a = [...document.querySelectorAll('.pa-barra button')].map(b => Math.round(b.getBoundingClientRect().top + b.getBoundingClientRect().height / 2)); return new Set(a).size === 1 && a.length === 4; });
+      chk('[' + ancho + '] las 4 acciones van en una sola fila', una, '');
       await p.evaluate(() => { activeTab = 'inicio'; renderTab(); sbOpen(); }); await p.waitForTimeout(350);
       const alt = await p.evaluate(() => [...document.querySelectorAll('.sb-item')].filter(b => b.getBoundingClientRect().height > 0).map(b => Math.round(b.getBoundingClientRect().height)));
       chk('[' + ancho + '] el menú lateral no comprime sus entradas (todas ≥44 px)', alt.length > 5 && alt.every(a => a >= 44), alt.join(','));

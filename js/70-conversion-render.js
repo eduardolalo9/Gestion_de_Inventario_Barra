@@ -363,6 +363,9 @@
         function renderTab() {
             updateHeaderActions();
             const content = document.getElementById('tabContent');
+            // v5.29 — Inicio con el estilo "Midnight Bar" (css/tema-inicio.css):
+            // la clase solo cambia tokens de color dentro de #mainContent.
+            document.documentElement.classList.toggle('vista-inicio', activeTab === 'inicio');
 
             // FIX 4: capturar estado antes del re-render
             const scrollY  = window.scrollY || window.pageYOffset;
@@ -385,6 +388,7 @@
                 case 'compras':         content.innerHTML = renderComprasTab(); break;
                 case 'recetario':       content.innerHTML = renderRecetarioTab(); break;
                 case 'ventas':          content.innerHTML = renderVentasTab(); break;
+                case 'pedido_sugerido': content.innerHTML = (typeof renderPedidoSugeridoTab === 'function') ? renderPedidoSugeridoTab() : renderInicioTab(); break;   // v5.28
                 case 'importar':        content.innerHTML = (typeof renderImportarTab === 'function') ? renderImportarTab() : renderInicioTab(); break;   // v5.18
                 case 'papelera':        content.innerHTML = (typeof renderPapeleraTab === 'function') ? renderPapeleraTab() : renderInicioTab(); break;   // v5.19
                 case 'ajustes':         content.innerHTML = renderAjustesTab(); break;
@@ -473,12 +477,11 @@
                 // Conteo — botón Excel para exportar
                 headerActions.innerHTML = _hdBtn('exportarAuditoriaExcel()', 'fa-download', 'Excel', '', 'ok');
             } else if (activeTab === 'productos') {
+                // v5.28 — las acciones del catálogo (Agregar, Importar, Publicar,
+                // Eliminar) bajaron a la barra propia de la pantalla
+                // (_productosBarraAcciones): el encabezado queda limpio.
                 if (isAdmin()) {
-                    headerActions.innerHTML = '<div class="hd-fila">' +
-                        _hdBtn('openProductModal()', 'fa-plus', 'Agregar', 'Agregar', 'primario') +
-                        _hdBtn('publicarCatalogoFirestore()', 'fa-cloud-arrow-up', 'Publicar catálogo', 'Publicar', 'acento') +
-                        _hdBtn('deleteAllProducts()', 'fa-trash', 'Eliminar todos', '', 'peligro', 'Eliminar todos los productos') +
-                        '</div>';
+                    headerActions.innerHTML = '';
                 } else {
                     headerActions.innerHTML = _chipSoloLectura();
                 }
@@ -752,26 +755,12 @@
             html += '</div></div>';
             html += BusquedaUI.chips('catalogo', _chipsCatalogo(false));
 
-            // ── Botones de acción (admin) ─────────────────────────────────────
-            if (isAdmin()) {
-                html += '<div class="inicio-btn-row">';
-                html += '<button class="inicio-btn primary" onclick="openProductModal()">'
-                      + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>'
-                      + 'Producto</button>';
-                // v5.18 — el botón "Excel" (importar catálogo sin validar) se
-                // retiró: importar vive en el módulo "Importar desde Excel".
-                html += '</div>';
-            }
+            // v5.28 (pedido de Eduardo, 15-oct-2026) — sin "+ Producto" ni
+            // "Eliminar todos los productos" en Inicio: agregar, importar,
+            // publicar y eliminar viven en la barra de acciones de Productos.
 
             // ── Tarjetas de productos (región que refresca la búsqueda) ──────
             html += BusquedaUI.region('catalogo', _renderInicioResultados().html);
-
-            // ── Zona admin: eliminar todos ─────────────────────────────────────
-            if (isAdmin() && products.length > 0) {
-                html += '<button class="inicio-btn danger" onclick="deleteAllProducts()" style="margin-top:10px;">'
-                      + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:15px;height:15px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>'
-                      + 'Eliminar todos los productos</button>';
-            }
 
             // ── Sincronización ─────────────────────────────────────────────────
             html += '<div class="sync-card" style="margin-top:14px;">';
@@ -788,35 +777,9 @@
                   + (syncOn ? 'Pausar' : 'Reanudar') + '</button>';
             html += '</div></div>';
 
-            // ── Reportes publicados (solo admin) ──────────────────────────────
-            if (isAdmin()) {
-                html += '<div class="sync-card">';
-                html += '<h3><i class="fa-solid fa-file-chart-column" aria-hidden="true"></i> Reportes Publicados</h3>';
-                html += '<button class="inicio-btn success" style="width:100%;justify-content:center;" onclick="generarYPublicarReporte()">'
-                      + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:15px;height:15px;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>'
-                      + 'Generar y publicar reporte final</button>';
-                html += '<div id="inicioReportesLista" style="margin-top:10px;"></div>';
-                html += '</div>';
-                // Cargar lista de reportes desde admin tab si está disponible
-                setTimeout(() => {
-                    const el = document.getElementById('inicioReportesLista');
-                    if (el && _db) {
-                        _db.collection('reportes').orderBy('fechaTs', 'desc').limit(3).get() // FIX: .get() estaba dentro del comentario — cadena rota
-                            .then(snap => {
-                                if (snap.empty) { el.innerHTML = '<p style="font-size:.75rem;color:var(--txt-muted);">Sin reportes publicados aún.</p>'; return; }
-                                let rows = '';
-                                snap.forEach(doc => {
-                                    const d = doc.data();
-                                    const f = d.fecha || '—'; // FIX-4: d.fecha ya es string legible; no reparsear con new Date()
-                                    rows += '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);font-size:.75rem;">'
-                                          + '<span style="color:var(--txt-secondary);">' + escapeHtml(f) + '</span>'
-                                          + '<span style="color:var(--txt-muted);">' + escapeHtml(String(d.totalProductos || 0)) + ' prods</span></div>';
-                                });
-                                el.innerHTML = rows;
-                            }).catch(() => { el.innerHTML = ''; });
-                    }
-                }, 100);
-            }
+            // v5.28 — la tarjeta "Reportes publicados" salió de Inicio. Generar,
+            // descargar y eliminar reportes sigue en Administración, y los
+            // publicados se ven en Historia (js/50-roles-permisos.js).
 
             return html;
         }
@@ -838,9 +801,45 @@
             return escapeHtml(v.toLocaleString('es-MX', { maximumFractionDigits: 3 })) + (sufijo || '');
         }
 
+        // ══════════════════════════════════════════════════════════════════
+        //  v5.28 — BARRA DE ACCIONES DEL CATÁLOGO (pedido de Eduardo, 15-oct-2026)
+        //  Jerarquía de izquierda a derecha:
+        //    Agregar   primario, el más usado (pill sólido, flex 1.2)
+        //    Importar  secundario alto (outline) → catálogo .xlsx al importador
+        //    Publicar  secundario bajo: gris sin cambios; verde con cambios
+        //              sin publicar (siempre se puede tocar)
+        //    Eliminar  círculo 44 px aislado tras un divisor, lejos de Agregar
+        //              (evita el toque equivocado); pide confirmación en
+        //              deleteAllProducts().
+        // ══════════════════════════════════════════════════════════════════
+        function _productosBarraAcciones() {
+            var pendiente = (typeof catalogoTieneCambiosSinPublicar === 'function') ? catalogoTieneCambiosSinPublicar() : false;
+            var h = '<div class="pa-barra" role="toolbar" aria-label="Acciones del catálogo">';
+            h += '<button type="button" class="pa-btn pa-btn--agregar" onclick="openProductModal()">'
+               + '<span>Agregar</span><span class="pa-btn__circulo" aria-hidden="true"><i class="fa-solid fa-plus"></i></span></button>';
+            h += '<button type="button" class="pa-btn pa-btn--importar" onclick="importarElegirArchivo(\'catalogo\')"'
+               + ' aria-label="Importar catálogo desde Excel">'
+               + '<i class="fa-solid fa-file-arrow-up" aria-hidden="true"></i><span>Importar</span></button>';
+            h += '<button type="button" class="pa-btn pa-btn--publicar' + (pendiente ? ' pa-btn--pendiente' : '') + '"'
+               + ' onclick="publicarCatalogoFirestore()"'
+               + ' aria-label="Publicar catálogo — ' + (pendiente ? 'hay cambios sin publicar' : 'sin cambios pendientes') + '">'
+               + '<i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i><span>Publicar</span>'
+               + (pendiente ? '<span class="pa-btn__punto" aria-hidden="true"></span>' : '') + '</button>';
+            h += '<span class="pa-divisor" aria-hidden="true"></span>';
+            h += '<button type="button" class="pa-eliminar" onclick="deleteAllProducts()"'
+               + ' aria-label="Eliminar todos los productos" title="Eliminar todos los productos"'
+               + (products.length ? '' : ' disabled') + '>'
+               + '<i class="fa-solid fa-trash" aria-hidden="true"></i></button>';
+            h += '</div>';
+            return h;
+        }
+
         function renderProductosTab() {
             const admin = isAdmin();
             let html = '';
+
+            // v5.28 — barra de acciones arriba, sin necesidad de hacer scroll.
+            if (admin) html += _productosBarraAcciones();
 
             // ── Buscador ──────────────────────────────────────────────────────
             // Mismo buscador y mismo estado que Inicio (clave 'catalogo'): filtrar
@@ -907,19 +906,15 @@
                 if (typeof p.precio !== 'number') sinPrecio++;
                 if (!p.pv) sinPV++;
             });
-            html += '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:baseline;margin:4px 0 12px">';
-            html += '<span style="font-weight:700;font-size:1.05rem">' + filteredProducts.length + '</span>';
-            html += '<span style="color:var(--txt-secondary);font-size:.85rem">'
-                 + (filteredProducts.length === products.length
-                    ? 'producto' + (products.length === 1 ? '' : 's') + ' en el catálogo'
-                    : 'de ' + products.length + ' productos') + '</span>';
-            if (sinPrecio) {
-                html += '<span style="margin-left:auto;font-size:.75rem;color:var(--txt-muted)">'
-                     + sinPrecio + ' sin precio</span>';
-            }
-            if (sinPV) {
-                html += '<span style="font-size:.75rem;color:var(--txt-muted)'
-                     + (sinPrecio ? '' : ';margin-left:auto') + '">' + sinPV + ' sin PV</span>';
+            // v5.28 — microcopy "123 productos • 9 visibles".
+            html += '<div class="pa-micro">';
+            html += '<span>' + products.length + ' producto' + (products.length === 1 ? '' : 's')
+                 + ' • ' + filteredProducts.length + ' visible' + (filteredProducts.length === 1 ? '' : 's') + '</span>';
+            if (sinPrecio || sinPV) {
+                html += '<span class="pa-micro__der">'
+                     + (sinPrecio ? sinPrecio + ' sin precio' : '')
+                     + (sinPrecio && sinPV ? ' · ' : '')
+                     + (sinPV ? sinPV + ' sin PV' : '') + '</span>';
             }
             html += '</div>';
 
@@ -943,11 +938,11 @@
 
             html += '<div style="background:var(--surface);border:1px solid var(--border-mid);'
                  + 'border-radius:12px;overflow:hidden"><div style="overflow-x:auto;-webkit-overflow-scrolling:touch">';
-            html += '<table style="width:100%;border-collapse:collapse;min-width:520px">';
+            html += '<table class="cat-tabla" style="width:100%;border-collapse:collapse">';
             html += '<thead><tr>';
             html += '<th style="' + th + '">Producto</th>';
             html += '<th style="' + th + '" class="cat-col-sec">Grupo</th>';
-            html += '<th style="' + th + '">Unidad</th>';
+            html += '<th style="' + th + '" class="cat-col-sec">Unidad</th>';
             html += '<th style="' + thNum + '">Stock</th>';
             html += '<th style="' + thNum + '" class="cat-col-sec">Precio</th>';
             html += '<th style="' + thNum + '" class="cat-col-sec">Mínimo</th>';
@@ -968,17 +963,20 @@
 
                 // Producto: el ID va debajo del nombre, en pequeño. Es lo que
                 // identifica la fila al importar, así que tiene que verse.
-                html += '<td style="' + td + '">'
-                     + '<div style="font-weight:600;color:var(--txt-primary);line-height:1.3">'
-                     + (product.name ? resaltarBusqueda(product.name, searchTerm) : '(sin nombre)') + '</div>'
-                     + '<div style="font-size:.7rem;color:var(--txt-muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;margin-top:2px">'
-                     + escapeHtml(product.id)
+                // v5.28 — en el teléfono, una sola línea: código 10 px gris +
+                // nombre 14 px en negritas + la unidad como pastilla. Tocar la
+                // fila abre la ficha con precio, mínimo, PV y proveedor.
+                html += '<td style="' + td + '" class="cat-prod" onclick="if(!event.target.closest(\'button\')&&typeof abrirFichaProducto===\'function\')abrirFichaProducto(\'' + escapeHtml(product.id) + '\')">'
+                     + '<div class="cat-prod__linea">'
+                     + '<span class="cat-prod__cod">' + escapeHtml(product.id) + '</span>'
+                     + '<span class="cat-prod__nom">' + (product.name ? resaltarBusqueda(product.name, searchTerm) : '(sin nombre)') + '</span>'
+                     + (product.unit ? '<span class="cat-prod__uom">' + escapeHtml(product.unit) + '</span>' : '')
                      + (usaOz ? ' · <span style="color:var(--accent)">oz</span>' : '')
                      + '</div></td>';
 
                 html += '<td style="' + td + ';color:var(--txt-secondary)" class="cat-col-sec">'
                      + escapeHtml(product.group || 'General') + '</td>';
-                html += '<td style="' + td + ';color:var(--txt-secondary)">'
+                html += '<td style="' + td + ';color:var(--txt-secondary)" class="cat-col-sec">'
                      + escapeHtml(product.unit || '—') + '</td>';
 
                 // Stock bajo el mínimo se marca. Es la señal que dispara una compra.
@@ -1027,6 +1025,9 @@
             // ordersChunks (ver eliminarPedido más abajo), igual que compras
             // o inventarios. "Sincronizado" es lo que realmente pasa.
             let headerHtml = '<div style="margin-bottom:14px;"><h2 style="font-size:1.05rem;font-weight:700;color:var(--txt-primary);">Pedidos WhatsApp</h2><p style="font-size:.75rem;color:var(--txt-muted);">Sincronizado entre dispositivos</p></div>';
+            // v5.28 — acceso directo a la pantalla Pedido Sugerido (js/73).
+            headerHtml += '<button type="button" class="ps-acceso" onclick="abrirPedidoSugerido()">'
+                        + '<i class="fa-solid fa-cart-shopping" aria-hidden="true"></i><span>Pedido sugerido</span><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button>';
             if (orders.length === 0) {
                 // REDISEÑO R3 — el vacío de Pedidos cae dentro de R7, pero su
                 // emoji vivía en este archivo y la prueba de R3 vigila el

@@ -252,16 +252,20 @@
                     { clase: k.bajo.length ? 'pm-tile--critico' : 'pm-tile--ok',
                       accion: k.bajo.length ? 'panelVerBajoMinimo()' : null });
             h += _panelTile('fa-coins', k.conPrecio ? _panelMoneda(k.valor) : '—', 'Valor en existencia',
-                    { sub: k.conPrecio < k.productos ? (k.productos - k.conPrecio) + ' sin precio' : null });
+                    { clase: 'pm-tile--dinero', sub: k.conPrecio < k.productos ? (k.productos - k.conPrecio) + ' sin precio' : null });
             h += _panelTile('fa-receipt', k.comprasN ? _panelMoneda(k.comprasImp) : '0', 'Compras esta semana',
-                    { sub: k.comprasN + ' documento' + (k.comprasN === 1 ? '' : 's'), accion: "switchTab('compras')" });
+                    { clase: 'pm-tile--dinero', sub: k.comprasN + ' documento' + (k.comprasN === 1 ? '' : 's'), accion: "switchTab('compras')" });
             h += _panelTile('fa-cart-shopping', k.carrito, 'En carrito', { accion: 'openOrderModal()' });
             h += _panelTile('fa-clipboard-list', k.pedidos, 'Pedidos', { accion: "switchTab('pedidos')" });
             h += '</div>';
 
             if (!(opciones && opciones.sinInventario)) h += _panelEstadoInventario();
 
-            h += _panelExistenciaSemana();
+            // v5.28 (pedido de Eduardo, 15-oct-2026) — la tarjeta "Origen del
+            // Total" ya no se pinta en Inicio. _panelExistenciaSemana() se
+            // conserva (pruebas de FASE 14/16 la verifican y puede volver a
+            // usarse en otra pantalla); los avisos del arrastre siguen en la
+            // ficha de cada producto ("Desde el último corte").
             h += '</section>';
             return h;
         }

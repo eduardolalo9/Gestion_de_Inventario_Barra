@@ -141,7 +141,7 @@ const PUERTO = process.env.PUERTO || '8080';
   await p.waitForTimeout(100);
   const vacio = await p.evaluate(() => {
     const cont = document.getElementById('tabContent');
-    const i = cont.querySelector('.vt-vacio i');
+    const i = cont.querySelector('.vs-vacio i');   // v5.28 — estado vacío rediseñado (.vs-vacio)
     return { icono: i ? i.getBoundingClientRect().width : 0, emoji: /[\u{1F300}-\u{1FAFF}]/u.test(cont.innerText), txt: cont.innerText.slice(0, 80) };
   });
   chk('★ El vacío de Ventas usa icono del kit (antes 📈), no emoji', vacio.icono >= 6 && !vacio.emoji, JSON.stringify(vacio));

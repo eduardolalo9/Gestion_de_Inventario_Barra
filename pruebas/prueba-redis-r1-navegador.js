@@ -224,7 +224,8 @@ const PUERTO = process.env.PUERTO || '8080';
       blancos: [...t.querySelectorAll('*')].filter(el => {
         const b = getComputedStyle(el).backgroundColor;
         // v5.25: el botón blanco de la tarjeta principal verde es intencional (diseño Verde Esmeralda)
-        return b === 'rgb(255, 255, 255)' && !el.closest('.it-inv');
+        // v5.29: tampoco el punto decorativo de la pastilla sólida de Inicio (texto blanco)
+        return b === 'rgb(255, 255, 255)' && !el.closest('.it-inv') && !el.classList.contains('bi-badge__punto');
       }).length
     };
   });

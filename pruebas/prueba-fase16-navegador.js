@@ -117,8 +117,10 @@ const PUERTO = process.env.PUERTO || '8080';
     const antes = existenciaMostrada(products[0]);
     _totalPublicado = { estado: 'ok', datos: Object.assign({}, doc, { publicadoEn: { seconds: Math.floor(Date.now() / 1000) - 600 } }), unsub: () => {} };
     const despues = existenciaMostrada(products[0]);
-    activeTab = 'inicio'; renderTab();
-    const card = [...document.querySelectorAll('.pm-card')].find(c => /Origen del Total/.test(c.innerText));
+    // v5.28 — la tarjeta ya no se pinta en Inicio: se monta la que arma _panelExistenciaSemana().
+    document.querySelectorAll('.__origen').forEach(x => x.remove());
+    const __d = document.createElement('div'); __d.className = '__origen'; __d.innerHTML = _panelExistenciaSemana(); document.body.appendChild(__d);
+    const card = [...__d.querySelectorAll('.pm-card')].find(c => /Origen del Total/.test(c.innerText));
     abrirFichaProducto('T1');
     const ficha = document.querySelector('.pm-ficha');
     const r = { antes, despues, card: card ? card.innerText : '', ficha: ficha ? ficha.innerText : '',
@@ -134,8 +136,10 @@ const PUERTO = process.env.PUERTO || '8080';
   chk('El aviso contrasta ≥ 4.5', bar.aviso >= 4.5, String(bar.aviso));
   const sinPub = await p.evaluate(() => {
     _totalPublicado = { estado: 'no_existe', datos: null, unsub: () => {} };
-    activeTab = 'inicio'; renderTab();
-    const card = [...document.querySelectorAll('.pm-card')].find(c => /Origen del Total/.test(c.innerText));
+    // v5.28 — la tarjeta ya no se pinta en Inicio: se monta la que arma _panelExistenciaSemana().
+    document.querySelectorAll('.__origen').forEach(x => x.remove());
+    const __d = document.createElement('div'); __d.className = '__origen'; __d.innerHTML = _panelExistenciaSemana(); document.body.appendChild(__d);
+    const card = [...__d.querySelectorAll('.pm-card')].find(c => /Origen del Total/.test(c.innerText));
     return card ? card.innerText : '';
   });
   chk('Sin Total publicado, el bartender ve un aviso claro (no incluye compras ni consumo)', /todavía no hay un Total publicado/.test(sinPub), sinPub.slice(0, 300));

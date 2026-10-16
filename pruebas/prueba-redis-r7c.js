@@ -52,7 +52,10 @@ chk('Las notificaciones (showNotification) conservan su emoji — texto plano, n
     /showNotification\('⚠️ No tienes permiso para importar ventas'\)/.test(js) && /showNotification\('❌ Error leyendo el archivo'\)/.test(js));
 
 // ═══ 2 · ICONOS DEL KIT ═════════════════════════════════════════════════════
-['location-dot', 'calendar-days', 'hourglass', 'circle-exclamation', 'triangle-exclamation', 'circle-info', 'circle-check', 'lock', 'file-chart-column']
+// v5.28 — el estado vacío rediseñado usa fa-chart-line (sustituye a file-chart-column);
+// se suman los íconos de KPIs, flechas de periodo y Exportar.
+['location-dot', 'calendar-days', 'hourglass', 'circle-exclamation', 'triangle-exclamation', 'circle-info', 'circle-check', 'lock',
+ 'chart-line', 'ticket', 'receipt', 'chevron-left', 'chevron-right', 'download', 'file-arrow-up', 'arrows-rotate']
     .forEach(function (ic) {
         chk('fa-' + ic + ' se usa en Ventas y está definido en el kit (utilidades.css)',
             js.indexOf('fa-' + ic) !== -1 && new RegExp('\\.fa-' + ic + '\\s*[,{ ]').test(util));

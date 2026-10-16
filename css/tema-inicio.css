@@ -1,0 +1,177 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   v5.29 — INICIO "MIDNIGHT BAR" (cristal + cifras de dashboard)
+   ───────────────────────────────────────────────────────────────────────────
+   Pedido de Eduardo (16-oct-2026): estilo glassmorphism con las cifras del
+   dashboard, SOLO en Inicio, con su paleta "Midnight Bar" (fondo casi negro,
+   tarjetas translúcidas con borde dorado, cifras de dinero en dorado). Los
+   datos, los indicadores y las tarjetas de producto no cambian: solo el
+   estilo.
+
+   Cómo funciona (mismo sistema de tokens que estilos.css): renderTab()
+   pone html.vista-inicio mientras se ve Inicio y esta hoja redefine los
+   tokens SOLO dentro de #mainContent. El encabezado, la barra inferior y las
+   demás pestañas siguen con su tema (claro u oscuro esmeralda).
+
+   Contraste verificado (WCAG AA 4.5:1) sobre la tarjeta (#181D1A efectivo):
+     texto 15.7:1 · secundario 7.0:1 · tenue 5.4:1 · dorado 7.6:1 ·
+     rojo 7.2:1 · ámbar 9.1:1 · verde 9.0:1.
+   Las pastillas Bajo / OK de la paleta original daban 3.3:1 y 3.7:1 con
+   texto blanco; se oscurecieron un tono (mismo matiz) a 5.2:1.
+
+   Batería: el desenfoque (backdrop-filter) se usa SOLO en el buscador fijo,
+   que es lo único que pasa por encima del contenido al desplazarse. En las
+   tarjetas, sobre un fondo fijo, no se vería y costaría GPU en cada cuadro.
+
+   Esta hoja carga DESPUÉS de estilos.css. Los hex viven solo en el bloque de
+   tokens de abajo (igual que en estilos.css); las reglas usan tokens.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+    --mb-bg:           #0E1210;
+    --mb-bg-alto:      #1A1F1C;
+    --mb-superficie:   #141915;
+    --mb-card:         rgba(26, 31, 28, .85);
+    --mb-card-alto:    rgba(34, 40, 36, .92);
+    --mb-borde-suave:  rgba(200, 169, 106, .09);
+    --mb-borde:        rgba(200, 169, 106, .15);
+    --mb-borde-fuerte: rgba(200, 169, 106, .30);
+    --mb-brillo:       rgba(247, 245, 240, .06);
+    --mb-sombra:       0 8px 24px rgba(0, 0, 0, .35);
+    --mb-velo:         rgba(14, 18, 16, .72);
+    --mb-txt:          #F7F5F0;
+    --mb-txt-2:        #A8A5A0;
+    --mb-txt-3:        #93908A;
+    --mb-oro:          #C8A96A;
+    --mb-oro-hover:    #D6BB82;
+    --mb-oro-on:       #0E1210;
+    --mb-oro-dim:      rgba(200, 169, 106, .12);
+    --mb-oro-dim2:     rgba(200, 169, 106, .20);
+    --mb-rojo:         #E8937D;
+    --mb-rojo-dim:     rgba(232, 147, 125, .14);
+    --mb-ambar:        #E0B865;
+    --mb-ambar-dim:    rgba(224, 184, 101, .14);
+    --mb-verde:        #9CC79C;
+    --mb-verde-dim:    rgba(156, 199, 156, .14);
+    --mb-cielo:        #8FB8D8;
+    --mb-cielo-dim:    rgba(143, 184, 216, .14);
+    --mb-bajo-bg:      #A25A3C;
+    --mb-ok-bg:        #557555;
+    --mb-pastilla-txt: #FFFFFF;
+    /* Iniciales de categoría: los mismos tonos oscuros de estilos.css, para
+       que en tema claro no queden recuadros claros sobre el fondo oscuro. */
+    --mb-cat-whisky-bg: #322843; --mb-cat-whisky-fg: #DECEFF;
+    --mb-cat-gin-bg:    #163045; --mb-cat-gin-fg:    #B1DDFF;
+    --mb-cat-dest-bg:   #272C44; --mb-cat-dest-fg:   #C9D5FF;
+    --mb-cat-lic-bg:    #0C333C; --mb-cat-lic-fg:    #A2E4F4;
+}
+
+/* Fuera de #mainContent solo asoma el borde del body (márgenes de la app).
+   En tema claro se iguala al fondo para no dejar una franja clara; en el
+   oscuro el body ya es casi el mismo tono y se deja con su token. */
+html.vista-inicio[data-theme="light"] body { background: var(--mb-bg); }
+
+/* ── Alcance: solo el contenido de Inicio ─────────────────────────────── */
+html.vista-inicio #mainContent {
+    --bg: var(--mb-bg);
+    --surface: var(--mb-superficie);
+    --card: var(--mb-card);
+    --card-high: var(--mb-card-alto);
+    --border: var(--mb-borde-suave);
+    --border-mid: var(--mb-borde);
+    --border-strong: var(--mb-borde-fuerte);
+    --txt-primary: var(--mb-txt);
+    --txt-secondary: var(--mb-txt-2);
+    --txt-muted: var(--mb-txt-3);
+    --accent: var(--mb-oro);
+    --accent-hover: var(--mb-oro-hover);
+    --accent-on: var(--mb-oro-on);
+    --accent-container: var(--mb-oro-dim2);
+    --accent-dim: var(--mb-oro-dim);
+    --accent-dim2: var(--mb-oro-dim2);
+    --brass: var(--mb-oro);
+    --brass-on: var(--mb-oro-on);
+    --brass-dim: var(--mb-oro-dim);
+    --green: var(--mb-verde);   --green-dim: var(--mb-verde-dim); --green-text: var(--mb-verde);
+    --red: var(--mb-rojo);      --red-dim: var(--mb-rojo-dim);    --red-text: var(--mb-rojo);
+    --amber: var(--mb-ambar);   --amber-dim: var(--mb-ambar-dim);
+    --sky: var(--mb-cielo);     --sky-dim: var(--mb-cielo-dim);
+    --ok: var(--mb-verde);      --ok-dim: var(--mb-verde-dim);
+    --warn: var(--mb-ambar);    --warn-dim: var(--mb-ambar-dim);
+    --danger: var(--mb-rojo);   --danger-dim: var(--mb-rojo-dim);
+    --info: var(--mb-cielo);    --info-dim: var(--mb-cielo-dim);
+    --shadow-card: var(--mb-sombra);
+    --hero-bg: var(--mb-card-alto);
+    --hero-fg: var(--mb-txt);
+    --hero-fg-2: var(--mb-txt-2);
+    --hero-linea: var(--mb-borde);
+    --hero-seg: var(--mb-borde);
+    --hero-ok-bg: var(--mb-ok-bg);
+    --hero-ok-fg: var(--mb-pastilla-txt);
+    --hero-warn-bg: var(--mb-bajo-bg);
+    --hero-warn-fg: var(--mb-pastilla-txt);
+    --sombra-hero: var(--mb-sombra);
+    --cat-whisky-bg: var(--mb-cat-whisky-bg); --cat-whisky-fg: var(--mb-cat-whisky-fg);
+    --cat-gin-bg: var(--mb-cat-gin-bg);       --cat-gin-fg: var(--mb-cat-gin-fg);
+    --cat-dest-bg: var(--mb-cat-dest-bg);     --cat-dest-fg: var(--mb-cat-dest-fg);
+    --cat-lic-bg: var(--mb-cat-lic-bg);       --cat-lic-fg: var(--mb-cat-lic-fg);
+    color: var(--txt-primary);
+    background: radial-gradient(120% 120% at 0% 0%, var(--mb-bg-alto) 0%, var(--mb-bg) 70%);
+    min-height: 100dvh;
+}
+
+/* ── Tarjetas de cristal: translúcidas, borde dorado y brillo superior ── */
+html.vista-inicio #mainContent :is(.it-inv, .it-alerta, .it-pedido, .it-modulo, .pm-tile, .prd-card, .sync-card, .sbx-vacio) {
+    background: var(--card);
+    border: 1px solid var(--border-mid);
+    box-shadow: inset 0 1px 0 var(--mb-brillo), var(--mb-sombra);
+}
+html.vista-inicio #mainContent .it-inv { background: var(--hero-bg); border-color: var(--border-strong); }
+
+/* Saludo y títulos de sección */
+html.vista-inicio #mainContent .it-saludo__titulo { color: var(--txt-primary); }
+html.vista-inicio #mainContent :is(.it-saludo__rol, .it-seccion__titulo) { color: var(--txt-secondary); }
+html.vista-inicio #mainContent .it-enlace { color: var(--accent); }
+
+/* ── Tarjeta de inventario: cifras grandes, medidor y botón en dorado ─── */
+html.vista-inicio #mainContent .it-inv .it-inv__grande { color: var(--accent); }
+html.vista-inicio #mainContent .it-inv .it-medidor__seg--on { background: var(--accent); }
+html.vista-inicio #mainContent .it-inv .it-btn--primario { background: var(--accent); color: var(--accent-on); border-color: var(--accent); }
+html.vista-inicio #mainContent .it-inv .it-btn--primario:hover { background: var(--accent-hover); }
+html.vista-inicio #mainContent .it-inv .it-btn:focus-visible { outline-color: var(--accent); }
+
+/* ── Cifras del dashboard: dinero en dorado, alertas en su color ──────── */
+html.vista-inicio #mainContent .pm-tile__val { color: var(--txt-primary); }
+html.vista-inicio #mainContent .pm-tile--dinero .pm-tile__val { color: var(--accent); }
+html.vista-inicio #mainContent .pm-tile__ico { color: var(--accent); }
+html.vista-inicio #mainContent .pm-tile--critico { border-color: var(--danger); }
+html.vista-inicio #mainContent .pm-tile--critico .pm-tile__val { color: var(--danger); }
+html.vista-inicio #mainContent .it-alerta--danger { border-color: var(--danger); }
+html.vista-inicio #mainContent .it-alerta--warn { border-color: var(--warn); }
+html.vista-inicio #mainContent .it-modulo i { color: var(--accent); }
+html.vista-inicio #mainContent .it-btn--sec { background: var(--accent-dim); color: var(--txt-primary); border-color: var(--border-strong); }
+
+/* ── Buscador fijo: el único con desenfoque (pasa sobre el contenido) ── */
+html.vista-inicio #mainContent .sbx--sticky { background: var(--mb-velo); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
+html.vista-inicio #mainContent :is(.sbx__input, .sbx__input:focus, .sbx--texto .sbx__input) { background: var(--card); border-color: var(--border-mid); color: var(--txt-primary); }
+html.vista-inicio #mainContent .sbx__input::placeholder { color: var(--txt-muted); }
+html.vista-inicio #mainContent .sbx__recientes { background: var(--mb-superficie); border-color: var(--border-mid); }
+html.vista-inicio #mainContent .sbx-chip { background: var(--card); border-color: var(--border-mid); color: var(--txt-primary); }
+html.vista-inicio #mainContent .sbx-chip--on { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+html.vista-inicio #mainContent .grp-pill { background: var(--card); border-color: var(--border-mid); color: var(--txt-primary); }
+html.vista-inicio #mainContent .grp-pill--active { background: var(--accent); border-color: var(--accent); color: var(--accent-on); }
+
+/* ── Tarjetas de producto: mismas, en cristal; pastillas Bajo / OK sólidas ── */
+html.vista-inicio #mainContent .prd-card__name { color: var(--txt-primary); }
+html.vista-inicio #mainContent .prd-card__grupo { color: var(--accent); }
+html.vista-inicio #mainContent .prd-card__pedido { background: var(--accent-dim); border-color: var(--border-mid); }
+html.vista-inicio #mainContent .prd-area-chip { border-color: var(--border-mid); }
+html.vista-inicio #mainContent .prd-action-btn { background: var(--mb-superficie); border-color: var(--border-mid); color: var(--txt-primary); }
+/* Pastillas: "Limitado" (peligro) en terracota y "OK" en salvia, sólidas con
+   texto blanco (paleta de Eduardo, oscurecida a 5.2:1). Advertencia y Bajo
+   mínimo conservan su tono propio: el nivel se sigue distinguiendo. */
+html.vista-inicio #mainContent .bi-badge--danger { background: var(--mb-bajo-bg); color: var(--mb-pastilla-txt); }
+html.vista-inicio #mainContent .bi-badge--ok { background: var(--mb-ok-bg); color: var(--mb-pastilla-txt); }
+
+/* ── Sincronización ────────────────────────────────────────────────────── */
+html.vista-inicio #mainContent .sync-status-sub { color: var(--txt-secondary); }
+html.vista-inicio #mainContent .sync-pause-btn { background: var(--accent-dim); color: var(--accent); border-color: var(--border-strong); }

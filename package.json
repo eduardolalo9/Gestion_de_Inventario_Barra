@@ -76,6 +76,8 @@
     "test:inicioconteo": "node pruebas/prueba-inicio-conteo.js",
     "test:tema": "node pruebas/prueba-tema-esmeralda.js",
     "test:inicioconteo-nav": "node pruebas/prueba-inicio-conteo-navegador.js",
+    "test:v528nav": "node pruebas/prueba-v528-navegador.js",
+    "test:v529nav": "node pruebas/prueba-v529-navegador.js",
     "test:icononav": "node pruebas/prueba-icono-navegador.js",
     "test:f16nav": "node pruebas/prueba-fase16-navegador.js",
     "test:f16integracion": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-fase16-integracion.js\"",

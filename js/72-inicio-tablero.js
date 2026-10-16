@@ -163,7 +163,9 @@
                     + (p.proveedores ? ' · ' + p.proveedores + ' proveedor' + (p.proveedores === 1 ? '' : 'es') : '');
             return '<section class="it-pedido" aria-label="Pedido sugerido"><div class="it-pedido__txt"><p class="it-pedido__t">Pedido sugerido listo</p>'
                  + '<p class="it-pedido__s">' + _itEsc(det) + '</p></div>'
-                 + '<button type="button" class="it-btn it-btn--sec" onclick="inicioGenerarPedidoSugerido()">Generar</button></section>';
+                 // v5.28 — abre la pantalla Pedido Sugerido (selección y cantidades
+                 // editables) en vez de mandar todo al carrito de golpe.
+                 + '<button type="button" class="it-btn it-btn--sec" onclick="abrirPedidoSugerido()">Revisar</button></section>';
         }
 
         function _itModulos() {

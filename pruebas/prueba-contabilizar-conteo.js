@@ -159,7 +159,8 @@ chk('Seguridad: la acción es delegada y toma el id del inventario escuchado',
 chk('Evita el doble toque, pero deja reintentar si se cancela',
     /b\.disabled = true;/.test(ui) && /setTimeout\(function\(\) \{ b\.disabled = false; \}/.test(ui));
 chk('El encabezado distingue CONTABILIZADO de SINCRONIZADO',
-    /INVENTARIO BARRA CONTABILIZADO/.test(cab) && /const esCerrado = !inventarioAbierto\(inv\);/.test(cab));
+    // v5.28 — "INVENTARIO BARRA " va en un span solo para lectores de pantalla (el título ya lo dice).
+    /INVENTARIO BARRA (<\/span>)?CONTABILIZADO/.test(cab) && /const esCerrado = !inventarioAbierto\(inv\);/.test(cab));
 
 // ═══ 5 · Coherencia con el resto ═══════════════════════════════════════════
 const contab = extraer(flujo, 'contabilizarInventario') || '';

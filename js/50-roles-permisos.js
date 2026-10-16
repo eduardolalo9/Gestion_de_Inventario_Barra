@@ -1239,6 +1239,44 @@
             }
         }
 
+        // ── v5.28 — ¿hay cambios del catálogo sin publicar? ───────────────
+        // Pedido de Eduardo (15-oct-2026): el botón Publicar de Productos se
+        // ve gris mientras el catálogo de este teléfono es igual al publicado
+        // y verde cuando hay cambios pendientes. La huella usa solo campos del
+        // CATÁLOGO: stock/stockByArea y campos internos (_x) cambian al contar
+        // y no son "cambios por publicar".
+        var CATALOGO_HUELLA_LS = 'inventarioApp_catalogPublicadoHuella';
+
+        function catalogoHuella(lista) {
+            var txt = (Array.isArray(lista) ? lista : []).map(function(p) {
+                if (!p) return '';
+                return Object.keys(p).filter(function(k) {
+                    return k.charAt(0) !== '_' && k !== 'stock' && k !== 'stockByArea';
+                }).sort().map(function(k) {
+                    var v = p[k];
+                    return k + '=' + (v !== null && typeof v === 'object' ? JSON.stringify(v) : String(v));
+                }).join('|');
+            }).sort().join('\n');
+            var h = 0x811c9dc5;                       // FNV-1a 32 bits: barato y suficiente para comparar
+            for (var i = 0; i < txt.length; i++) {
+                h ^= txt.charCodeAt(i);
+                h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+            }
+            return (Array.isArray(lista) ? lista.length : 0) + ':' + h.toString(16);
+        }
+
+        function _catalogoRecordarPublicado(lista) {
+            try { localStorage.setItem(CATALOGO_HUELLA_LS, catalogoHuella(lista)); } catch (_) {}
+        }
+
+        /** true si el catálogo local difiere del último publicado que vio este teléfono (o no se sabe). */
+        function catalogoTieneCambiosSinPublicar() {
+            var guardada = null;
+            try { guardada = localStorage.getItem(CATALOGO_HUELLA_LS); } catch (_) {}
+            if (!guardada) return (typeof products !== 'undefined' && products.length > 0);
+            return guardada !== catalogoHuella(typeof products !== 'undefined' ? products : []);
+        }
+
         // ── MÓDULO: CATÁLOGO (admin publica, usuarios reciben) ────────────
         async function publicarCatalogoFirestore() {
             if (!_db || !hasPermission('catalog.publish')) return false;
@@ -1249,8 +1287,10 @@
                     publicadoEn:      Date.now(),
                     version:          Date.now()
                 });
+                _catalogoRecordarPublicado(products);   // v5.28 — Publicar vuelve a gris
                 await crearNotificacion('catalogo', 'Admin publicó catálogo actualizado (' + products.length + ' productos)', null, true);
                 showNotification('✅ Catálogo publicado a todos los usuarios');
+                if (typeof activeTab !== 'undefined' && activeTab === 'productos' && typeof renderTab === 'function') renderTab();
                 return true;    // v5.18 — el módulo Importar necesita saber si se publicó
             } catch (e) {
                 console.error('[Catalogo] Error publicando:', e);
@@ -1296,6 +1336,8 @@
                     if (!snap.exists) return;
                     const data = snap.data();
                     if (!Array.isArray(data.productos)) return;
+                    // v5.28 — esto ES lo publicado: base para "cambios sin publicar".
+                    _catalogoRecordarPublicado(data.productos);
                     // Solo actualizar si la versión del servidor es más nueva
                     const serverVersion = data.version || 0;
                     const localVersion  = parseInt(localStorage.getItem('inventarioApp_catalogVersion') || '0', 10);
@@ -1346,6 +1388,8 @@
                     if (!snap.exists) return;
                     const data = snap.data();
                     if (!Array.isArray(data.productos)) return;
+                    // v5.28 — esto ES lo publicado: base para "cambios sin publicar".
+                    _catalogoRecordarPublicado(data.productos);
                     const serverVersion = data.version || 0;
                     const localVersion  = parseInt(localStorage.getItem('inventarioApp_catalogVersion') || '0', 10);
                     if (serverVersion <= localVersion) return; // ya lo tenemos (incluye el caso "yo mismo lo publiqué")
@@ -2428,47 +2472,95 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
             return '<span class="pr-estado pr-estado--' + m[1] + '">' + m[0] + '</span>';
         }
 
+        // ══════════════════════════════════════════════════════════════════
+        //  v5.28 — GESTIÓN DE EQUIPO (rediseño de "Usuarios y permisos")
+        //  Decisión de Eduardo (15-oct-2026): mismo estilo que Pedido
+        //  sugerido — cabecera, buscador y una tarjeta por persona con rol,
+        //  estado y acceso a sus permisos. La LÓGICA de permisos no cambia:
+        //  tocar una tarjeta llama a permSeleccionarUsuario() de siempre y el
+        //  editor de abajo (rol, estado, áreas, permisos, Guardar) es el mismo.
+        // ══════════════════════════════════════════════════════════════════
+        function _equipoIniciales(u) {
+            var base = String((u && (u.displayName || u.email || u.uid)) || '?').trim();
+            var partes = base.split(/[\s@._-]+/).filter(Boolean);
+            return ((partes[0] || '?').charAt(0) + ((partes[1] || '').charAt(0) || '')).toUpperCase();
+        }
+
+        function _equipoRolPill(u) {
+            var rid = _roleCanonico(u.role);
+            var nom = (ROLES_SISTEMA_DEFECTO[rid] && ROLES_SISTEMA_DEFECTO[rid].nombre) || rid;
+            return '<span class="eq-rol eq-rol--' + escapeHtml(String(rid).toLowerCase()) + '">' + escapeHtml(nom) + '</span>';
+        }
+
+        function _equipoTarjeta(u) {
+            var inactivo = u.status === 'inactivo';
+            var nOv = Object.keys(_sanitizarOverrides(u.permissionOverrides) || {}).length;
+            return '<button type="button" class="eq-card' + (inactivo ? ' eq-card--inactiva' : '') + '" data-sbx-item'
+                 + ' onclick="permSeleccionarUsuario(this.getAttribute(\'data-uid\'))" data-uid="' + escapeHtml(u.uid) + '"'
+                 + ' aria-label="Ver permisos de ' + escapeHtml(u.email || u.displayName || u.uid) + '">'
+                 + '<span class="eq-avatar" aria-hidden="true">' + escapeHtml(_equipoIniciales(u)) + '</span>'
+                 + '<span class="eq-card__info"><span class="eq-card__nom">' + escapeHtml(u.displayName || u.email || u.uid) + '</span>'
+                 + (u.displayName && u.email ? '<span class="eq-card__mail">' + escapeHtml(u.email) + '</span>' : '')
+                 + '<span class="eq-card__pills">' + _equipoRolPill(u)
+                 + '<span class="eq-estado eq-estado--' + (inactivo ? 'inactiva' : 'activa') + '">' + (inactivo ? 'Inactiva' : 'Activa') + '</span>'
+                 + (nOv ? '<span class="eq-ajustes">' + nOv + ' ajuste' + (nOv === 1 ? '' : 's') + '</span>' : '')
+                 + '</span></span>'
+                 + '<i class="fa-solid fa-chevron-right eq-card__flecha" aria-hidden="true"></i></button>';
+        }
+
+        function _renderEquipoResultados() {
+            var lista = (_permUsuarios || []).slice().sort(function(a, b) {
+                var ia = a.status === 'inactivo', ib = b.status === 'inactivo';
+                if (ia !== ib) return ia ? 1 : -1;
+                return String(a.email || a.uid).localeCompare(String(b.email || b.uid), 'es');
+            });
+            var q = (typeof _equipoBusqueda !== 'undefined') ? _equipoBusqueda : '';
+            var items = (q && typeof _motorEquipo !== 'undefined') ? _motorEquipo.buscar(lista, q).items : lista;
+            var activas = lista.filter(function(u) { return u.status !== 'inactivo'; }).length;
+            var h = '<div class="ps-micro"><span>' + lista.length + ' persona' + (lista.length === 1 ? '' : 's') + ' • ' + activas + ' activa' + (activas === 1 ? '' : 's') + '</span>'
+                  + '<button type="button" class="ps-micro__sel" onclick="_cargarUsuariosParaPermisos(true)"><i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i> Recargar</button></div>';
+            if (!items.length) {
+                h += '<div class="ps-vacio"><i class="fa-solid fa-users" aria-hidden="true"></i><div class="ps-vacio__t">'
+                   + (q ? 'Sin coincidencias' : 'Sin usuarios') + '</div></div>';
+            } else {
+                h += '<div class="eq-lista">' + items.map(_equipoTarjeta).join('') + '</div>';
+            }
+            return { html: h, coincidencias: items.length, total: lista.length };
+        }
+
+        function permVolverALista() {
+            _permUidSel = null;
+            _permEdicion = null;
+            renderTab();
+        }
+        window.permVolverALista = permVolverALista;
+
         function renderUsuariosPermisosTab() {
             if (!hasPermission('permissions.read')) {
                 return '<p class="ui-nota">Acceso restringido</p>';
             }
-            let html = '<div class="max-w-2xl mx-auto">';
-            html += '<div class="adm-card">';
-            html += '<button type="button" class="adm-btn" onclick="cerrarUsuariosPermisos()">'
-                  + '<i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Volver al panel</button>';
-            html += '<h3><i class="fa-solid fa-user-shield" aria-hidden="true"></i> Usuarios y permisos</h3>';
+            let html = '<div class="max-w-2xl mx-auto eq-pantalla">';
+            var enDetalle = !!(_permUidSel && _permEdicion);
+            html += (typeof moduloCabecera === 'function')
+                ? moduloCabecera('Gestión de equipo', enDetalle ? 'permVolverALista()' : 'cerrarUsuariosPermisos()', 'ok')
+                : '<button type="button" class="adm-btn" onclick="cerrarUsuariosPermisos()">Volver al panel</button>';
 
             if (_permCargando && !_permUsuarios) {
-                html += '<p class="ui-nota"><i class="fa-solid fa-hourglass" aria-hidden="true"></i> Cargando usuarios…</p></div></div>';
+                html += '<p class="ui-nota"><i class="fa-solid fa-hourglass" aria-hidden="true"></i> Cargando usuarios…</p></div>';
                 return html;
             }
             if (_permError) {
                 html += '<p class="ui-nota ui-nota--error"><i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i> ' + escapeHtml(_permError) + '</p>';
                 html += '<button class="adm-btn" onclick="_cargarUsuariosParaPermisos(true)">Reintentar</button>';
-                html += '</div></div>';
+                html += '</div>';
                 return html;
             }
 
-            // ── Selector de usuario ─────────────────────────────────────────
-            html += '<label class="ui-etiqueta" for="permUserSel">Usuario</label>';
-            html += '<select id="permUserSel" class="ui-campo" onchange="permSeleccionarUsuario(this.value)">';
-            html += '<option value="">— Selecciona un usuario —</option>';
-            (_permUsuarios || []).forEach(function(u) {
-                const etiqueta = (u.email || u.displayName || u.uid) +
-                                 '  ·  ' + _roleCanonico(u.role) +
-                                 ((u.status === 'inactivo') ? '  ·  INACTIVO' : '');
-                html += '<option value="' + escapeHtml(u.uid) + '"' +
-                        (u.uid === _permUidSel ? ' selected' : '') + '>' +
-                        escapeHtml(etiqueta) + '</option>';
-            });
-            html += '</select>';
-            html += '<button type="button" class="adm-btn" onclick="_cargarUsuariosParaPermisos(true)">'
-                  + '<i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i> Recargar lista</button>';
-            html += '</div>';
-
-            if (!_permUidSel || !_permEdicion) {
-                html += '<div class="adm-card"><p class="ui-nota">'
-                      + 'Selecciona un usuario para ver y modificar sus permisos.</p></div></div>';
+            // ── Lista de personas ───────────────────────────────────────────
+            if (!enDetalle) {
+                html += BusquedaUI.barra('equipo', { placeholder: 'Buscar por nombre, correo o rol', etiqueta: 'Buscar en el equipo' });
+                html += BusquedaUI.region('equipo', _renderEquipoResultados().html);
+                html += '</div>';
                 return html;
             }
 
@@ -2477,8 +2569,13 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
             const base = _permUsuarioPorUid(_permUidSel);
 
             // ── Rol, estado y áreas ─────────────────────────────────────────
+            // v5.28 — resumen de la persona arriba del editor (mismo editor de siempre).
+            html += '<div class="eq-resumen"><span class="eq-avatar eq-avatar--g" aria-hidden="true">' + escapeHtml(_equipoIniciales(base)) + '</span>'
+                  + '<span class="eq-card__info"><span class="eq-card__nom">' + escapeHtml(base.displayName || base.email || base.uid) + '</span>'
+                  + (base.displayName && base.email ? '<span class="eq-card__mail">' + escapeHtml(base.email) + '</span>' : '')
+                  + '<span class="eq-card__pills">' + _equipoRolPill(base) + '</span></span></div>';
             html += '<div class="adm-card">';
-            html += '<h3><i class="fa-solid fa-user" aria-hidden="true"></i> ' + escapeHtml(base.email || base.displayName || base.uid) + '</h3>';
+            html += '<h3><i class="fa-solid fa-user" aria-hidden="true"></i> Rol y cuenta</h3>';
             html += '<label class="ui-etiqueta" for="permRolSel">Rol base</label>';
             html += '<select id="permRolSel" class="ui-campo" onchange="permCambiarRol(this.value)">';
             Object.keys(ROLES_SISTEMA_DEFECTO).forEach(function(rid) {
@@ -2570,6 +2667,8 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
             return html;
         }
         window.renderUsuariosPermisosTab = renderUsuariosPermisosTab;
+
+        let _equipoBusqueda = '';   // v5.28 — buscador de Gestión de equipo
 
         // Subvista activa dentro de la pestaña Admin: 'panel' | 'permisos'
         let _adminSubvista = 'panel';
