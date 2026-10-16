@@ -179,7 +179,7 @@ const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
     return { existe: !!btn, icono: btn ? !!btn.querySelector('.fa-book') : false, bg: cs ? cs.backgroundColor : null };
   });
   chk('★ El botón "Contabilizar" del detalle es bt--primario (el único latón de la pantalla)',
-      contab.existe && contab.icono && /rgb\(84, 195, 152\)/.test(contab.bg || ''), JSON.stringify(contab));
+      contab.existe && contab.icono && /rgb\(200, 169, 106\)/.test(contab.bg || ''), JSON.stringify(contab));   // v5.30: acento dorado Midnight
 
   chk('Sin errores de JS en toda la prueba', errs.length === 0, errs.join(' | '));
 

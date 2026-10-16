@@ -66,7 +66,7 @@ const PUERTO = process.env.PUERTO || '8080';
   // ── Inventario ABIERTO (admin) ──────────────────────────────────────────
   await montar('SINCRONIZADO'); await p.waitForTimeout(250);
   let m = await p.evaluate(MEDIDAS);
-  chk('★ Todos los botones de la pantalla miden al menos 48 px de alto (pulgar)', m.length >= 6 && m.every(b => b.h >= 48), JSON.stringify(m.filter(b => b.h < 48)));
+  chk('★ Todos los botones de la pantalla miden al menos 48 px de alto (pulgar)', m.length >= 6 && m.every(b => Math.round(b.h) >= 48), JSON.stringify(m.filter(b => Math.round(b.h) < 48)));   // v5.30: redondeo (47.99997 px es 48)
   chk('★ Todos los botones tienen texto de al menos 14 px (antes 11–12 px)', m.every(b => b.fs >= 14), JSON.stringify(m.filter(b => b.fs < 14)));
   // v5.28 (pedido de Eduardo, 16-oct-2026: "más compacto") — las 4 acciones
   // del encabezado van en rejilla de 2 columnas (cada una ~la mitad del
@@ -124,7 +124,7 @@ const PUERTO = process.env.PUERTO || '8080';
   // ── Inventario CERRADO: siguiente paso con botones grandes ──────────────
   await montar('CERRADO'); await p.waitForTimeout(250);
   m = await p.evaluate(MEDIDAS);
-  const aLoAncho = (b) => b.h >= 48 && b.w >= b.wp - 1;   // ocupa su contenedor
+  const aLoAncho = (b) => Math.round(b.h) >= 48 && b.w >= b.wp - 1;   // ocupa su contenedor (v5.30: alto redondeado)
   chk('Con el inventario cerrado: "Contabilizar" y "Crear el siguiente" son botones grandes y apilados',
       m.some(b => /Contabilizar/.test(b.t) && aLoAncho(b)) && m.some(b => /Crear el siguiente/.test(b.t) && aLoAncho(b)),
       JSON.stringify(m.map(b => [b.t, Math.round(b.h), Math.round(b.w), Math.round(b.wp)])));
