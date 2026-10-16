@@ -40,11 +40,14 @@ const lum = s => { const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(s || ''); if 
         sombraCerrada: cs(sb, 'boxShadow'), monoClases: mono.map(x => x.className), body: cs(document.body, 'backgroundColor') };
     });
     const T = '[' + tema + '] ';
-    chk(T + '★ La barra lateral es Noche Profunda (#101E18) en este tema', m.sbBg === 'rgb(16, 30, 24)', m.sbBg);
+    // v5.30 (tema cristal) — la barra lateral es Midnight (#121713) en ambos temas.
+    chk(T + '★ La barra lateral es Midnight (#121713) en este tema', m.sbBg === 'rgb(18, 23, 19)', m.sbBg);
     chk(T + 'Sus textos son claros sobre fondo oscuro (luminancia > .6)', lum(m.sbItem) > 0.6 && lum(m.sbMuted) > 0.45, m.sbItem + ' / ' + m.sbMuted);
-    chk(T + '★ El destino activo es esmeralda #10664A con texto blanco', m.sbActivoBg === 'rgb(16, 102, 74)' && m.sbActivoColor === 'rgb(255, 255, 255)', m.sbActivoBg + ' / ' + m.sbActivoColor);
-    // v5.29 (pedido de Eduardo, 16-oct-2026) — Inicio en "Midnight Bar": la tarjeta principal es cristal oscuro con texto marfil.
-    chk(T + '★ La tarjeta principal es cristal oscuro (Midnight Bar) con texto marfil', m.heroBg && lum(m.heroBg) < 0.2 && m.heroBg !== 'rgba(0, 0, 0, 0)' && m.heroColor === 'rgb(247, 245, 240)', m.heroBg + ' / ' + m.heroColor);
+    chk(T + '★ El destino activo es dorado #C8A96A con texto oscuro', m.sbActivoBg === 'rgb(200, 169, 106)' && m.sbActivoColor === 'rgb(14, 18, 16)', m.sbActivoBg + ' / ' + m.sbActivoColor);
+    // v5.30 (tema cristal) — la tarjeta principal es cristal del tema: oscuro con texto marfil, o claro con texto casi negro.
+    chk(T + '★ La tarjeta principal es cristal del tema con texto legible',
+        tema === 'dark' ? (m.heroBg === 'rgba(34, 40, 36, 0.78)' && m.heroColor === 'rgb(247, 245, 240)')
+                        : (m.heroBg === 'rgba(255, 255, 255, 0.8)' && m.heroColor === 'rgb(30, 36, 32)'), m.heroBg + ' / ' + m.heroColor);
     chk(T + '★ El encabezado mide 48 px', m.hd === 48, String(m.hd));
     chk(T + '★ Títulos en Manrope y cuerpo en DM Sans', /Manrope/.test(m.h1Fuente) && /DM Sans/.test(m.cuerpo), m.h1Fuente + ' | ' + m.cuerpo);
     chk(T + '★ Las fuentes propias se descargan del servidor (no caen a la del sistema)', m.fuentesOk && m.fuentesOk.some(f => /Manrope/.test(f)) && m.fuentesOk.some(f => /DM Sans/.test(f)), JSON.stringify(m.fuentesOk));

@@ -57,14 +57,15 @@ const PUERTO = process.env.PUERTO || '8080';
              book: v('--book'), scrim: v('--scrim'), ok: v('--ok'),
              onAccent: v('--accent-on') };
   });
-  chk('★ v5.25 · El acento calculado (tema oscuro) es el esmeralda claro #54C398',
-      tok.accent.toUpperCase() === '#54C398', JSON.stringify(tok));
+  // v5.30 — tema oscuro "Midnight Bar" (css/tema-cristal.css): acento dorado.
+  chk('★ v5.30 · El acento calculado (tema oscuro) es el dorado Midnight #C8A96A',
+      tok.accent.toUpperCase() === '#C8A96A', JSON.stringify(tok));
   chk('Los alias nuevos resuelven (--brass, --ok, --book, --scrim)',
       !!tok.brass && !!tok.ok && !!tok.book && !!tok.scrim, JSON.stringify(tok));
   chk('El fondo del body usa el token, no un color del navegador',
       await p.evaluate(() => {
         const bg = getComputedStyle(document.body).backgroundColor;
-        return bg === 'rgb(10, 17, 14)';   // #0A110E
+        return bg === 'rgb(14, 18, 16)';   // v5.30: #0E1210 (Midnight)
       }),
       await p.evaluate(() => getComputedStyle(document.body).backgroundColor));
 
@@ -91,18 +92,19 @@ const PUERTO = process.env.PUERTO || '8080';
       sombra:     medir('shadow-md', 'boxShadow')
     };
   });
-  chk('★ bg-white YA NO es blanco: es la superficie del tema oscuro',
-      util.bgWhite !== 'rgb(255, 255, 255)' && util.bgWhite === 'rgb(21, 33, 28)',
-      'calculado: ' + util.bgWhite + ' (esperado rgb(21, 33, 28) = #15211C)');
+  // v5.30 — la tarjeta es cristal translúcido del tema.
+  chk('★ bg-white YA NO es blanco: es la superficie (cristal) del tema oscuro',
+      util.bgWhite !== 'rgb(255, 255, 255)' && util.bgWhite === 'rgba(26, 31, 28, 0.62)',
+      'calculado: ' + util.bgWhite + ' (esperado rgba(26, 31, 28, 0.62))');
   chk('★ text-gray-900 YA NO es casi negro: es el texto claro del tema',
-      util.txt900 === 'rgb(235, 240, 237)',
+      util.txt900 === 'rgb(247, 245, 240)',   // v5.30 Midnight
       'calculado: ' + util.txt900);
   chk('text-gray-600 resuelve al texto secundario del tema',
-      util.txt600 === 'rgb(183, 192, 188)', 'calculado: ' + util.txt600);
+      util.txt600 === 'rgb(168, 165, 160)', 'calculado: ' + util.txt600);   // v5.30 Midnight
   chk('border-gray-200 resuelve al borde del tema (translúcido)',
-      /rgba?\(216, 224, 220/.test(util.borde), 'calculado: ' + util.borde);
+      /rgba?\(200, 169, 106/.test(util.borde), 'calculado: ' + util.borde);   // v5.30: borde dorado translúcido
   chk('El velo del modal usa --scrim, no negro al 60 %',
-      /rgba\(0, 5, 2/.test(util.velo), 'calculado: ' + util.velo);
+      /rgba\(5, 7, 6/.test(util.velo), 'calculado: ' + util.velo);   // v5.30 Midnight
   chk('★ Las utilidades de layout funcionan sin Tailwind (flex, gap, radio, texto, sombra)',
       util.flexDisp === 'flex' && util.gap3 === '12px' &&
       util.redondo !== '0px' && util.textoSm !== '' && util.sombra !== 'none',
@@ -192,7 +194,7 @@ const PUERTO = process.env.PUERTO || '8080';
   chk('★ Una fila accionable es un <button> de verdad (Tab la alcanza)',
       kit.filaEtiqueta === 'BUTTON', 'etiqueta: ' + kit.filaEtiqueta);
   chk('El campo tiene fondo hundido del tema, no blanco',
-      kit.inputFondo === 'rgb(10, 17, 14)', 'fondo: ' + kit.inputFondo);
+      kit.inputFondo === 'rgb(14, 18, 16)', 'fondo: ' + kit.inputFondo);   // v5.30 Midnight
   chk('La etiqueta del campo está asociada a su input con for/id',
       kit.labelFor && kit.labelFor === kit.inputId, kit.labelFor + ' / ' + kit.inputId);
   chk('El medidor dibuja sus segmentos y enciende la proporción correcta',
