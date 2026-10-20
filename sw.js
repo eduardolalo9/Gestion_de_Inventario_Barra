@@ -29,7 +29,7 @@
 // pruebas/prueba-integridad-split.js falla si se desincronizan: un index.html
 // nuevo sirviendo un .js viejo desde cache es el fallo mas dificil de
 // diagnosticar que puede tener una PWA partida en archivos.
-const APP_VERSION = '5.30';
+const APP_VERSION = '5.31';
 const CACHE_NAME  = 'barinventory-v' + APP_VERSION;
 
 // SW8 FIX: OFFLINE_URL calculado desde el scope del SW en tiempo de ejecución.
@@ -76,8 +76,8 @@ const PRECACHE_URLS = [
 // A diferencia de addAll(), esto va UNO POR UNO y cada fallo se tolera: que un
 // archivo no se pueda traer no puede tumbar al resto ni impedir la activacion.
 const WARM_URLS = [
-    // v5.30 — tema cristal de toda la app. En WARM (PRECACHE tiene tope de 6): si faltara sin red, la app se ve con el tema esmeralda de siempre.
-    './css/tema-cristal.css?v=' + APP_VERSION,
+    // v5.31 — tema minimalista claro. En WARM (PRECACHE tiene tope de 6): si faltara sin red, la app se ve con el tema esmeralda de siempre.
+    './css/tema-minimal.css?v=' + APP_VERSION,
     // v5.25 — tipografías propias (Manrope y DM Sans): sin esto la primera carga sin red caería a la fuente del sistema.
     './fonts/manrope-600.woff2', './fonts/manrope-700.woff2', './fonts/manrope-800.woff2',
     './fonts/dm-sans-400.woff2', './fonts/dm-sans-500.woff2', './fonts/dm-sans-600.woff2', './fonts/dm-sans-700.woff2',
@@ -118,6 +118,7 @@ const WARM_URLS = [
     './js/94-venta-turno.js?v=' + APP_VERSION,        // FASE 14
     './js/95-exportacion.js?v=' + APP_VERSION,
     './js/96-importar.js?v=' + APP_VERSION,         // v5.18
+    './js/98-navegacion-atras.js?v=' + APP_VERSION, // v5.31 — botón Atrás de Android
     './js/99-window-arranque.js?v=' + APP_VERSION,
     // v5.20 — icono de la app: archivos reales (antes se dibujaba una "B"
     // azul con Canvas). Calentados uno por uno: si faltara uno, no tumba la

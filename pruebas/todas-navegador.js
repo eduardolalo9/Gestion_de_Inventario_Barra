@@ -68,7 +68,8 @@ const PRUEBAS = [
     'prueba-sync-vivo-navegador.js',    // v5.22 — compras, ventas y cortes en vivo
     'prueba-inicio-conteo-navegador.js', // v5.23 — diseño de Inicio y Conteo
     'prueba-v528-navegador.js',      // v5.28 — rediseño de Productos, Pedido sugerido, Inventario, Equipo y Ventas a 360/390 px
-    'prueba-v530-navegador.js',      // v5.30 — tema cristal: contraste AA de 10 pantallas en claro y oscuro, fondo fijo, tarjetas desenfocadas y modales casi opacos
+    'prueba-v531-tema-navegador.js', // v5.31 — tema minimalista: contraste AA de 10 pantallas + modal en claro y oscuro
+    'prueba-v531-atras-navegador.js', // v5.31 — botón Atrás de Android: modales, Volver, pestañas, conteo intacto, doble Atrás en Inicio
     'prueba-conteo-compacto-navegador.js', // v5.11 — vista compacta del Conteo, en pantalla
     'prueba-tema-esmeralda-navegador.js', // v5.25 — Verde Esmeralda: barra oscura, fuentes, pasteles, tablet, migración de tema
     'prueba-actualizaciones-navegador.js', // v5.12 — despliegue simulado: detecta, avisa, actualiza con un toque, conserva datos

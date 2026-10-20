@@ -1,0 +1,115 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   v5.31 — TEMA MINIMALISTA CLARO (+ oscuro sobrio)
+   ───────────────────────────────────────────────────────────────────────────
+   Encargo de Eduardo (20-oct-2026): rediseño visual minimalista claro,
+   inspirado en Apple y Notion — fondo blanco cálido / gris perla, tarjetas
+   blancas, verde esmeralda bosque como color corporativo, texto gris carbón,
+   bordes sutiles y sombras discretas. Decisiones de Eduardo:
+     · Claro minimalista como tema principal.
+     · Oscuro "sobrio": el carbón + esmeralda de v5.25 tal cual (sus valores
+       ya están verificados en estilos.css; esta hoja no los toca).
+     · Se retiran el cristal, el dorado y el "Midnight Bar" (v5.29–v5.30).
+
+   SOLO PRESENTACIÓN. Esta hoja carga después de estilos.css y:
+     1. cambia los VALORES de los tokens del tema claro;
+     2. afina bordes, sombras, radios y espaciado con tokens;
+     3. en pantallas de 600 px o más, muestra con texto ("Editar",
+        "Eliminar", "Carrito") acciones que eran solo un ícono, con CSS
+        (::after): el botón, su onclick, su permiso y su confirmación NO
+        cambian.
+   No toca ningún selector que use JavaScript ni ningún id.
+
+   Contraste verificado (WCAG AA 4.5:1), peor caso sobre --surface #F1F1EE:
+     texto 14.1 · secundario 6.0 · tenue 5.3 · esmeralda 5.9 ·
+     botón esmeralda con texto blanco 6.7.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── TOKENS · CLARO MINIMALISTA ───────────────────────────────────────── */
+html[data-theme="light"] {
+    --bg:             #F7F7F5;
+    --surface:        #F1F1EE;
+    --card:           #FFFFFF;
+    --card-high:      #F4F4F1;
+    --border:         rgba(31, 35, 33, .07);
+    --border-mid:     rgba(31, 35, 33, .11);
+    --border-strong:  rgba(31, 35, 33, .22);
+    --scrim:          rgba(20, 24, 22, .40);
+    --accent:         #17694B;
+    --accent-hover:   #12573E;
+    --accent-on:      #FFFFFF;
+    --accent-container: rgba(23, 105, 75, .10);
+    --accent-dim:     rgba(23, 105, 75, .07);
+    --accent-dim2:    rgba(23, 105, 75, .13);
+    --txt-primary:    #1F2321;
+    --txt-secondary:  #565C59;
+    --txt-muted:      #5F6561;
+    --shadow-xs:      0 1px 2px rgba(16, 24, 20, .04);
+    --shadow-card:    0 1px 2px rgba(16, 24, 20, .04), 0 1px 3px rgba(16, 24, 20, .05);
+    --shadow-elev2:   0 4px 12px rgba(16, 24, 20, .06), 0 1px 3px rgba(16, 24, 20, .04);
+    --shadow-modal:   0 20px 48px rgba(16, 24, 20, .14), 0 4px 12px rgba(16, 24, 20, .06);
+    --modal-bg:       #FFFFFF;
+    /* Tarjeta principal de Inicio: blanca con detalles esmeralda */
+    --hero-bg:        #FFFFFF;
+    --hero-fg:        #1F2321;
+    --hero-fg-2:      #565C59;
+    --hero-linea:     rgba(31, 35, 33, .09);
+    --hero-seg:       rgba(31, 35, 33, .10);
+    --hero-btn-fg:    #FFFFFF;
+    --hero-btn-hover: #12573E;
+    --hero-ok-bg:     #E3F1EA;
+    --hero-ok-fg:     #0F5138;
+    --hero-warn-bg:   #FFF1D6;
+    --hero-warn-fg:   #6F4100;
+    --sombra-hero:    0 1px 2px rgba(16, 24, 20, .04), 0 2px 8px rgba(16, 24, 20, .05);
+    --sombra-barra:   0 -1px 0 var(--border-mid);
+    /* El menú lateral se queda "Noche Profunda" (oscuro en ambos temas,
+       decisión de v5.25): sus tokens propios no se tocan aquí. */
+}
+
+/* ── Superficies: tarjetas blancas, borde fino y sombra discreta ──────── */
+html[data-theme="light"] body .sticky.top-0 { background: var(--bg); box-shadow: 0 1px 0 var(--border-mid); }
+html[data-theme="light"] #bottomTabBar { background: var(--card); box-shadow: var(--sombra-barra); }
+html[data-theme="light"] :is(.it-alerta, .it-pedido, .it-modulo, .pm-tile, .prd-card, .if-card, .adm-card, .eq-card, .ps-card, .vs-kpi, .vs-top, .vs-dias, .bi-card, .imp-sec, .rc-card, .sync-card) {
+    background: var(--card);
+    border: 1px solid var(--border-mid);
+    box-shadow: var(--shadow-card);
+}
+
+/* ── Tarjeta principal de Inicio (claro): blanca, cifra y botón esmeralda ── */
+html[data-theme="light"] .it-inv { border: 1px solid var(--border-mid); }
+html[data-theme="light"] .it-inv .it-inv__grande { color: var(--accent); }
+html[data-theme="light"] .it-inv .it-medidor__seg--on { background: var(--accent); }
+html[data-theme="light"] .it-inv .it-btn--primario { background: var(--accent); color: var(--accent-on); border-color: var(--accent); }
+html[data-theme="light"] .it-inv .it-btn--primario:hover { background: var(--accent-hover); }
+html[data-theme="light"] .it-inv .it-btn:focus-visible { outline-color: var(--accent); }
+
+/* ── Cifras: dinero con el acento; alertas en su color ────────────────── */
+.pm-tile--dinero .pm-tile__val { color: var(--accent); }
+
+/* ── Pastilla "Finalizado" del panel de usuarios: tenía un verde fijo
+      (2.0:1 en claro). Ahora usa los tokens del tema. ─────────────────── */
+.audit-done-badge { color: var(--ok); background: var(--ok-dim); border-color: var(--ok-dim); }
+
+/* ── Acciones que eran solo un ícono: ahora con su palabra ─────────────
+   Mismo botón, mismo onclick, mismo permiso y misma confirmación: solo se
+   añade el texto visible con ::after. El nombre accesible sigue siendo su
+   aria-label.
+   Solo en pantallas de 600 px o más: en el teléfono la tarjeta compacta de
+   v5.24 (áreas y acciones en el mismo renglón) no tiene espacio y el texto
+   aplastaba las cifras por área. Ahí quedan los íconos, con su nombre
+   accesible y su tooltip, como antes. */
+@media (min-width: 600px) {
+    .prd-card .prd-action-btn { width: auto; min-width: 44px; padding: 0 12px; gap: 6px; border-radius: 999px; }
+    .prd-card .prd-action-btn.cart::after { content: "Carrito"; }
+    .prd-card .prd-action-btn.edit::after { content: "Editar"; }
+    .prd-card .prd-action-btn.del::after  { content: "Eliminar"; }
+    .prd-card .prd-action-btn::after { font-family: var(--f-body); font-size: .8125rem; font-weight: 600; line-height: 1; }
+    .cat-tabla button[title="Editar"]::after   { content: "Editar"; }
+    .cat-tabla button[title="Eliminar"]::after { content: "Eliminar"; }
+    .cat-tabla button[title="Editar"], .cat-tabla button[title="Eliminar"] { gap: 6px; padding: 0 12px; font-size: .8125rem; font-weight: 600; }
+}
+
+/* ── Botones: esquinas suaves y foco visible ──────────────────────────── */
+html[data-theme="light"] .bt { border-radius: 12px; }
+html[data-theme="light"] .bt--secundario { border-width: 1.5px; }
+html[data-theme="light"] .grp-pill--active { background: var(--accent); border-color: var(--accent); color: var(--accent-on); }
