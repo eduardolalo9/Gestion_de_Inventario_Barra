@@ -147,17 +147,16 @@ const GRIS_DE_FABRICA = /rgb\(239, 239, 239\)|buttonface/i;
   chk('★ "Agregar" dejó de ser el botón azul de la paleta anterior',
       !/rgb\(111, 178, 232\)/.test(modal.agregar.bg) && !GRIS_DE_FABRICA.test(modal.agregar.bg),
       'fondo: ' + modal.agregar.bg);
-  // v5.30 — el acento del tema oscuro Midnight es dorado (#C8A96A).
-  chk('★ Guardar es el único acento del modal (el acento se gana)',
-      /rgb\(200, 169, 106\)/.test(modal.guardar.bg) &&
-      !/rgb\(200, 169, 106\)/.test(modal.agregar.bg) &&
-      !/rgb\(200, 169, 106\)/.test(modal.cancelar.bg),
+  chk('★ Guardar es el único latón del modal (el latón se gana)',
+      /rgb\(84, 195, 152\)/.test(modal.guardar.bg) &&
+      !/rgb\(84, 195, 152\)/.test(modal.agregar.bg) &&
+      !/rgb\(84, 195, 152\)/.test(modal.cancelar.bg),
       JSON.stringify({ guardar: modal.guardar.bg, agregar: modal.agregar.bg, cancelar: modal.cancelar.bg }));
   chk('Cancelar y Guardar son táctiles (≥ 44 px)',
       modal.cancelar.h >= 44 && modal.guardar.h >= 44,
       JSON.stringify({ c: modal.cancelar.h, g: modal.guardar.h }));
   chk('El velo del modal usa el token del sistema, no un negro a mano',
-      /rgba?\(0, 5, 2/.test(modal.scrim) || /rgba\(5, 7, 6/.test(modal.scrim) || /rgba\(0, 0, 0, 0\.7/.test(modal.scrim), modal.scrim);   // v5.30: + velo Midnight
+      /rgba?\(0, 5, 2/.test(modal.scrim) || /rgba\(0, 0, 0, 0\.7/.test(modal.scrim), modal.scrim);
 
   const sinGris = await p.evaluate((re) => {
     const rx = new RegExp(re, 'i');

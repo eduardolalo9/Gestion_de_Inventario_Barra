@@ -46,7 +46,6 @@ const leer = (f) => fs.readFileSync(path.join(RAIZ, f), 'utf8');
 const html  = leer('index.html');
 const util  = leer('css/utilidades.css');
 const esti  = leer('css/estilos.css');
-const tema  = leer('css/tema-cristal.css');   // v5.30 — hoja de tema cristal (carga después de estilos.css)
 const kit   = leer('js/03-ui-kit.js');
 const sw    = leer('sw.js');
 const jsDir = fs.readdirSync(path.join(RAIZ, 'js')).filter(f => f.endsWith('.js'));
@@ -104,7 +103,7 @@ const utilidades = [...usadas].filter(c => !PREFIJOS_PROPIOS.test(c));
 function definida(clase) {
     const escapada = clase.replace(/[.:\/\[\]()]/g, (ch) => '\\\\?' + ch.replace(/[.[\]()]/g, '\\$&'));
     const re = new RegExp('\\.' + escapada + '(?![\\w-])');
-    return re.test(util) || re.test(esti) || re.test(tema);   // v5.30: + css/tema-cristal.css
+    return re.test(util) || re.test(esti);
 }
 
 const huerfanas = utilidades.filter(c => !definida(c));

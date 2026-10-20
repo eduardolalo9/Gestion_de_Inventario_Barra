@@ -82,6 +82,12 @@ function copiar(origen, destino) {
   chk('★ El SW nuevo se instaló y el pie lo dice con palabras ("actualización ' + V1 + ' lista")', await p.evaluate((v) => document.getElementById('sbVersion').textContent.includes('actualización ' + v + ' lista'), V1), await p.evaluate(() => document.getElementById('sbVersion').textContent));
 
   // ── 3 · Un toque en "Actualizar": la página nueva, con la versión nueva ──────
+  // v5.31 — el botón Atrás de Android pone su entrada "guardia" en el
+  // historial con el PRIMER toque (history.pushState). Playwright cuenta ese
+  // pushState como una "navegación", así que waitForNavigation se resolvía
+  // con él y no con la recarga. Un toque previo (lo normal: la persona ya
+  // usó la app antes de ver el aviso) deja la guardia puesta antes.
+  await p.mouse.click(5, 300); await p.waitForTimeout(150);
   await Promise.all([p.waitForNavigation({ waitUntil: 'load', timeout: 20000 }), p.click('#actBannerBtn')]);
   await p.waitForTimeout(800); await montar();
   chk('★ Tras UN toque en "Actualizar" corre la versión nueva (el HTML no salió de la caché HTTP de 10 min)', await p.evaluate((v) => window.BIActualizaciones._versionPagina() === v && !!document.querySelector('meta[name="bi-prueba"]'), V1));

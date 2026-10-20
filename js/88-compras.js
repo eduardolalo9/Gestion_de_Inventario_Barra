@@ -1475,7 +1475,7 @@
              ['Proveedores', r.proveedores],
              ['Importe', _dineroMX(r.importe)]
             ].forEach(function(par) {
-                html += '<div class="cmp-kpi" style="flex:1;min-width:120px;background:var(--surface);'
+                html += '<div style="flex:1;min-width:120px;background:var(--surface);'
                       + 'border:1px solid var(--border-mid);border-radius:12px;padding:12px 14px">'
                       + '<div style="font-size:1.25rem;font-weight:700;letter-spacing:-.02em">'
                       + escapeHtml(String(par[1])) + '</div>'
@@ -1506,7 +1506,7 @@
 
             // ── Lista ─────────────────────────────────────────────────────────
             if (compras.length === 0) {
-                html += '<div class="cmp-vacio" style="text-align:center;padding:42px 18px;'
+                html += '<div style="text-align:center;padding:42px 18px;'
                       + 'background:var(--surface);border:1px solid var(--border-mid);'
                       + 'border-radius:12px">'
                       + '<div style="font-size:2.2rem;margin-bottom:10px;color:var(--txt-muted);opacity:.55"><i class="fa-solid fa-receipt" aria-hidden="true"></i></div>'
