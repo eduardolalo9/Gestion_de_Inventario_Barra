@@ -70,6 +70,7 @@ const PRUEBAS = [
     'prueba-v528-navegador.js',      // v5.28 — rediseño de Productos, Pedido sugerido, Inventario, Equipo y Ventas a 360/390 px
     'prueba-v531-tema-navegador.js', // v5.31 — tema minimalista: contraste AA de 10 pantallas + modal en claro y oscuro
     'prueba-v531-atras-navegador.js', // v5.31 — botón Atrás de Android: modales, Volver, pestañas, conteo intacto, doble Atrás en Inicio
+    'prueba-v532-existencias-navegador.js', // v5.32 — exportar existencias: descarga real del .xlsx, 12 escenarios, Excel = app
     'prueba-conteo-compacto-navegador.js', // v5.11 — vista compacta del Conteo, en pantalla
     'prueba-tema-esmeralda-navegador.js', // v5.25 — Verde Esmeralda: barra oscura, fuentes, pasteles, tablet, migración de tema
     'prueba-actualizaciones-navegador.js', // v5.12 — despliegue simulado: detecta, avisa, actualiza con un toque, conserva datos

@@ -74,6 +74,7 @@ const PRUEBAS = [
     'prueba-v527-compras-fvs.js',    // v5.27 — Compras: cancelar (marca), fecha de ingreso, duplicados, lista por día/proveedor/producto; FvS por grupo con corrección directa
     'prueba-v528-rediseno-modulos.js', // v5.28 — Inicio sin bloques retirados, barra de Productos y huella de Publicar, Pedido sugerido, Inventario en filas, Gestión de equipo y Ventas Semanales (navegar semanas no toca la semana activa)
     'prueba-v531-minimal-y-atras.js', // v5.31 — tema minimalista claro (tokens, contraste, solo CSS) y botón Atrás de Android (módulo aislado, sin tocar funciones)
+    'prueba-v532-exportar-existencias.js', // v5.32 — exportar existencias a Excel: capa pura, columnas exactas, solo lectura, sin ceros silenciosos
     'prueba-fase12.js',              // FASE 12 — folio #1001, anti-solapamiento y consistencia entre dispositivos
     'prueba-fisico-vs-sistema.js',   // FASE 11B (parte 1) — comparación físico vs. sistema
     'prueba-hotfix-4.22-movimientos.js', // HOTFIX 4.22 — recorte de movimientos y aviso de cuota

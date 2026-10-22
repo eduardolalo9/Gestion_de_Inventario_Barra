@@ -789,3 +789,13 @@ table { border-collapse: collapse; }
 .pa-btn, .vs-btn, .mc-pill, .ps-pie__btn, .vs-link, .ps-micro__sel { font-family: var(--f-head) !important; font-weight: 700 !important; letter-spacing: 0 !important; }
 .pa-btn--agregar { font-weight: 800 !important; }
 .pa-btn--publicar:not(.pa-btn--pendiente) { font-weight: 600 !important; }
+
+/* v5.32 — «Exportar existencias a Excel» (js/97-exportar-existencias.js).
+   Secundario: contorno con el acento, debajo de la barra del catálogo.
+   Ocupado: deshabilitado + ícono girando + "Generando Excel…". */
+.ex-fila { display: flex; justify-content: flex-end; margin: 0 0 12px; }
+.ex-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 44px; padding: 0 16px; border-radius: 999px; background: var(--card); color: var(--accent); border: 1.5px solid var(--border-strong); font-family: var(--f-head) !important; font-size: .8125rem; font-weight: 700 !important; letter-spacing: 0 !important; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.ex-btn:hover { border-color: var(--accent); }
+.ex-btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.ex-btn:disabled { opacity: .6; cursor: progress; }
+@media (min-width: 600px) { .ex-btn { width: auto; } }
