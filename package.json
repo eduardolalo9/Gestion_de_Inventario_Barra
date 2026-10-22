@@ -78,6 +78,7 @@
     "test:inicioconteo-nav": "node pruebas/prueba-inicio-conteo-navegador.js",
     "test:v528nav": "node pruebas/prueba-v528-navegador.js",
     "test:v531nav": "node pruebas/prueba-v531-tema-navegador.js",
+    "test:existnav": "node pruebas/prueba-v532-existencias-navegador.js",
     "test:atrasnav": "node pruebas/prueba-v531-atras-navegador.js",
     "test:icononav": "node pruebas/prueba-icono-navegador.js",
     "test:f16nav": "node pruebas/prueba-fase16-navegador.js",

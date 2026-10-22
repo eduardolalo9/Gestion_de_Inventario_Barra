@@ -837,6 +837,10 @@
 
             // v5.28 — barra de acciones arriba, sin necesidad de hacer scroll.
             if (admin) html += _productosBarraAcciones();
+            // v5.32 — «Exportar existencias a Excel» (js/97). Lo ve quien tiene
+            // inventory.export (también sin ser administrador). Va fuera de la
+            // región de búsqueda: exporta siempre el catálogo completo.
+            if (typeof existenciasExportBotonHtml === 'function') html += existenciasExportBotonHtml();
 
             // ── Buscador ──────────────────────────────────────────────────────
             // Mismo buscador y mismo estado que Inicio (clave 'catalogo'): filtrar
