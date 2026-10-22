@@ -67,15 +67,16 @@ chk('La ficha muestra el costo por línea con el mismo cálculo corregido',
 chk('El motor vive en su propia capa (js/48-consumo-teorico.js) y no pinta nada',
     /function consumoTeorico\(\)/.test(consumo) &&
     !/document\.getElementById/.test(consumo) && !/innerHTML/.test(consumo));
-chk('★ El cruce es el del Excel: unidades vendidas × cantidad de la receta, SIN convertir unidades',
-    /resultado\.consumo\[pid\] = \(resultado\.consumo\[pid\] \|\| 0\) \+ unidades \* cant;/.test(consumo));
+chk('★ v5.26 (hallazgo #2) · El cruce convierte unidades como el costeo: unidades vendidas × cantidad × factor de conversión',
+    /resultado\.consumo\[pid\] = \(resultado\.consumo\[pid\] \|\| 0\) \+ unidades \* cant \* factorConv;/.test(consumo) &&
+    /factorAUnidadProducto\(ing\.uom, prod\)/.test(consumo));
 chk('Agrupa las recetas por su código pv (case-insensitive), no por nombre',
     /recetaPorPV\[String\(r\.pv\)\.trim\(\)\.toUpperCase\(\)\]/.test(consumo));
 chk('★ Un SKU vendido SIN receta se reporta, nunca se estima su consumo',
     /avisos\.sinReceta\.push/.test(consumo) && /if \(!receta\) \{/.test(consumo));
 chk('Un insumo de receta fuera del catálogo se reporta',
     /avisos\.sinCatalogo\.push/.test(consumo));
-chk('Una UoM de receta distinta a la del insumo se reporta (65 líneas reales del Excel)',
+chk('Una UoM de receta que no se pudo convertir se reporta (ya no se asume factor 1 en silencio)',
     /avisos\.uomDistinta\.push/.test(consumo));
 chk('El resultado trae su procedencia (semana, líneas aplicadas, SKU vendidos), no un mapa suelto',
     /semana: semana,/.test(consumo) && /lineasCalculadas/.test(consumo) && /skusVendidos/.test(consumo));

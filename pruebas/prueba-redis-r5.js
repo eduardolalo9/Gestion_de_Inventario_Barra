@@ -76,7 +76,7 @@ chk('★ El detalle de un inventario cerrado ya no usa el envoltorio Tailwind cr
     !/bg-white rounded-xl p-4/.test(fDetalle) && /<div class="if-card">/.test(fDetalle));
 chk('El panel de administración en vivo usa if-card, no un div con estilo en línea',
     !/background:var\(--surface\);border:1px solid var\(--border\);border-radius:var\(--r-lg\);padding:14px;margin-bottom:16px;/.test(fAdminPanel) &&
-    /<div class="if-card">/.test(fAdminPanel));
+    /<div class="if-card( if-card--usuarios)?">/.test(fAdminPanel));   // v5.28: + modificador del inventario compacto
 
 // ═══ 2 · NI UN HEX ESCRITO A MANO EN LAS ZONAS TOCADAS ═════════════════════
 const HEX_PROHIBIDO = /#(16a34a|ef4444|22c55e|f59e0b|fff\b)/i;

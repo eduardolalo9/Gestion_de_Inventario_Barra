@@ -258,8 +258,9 @@ chk('index.html carga 47-existencia.js antes de 50-roles-permisos.js',
 chk('El panel dejó de guardar su propia copia del inicial',
     !/_panelInicial\s*=\s*\{/.test(panel) && /existenciaCargarInicial/.test(panel),
     'dos copias del mismo dato vuelven a divergir');
-chk('El panel pide la comparación a la capa de existencia',
-    /existenciaComparacion\(\)/.test(panel));
+// v5.24: la tarjeta "Comparación de existencias" se quitó de Inicio (pedido de Eduardo); la capa de existencia conserva existenciaComparacion().
+chk('v5.24 · El panel de Inicio ya no pinta la tarjeta de comparación (la capa de existencia sigue exponiéndola)',
+    !/_panelComparacion/.test(panel) && /function existenciaComparacion\(/.test(fs.readFileSync(path.join(RAIZ, 'js/47-existencia.js'), 'utf8')));
 chk('★ Guardar un producto sella su versión (alta y edición)',
     /_v: _versionProducto\(0\)/.test(uiInv) && /product\._v = _versionProducto\(product\._v\)/.test(uiInv));
 

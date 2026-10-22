@@ -370,7 +370,7 @@ chk('Las garantías de reglas que dejó F1 siguen en pie',
     (/allow update: if isAdminUser\(\) && \(\s*\n\s*\(resource\.data\.estado != 'CERRADO' && resource\.data\.estado != 'CONTABILIZADO'/.test(reglas) &&
      // FASE 13 sumó 'mesDestino' a la lista blanca (corte de fin de mes); el
      // resto de la garantía —transición única y acotada— no cambió.
-     /\.hasOnly\(\['estado','contabilizadoEn','contabilizadoPor','semanaDestino','mesDestino'\]\)/.test(reglas)) &&
+     /\.hasOnly\(\['estado','contabilizadoEn','contabilizadoPor','semanaDestino','mesDestino','anclaDestino'\]\)/.test(reglas)) &&
     /match \/historialCambios\/\{docId\}/.test(reglas),
     'se perdió el bloqueo del inventario cerrado o la regla del historial');
 // FASE 2 — esta comprobación afirmaba que Subjefe y Bartender seguían

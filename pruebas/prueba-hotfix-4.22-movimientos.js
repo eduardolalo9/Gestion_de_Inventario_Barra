@@ -102,8 +102,11 @@ try {
     process.exit(1);
 }
 
-// Semana de "hoy" para la prueba: un miércoles cualquiera.
-const HOY = new Date(2026, 8, 30); // 30-sep-2026 (miércoles)
+// Semana de "hoy" para la prueba. Debe ser la fecha REAL: _movimientosRecortar()
+// calcula "esta semana" con new Date() por dentro. Antes aquí había una fecha
+// fija (30-sep-2026) y la prueba empezó a fallar el lunes 5-oct-2026 sin que
+// el código hubiera cambiado: una bomba de reloj en la prueba, no un defecto.
+const HOY = new Date();
 const SEM_HOY       = api.semanaId(HOY);               // lunes de esta semana
 const SEM_ANTERIOR  = api.semanaAnterior(SEM_HOY);      // lunes de la semana pasada
 const SEM_VIEJA     = api.semanaAnterior(SEM_ANTERIOR); // dos semanas atrás — debe caer

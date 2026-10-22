@@ -199,7 +199,7 @@
                 var st = _estado(key);
                 var hayFiltros = Object.keys(st.filtros).length > 0;
                 var h = '<div class="sbx-vacio" role="note">';
-                h += '<div class="sbx-vacio__icono" aria-hidden="true">🔍</div>';
+                h += '<div class="sbx-vacio__icono" aria-hidden="true"><i class="fa-solid fa-magnifying-glass"></i></div>';
                 if (st.consulta) {
                     h += '<div class="sbx-vacio__titulo">No se encontró “' + _esc(st.consulta) + '”</div>';
                     h += '<div class="sbx-vacio__texto">Prueba con otra palabra, el código del producto'

@@ -28,8 +28,9 @@ const PUERTO = process.env.PUERTO || '8080';
   });
   await p.waitForTimeout(150);
 
-  chk('Con sales.import el header ofrece "Importar ventas"',
-      await p.evaluate(() => !!document.querySelector('[onclick="ventasImportarExcel()"]')), '');
+  // v5.18 — importar ventas vive en el módulo "Importar desde Excel".
+  chk('Con sales.import el header ya NO importa: se hace desde el módulo Importar',
+      await p.evaluate(() => !document.querySelector('[onclick="ventasImportarExcel()"]') && !!document.querySelector('[data-sb-tab="importar"]')), '');
   chk('Sin ventas cargadas, la pestaña lo dice',
       /Todavía no hay ventas cargadas/.test(await p.evaluate(() => document.getElementById('tabContent').innerText)), '');
 
@@ -210,10 +211,14 @@ const PUERTO = process.env.PUERTO || '8080';
   }, parsed.lineas);
   await p.waitForTimeout(120);
   const lista = await p.evaluate(() => document.getElementById('tabContent').innerText);
-  chk('La lista muestra la semana, el total y los SKU ordenados por cantidad',
-      /semana del 21 al 27 de septiembre de 2026/.test(lista) && /3.*SKU/.test(lista) && /Rib Eye Mochomos/.test(lista), lista.slice(0, 300));
+  // v5.28 — Ventas Semanales rediseñada: la semana va en la pill ("21–27 sep
+  // 2026"; la etiqueta larga queda en su aria-label), el conteo en el
+  // microcopy ("3 productos • N artículos") y la lista es "Top productos".
+  chk('La lista muestra la semana, el total y los productos vendidos',
+      /21–27 sep 2026/.test(lista) && /3 productos •/.test(lista) && /Rib Eye Mochomos/.test(lista)
+      && await p.evaluate(() => /semana del 21 al 27 de septiembre de 2026/.test(document.querySelector('.vs-periodo__actual').getAttribute('aria-label'))), lista.slice(0, 300));
   chk('★ La lista dice cuántos días de la semana están cargados y avisa que el teórico es parcial',
-      /Días cargados: 3 de 7/.test(lista) && /Faltan 4 día/.test(lista) &&
+      /Días cargados\s*3 de 7/.test(lista) && /Faltan 4 día/.test(lista) &&
       await p.evaluate(() => document.querySelectorAll('.vt-dia--ok').length === 3), lista.slice(0, 500));
 
   // ── Permisos ────────────────────────────────────────────────────────────

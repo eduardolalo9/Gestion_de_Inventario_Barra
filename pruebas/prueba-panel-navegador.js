@@ -45,13 +45,14 @@ const PUERTO = process.env.PUERTO || '8080';
   chk('Bajo mínimo cuenta 3 (A, B y el de prueba)', /3 BAJO M[ÍI]NIMO/i.test(k.tiles[1]), k.tiles[1]);
   chk('Valor en existencia = 2×100 + 3×50 + 0×1 = $350', /\$350/.test(k.tiles[2]), k.tiles[2]);
   chk('Compras de la semana muestran el importe', /\$1,200/.test(k.tiles[3]), k.tiles[3]);
-  chk('La gráfica de bajo mínimo pone primero al más urgente', /0 \/ 9/.test(k.barras[0] || '') && /2 \/ 10/.test(k.barras[1] || ''), JSON.stringify(k.barras.slice(0, 3)));
+  chk('v5.24 · Inicio ya no trae las gráficas "Bajo mínimo — existencia / mínimo", "Productos por grupo" ni "Comparación de existencias"',
+      k.barras.length === 0 && await p.evaluate(() => !/Bajo mínimo — existencia|Productos por grupo|Comparación de existencias/.test(document.getElementById('tabContent').innerText)), JSON.stringify(k.barras));
   chk('★ Un nombre con HTML no se ejecuta en el panel', await p.evaluate(() => window.__xss === undefined && !document.querySelector('.pm-panel img')), '');
 
-  await p.evaluate(() => document.querySelector('.pm-barra[data-pm-ficha="A"]').click());
+  await p.evaluate(() => document.querySelector('.pm-nombre-btn[data-pm-ficha="A"]').click());
   await p.waitForTimeout(150);
   const f = await p.evaluate(() => { const w = document.getElementById('pm-ficha-wrap'); return w ? w.innerText.replace(/\s+/g, ' ') : ''; });
-  chk('Tocar una barra abre la ficha del producto', /TEQUILA A/.test(f), f.slice(0, 80));
+  chk('Tocar el nombre del producto abre su ficha', /TEQUILA A/.test(f), f.slice(0, 80));
   chk('La ficha muestra existencia por área, mínimo y bajo mínimo', /Total 2/.test(f) && /Mínimo 10/.test(f) && /bajo mínimo/.test(f), f.slice(0, 200));
   chk('★ La ficha muestra las compras del producto y el último costo', /PROVEEDOR UNO/.test(f) && /\+6/.test(f) && /Último costo \$80/.test(f), f);
   chk('La ficha muestra las entradas de la semana', /Entradas por compras 6/.test(f), '');

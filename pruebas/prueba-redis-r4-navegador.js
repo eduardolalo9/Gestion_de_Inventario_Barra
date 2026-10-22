@@ -31,7 +31,7 @@ const GRIS_DE_FABRICA = /rgb\(239, 239, 239\)|buttonface/i;
 
 (async () => {
   const nav = await chromium.launch(require('./_lanzar-navegador')());
-  const p = await (await nav.newContext({ viewport: { width: 390, height: 844 } })).newPage();
+  const p = await require('./_tema-oscuro')(await nav.newContext({ viewport: { width: 390, height: 844 } })).newPage();
   const errs = []; p.on('pageerror', e => errs.push(String(e).slice(0, 200)));
   await p.goto('http://127.0.0.1:' + PUERTO + '/index.html', { waitUntil: 'load' });
   await p.evaluate(async () => {
@@ -120,7 +120,7 @@ const GRIS_DE_FABRICA = /rgb\(239, 239, 239\)|buttonface/i;
       enteras: med('#inv_enteras'),
       abierta: med('#inv_abiertasContainer input'),
       agregar: med('.inv-modal__agregar'),
-      cancelar: med('.inv-modal__btn--fantasma'),
+      cancelar: med('.inv-modal__cerrar'),   // v5.23: la X de la cabecera sustituye a Cancelar
       guardar: med('.inv-modal__btn--primario'),
       // ¿La etiqueta de abiertas y el botón de agregar se pisan? Antes sí: el
       // botón compartía fila con la etiqueta y la tapaba al crecer a dos líneas.
@@ -134,13 +134,13 @@ const GRIS_DE_FABRICA = /rgb\(239, 239, 239\)|buttonface/i;
     };
   });
   chk('★ El campo de enteras es mono tabular (es la cifra que se escribe)',
-      /Plex Mono/.test(modal.enteras.font || ''), modal.enteras.font);
+      /Manrope/.test(modal.enteras.font || ''), modal.enteras.font);
   chk('★ El campo de enteras es grande de leer (≥ 20 px)',
       modal.enteras.size >= 20, 'tamaño: ' + modal.enteras.size);
   chk('★ El campo de enteras es táctil (≥ 48 px de alto)',
       modal.enteras.h >= 48, 'alto: ' + modal.enteras.h);
   chk('★ El campo de una botella abierta también es mono tabular y táctil',
-      /Plex Mono/.test(modal.abierta.font || '') && modal.abierta.h >= 44,
+      /Manrope/.test(modal.abierta.font || '') && modal.abierta.h >= 44,
       JSON.stringify(modal.abierta));
   chk('★ "Agregar otra abierta" ya no pisa la etiqueta de al lado',
       modal.seSolapan === false, 'se solapaban: ' + modal.seSolapan);
@@ -148,15 +148,15 @@ const GRIS_DE_FABRICA = /rgb\(239, 239, 239\)|buttonface/i;
       !/rgb\(111, 178, 232\)/.test(modal.agregar.bg) && !GRIS_DE_FABRICA.test(modal.agregar.bg),
       'fondo: ' + modal.agregar.bg);
   chk('★ Guardar es el único latón del modal (el latón se gana)',
-      /rgb\(232, 181, 92\)/.test(modal.guardar.bg) &&
-      !/rgb\(232, 181, 92\)/.test(modal.agregar.bg) &&
-      !/rgb\(232, 181, 92\)/.test(modal.cancelar.bg),
+      /rgb\(84, 195, 152\)/.test(modal.guardar.bg) &&
+      !/rgb\(84, 195, 152\)/.test(modal.agregar.bg) &&
+      !/rgb\(84, 195, 152\)/.test(modal.cancelar.bg),
       JSON.stringify({ guardar: modal.guardar.bg, agregar: modal.agregar.bg, cancelar: modal.cancelar.bg }));
   chk('Cancelar y Guardar son táctiles (≥ 44 px)',
       modal.cancelar.h >= 44 && modal.guardar.h >= 44,
       JSON.stringify({ c: modal.cancelar.h, g: modal.guardar.h }));
   chk('El velo del modal usa el token del sistema, no un negro a mano',
-      /rgba?\(5, 6, 8/.test(modal.scrim) || /rgba\(0, 0, 0, 0\.7/.test(modal.scrim), modal.scrim);
+      /rgba?\(0, 5, 2/.test(modal.scrim) || /rgba\(0, 0, 0, 0\.7/.test(modal.scrim), modal.scrim);
 
   const sinGris = await p.evaluate((re) => {
     const rx = new RegExp(re, 'i');
@@ -201,7 +201,7 @@ const GRIS_DE_FABRICA = /rgb\(239, 239, 239\)|buttonface/i;
       cantidad.bloqueCantidad !== 'none' && cantidad.bloqueBotella === 'none',
       JSON.stringify(cantidad));
   chk('El campo de cantidad también es mono tabular y grande',
-      /Plex Mono/.test(cantidad.font || '') && cantidad.size >= 20, JSON.stringify(cantidad));
+      /Manrope/.test(cantidad.font || '') && cantidad.size >= 20, JSON.stringify(cantidad));
   await p.evaluate(() => closeInventarioModal());
   await p.waitForTimeout(250);
 
@@ -230,7 +230,7 @@ const GRIS_DE_FABRICA = /rgb\(239, 239, 239\)|buttonface/i;
   chk('★ La tarjeta de conteo lleva el MISMO monograma que en Inicio',
       tarjeta.mono === 'ASH', 'monograma: ' + tarjeta.mono);
   chk('★ El total es la cifra grande de la tarjeta, a la derecha y en mono',
-      /Plex Mono/.test(tarjeta.totalFuente || '') && tarjeta.totalTam >= 15 &&
+      /Manrope/.test(tarjeta.totalFuente || '') && tarjeta.totalTam >= 15 &&
       tarjeta.totalALaDerecha === true, JSON.stringify(tarjeta));
   /**
    * EL MISMO NÚMERO, UN SOLO VALOR.

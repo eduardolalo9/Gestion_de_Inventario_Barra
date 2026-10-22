@@ -282,7 +282,7 @@
                      + '<div style="font-weight:600;margin-bottom:6px">No hay ninguna receta con PV reconocible en este archivo</div>'
                      + '<div style="color:var(--txt-secondary);font-size:.86rem">Revisa que sea la hoja "Recetas" del Excel de producción.</div></div>'
                      + '<div style="margin-top:14px"><button type="button" onclick="cancelarImportacionRecetario()" '
-                     + 'style="padding:9px 15px;border-radius:var(--r-md);background:var(--surface);'
+                     + 'style="padding:0 15px;min-height:44px;border-radius:var(--r-md);background:var(--surface);'
                      + 'border:1px solid var(--border-mid);color:var(--txt-primary);cursor:pointer">Cerrar</button></div>';
             }
 
@@ -296,13 +296,13 @@
                       + '<div style="color:var(--txt-secondary);font-size:.86rem;line-height:1.5">'
                       + parsed.recetas.length + ' receta(s) · <b>' + nuevas + ' nueva(s)</b> · <b>' + actualizadas + ' se actualizan</b>'
                       + (parsed.filasSinPV ? ' · ' + parsed.filasSinPV + ' fila(s) sin PV (descartadas)' : '')
-                      + (totalIncidencias ? ' · <b style="color:#fbbf24">' + totalIncidencias + ' incidencia(s)</b>' : '')
-                      + (sinIngredientes ? ' · <b style="color:#f87171">' + sinIngredientes + ' sin ingredientes</b>' : '')
+                      + (totalIncidencias ? ' · <b style="color:var(--warn)">' + totalIncidencias + ' incidencia(s)</b>' : '')
+                      + (sinIngredientes ? ' · <b style="color:var(--danger)">' + sinIngredientes + ' sin ingredientes</b>' : '')
                       + '</div></div>';
 
             html += '<div style="padding:10px 12px;margin-bottom:14px;border-radius:10px;'
-                  + 'background:rgba(251,191,36,.10);border:1px solid rgba(251,191,36,.28);'
-                  + 'color:#fbbf24;font-size:.82rem;line-height:1.5">'
+                  + 'background:var(--warn-dim);border:1px solid var(--warn-dim);'
+                  + 'color:var(--warn);font-size:.82rem;line-height:1.5">'
                   + '⚠️ Esto reemplaza los ingredientes de cada receta que ya existe con el mismo PV. '
                   + 'No se publica todavía — después de confirmar, sigue haciendo falta "Publicar recetario" '
                   + 'para que lo vean los demás.</div>';
@@ -312,7 +312,7 @@
             // una escondería las que sí importan.
             if (parsed.recetasOtroAlmacen || parsed.lineasFueraDeAlcance) {
                 html += '<div style="padding:10px 12px;margin-bottom:14px;border-radius:10px;'
-                      + 'background:rgba(148,163,184,.10);border:1px solid rgba(148,163,184,.28);'
+                      + 'background:var(--surface);border:1px solid var(--border-mid);'
                       + 'color:var(--txt-secondary);font-size:.82rem;line-height:1.5">'
                       + '🏷️ Fuera de alcance de la barra (almacén ' + ALMACEN_BARRA_CODIGO + '): '
                       + '<b>' + (parsed.recetasOtroAlmacen || 0) + '</b> receta(s) de cocina o cava no se importan'
@@ -343,27 +343,27 @@
                         (r.esNueva ? 'Nueva' : 'Actualiza') + '</span></div>'
                       + '<div style="color:var(--txt-secondary);font-size:.82rem;margin-top:5px">'
                       + 'PV ' + escapeHtml(r.pv) + (r.categoria ? ' · ' + escapeHtml(r.categoria) : '')
-                      + (r.activa ? '' : ' · <span style="color:#9ca3af">inactiva</span>') + '</div>'
+                      + (r.activa ? '' : ' · <span style="color:var(--txt-muted)">inactiva</span>') + '</div>'
                       + '<div style="margin-top:7px;font-size:.9rem">'
                       + '<b>' + r.totalIngredientes + '</b> ingrediente' + (r.totalIngredientes === 1 ? '' : 's')
-                      + (r.totalIngredientes === 0 ? ' <span style="color:#f87171">— sin ingredientes en el Excel</span>' : '') + '</div>';
+                      + (r.totalIngredientes === 0 ? ' <span style="color:var(--danger)">— sin ingredientes en el Excel</span>' : '') + '</div>';
 
                 if (r.incidencias.length) {
-                    html += '<div style="margin-top:8px;font-size:.8rem;color:#fbbf24">'
+                    html += '<div style="margin-top:8px;font-size:.8rem;color:var(--warn)">'
                           + '⚠️ ' + r.incidencias.length + ' incidencia(s) — '
                           + '<a href="javascript:void(0)" onclick="_recetarioVerIncidenciasGrupo(\'' + escapeHtml(r.pv) + '\')" '
-                          + 'style="color:#fbbf24;text-decoration:underline">ver detalle</a></div>';
+                          + 'style="color:var(--warn);text-decoration:underline">ver detalle</a></div>';
                 }
                 html += '</div>';
             });
 
             html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">'
                   + '<button type="button" onclick="confirmarImportacionRecetario()" '
-                  + 'style="padding:9px 15px;border-radius:var(--r-md);background:#065f46;'
-                  + 'border:1px solid rgba(34,197,94,.28);color:#86efac;font-weight:600;cursor:pointer">'
+                  + 'style="padding:0 15px;min-height:44px;border-radius:var(--r-md);background:var(--ok-dim);'
+                  + 'border:1px solid var(--ok-dim);color:var(--ok);font-weight:600;cursor:pointer">'
                   + 'Confirmar e importar</button>'
                   + '<button type="button" onclick="cancelarImportacionRecetario()" '
-                  + 'style="padding:9px 15px;border-radius:var(--r-md);background:var(--surface);'
+                  + 'style="padding:0 15px;min-height:44px;border-radius:var(--r-md);background:var(--surface);'
                   + 'border:1px solid var(--border-mid);color:var(--txt-primary);cursor:pointer">Cancelar</button>'
                   + '</div>';
             return html;
@@ -397,7 +397,7 @@
             }
 
             html += '<div style="margin-top:16px"><button type="button" onclick="cerrarResultadoImportacionRecetario()" '
-                  + 'style="padding:9px 15px;border-radius:var(--r-md);background:var(--surface);'
+                  + 'style="padding:0 15px;min-height:44px;border-radius:var(--r-md);background:var(--surface);'
                   + 'border:1px solid var(--border-mid);color:var(--txt-primary);cursor:pointer">Aceptar</button></div>';
             return html;
         }

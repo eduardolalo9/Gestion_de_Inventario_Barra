@@ -188,7 +188,7 @@
          * Fin vacío = un solo día (fin = inicio).
          * Devuelve { ok, errores[], avisos[], inicio, fin, semanaId, dias[], conflictos[] }.
          */
-        function validarPeriodoVentas(inicio, fin, periodosExistentes, hoyISO) {
+        function validarPeriodoVentas(inicio, fin, periodosExistentes, hoyISO, anclaFecha) {
             var r = { ok: false, errores: [], avisos: [], inicio: inicio || '', fin: fin || inicio || '',
                       semanaId: null, dias: [], conflictos: [] };
             var hoy = hoyISO || fechaISOLocal(new Date());
@@ -215,6 +215,14 @@
             } else if (r.conflictos.length > 1) {
                 r.errores.push('Las fechas ' + r.conflictos.map(_ventasFmtFecha).join(', ') + ' ya se encuentran en el sistema. No se pueden cargar.');
             }
+            // FASE 14 — un periodo que CRUZA la fecha del último corte no se
+            // podría repartir después (el reporte trae cantidades sumadas):
+            // la parte anterior ya está en el conteo físico y la posterior no.
+            if (anclaFecha && typeof periodoCruzaAncla === 'function' && periodoCruzaAncla(r.inicio, r.fin, anclaFecha)) {
+                r.errores.push('El rango cruza la fecha del último corte contabilizado (' + _ventasFmtFecha(anclaFecha) + '). '
+                             + 'Importa un reporte hasta el ' + _ventasFmtFecha(anclaFecha) + ' y otro desde el día siguiente: '
+                             + 'así lo vendido antes del corte no se descuenta dos veces.');
+            }
             if (!r.errores.length && r.fin === hoy) {
                 r.avisos.push('Incluye hoy (' + _ventasFmtFecha(hoy) + '). Si el día no ha terminado, las ventas que falten de hoy ya no se podrán cargar después.');
             }
@@ -229,16 +237,20 @@
             (listas || []).forEach(function(lineas) {
                 (lineas || []).forEach(function(l) {
                     if (!l || !l.sku) return;
-                    if (!porSku[l.sku]) { porSku[l.sku] = { sku: l.sku, nombre: l.nombre || '', tipo: l.tipo || '', cantidad: 0, ventaNeta: 0 }; orden.push(l.sku); }
+                    if (!porSku[l.sku]) { porSku[l.sku] = { sku: l.sku, nombre: l.nombre || '', tipo: l.tipo || '', cantidad: 0, ventaNeta: 0, cortesia: 0, promo: 0 }; orden.push(l.sku); }
                     porSku[l.sku].cantidad  += Number(l.cantidad)  || 0;
                     porSku[l.sku].ventaNeta += Number(l.ventaNeta) || 0;
+                    // v5.19 — cortesías y promos 2x1 viajan con la línea (se suman igual)
+                    var partes = ventaPartesLinea(l);
+                    porSku[l.sku].cortesia += partes.cortesia;
+                    porSku[l.sku].promo    += partes.promo;
                 });
             });
             return orden.map(function(s) {
                 var g = porSku[s];
-                return { sku: g.sku, nombre: g.nombre, tipo: g.tipo,
+                return _ventasLineaConPartes({ sku: g.sku, nombre: g.nombre, tipo: g.tipo,
                          cantidad: Math.round(g.cantidad * 1000) / 1000,
-                         ventaNeta: Math.round(g.ventaNeta * 100) / 100 };
+                         ventaNeta: Math.round(g.ventaNeta * 100) / 100 }, g.cortesia, g.promo);
             });
         }
         window._ventasAgregarLineas = _ventasAgregarLineas;
@@ -250,6 +262,61 @@
             return Object.keys(dias).sort();
         }
         window.ventasCoberturaSemana = ventasCoberturaSemana;
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  v5.19 — CORTESÍAS Y PROMOCIONES 2x1 (decisiones de Eduardo)
+        //  ────────────────────────────────────────────────────────────────────
+        //  · D-5 (19-sep): las cortesías NO se costean contra la venta, pero SÍ
+        //    descuentan stock teórico — el líquido salió de la botella.
+        //  · 2x1 (6-oct): Parrot registra la copa cobrada como el artículo normal
+        //    y la de regalo como "… promo 2x1" a $0, con el MISMO SKU. Cada
+        //    unidad promo es UNA copa: sumarlas (lo que ya se hacía) es correcto.
+        //  El consumo NO cambia. Lo nuevo es separarlas para verlas y saber
+        //  cuánto cuestan (a precio de insumo), como control.
+        //  Una fila es "a $0" si su Venta neta es exactamente 0. Si el archivo
+        //  no trae Venta neta no se clasifica nada (no se adivina).
+        // ══════════════════════════════════════════════════════════════════════
+        var VENTAS_RE_PROMO = /promo|2\s*x\s*1/i;
+
+        /** 'venta' | 'promo' | 'cortesia' para una fila del reporte. */
+        function ventaClasificarFila(nombre, ventaNeta, cantidad) {
+            if (ventaNeta === null || ventaNeta === undefined || ventaNeta === '' || !isFinite(Number(ventaNeta))) return 'venta';
+            if (Number(ventaNeta) !== 0 || !(Number(cantidad) > 0)) return 'venta';
+            return VENTAS_RE_PROMO.test(String(nombre || '')) ? 'promo' : 'cortesia';
+        }
+
+        /** Agrega cortesia/promo a la línea solo si hay (el formato viejo no cambia). */
+        function _ventasLineaConPartes(l, cortesia, promo) {
+            var c = Math.round((Number(cortesia) || 0) * 1000) / 1000;
+            var p = Math.round((Number(promo) || 0) * 1000) / 1000;
+            if (c > 0) l.cortesia = c;
+            if (p > 0) l.promo = p;
+            return l;
+        }
+
+        /**
+         * Unidades de cortesía y de promo 2x1 de una línea guardada. Las líneas
+         * anteriores a v5.19 no traen el desglose: si la línea entera vale $0 se
+         * clasifica por su nombre; si mezcla venta y regalo, no se puede saber.
+         */
+        function ventaPartesLinea(l) {
+            if (!l) return { cortesia: 0, promo: 0 };
+            if (typeof l.cortesia === 'number' || typeof l.promo === 'number') {
+                return { cortesia: Number(l.cortesia) || 0, promo: Number(l.promo) || 0 };
+            }
+            var clase = ventaClasificarFila(l.nombre, l.ventaNeta, l.cantidad);
+            var n = Number(l.cantidad) || 0;
+            return { cortesia: clase === 'cortesia' ? n : 0, promo: clase === 'promo' ? n : 0 };
+        }
+        /** Etiqueta corta "x cortesía · y 2x1" para una línea (vacía si no hay). */
+        function _ventasEtiquetaRegalo(l) {
+            var p = ventaPartesLinea(l), t = [];
+            if (p.cortesia > 0) t.push(p.cortesia + ' cortesía');
+            if (p.promo > 0) t.push(p.promo + ' de regalo 2x1');
+            return t.length ? ' <span class="vt-regalo">' + escapeHtml(t.join(' · ')) + '</span>' : '';
+        }
+        window.ventaClasificarFila = ventaClasificarFila;
+        window.ventaPartesLinea = ventaPartesLinea;
 
         /**
          * _parsearExcelVentas(filas)
@@ -302,6 +369,8 @@
                         tipo: String(_findColCompras(fila, COLUMNAS_EXCEL_VENTAS.tipo) || '').trim(),
                         cantidad: 0,
                         ventaNeta: 0,
+                        cortesia: 0,
+                        promo: 0,
                         filas: 0
                     };
                     orden.push(sku);
@@ -312,6 +381,13 @@
                 g.filas++;
                 const neta = _numeroExcel(_findColCompras(fila, COLUMNAS_EXCEL_VENTAS.ventaNeta));
                 if (neta !== null) g.ventaNeta += neta;
+                // v5.19 — una fila a $0 es cortesía o la copa de regalo de una
+                // promo 2x1 (decisión de Eduardo, 6-oct-2026: cada unidad "promo
+                // 2x1" a $0 es UNA copa). Las dos SÍ descuentan stock (D-5); aquí
+                // solo se separan para poder verlas y costearlas aparte.
+                const clase = ventaClasificarFila(nombre, neta, cantidad);
+                if (clase === 'cortesia') g.cortesia += cantidad;
+                else if (clase === 'promo') g.promo += cantidad;
                 // El nombre de la variante promo es menos útil que el base:
                 // se conserva el primero que llegó, que es el de mayor venta
                 // porque el reporte viene ordenado de mayor a menor.
@@ -319,11 +395,11 @@
 
             const lineas = orden.map(function(sku) {
                 const g = porSku[sku];
-                return {
+                return _ventasLineaConPartes({
                     sku: g.sku, nombre: g.nombre, tipo: g.tipo,
                     cantidad: Math.round(g.cantidad * 1000) / 1000,
                     ventaNeta: Math.round(g.ventaNeta * 100) / 100
-                };
+                }, g.cortesia, g.promo);
             });
 
             const agrupadas = orden.filter(function(sku) { return porSku[sku].filas > 1; })
@@ -337,6 +413,8 @@
                 filasIgnoradas: filasIgnoradas,
                 totalFilas: (filas || []).length,
                 totalUnidades: Math.round(lineas.reduce(function(a, l) { return a + l.cantidad; }, 0) * 1000) / 1000,
+                unidadesCortesia: Math.round(lineas.reduce(function(a, l) { return a + (l.cortesia || 0); }, 0) * 1000) / 1000,
+                unidadesPromo: Math.round(lineas.reduce(function(a, l) { return a + (l.promo || 0); }, 0) * 1000) / 1000,
                 excedeTope: lineas.length > VENTAS_MAX_LINEAS
             };
         }
@@ -441,7 +519,8 @@
         function _ventasValidacionPendiente(parsed) {
             var ex = parsed.existentes || { estado: 'verificando', periodos: [] };
             var v = validarPeriodoVentas(parsed.periodo.inicio, parsed.periodo.fin,
-                                         ex.estado === 'ok' ? ex.periodos : []);
+                                         ex.estado === 'ok' ? ex.periodos : [], undefined,
+                                         (typeof ventaTurnoAnclaFecha === 'function') ? ventaTurnoAnclaFecha() : null);
             v.verificado = (ex.estado === 'ok' && ex.semanaId === v.semanaId);
             v.puedeConfirmar = v.ok && v.verificado && !parsed.excedeTope;
             return v;
@@ -470,29 +549,29 @@
                      + (p.inicio ? 'min="' + escapeHtml(p.inicio) + '" ' : '') + 'max="' + hoy + '" '
                      + 'onchange="_ventasCambiarPeriodo(\'fin\', this.value)"></label>'
                      + '<button type="button" class="bt bt--secundario" onclick="_ventasUnSoloDia()"'
-                     + (p.inicio && p.fin === p.inicio ? ' aria-pressed="true"' : '') + '>📍 Un solo día (fin = inicio)</button>';
+                     + (p.inicio && p.fin === p.inicio ? ' aria-pressed="true"' : '') + '><i class="fa-solid fa-location-dot" aria-hidden="true"></i> Un solo día (fin = inicio)</button>';
 
             // ¿A qué semana pertenece esta fecha?
             if (v.semanaId) {
-                html += '<div class="vt-semana" role="status">📅 Pertenece a la <b>' + escapeHtml(etiquetaSemana(v.inicio)) + '</b>'
+                html += '<div class="vt-semana" role="status"><i class="fa-solid fa-calendar-days" aria-hidden="true"></i> Pertenece a la <b>' + escapeHtml(etiquetaSemana(v.inicio)) + '</b>'
                       + '<br>' + (v.dias.length === 1 ? '1 día: ' : v.dias.length + ' días: ') + escapeHtml(_ventasTextoRango(v.inicio, v.fin))
                       + '</div>';
             }
 
             if (ex.estado === 'verificando') {
-                html += '<div class="vt-msg vt-msg--info" role="status">⏳ Comprobando en el servidor qué fechas ya están cargadas…</div>';
+                html += '<div class="vt-msg vt-msg--info" role="status"><i class="fa-solid fa-hourglass" aria-hidden="true"></i> Comprobando en el servidor qué fechas ya están cargadas…</div>';
             } else if (ex.estado === 'error') {
-                html += '<div class="vt-msg vt-msg--error" role="alert">🛑 ' + escapeHtml(ex.mensaje || 'No se pudo comprobar qué fechas ya están cargadas.') + '</div>';
+                html += '<div class="vt-msg vt-msg--error" role="alert"><i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i> ' + escapeHtml(ex.mensaje || 'No se pudo comprobar qué fechas ya están cargadas.') + '</div>';
             } else if (ex.periodos && ex.periodos.length) {
                 html += '<div class="vt-msg vt-msg--info">Ya cargadas en esa semana: <b>'
                       + escapeHtml(ex.periodos.map(function(x) { return _ventasTextoRango(x.inicio, x.fin); }).join(' · ')) + '</b></div>';
             }
 
             v.errores.forEach(function(e) {
-                html += '<div class="vt-msg vt-msg--error" role="alert">🛑 ' + escapeHtml(e) + '</div>';
+                html += '<div class="vt-msg vt-msg--error" role="alert"><i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i> ' + escapeHtml(e) + '</div>';
             });
             v.avisos.forEach(function(a) {
-                html += '<div class="vt-msg vt-msg--aviso">⚠️ ' + escapeHtml(a) + '</div>';
+                html += '<div class="vt-msg vt-msg--aviso"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> ' + escapeHtml(a) + '</div>';
             });
             html += '</section>';
             return html;
@@ -500,63 +579,73 @@
 
         function renderVistaPreviaVentas(parsed) {
             if (!parsed || !parsed.lineas || parsed.lineas.length === 0) {
-                return '<div style="text-align:center;padding:32px 18px;background:var(--surface);'
-                     + 'border:1px solid var(--border-mid);border-radius:12px">'
-                     + '<div style="font-weight:600;margin-bottom:6px">No hay ninguna venta con SKU en este archivo</div>'
-                     + '<div style="color:var(--txt-secondary);font-size:.9rem">Revisa que sea el reporte de ventas de Parrot (hoja "Detalle").</div></div>'
-                     + '<div class="bt-pila" style="margin-top:16px"><button type="button" class="bt bt--secundario" onclick="cancelarImportacionVentas()">Cerrar</button></div>';
+                return '<div class="vt-vacio vt-vacio--caja">'
+                     + '<div class="vt-vacio__tit">No hay ninguna venta con SKU en este archivo</div>'
+                     + '<div class="vt-vacio__txt">Revisa que sea el reporte de ventas de Parrot (hoja "Detalle").</div></div>'
+                     + '<div class="bt-pila vt-pila"><button type="button" class="bt bt--secundario" onclick="cancelarImportacionVentas()">Cerrar</button></div>';
             }
 
-            var html = '<div style="margin-bottom:14px">'
-                     + '<div style="font-weight:700;font-size:1.1rem;margin-bottom:4px">Vista previa de la importación de ventas</div>'
-                     + '<div style="color:var(--txt-secondary);font-size:.9rem;line-height:1.5">'
+            var html = '<div class="vt-cab">'
+                     + '<div class="vt-cab__tit">Vista previa de la importación de ventas</div>'
+                     + '<div class="vt-cab__txt">'
                      + (parsed.hoja ? 'Hoja <b>' + escapeHtml(parsed.hoja) + '</b>' + (parsed.archivo ? ' de ' + escapeHtml(parsed.archivo) : '') + '<br>' : '')
                      + '<b>' + parsed.lineas.length + '</b> SKU · <b>' + parsed.totalUnidades + '</b> unidades vendidas'
                      + (parsed.filasIgnoradas ? ' · ' + parsed.filasIgnoradas + ' fila(s) sin datos (descartadas)' : '')
-                     + (parsed.incidencias.length ? ' · <b style="color:var(--amber)">' + parsed.incidencias.length + ' incidencia(s)</b>' : '')
+                     + (parsed.incidencias.length ? ' · <b class="vt-txt-aviso">' + parsed.incidencias.length + ' incidencia(s)</b>' : '')
                      + '</div></div>';
 
             // ── El periodo: lo más importante de esta pantalla ──────────────
             html += _ventasBloquePeriodo(parsed);
 
             if (parsed.excedeTope) {
-                html += '<div class="vt-msg vt-msg--error" style="margin-bottom:14px">'
-                      + '🛑 El archivo trae ' + parsed.lineas.length + ' SKU y el tope por periodo es ' + VENTAS_MAX_LINEAS
+                html += '<div class="vt-msg vt-msg--error vt-msg--sep">'
+                      + '<i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i> El archivo trae ' + parsed.lineas.length + ' SKU y el tope por periodo es ' + VENTAS_MAX_LINEAS
                       + '. No se puede guardar: revisa que el reporte sea de un solo periodo.</div>';
             }
 
             if (parsed.skusAgrupados && parsed.skusAgrupados.length) {
-                html += '<div class="vt-msg vt-msg--info" style="margin-bottom:14px">'
-                      + 'ℹ️ ' + parsed.skusAgrupados.length + ' SKU venían en varias filas (variantes promo, 2x1) y '
+                html += '<div class="vt-msg vt-msg--info vt-msg--sep">'
+                      + '<i class="fa-solid fa-circle-info" aria-hidden="true"></i> ' + parsed.skusAgrupados.length + ' SKU venían en varias filas (variantes promo, 2x1) y '
                       + '<b>se sumaron</b>, como hace el Excel: '
                       + escapeHtml(parsed.skusAgrupados.slice(0, 4).map(function(s) { return s.nombre + ' (' + s.filas + ')'; }).join(', '))
                       + (parsed.skusAgrupados.length > 4 ? '…' : '') + '</div>';
+            }
+            // v5.19 — cortesías y copas de regalo 2x1 (filas a $0)
+            if (parsed.unidadesCortesia || parsed.unidadesPromo) {
+                html += '<div class="vt-msg vt-msg--info vt-msg--sep">'
+                      + '<i class="fa-solid fa-gift" aria-hidden="true"></i> Incluye <b>' + (parsed.unidadesCortesia || 0) + '</b> cortesía(s) y <b>'
+                      + (parsed.unidadesPromo || 0) + '</b> copa(s) de regalo 2x1 a $0. Descuentan inventario; con <b>Simular</b> ves qué consumieron y su costo.</div>';
             }
 
             // Las 12 más vendidas, para que se reconozca de un vistazo si el
             // archivo es el correcto sin pintar 200 filas en un teléfono.
             var top = parsed.lineas.slice().sort(function(a, b) { return b.cantidad - a.cantidad; }).slice(0, 12);
-            html += '<div style="background:var(--surface);border:1px solid var(--border-mid);border-radius:12px;padding:12px 14px;margin-bottom:10px">'
-                  + '<div style="font-size:.75rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--txt-secondary);margin-bottom:8px">Más vendidos en el archivo</div>'
-                  + '<table style="width:100%;border-collapse:collapse;font-size:.9rem">';
+            html += '<div class="vt-panel">'
+                  + '<div class="vt-etiqueta">Más vendidos en el archivo</div>'
+                  + '<table class="vt-tabla">';
             top.forEach(function(l) {
-                html += '<tr style="border-bottom:1px solid var(--border-mid)">'
-                      + '<td style="padding:8px 4px">' + escapeHtml(l.nombre || l.sku) + '</td>'
-                      + '<td style="padding:8px 4px;text-align:right;color:var(--txt-secondary);white-space:nowrap">' + l.cantidad + '</td>'
+                html += '<tr>'
+                      + '<td>' + escapeHtml(l.nombre || l.sku) + _ventasEtiquetaRegalo(l) + '</td>'
+                      + '<td class="vt-num">' + l.cantidad + '</td>'
                       + '</tr>';
             });
             html += '</table></div>';
 
+            // FASE 14 — reventar la venta contra las recetas antes de procesar.
+            if (typeof renderSimulacionVentaTurno === 'function') html += renderSimulacionVentaTurno(parsed);
+
             var v = _ventasValidacionPendiente(parsed);
-            html += '<div class="bt-pila" style="margin-top:18px">';
+            html += '<div class="bt-pila vt-pila">';
             if (parsed.incidencias.length) {
-                html += '<button type="button" class="bt bt--secundario" onclick="_ventasVerIncidencias()">⚠️ Ver ' + parsed.incidencias.length + ' incidencia(s)</button>';
+                html += '<button type="button" class="bt bt--secundario" onclick="_ventasVerIncidencias()"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> Ver ' + parsed.incidencias.length + ' incidencia(s)</button>';
             }
             if (!parsed.excedeTope) {
-                html += '<button type="button" id="ventasBtnConfirmar" class="bt bt--exito" onclick="confirmarImportacionVentas()"'
-                      + (v.puedeConfirmar ? '' : ' disabled aria-disabled="true"') + '>✅ Confirmar e importar</button>';
+                // FASE 14 — "Procesar" = guardar el periodo; el Total lo resta solo.
+                html += '<button type="button" id="ventasBtnConfirmar" class="bt bt--exito" onclick="'
+                      + (typeof ventaTurnoProcesar === 'function' ? 'ventaTurnoProcesar()' : 'confirmarImportacionVentas()') + '"'
+                      + (v.puedeConfirmar ? '' : ' disabled aria-disabled="true"') + '><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Procesar venta (baja el inventario)</button>';
                 if (!v.puedeConfirmar) {
-                    html += '<p class="bt-nota">' + (v.errores.length ? 'Corrige las fechas marcadas en rojo para poder importar.'
+                    html += '<p class="bt-nota">' + (v.errores.length ? 'Corrige las fechas marcadas en rojo para poder procesar.'
                           : 'Se habilita en cuanto termine la comprobación de fechas.') + '</p>';
                 }
             }
@@ -568,29 +657,29 @@
         function renderIncidenciasVentas(resultado) {
             if (!resultado) return '';
             var periodoTxt = (resultado.inicio && resultado.fin) ? _ventasTextoRango(resultado.inicio, resultado.fin) : '';
-            var html = '<div style="margin-bottom:14px">'
-                     + '<div style="font-weight:700;font-size:1.1rem;margin-bottom:4px">Resultado de la importación</div>'
-                     + '<div style="color:var(--txt-secondary);font-size:.9rem;line-height:1.5">'
+            var html = '<div class="vt-cab">'
+                     + '<div class="vt-cab__tit">Resultado de la importación</div>'
+                     + '<div class="vt-cab__txt">'
                      + (resultado.guardado
                          ? resultado.totalSkus + ' SKU guardados · periodo <b>' + escapeHtml(periodoTxt) + '</b>'
                            + (resultado.semanaId ? ' (' + escapeHtml(etiquetaSemana(resultado.semanaId)) + ')' : '')
-                         : '<b style="color:var(--red-text)">No se guardó: ' + escapeHtml(resultado.motivo || 'error desconocido') + '</b>')
+                         : '<b class="vt-txt-error"><i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i> No se guardó: ' + escapeHtml(resultado.motivo || 'error desconocido') + '</b>')
                      + '</div></div>';
 
             if (resultado.incidencias && resultado.incidencias.length) {
-                html += '<div style="font-weight:600;margin-bottom:8px">Incidencias (' + resultado.incidencias.length + ')</div>';
+                html += '<div class="vt-subtit">Incidencias (' + resultado.incidencias.length + ')</div>';
                 resultado.incidencias.forEach(function(inc) {
-                    html += '<div style="background:var(--surface);border:1px solid var(--border-mid);'
-                          + 'border-radius:10px;padding:10px 12px;margin-bottom:8px;font-size:.88rem">'
-                          + '<div style="color:var(--txt-secondary);font-size:.78rem;margin-bottom:2px">'
+                    html += '<div class="vt-inc">'
+                          + '<div class="vt-inc__sku">'
                           + escapeHtml(inc.sku || '(sin SKU)') + '</div>'
                           + escapeHtml(inc.detalle) + '</div>';
                 });
             } else {
-                html += '<div style="color:var(--txt-secondary);font-size:.9rem">Sin incidencias.</div>';
+                html += '<div class="vt-ayuda">Sin incidencias.</div>';
             }
 
-            html += '<div class="bt-pila" style="margin-top:18px"><button type="button" class="bt bt--primario" onclick="cerrarResultadoImportacionVentas()">Aceptar</button></div>';
+            if (typeof renderDescargoVentaTurno === 'function') html += renderDescargoVentaTurno(resultado);
+            html += '<div class="bt-pila vt-pila"><button type="button" class="bt bt--primario" onclick="cerrarResultadoImportacionVentas()">Aceptar</button></div>';
             return html;
         }
 
@@ -651,6 +740,11 @@
                     // Qué fechas de esa semana ya están en el servidor: sin esta
                     // respuesta no se habilita "Confirmar".
                     _ventasRevisarPeriodos();
+                    // FASE 14 — el corte vigente decide si el periodo baja el
+                    // Total o lo cruza: se asegura que esté cargado.
+                    if (typeof existenciaCargarInicial === 'function') {
+                        existenciaCargarInicial(function() { if (ventasImportView === 'vista_previa') renderTab(); });
+                    }
                 } catch (err) {
                     console.error('[Ventas] Error leyendo el Excel:', err);
                     showNotification('❌ No se pudo leer el archivo — revisa que sea el reporte de ventas del POS');
@@ -692,6 +786,7 @@
         function _ventasCambiarPeriodo(campo, valor) {
             var p = _ventasImportPendiente;
             if (!p || !p.periodo) return;
+            p.simulacion = null;   // FASE 14: el efecto sobre el Total depende del periodo
             if (campo === 'inicio') {
                 p.periodo.inicio = valor || '';
                 if (!p.periodo.fin || p.periodo.fin < p.periodo.inicio) p.periodo.fin = p.periodo.inicio;
@@ -707,6 +802,7 @@
             var p = _ventasImportPendiente;
             if (!p || !p.periodo || !p.periodo.inicio) return;
             p.periodo.fin = p.periodo.inicio;
+            p.simulacion = null;
             renderTab();
         }
         window._ventasUnSoloDia = _ventasUnSoloDia;
@@ -736,7 +832,8 @@
                 }
                 var existentes = docs.map(function(x) { return _ventasPeriodoDeDoc(x.id, x.data); });
                 parsed.existentes = { semanaId: previa.semanaId, estado: 'ok', periodos: existentes };
-                var v = validarPeriodoVentas(parsed.periodo.inicio, parsed.periodo.fin, existentes);
+                var v = validarPeriodoVentas(parsed.periodo.inicio, parsed.periodo.fin, existentes, undefined,
+                                             (typeof ventaTurnoAnclaFecha === 'function') ? ventaTurnoAnclaFecha() : null);
                 if (!v.ok) { showNotification('🛑 ' + v.errores[0]); renderTab(); return; }
 
                 _crearBackupNombrado('pre_importacion_ventas_' + Date.now());
@@ -817,71 +914,451 @@
                 var f = fechaISOLocal(new Date(l.getFullYear(), l.getMonth(), l.getDate() + i));
                 var ok = !!set[f];
                 html += '<div role="listitem" class="vt-dia' + (ok ? ' vt-dia--ok' : '') + '" title="' + _ventasFmtFecha(f)
-                      + (ok ? ' · cargado' : ' · sin ventas') + '">' + letras[i] + '<br>' + parseFechaLocal(f).getDate() + '</div>';
+                      + (ok ? ' · cargado' : ' · sin ventas') + '" aria-label="' + _ventasFmtFecha(f) + (ok ? ', cargado' : ', sin ventas') + '">'
+                      + letras[i] + '<br>' + parseFechaLocal(f).getDate()
+                      + (ok ? '<br><i class="fa-solid fa-circle-check" aria-hidden="true"></i>' : '') + '</div>';
             }
             return html + '</div>';
         }
 
+        // ══════════════════════════════════════════════════════════════════════
+        //  v5.28 — VENTAS SEMANALES (rediseño, decisión de Eduardo 15-oct-2026)
+        //  ────────────────────────────────────────────────────────────────────
+        //  Mismo look del resto de los módulos rediseñados: cabecera con volver,
+        //  pills de periodo con flechas < >, buscador, Importar / Exportar,
+        //  estado vacío, 3 KPIs y "Top productos" con "Ver todo".
+        //
+        //  Lo que NO cambia (Cero Pérdida de Datos):
+        //  · Importar sigue siendo el importador de Parrot de siempre (vista
+        //    previa, fechas, bloqueo de duplicados, regla create-only).
+        //  · Los globales `ventas`, `ventasPeriodos` y `ventasSemanaId` siguen
+        //    siendo la SEMANA ACTIVA: los usan el Total, el consumo teórico y
+        //    la sincronización en vivo. Ver otra semana o el mes NO los toca:
+        //    se lee aparte (leerPeriodosVentasSemana / consulta por mes) a un
+        //    estado de pantalla (_vs.datos) que solo sirve para mirar.
+        //  · Sin tickets: el reporte "Detalle" de Parrot no los trae. Los KPIs
+        //    son Venta neta, Artículos vendidos y Precio promedio por artículo
+        //    COBRADO (venta neta ÷ (artículos − cortesías − regalos 2x1)).
+        // ══════════════════════════════════════════════════════════════════════
+
+        var _vs = {
+            vista:    'semana',   // 'semana' | 'mes'
+            semana:   null,       // null = la semana activa (ventasSemanaId)
+            mes:      null,       // 'YYYY-MM' cuando vista === 'mes'
+            datos:    {},         // clave → { estado, lineas, periodos, ts, motivo }
+            verTodo:  false,
+            ayuda:    false,
+            busqueda: ''
+        };
+        var VENTAS_VISTA_TTL_MS = 120000;   // 2 min: lo leído de otra semana caduca solo
+        var VENTAS_TOP_N = 5;
+
+        /** Semana que se está mirando (id = lunes 'YYYY-MM-DD'). */
+        function _vsSemanaVista() {
+            return _vs.semana || ventasSemanaId || semanaId(new Date());
+        }
+        function _vsEsActiva() {
+            return _vs.vista === 'semana' && (!_vs.semana || _vs.semana === ventasSemanaId);
+        }
+        function _vsClave() {
+            if (_vs.vista === 'mes') return 'mes:' + _vs.mes;
+            return _vsEsActiva() ? 'activa' : 'semana:' + _vsSemanaVista();
+        }
+
+        /**
+         * ventasResumen(lineas) — capa de negocio, pura. KPIs del periodo:
+         *   ventaNeta       suma de Venta neta del reporte
+         *   articulos       unidades vendidas (incluye cortesías y regalos 2x1:
+         *                   salieron de la barra igual)
+         *   regalos         cortesías + promos 2x1 (a $0)
+         *   cobrados        articulos − regalos
+         *   precioPromedio  ventaNeta ÷ cobrados (null si no hubo cobrados o el
+         *                   archivo no traía Venta neta)
+         *   productos       SKU distintos con al menos una unidad
+         */
+        function ventasResumen(lineas) {
+            var r = { ventaNeta: 0, articulos: 0, regalos: 0, cobrados: 0, precioPromedio: null, productos: 0, conImporte: false };
+            (lineas || []).forEach(function(l) {
+                if (!l) return;
+                var n = Number(l.cantidad) || 0;
+                if (n > 0) r.productos++;
+                r.articulos += n;
+                if (typeof l.ventaNeta === 'number' && isFinite(l.ventaNeta)) { r.ventaNeta += l.ventaNeta; if (l.ventaNeta !== 0) r.conImporte = true; }
+                var p = ventaPartesLinea(l);
+                r.regalos += p.cortesia + p.promo;
+            });
+            r.ventaNeta = Math.round(r.ventaNeta * 100) / 100;
+            r.articulos = Math.round(r.articulos * 1000) / 1000;
+            r.regalos   = Math.round(r.regalos * 1000) / 1000;
+            r.cobrados  = Math.round(Math.max(0, r.articulos - r.regalos) * 1000) / 1000;
+            r.precioPromedio = (r.cobrados > 0 && r.conImporte) ? Math.round(r.ventaNeta / r.cobrados * 100) / 100 : null;
+            return r;
+        }
+        window.ventasResumen = ventasResumen;
+
+        /** Top por venta neta (desempate: cantidad, luego nombre). No muta la lista. */
+        function ventasTopProductos(lineas) {
+            return (lineas || []).slice().sort(function(a, b) {
+                var d = (Number(b.ventaNeta) || 0) - (Number(a.ventaNeta) || 0);
+                if (d) return d;
+                d = (Number(b.cantidad) || 0) - (Number(a.cantidad) || 0);
+                if (d) return d;
+                return String(a.nombre || a.sku).localeCompare(String(b.nombre || b.sku), 'es');
+            });
+        }
+        window.ventasTopProductos = ventasTopProductos;
+
+        /** Rango de días 'YYYY-MM-01'..'YYYY-MM-último' de un mes 'YYYY-MM'. */
+        function ventasRangoMes(mes) {
+            var m = /^(\d{4})-(\d{2})$/.exec(String(mes || ''));
+            if (!m) return null;
+            var y = Number(m[1]), mm = Number(m[2]);
+            if (mm < 1 || mm > 12) return null;
+            var ultimo = new Date(y, mm, 0).getDate();
+            return { inicio: m[1] + '-' + m[2] + '-01', fin: m[1] + '-' + m[2] + '-' + (ultimo < 10 ? '0' : '') + ultimo };
+        }
+        window.ventasRangoMes = ventasRangoMes;
+
+        /** Etiqueta corta de la pill: '12–18 oct 2026' / '29 sep – 5 oct 2026'. */
+        function ventasEtiquetaCorta(semana) {
+            var l = inicioSemana(semana), d = finSemana(semana);
+            if (!l || !d) return '—';
+            var mc = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+            if (l.getMonth() === d.getMonth()) return l.getDate() + '–' + d.getDate() + ' ' + mc[l.getMonth()] + ' ' + d.getFullYear();
+            return l.getDate() + ' ' + mc[l.getMonth()] + ' – ' + d.getDate() + ' ' + mc[d.getMonth()] + ' ' + d.getFullYear();
+        }
+        function _vsEtiquetaMes(mes) {
+            var m = /^(\d{4})-(\d{2})$/.exec(String(mes || ''));
+            if (!m) return '—';
+            var meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+            return meses[Number(m[2]) - 1] + ' ' + m[1];
+        }
+
+        /** Datos del periodo que se mira. La semana activa sale de memoria; lo demás, de Firestore. */
+        function _vsDatos() {
+            if (_vsEsActiva()) return { estado: 'ok', lineas: ventas || [], periodos: ventasPeriodos || [], activa: true };
+            var clave = _vsClave();
+            var d = _vs.datos[clave];
+            if (d && d.estado === 'ok' && (Date.now() - d.ts) > VENTAS_VISTA_TTL_MS) d = null;
+            if (!d) { _vsCargar(clave); d = _vs.datos[clave]; }
+            return d;
+        }
+
+        async function _ventasLeerMes(mes) {
+            if (!_db) throw new Error('sin conexión a Firestore');
+            var r = ventasRangoMes(mes);
+            if (!r) throw new Error('mes inválido');
+            var snap = await _docPrincipal().collection('ventas')
+                .where('fechaInicio', '>=', r.inicio).where('fechaInicio', '<=', r.fin).get();
+            var out = [];
+            snap.forEach(function(doc) { out.push({ id: doc.id, data: doc.data() || {} }); });
+            return out;
+        }
+
+        function _vsCargar(clave) {
+            _vs.datos[clave] = { estado: 'cargando', lineas: [], periodos: [], ts: Date.now() };
+            if (!_db) { _vs.datos[clave] = { estado: 'error', lineas: [], periodos: [], ts: Date.now(), motivo: 'Sin conexión: solo se puede ver la semana activa.' }; return; }
+            var lectura = clave.indexOf('mes:') === 0 ? _ventasLeerMes(clave.slice(4)) : leerPeriodosVentasSemana(clave.slice(7));
+            lectura.then(function(docs) {
+                _vs.datos[clave] = {
+                    estado: 'ok', ts: Date.now(),
+                    lineas: _ventasAgregarLineas(docs.map(function(x) { return (x.data || {}).lineas; })),
+                    periodos: docs.map(function(x) { return _ventasPeriodoDeDoc(x.id, x.data); })
+                        .sort(function(a, b) { return a.inicio < b.inicio ? -1 : (a.inicio > b.inicio ? 1 : 0); })
+                };
+            }).catch(function(e) {
+                console.warn('[Ventas] No se pudo leer ' + clave + ':', e);
+                _vs.datos[clave] = { estado: 'error', lineas: [], periodos: [], ts: Date.now(), motivo: 'No se pudieron leer las ventas de este periodo. Revisa la conexión e inténtalo de nuevo.' };
+            }).then(function() {
+                if (typeof activeTab !== 'undefined' && activeTab === 'ventas' && _vsClave() === clave && typeof renderTab === 'function') renderTab();
+            });
+        }
+
+        /** Flechas < >: mueve una semana (o un mes en la vista Mes). Nunca pasa de hoy. */
+        function ventasMoverPeriodo(delta) {
+            delta = delta < 0 ? -1 : 1;
+            if (_vs.vista === 'mes') {
+                var m = /^(\d{4})-(\d{2})$/.exec(_vs.mes || '');
+                if (!m) return;
+                var f = new Date(Number(m[1]), Number(m[2]) - 1 + delta, 1);
+                var nuevo = f.getFullYear() + '-' + (f.getMonth() < 9 ? '0' : '') + (f.getMonth() + 1);
+                var hoy = fechaISOLocal(new Date()).slice(0, 7);
+                if (nuevo > hoy) return;
+                _vs.mes = nuevo;
+            } else {
+                var s = delta < 0 ? semanaAnterior(_vsSemanaVista()) : semanaSiguiente(_vsSemanaVista());
+                if (!s || s > semanaId(new Date())) return;
+                _vs.semana = (s === ventasSemanaId) ? null : s;
+            }
+            _vs.verTodo = false;
+            renderTab();
+        }
+        function ventasVerSemanaActiva() { _vs.vista = 'semana'; _vs.semana = null; _vs.verTodo = false; renderTab(); }
+        function ventasVerSemanaAnterior() {
+            _vs.vista = 'semana';
+            _vs.semana = semanaAnterior(ventasSemanaId || semanaId(new Date()));
+            _vs.verTodo = false; renderTab();
+        }
+        function ventasVerMes() {
+            if (_vs.vista === 'mes') { ventasVerSemanaActiva(); return; }
+            _vs.vista = 'mes';
+            _vs.mes = String(_vsSemanaVista()).slice(0, 7);
+            _vs.verTodo = false; renderTab();
+        }
+        function ventasRecargarVista() { delete _vs.datos[_vsClave()]; renderTab(); }
+        function ventasToggleVerTodo() { _vs.verTodo = !_vs.verTodo; if (typeof BusquedaUI !== 'undefined') BusquedaUI.refrescar('ventas', { sinAnimacion: true }); }
+        function ventasToggleAyuda() { _vs.ayuda = !_vs.ayuda; renderTab(); }
+        function ventasImportarDesdeModulo() {
+            if (!hasPermission('sales.import')) { showNotification('⚠️ No tienes permiso para importar ventas'); return; }
+            _vs.datos = {};   // lo importado debe verse al volver
+            if (typeof importarElegirArchivo === 'function') importarElegirArchivo('ventas'); else ventasImportarExcel();
+        }
+
+        /** Exporta a .xlsx lo que se está mirando (semana o mes). Solo lectura. */
+        function ventasExportarExcel() {
+            if (!hasPermission('sales.read')) { showNotification('⚠️ No tienes acceso a las ventas'); return; }
+            var d = _vsDatos();
+            if (!d || d.estado !== 'ok' || !d.lineas.length) { showNotification('ℹ️ No hay ventas que exportar en este periodo'); return; }
+            if (typeof XLSX === 'undefined') { showNotification('⏳ Cargando librería Excel… intenta en unos segundos'); return; }
+            var r = ventasResumen(d.lineas);
+            var esMes = _vs.vista === 'mes';
+            var etiqueta = esMes ? _vsEtiquetaMes(_vs.mes) : etiquetaSemana(_vsSemanaVista());
+            var filas = ventasTopProductos(d.lineas).map(function(l) {
+                var p = ventaPartesLinea(l);
+                return [l.sku, l.nombre || '', l.tipo || '', Number(l.cantidad) || 0, p.cortesia, p.promo,
+                        (typeof l.ventaNeta === 'number') ? l.ventaNeta : ''];
+            });
+            var wb = XLSX.utils.book_new();
+            var ws = XLSX.utils.aoa_to_sheet([['SKU', 'Producto', 'Tipo', 'Cantidad', 'Cortesía', 'Regalo 2x1', 'Venta neta']].concat(filas));
+            ws['!cols'] = [{ wch: 12 }, { wch: 34 }, { wch: 16 }, { wch: 10 }, { wch: 10 }, { wch: 11 }, { wch: 12 }];
+            XLSX.utils.book_append_sheet(wb, ws, 'Ventas');
+            var res = XLSX.utils.aoa_to_sheet([
+                ['Periodo', etiqueta],
+                ['Días con ventas', ventasCoberturaSemana(d.periodos).length],
+                ['Venta neta', r.ventaNeta],
+                ['Artículos vendidos', r.articulos],
+                ['Cortesías y regalos 2x1', r.regalos],
+                ['Precio promedio por artículo cobrado', r.precioPromedio === null ? '' : r.precioPromedio],
+                ['Productos distintos', r.productos],
+                ['Exportado', new Date().toLocaleString('es-MX')]
+            ]);
+            res['!cols'] = [{ wch: 36 }, { wch: 40 }];
+            XLSX.utils.book_append_sheet(wb, res, 'Resumen');
+            var nombre = 'ventas_' + (esMes ? 'mes_' + _vs.mes : 'semana_' + _vsSemanaVista()) + '.xlsx';
+            XLSX.writeFile(wb, nombre);
+            showNotification('✅ Ventas exportadas: ' + nombre);
+        }
+
+        function _vsMoneda(n) {
+            return '$' + (Number(n) || 0).toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+        }
+        function _vsNum(n) { return (Math.round((Number(n) || 0) * 1000) / 1000).toLocaleString('es-MX'); }
+
+        function _vsFila(l) {
+            var n = Number(l.cantidad) || 0;
+            var p = ventaPartesLinea(l);
+            var cobr = Math.max(0, n - p.cortesia - p.promo);
+            var tieneImp = typeof l.ventaNeta === 'number';
+            var prom = (tieneImp && cobr > 0) ? (l.ventaNeta / cobr) : null;
+            return '<li class="vs-fila">'
+                 + '<div class="vs-fila__izq">'
+                 + (l.tipo ? '<span class="vs-pill">' + escapeHtml(l.tipo) + '</span>' : '')
+                 + '<span class="vs-fila__nom">' + escapeHtml(l.nombre || l.sku) + '</span>'
+                 + '<span class="vs-fila__sku">' + escapeHtml(l.sku) + _ventasEtiquetaRegalo(l) + '</span>'
+                 + '</div>'
+                 + '<div class="vs-fila__der">'
+                 + '<span class="vs-fila__imp num">' + (tieneImp ? _vsMoneda(l.ventaNeta) : '—') + '</span>'
+                 + '<span class="vs-fila__cant num">' + _vsNum(n) + ' u.' + (prom !== null ? ' · ' + _vsMoneda(Math.round(prom * 100) / 100) + ' c/u' : '') + '</span>'
+                 + '</div></li>';
+        }
+
+        /** Región del buscador: microcopy + top productos (o coincidencias). */
+        function _renderVentasResultados() {
+            var d = _vsDatos();
+            var base = (d && d.estado === 'ok') ? d.lineas : [];
+            var lista = ventasTopProductos(base);
+            var filtrando = !!(_vs.busqueda && _vs.busqueda.trim());
+            if (filtrando && typeof _motorVentas !== 'undefined') {
+                var hallados = _motorVentas.buscar(base, _vs.busqueda).items;
+                var orden = {};
+                lista.forEach(function(l, i) { orden[l.sku] = i; });
+                lista = hallados.slice().sort(function(a, b) { return orden[a.sku] - orden[b.sku]; });
+            }
+            var r = ventasResumen(lista);
+            var h = '<div class="vs-micro"><span>' + lista.length + ' producto' + (lista.length === 1 ? '' : 's')
+                  + ' • ' + _vsNum(r.articulos) + ' artículo' + (r.articulos === 1 ? '' : 's') + '</span>'
+                  + (filtrando ? '<span class="vs-micro__der">de ' + base.length + '</span>' : '') + '</div>';
+            if (!base.length) return { html: h, coincidencias: 0, total: 0 };   // el estado vacío lo pinta renderVentasTab
+            if (!lista.length) {
+                h += '<div class="vs-vacio vs-vacio--chico"><div class="vs-vacio__t">Sin coincidencias</div>'
+                   + '<div class="vs-vacio__s">Prueba con otra palabra o con el SKU.</div></div>';
+                return { html: h, coincidencias: 0, total: base.length };
+            }
+            var mostrar = (filtrando || _vs.verTodo) ? lista : lista.slice(0, VENTAS_TOP_N);
+            h += '<section class="vs-top" aria-labelledby="vsTopTit">'
+               + '<div class="vs-top__cab"><h3 id="vsTopTit" class="vs-top__tit">' + (filtrando ? 'Coincidencias' : 'Top productos vendidos') + '</h3>'
+               + ((!filtrando && lista.length > VENTAS_TOP_N)
+                    ? '<button type="button" class="vs-link" onclick="ventasToggleVerTodo()" aria-expanded="' + _vs.verTodo + '">'
+                      + (_vs.verTodo ? 'Ver menos' : 'Ver todo (' + lista.length + ')') + '</button>' : '')
+               + '</div><ol class="vs-lista">' + mostrar.map(_vsFila).join('') + '</ol></section>';
+            return { html: h, coincidencias: lista.length, total: base.length };
+        }
+        window._renderVentasResultados = _renderVentasResultados;
+
+        function _vsPeriodoPills() {
+            var esMes = _vs.vista === 'mes';
+            var activa = _vsEsActiva();
+            var anterior = !esMes && !activa && _vs.semana === semanaAnterior(ventasSemanaId || semanaId(new Date()));
+            var etiqueta = esMes ? _vsEtiquetaMes(_vs.mes) : ventasEtiquetaCorta(_vsSemanaVista());
+            var tope = esMes ? (_vs.mes >= fechaISOLocal(new Date()).slice(0, 7)) : (_vsSemanaVista() >= semanaId(new Date()));
+            return '<div class="vs-periodo" role="group" aria-label="Periodo">'
+                 + '<button type="button" class="vs-flecha" onclick="ventasMoverPeriodo(-1)" aria-label="' + (esMes ? 'Mes anterior' : 'Semana anterior a la mostrada') + '">'
+                 + '<i class="fa-solid fa-chevron-left" aria-hidden="true"></i></button>'
+                 + '<button type="button" class="mc-pill mc-pill--on vs-periodo__actual" onclick="ventasVerSemanaActiva()" aria-label="' + escapeHtml(esMes ? _vsEtiquetaMes(_vs.mes) : etiquetaSemana(_vsSemanaVista())) + (activa ? ' (semana activa)' : '. Volver a la semana activa') + '">'
+                 + '<i class="fa-solid fa-calendar-days" aria-hidden="true"></i> ' + escapeHtml(etiqueta) + '</button>'
+                 + '<button type="button" class="vs-flecha" onclick="ventasMoverPeriodo(1)" aria-label="' + (esMes ? 'Mes siguiente' : 'Semana siguiente') + '"' + (tope ? ' disabled' : '') + '>'
+                 + '<i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button>'
+                 + '</div>'
+                 + '<div class="vs-pills" role="group" aria-label="Atajos de periodo">'
+                 + '<button type="button" class="mc-pill' + (anterior ? ' mc-pill--on' : '') + '" aria-pressed="' + anterior + '" onclick="ventasVerSemanaAnterior()">Semana anterior</button>'
+                 + '<button type="button" class="mc-pill' + (esMes ? ' mc-pill--on' : '') + '" aria-pressed="' + esMes + '" onclick="ventasVerMes()">Mes</button>'
+                 + '</div>';
+        }
+
+        function _vsKpis(d) {
+            var r = ventasResumen(d.lineas);
+            return '<div class="vs-kpis">'
+                 + '<div class="vs-kpi"><span class="vs-kpi__ico"><i class="fa-solid fa-chart-line" aria-hidden="true"></i></span>'
+                 + '<span class="vs-kpi__lbl">Venta neta</span><span class="vs-kpi__val num">' + (r.conImporte ? _vsMoneda(r.ventaNeta) : '—') + '</span></div>'
+                 + '<div class="vs-kpi"><span class="vs-kpi__ico"><i class="fa-solid fa-ticket" aria-hidden="true"></i></span>'
+                 + '<span class="vs-kpi__lbl">Artículos vendidos</span><span class="vs-kpi__val num">' + _vsNum(r.articulos) + '</span>'
+                 + (r.regalos > 0 ? '<span class="vs-kpi__sub">' + _vsNum(r.regalos) + ' de regalo</span>' : '') + '</div>'
+                 + '<div class="vs-kpi"><span class="vs-kpi__ico"><i class="fa-solid fa-receipt" aria-hidden="true"></i></span>'
+                 + '<span class="vs-kpi__lbl">Precio promedio</span><span class="vs-kpi__val num">' + (r.precioPromedio === null ? '—' : _vsMoneda(r.precioPromedio)) + '</span>'
+                 + '<span class="vs-kpi__sub">por artículo cobrado</span></div>'
+                 + '</div>';
+        }
+
         function renderVentasTab() {
             if (!hasPermission('sales.read')) {
-                return '<div style="text-align:center;padding:60px 20px;color:var(--txt-secondary);">' +
-                       '<p style="font-size:1rem;">🔒 No tienes acceso a las ventas.</p></div>';
+                return '<div class="vt-vacio"><p><i class="fa-solid fa-lock" aria-hidden="true"></i> No tienes acceso a las ventas.</p></div>';
             }
             if (typeof ventasImportView === 'undefined') ventasImportView = 'lista';
             if (ventasImportView === 'vista_previa' && _ventasImportPendiente) {
-                return '<div style="padding:4px 0 8px">' + renderVistaPreviaVentas(_ventasImportPendiente) + '</div>';
+                _vs.datos = {};
+                return '<div class="vt-wrap">' + renderVistaPreviaVentas(_ventasImportPendiente) + '</div>';
             }
             if (ventasImportView === 'incidencias' && _ventasImportResultado) {
-                return '<div style="padding:4px 0 8px">' + renderIncidenciasVentas(_ventasImportResultado) + '</div>';
+                _vs.datos = {};
+                return '<div class="vt-wrap">' + renderIncidenciasVentas(_ventasImportResultado) + '</div>';
             }
 
             var puedeImportar = hasPermission('sales.import');
-            var html = '<div style="padding:4px 0 8px">';
+            var d = _vsDatos();
+            var esMes = _vs.vista === 'mes';
+            var hayDatos = d.estado === 'ok' && d.lineas.length > 0;
+            var estadoSync = (typeof _syncEnabled !== 'undefined' && !_syncEnabled) ? 'pendiente' : 'ok';
 
-            if (!ventas.length) {
-                html += '<div style="text-align:center;padding:50px 20px;color:var(--txt-secondary);">'
-                      + '<p>📈 Todavía no hay ventas cargadas'
-                      + (ventasSemanaId ? ' para la ' + escapeHtml(etiquetaSemana(ventasSemanaId)) : '') + '. '
-                      + (puedeImportar ? 'Impórtalas desde el reporte del POS con el botón de arriba.'
-                                       : 'El administrador todavía no las importa.')
-                      + '</p></div></div>';
+            var html = '<div class="vt-wrap vs-pantalla">';
+            html += moduloCabecera('Ventas Semanales', "switchTab('inicio')", estadoSync);
+            html += _vsPeriodoPills();
+            html += BusquedaUI.barra('ventas', { placeholder: 'Buscar por producto o SKU', etiqueta: 'Buscar en las ventas' });
+            html += '<div class="vs-acciones">'
+                  + (puedeImportar ? '<button type="button" class="vs-btn vs-btn--primario" onclick="ventasImportarDesdeModulo()">'
+                                   + '<span class="vs-btn__circulo"><i class="fa-solid fa-file-arrow-up" aria-hidden="true"></i></span> Importar Ventas</button>' : '')
+                  + '<button type="button" class="vs-btn vs-btn--secundario" onclick="ventasExportarExcel()"' + (hayDatos ? '' : ' disabled') + '>'
+                  + '<i class="fa-solid fa-download" aria-hidden="true"></i> Exportar</button>'
+                  + '</div>';
+
+            if (!_vsEsActiva()) {
+                html += '<div class="vs-aviso" role="status"><i class="fa-solid fa-circle-info" aria-hidden="true"></i> '
+                      + 'Solo consulta. El Total y el consumo teórico usan la <b>' + escapeHtml(ventasSemanaId ? etiquetaSemana(ventasSemanaId) : 'semana activa') + '</b>.'
+                      + (esMes ? ' El mes suma los periodos que <b>inician</b> en él.' : '')
+                      + ' <button type="button" class="vs-link" onclick="ventasVerSemanaActiva()">Ir a la semana activa</button></div>';
+            }
+
+            if (d.estado === 'cargando') {
+                html += '<div class="vs-vacio" role="status" aria-live="polite"><i class="fa-solid fa-arrows-rotate fa-spin" aria-hidden="true"></i>'
+                      + '<div class="vs-vacio__t">Cargando ventas…</div></div></div>';
+                return html;
+            }
+            if (d.estado === 'error') {
+                html += '<div class="vs-vacio" role="alert"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>'
+                      + '<div class="vs-vacio__t">No disponible</div><div class="vs-vacio__s">' + escapeHtml(d.motivo || '') + '</div>'
+                      + (_db ? '<button type="button" class="vs-link" onclick="ventasRecargarVista()">Reintentar</button>' : '') + '</div></div>';
                 return html;
             }
 
-            var unidades = Math.round(ventas.reduce(function(a, l) { return a + (l.cantidad || 0); }, 0) * 1000) / 1000;
-            var cubiertos = ventasCoberturaSemana(ventasPeriodos || []);
-            html += '<div style="background:var(--surface);border:1px solid var(--border-mid);border-radius:14px;padding:16px;margin-bottom:12px;display:flex;flex-direction:column;gap:10px">'
-                  + '<div style="font-weight:700;font-size:1.02rem">Ventas de la ' + escapeHtml(ventasSemanaId ? etiquetaSemana(ventasSemanaId) : '—') + '</div>'
-                  + '<div style="color:var(--txt-secondary);font-size:.9rem">'
-                  + '<b>' + ventas.length + '</b> SKU · <b>' + unidades + '</b> unidades vendidas</div>';
-            if (ventasPeriodos && ventasPeriodos.length && ventasSemanaId) {
-                html += '<div style="font-size:.9rem;font-weight:600">Días cargados: ' + cubiertos.length + ' de 7</div>'
-                      + _ventasTiraSemana(ventasSemanaId, cubiertos)
-                      + '<div style="color:var(--txt-secondary);font-size:.84rem;line-height:1.5">Periodos: '
-                      + escapeHtml(ventasPeriodos.map(function(x) { return _ventasTextoRango(x.inicio, x.fin); }).join(' · ')) + '</div>';
-                if (cubiertos.length < 7) {
-                    html += '<div class="vt-msg vt-msg--aviso">⚠️ Faltan ' + (7 - cubiertos.length) + ' día(s) de esta semana: '
+            if (!hayDatos) {
+                var periodoTxt = esMes ? 'el mes de ' + _vsEtiquetaMes(_vs.mes).toLowerCase() : 'la ' + etiquetaSemana(_vsSemanaVista());
+                html += BusquedaUI.region('ventas', _renderVentasResultados().html);
+                html += '<div class="vs-vacio">'
+                      + '<span class="vs-vacio__ico"><i class="fa-solid fa-chart-line" aria-hidden="true"></i></span>'
+                      + '<div class="vs-vacio__t">' + (esMes ? 'Sin ventas este mes' : 'Sin ventas esta semana') + '</div>'
+                      + '<div class="vs-vacio__s">Todavía no hay ventas cargadas para ' + escapeHtml(periodoTxt) + '. '
+                      + (puedeImportar ? 'Impórtalas desde el reporte del POS (Parrot, hoja "Detalle") con <b>Importar Ventas</b>.'
+                                       : 'El administrador todavía no las importa.') + '</div>'
+                      + '</div>'
+                      + '<div class="vs-total"><span>Venta neta <b class="num">$0</b></span>'
+                      + (puedeImportar ? '<button type="button" class="mc-pill" onclick="ventasToggleAyuda()" aria-expanded="' + _vs.ayuda + '">Cómo importar</button>' : '')
+                      + '</div>';
+                if (_vs.ayuda && puedeImportar) {
+                    html += '<ol class="vs-ayuda">'
+                          + '<li>En Parrot descarga el reporte de ventas por producto (.xlsx); la app lee la hoja <b>"Detalle"</b>.</li>'
+                          + '<li>Toca <b>Importar Ventas</b> y elige el archivo.</li>'
+                          + '<li>Indica las fechas que cubre (para un solo día, la misma fecha en inicio y fin) y confirma.</li>'
+                          + '<li>Una fecha ya cargada no se puede volver a subir: el sistema la bloquea.</li>'
+                          + '</ol>';
+                }
+                html += '</div>';
+                return html;
+            }
+
+            html += _vsKpis(d);
+
+            // Días cargados (semana): la misma tira de siempre.
+            if (!esMes && d.periodos && d.periodos.length) {
+                var semanaVista = _vsSemanaVista();
+                var cubiertos = ventasCoberturaSemana(d.periodos);
+                html += '<div class="vs-dias">'
+                      + '<div class="vs-dias__cab"><span>Días cargados</span><b class="num">' + cubiertos.length + ' de 7</b></div>'
+                      + _ventasTiraSemana(semanaVista, cubiertos)
+                      + '<div class="vt-ayuda">Periodos: ' + escapeHtml(d.periodos.map(function(x) { return _ventasTextoRango(x.inicio, x.fin); }).join(' · ')) + '</div>';
+                if (cubiertos.length < 7 && d.activa) {
+                    html += '<div class="vt-msg vt-msg--aviso"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> Faltan ' + (7 - cubiertos.length) + ' día(s) de esta semana: '
                           + 'el consumo teórico de abajo es parcial.</div>';
+                }
+                html += '</div>';
+            } else if (esMes) {
+                html += '<div class="vs-dias"><div class="vs-dias__cab"><span>Días con ventas en el mes</span><b class="num">' + ventasCoberturaSemana(d.periodos).length + '</b></div>'
+                      + '<div class="vt-ayuda">' + d.periodos.length + ' periodo' + (d.periodos.length === 1 ? '' : 's') + ' importado' + (d.periodos.length === 1 ? '' : 's') + '</div></div>';
+            }
+
+            html += BusquedaUI.region('ventas', _renderVentasResultados().html);
+
+            // Solo la semana activa: consumo teórico (FASE 11A) y cortesías (v5.19), sin cambios.
+            if (d.activa) {
+                html += _renderConsumoTeorico();
+                if (typeof ventaCortesiasAnalizar === 'function' && typeof renderCortesiasVenta === 'function') {
+                    html += renderCortesiasVenta(ventaCortesiasAnalizar(ventas, { productos: (typeof products !== 'undefined') ? products : [] }), {
+                        notaHistorica: 'En ventas importadas antes del 6-oct-2026, una promo 2x1 que comparte SKU con la venta normal no se puede separar (sí está en el consumo).'
+                    });
                 }
             }
             html += '</div>';
-
-            // ── FASE 11A — consumo teórico calculado con el recetario ────────
-            html += _renderConsumoTeorico();
-
-            var ordenadas = ventas.slice().sort(function(a, b) { return (b.cantidad || 0) - (a.cantidad || 0); });
-            html += '<table style="width:100%;border-collapse:collapse;font-size:.9rem">';
-            ordenadas.forEach(function(l) {
-                html += '<tr style="border-bottom:1px solid var(--border-mid)">'
-                      + '<td style="padding:10px 4px;color:var(--txt-primary)">' + escapeHtml(l.nombre || l.sku)
-                      + '<div style="color:var(--txt-secondary);font-size:.76rem">' + escapeHtml(l.sku) + '</div></td>'
-                      + '<td style="padding:10px 4px;text-align:right;color:var(--txt-secondary);white-space:nowrap">' + (l.cantidad || 0) + '</td>'
-                      + '</tr>';
-            });
-            html += '</table></div>';
             return html;
         }
         window.renderVentasTab = renderVentasTab;
+        window.ventasMoverPeriodo = ventasMoverPeriodo;
+        window.ventasVerSemanaActiva = ventasVerSemanaActiva;
+        window.ventasVerSemanaAnterior = ventasVerSemanaAnterior;
+        window.ventasVerMes = ventasVerMes;
+        window.ventasRecargarVista = ventasRecargarVista;
+        window.ventasToggleVerTodo = ventasToggleVerTodo;
+        window.ventasToggleAyuda = ventasToggleAyuda;
+        window.ventasImportarDesdeModulo = ventasImportarDesdeModulo;
+        window.ventasExportarExcel = ventasExportarExcel;
+        window.ventasEtiquetaCorta = ventasEtiquetaCorta;
 
         /**
          * _renderConsumoTeorico()
@@ -894,29 +1371,29 @@
         function _renderConsumoTeorico() {
             if (typeof consumoTeorico !== 'function') return '';
             var r = consumoTeorico();
-            var html = '<div style="background:var(--surface);border:1px solid var(--border-mid);border-radius:12px;padding:14px 16px;margin-bottom:12px">'
-                     + '<div style="font-weight:700;margin-bottom:2px">Consumo teórico</div>'
-                     + '<div style="color:var(--txt-secondary);font-size:.8rem;line-height:1.5;margin-bottom:8px">'
+            var html = '<div class="vt-panel">'
+                     + '<div class="vt-panel__tit">Consumo teórico</div>'
+                     + '<div class="vt-ayuda vt-ayuda--chica">'
                      + 'Lo que el recetario dice que debió salir de la barra con estas ventas. '
                      + 'Es el mismo cálculo del Excel: unidades vendidas × cantidad de cada receta.</div>';
 
             if (!recetas || !recetas.length) {
-                html += '<div style="color:#fbbf24;font-size:.84rem">⚠️ No hay recetario cargado: sin recetas no hay consumo que calcular.</div></div>';
+                html += '<div class="vt-nota vt-nota--aviso"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> No hay recetario cargado: sin recetas no hay consumo que calcular.</div></div>';
                 return html;
             }
 
             var top = consumoTeoricoTop(10);
             if (!top.length) {
-                html += '<div style="color:var(--txt-secondary);font-size:.84rem">Ningún SKU vendido cruzó con una receta.</div>';
+                html += '<div class="vt-ayuda">Ningún SKU vendido cruzó con una receta.</div>';
             } else {
-                html += '<div style="color:var(--txt-secondary);font-size:.78rem;margin-bottom:6px">'
+                html += '<div class="vt-ayuda vt-ayuda--chica">'
                       + Object.keys(r.consumo).length + ' insumo(s) con consumo · ' + r.lineasCalculadas + ' línea(s) de receta aplicadas</div>'
-                      + '<table style="width:100%;border-collapse:collapse;font-size:.84rem">';
+                      + '<table class="vt-tabla vt-tabla--densa">';
                 top.forEach(function(x) {
-                    html += '<tr style="border-bottom:1px solid var(--border-mid)">'
-                          + '<td style="padding:6px 4px">' + escapeHtml(x.nombre)
-                          + (x.enCatalogo ? '' : ' <span style="color:#dc2626;font-size:.72rem">(no está en el catálogo)</span>') + '</td>'
-                          + '<td style="padding:6px 4px;text-align:right;color:var(--txt-secondary);white-space:nowrap">'
+                    html += '<tr>'
+                          + '<td>' + escapeHtml(x.nombre)
+                          + (x.enCatalogo ? '' : ' <span class="vt-txt-error vt-txt-chico">(no está en el catálogo)</span>') + '</td>'
+                          + '<td class="vt-num">'
                           + x.cantidad + ' ' + escapeHtml(x.unidad) + '</td></tr>';
                 });
                 html += '</table>';
@@ -924,30 +1401,26 @@
 
             var a = r.avisos;
             if (a.sinReceta.length) {
-                html += '<div style="margin-top:10px;padding:8px 10px;border-radius:8px;background:rgba(251,191,36,.10);'
-                      + 'border:1px solid rgba(251,191,36,.28);color:#fbbf24;font-size:.8rem;line-height:1.5">'
-                      + '⚠️ <b>' + a.sinReceta.length + ' producto(s) vendidos sin receta</b> — su consumo NO se descuenta de ningún insumo, '
+                html += '<div class="vt-nota vt-nota--aviso">'
+                      + '<i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> <b>' + a.sinReceta.length + ' producto(s) vendidos sin receta</b> — su consumo NO se descuenta de ningún insumo, '
                       + 'así que el stock teórico de esos insumos saldrá alto: '
                       + escapeHtml(a.sinReceta.slice(0, 4).map(function(x) { return x.nombre; }).join(', '))
                       + (a.sinReceta.length > 4 ? '…' : '') + '</div>';
             }
             if (a.sinCatalogo.length) {
-                html += '<div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:rgba(239,68,68,.10);'
-                      + 'border:1px solid rgba(239,68,68,.28);color:#f87171;font-size:.8rem;line-height:1.5">'
-                      + '🛑 <b>' + a.sinCatalogo.length + ' insumo(s) de receta no están en el catálogo</b> — su consumo se calcula pero no hay stock del cual restarlo: '
+                html += '<div class="vt-nota vt-nota--error">'
+                      + '<i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i> <b>' + a.sinCatalogo.length + ' insumo(s) de receta no están en el catálogo</b> — su consumo se calcula pero no hay stock del cual restarlo: '
                       + escapeHtml(a.sinCatalogo.slice(0, 4).map(function(x) { return x.descripcion; }).join(', '))
                       + (a.sinCatalogo.length > 4 ? '…' : '') + '</div>';
             }
             if (a.uomDistinta.length) {
-                html += '<div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:rgba(148,163,184,.10);'
-                      + 'border:1px solid rgba(148,163,184,.28);color:var(--txt-secondary);font-size:.8rem;line-height:1.5">'
-                      + 'ℹ️ ' + a.uomDistinta.length + ' insumo(s) con unidad de receta distinta a la del catálogo. Se calculan como hace el Excel '
-                      + '(sin convertir), pero conviene revisarlos: '
+                html += '<div class="vt-nota vt-nota--info">'
+                      + '<i class="fa-solid fa-circle-info" aria-hidden="true"></i> ' + a.uomDistinta.length + ' insumo(s) con una unidad de receta que no se pudo convertir a la del catálogo — se descuenta la cantidad tal cual, sin convertir, y conviene revisarlos: '
                       + escapeHtml(a.uomDistinta.slice(0, 3).map(function(x) { return x.nombre + ' (' + x.uomReceta + ' vs ' + x.unidadProducto + ')'; }).join(', '))
                       + (a.uomDistinta.length > 3 ? '…' : '') + '</div>';
             }
 
-            html += '<div style="margin-top:10px;color:var(--txt-secondary);font-size:.76rem">'
+            html += '<div class="vt-ayuda vt-ayuda--chica vt-ayuda--sep">'
                   + (EXISTENCIA_FUENTE_OFICIAL_ACTIVA
                      ? 'La fuente oficial ya está encendida: en cuanto haya un inicial contabilizado para esta semana, '
                        + 'esta cifra pasa a decidir "bajo mínimo" y la existencia en catálogo. Compárala contra tu Excel '

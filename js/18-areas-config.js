@@ -347,17 +347,10 @@
         function renderAreasConteoAdmin() {
             if (!hasPermission('warehouses.read')) return '';
             var def = areasDefinidas();
-            var inp = 'width:100%;padding:8px;border-radius:6px;border:1px solid var(--border-mid);'
-                    + 'background:var(--surface);color:var(--txt-primary);font-family:inherit;font-size:.82rem;';
-            var BTN_ACCION = 'min-height:44px;min-width:44px;display:inline-flex;align-items:center;'
-                    + 'justify-content:center;padding:0 10px;border-radius:10px;'
-                    + 'border:1px solid var(--border-mid);background:var(--surface);'
-                    + 'cursor:pointer;font-size:1rem;line-height:1;';
 
-            var html = '<div class="adm-card" style="margin-bottom:16px;padding:14px 16px;">';
-            html += '<h3 style="font-size:.82rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;'
-                 +  'color:var(--txt-secondary);margin-bottom:4px;">📍 Áreas de conteo</h3>';
-            html += '<p style="font-size:.75rem;color:var(--txt-muted);margin-bottom:12px;line-height:1.5;">'
+            var html = '<div class="adm-card aj-nuevo">';
+            html += '<h3 class="ui-titulo--seccion"><i class="fa-solid fa-location-dot" aria-hidden="true"></i> Áreas de conteo</h3>';
+            html += '<p class="ui-nota">'
                  +  'Cada área es una zona que se cuenta por separado y luego se totaliza. '
                  +  'Almacén, Barra Restaurante y Barra Bar son fijas: puedes cambiarles el nombre, '
                  +  'pero no eliminarlas, porque sus conteos están dentro de todos los inventarios ya cerrados.</p>';
@@ -367,41 +360,42 @@
                 var editando = (_areaEditandoId === a.id);
                 var conteos  = conteosEnArea(a.id);
 
-                html += '<div style="border:1px solid var(--border-mid);border-radius:10px;'
-                     +  'padding:10px 12px;margin-bottom:8px;background:var(--surface);">';
+                html += '<div class="aj-area">';
 
                 if (editando) {
-                    html += '<div style="display:flex;gap:8px;margin-bottom:8px;">';
-                    html += '<input id="areaIco_' + escapeHtml(a.id) + '" value="' + escapeHtml(a.icono || '') + '" '
-                         +  'maxlength="4" style="' + inp + 'width:60px;text-align:center;">';
-                    html += '<input id="areaNom_' + escapeHtml(a.id) + '" value="' + escapeHtml(a.nombre) + '" '
-                         +  'maxlength="40" placeholder="Nombre completo" style="' + inp + '">';
+                    // El icono del área es un DATO que elige el administrador (puede
+                    // ser un emoji): se edita como texto y se muestra tal cual.
+                    html += '<div class="ui-fila">';
+                    html += '<input id="areaIco_' + escapeHtml(a.id) + '" class="ui-campo aj-area__ico-in" value="' + escapeHtml(a.icono || '') + '" '
+                         +  'maxlength="4" aria-label="Icono del área">';
+                    html += '<input id="areaNom_' + escapeHtml(a.id) + '" class="ui-campo aj-area__nom-in" value="' + escapeHtml(a.nombre) + '" '
+                         +  'maxlength="40" placeholder="Nombre completo" aria-label="Nombre del área">';
                     html += '</div>';
-                    html += '<input id="areaCor_' + escapeHtml(a.id) + '" value="' + escapeHtml(a.etiquetaCorta || '') + '" '
-                         +  'maxlength="20" placeholder="Etiqueta corta (para los botones)" style="' + inp + 'margin-bottom:8px;">';
-                    html += '<div style="display:flex;gap:8px;">';
-                    html += '<button class="adm-btn primary" style="min-height:44px;" onclick="uiGuardarArea(\'' + escapeHtml(a.id) + '\')">Guardar</button>';
-                    html += '<button class="adm-btn" style="min-height:44px;" onclick="uiCancelarEdicion()">Cancelar</button>';
+                    html += '<input id="areaCor_' + escapeHtml(a.id) + '" class="ui-campo" value="' + escapeHtml(a.etiquetaCorta || '') + '" '
+                         +  'maxlength="20" placeholder="Etiqueta corta (para los botones)" aria-label="Etiqueta corta">';
+                    html += '<div class="ui-fila">';
+                    html += '<button type="button" class="adm-btn primary" onclick="uiGuardarArea(\'' + escapeHtml(a.id) + '\')">Guardar</button>';
+                    html += '<button type="button" class="adm-btn" onclick="uiCancelarEdicion()">Cancelar</button>';
                     html += '</div>';
                 } else {
-                    html += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">';
-                    html += '<span style="font-size:1.3rem;line-height:1;">' + escapeHtml(a.icono || '📍') + '</span>';
-                    html += '<div style="flex:1;min-width:140px;">';
-                    html += '<div style="font-weight:600;font-size:.9rem;">' + escapeHtml(a.nombre) + '</div>';
-                    html += '<div style="font-size:.7rem;color:var(--txt-muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;">'
+                    html += '<div class="ui-fila">';
+                    html += '<span class="aj-area__icono" aria-hidden="true">' + escapeHtml(a.icono || '📍') + '</span>';
+                    html += '<div class="aj-area__cuerpo">';
+                    html += '<div class="aj-area__nombre">' + escapeHtml(a.nombre) + '</div>';
+                    html += '<div class="aj-area__id">'
                          +  escapeHtml(a.id)
                          +  (sistema ? ' · fija' : '')
                          +  (conteos ? ' · ' + conteos + ' contados' : '')
                          +  '</div></div>';
                     // Botones propios en vez de .adm-btn: esa clase es de bloque y
                     // dejaba las dos acciones apiladas a todo lo ancho de la tarjeta.
-                    html += '<button type="button" style="' + BTN_ACCION + '" '
+                    html += '<button type="button" class="ui-icono-btn" '
                          +  'title="Editar" aria-label="Editar ' + escapeHtml(a.nombre) + '" '
-                         +  'onclick="uiEditarArea(\'' + escapeHtml(a.id) + '\')">✏️</button>';
+                         +  'onclick="uiEditarArea(\'' + escapeHtml(a.id) + '\')"><i class="fa-solid fa-pen" aria-hidden="true"></i></button>';
                     if (!sistema) {
-                        html += '<button type="button" style="' + BTN_ACCION + 'border-color:rgba(248,113,113,.3);" '
+                        html += '<button type="button" class="ui-icono-btn ui-icono-btn--peligro" '
                              +  'title="Eliminar" aria-label="Eliminar ' + escapeHtml(a.nombre) + '" '
-                             +  'onclick="uiEliminarArea(\'' + escapeHtml(a.id) + '\')">🗑️</button>';
+                             +  'onclick="uiEliminarArea(\'' + escapeHtml(a.id) + '\')"><i class="fa-solid fa-trash" aria-hidden="true"></i></button>';
                     }
                     html += '</div>';
                 }
@@ -409,14 +403,14 @@
             });
 
             // ── Alta ──────────────────────────────────────────────────────────
-            html += '<div style="border:1px dashed var(--border-mid);border-radius:10px;padding:12px;margin-top:12px;">';
-            html += '<div style="font-size:.78rem;font-weight:600;margin-bottom:8px;">Agregar área de conteo</div>';
-            html += '<div style="display:flex;gap:8px;margin-bottom:8px;">';
-            html += '<input id="areaNuevaIcono" value="📍" maxlength="4" style="' + inp + 'width:60px;text-align:center;">';
-            html += '<input id="areaNuevaNombre" placeholder="Ej: Barra Terraza" maxlength="40" style="' + inp + '">';
+            html += '<div class="aj-area aj-area--alta">';
+            html += '<div class="ui-etiqueta">Agregar área de conteo</div>';
+            html += '<div class="ui-fila">';
+            html += '<input id="areaNuevaIcono" class="ui-campo aj-area__ico-in" value="📍" maxlength="4" aria-label="Icono del área nueva">';
+            html += '<input id="areaNuevaNombre" class="ui-campo aj-area__nom-in" placeholder="Ej: Barra Terraza" maxlength="40" aria-label="Nombre del área nueva">';
             html += '</div>';
-            html += '<button class="adm-btn primary" style="min-height:44px;" onclick="uiCrearArea()">Crear área</button>';
-            html += '<p style="font-size:.7rem;color:var(--txt-muted);margin-top:8px;line-height:1.5;">'
+            html += '<button type="button" class="adm-btn primary" onclick="uiCrearArea()">Crear área</button>';
+            html += '<p class="ui-nota ui-nota--chica">'
                  +  'El identificador se genera solo a partir del nombre y ya no cambia: '
                  +  'queda escrito dentro de cada conteo.</p>';
             html += '</div>';

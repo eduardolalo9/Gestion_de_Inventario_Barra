@@ -85,9 +85,13 @@ if (A) {
     chk('…y su destino es la semana siguiente (lunes 21)',
         ok.semanaDestino === '2026-09-21', String(ok.semanaDestino));
 
-    const mie = A.evaluarContabilizable({ estado: 'CERRADO', semanaId: '2026-09-21', fechaRecuento: MIE });
-    chk('★ Un corte a media semana no se contabiliza, y dice por qué',
-        mie.puede === false && /DOMINGO/.test(mie.motivo) && /2026-09-23/.test(mie.motivo), JSON.stringify(mie));
+    // FASE 14 (5-oct-2026): a media semana ya se contabiliza, como ANCLA del Total.
+    const mie = A.evaluarContabilizable({ estado: 'CERRADO', semanaId: '2026-09-21', fechaRecuento: MIE }, '2026-10-05');
+    chk('★ FASE 14 · un corte a media semana se contabiliza como ancla del Total (no como inicial)',
+        mie.puede === true && mie.haceAncla === true && mie.semanaDestino === null && mie.anclaFecha === MIE, JSON.stringify(mie));
+    const futuro = A.evaluarContabilizable({ estado: 'CERRADO', semanaId: '2026-09-21', fechaRecuento: MIE }, '2026-09-22');
+    chk('FASE 14 · un ancla con fecha futura no se contabiliza, y dice por qué',
+        futuro.puede === false && /futuro/.test(futuro.motivo), JSON.stringify(futuro));
 
     const sinSem = A.evaluarContabilizable({ estado: 'CERRADO', fechaRecuento: DOM });
     chk('Sin semana en la cabecera no se inventa una',
@@ -155,7 +159,8 @@ chk('Seguridad: la acción es delegada y toma el id del inventario escuchado',
 chk('Evita el doble toque, pero deja reintentar si se cancela',
     /b\.disabled = true;/.test(ui) && /setTimeout\(function\(\) \{ b\.disabled = false; \}/.test(ui));
 chk('El encabezado distingue CONTABILIZADO de SINCRONIZADO',
-    /INVENTARIO BARRA CONTABILIZADO/.test(cab) && /const esCerrado = !inventarioAbierto\(inv\);/.test(cab));
+    // v5.28 — "INVENTARIO BARRA " va en un span solo para lectores de pantalla (el título ya lo dice).
+    /INVENTARIO BARRA (<\/span>)?CONTABILIZADO/.test(cab) && /const esCerrado = !inventarioAbierto\(inv\);/.test(cab));
 
 // ═══ 5 · Coherencia con el resto ═══════════════════════════════════════════
 const contab = extraer(flujo, 'contabilizarInventario') || '';

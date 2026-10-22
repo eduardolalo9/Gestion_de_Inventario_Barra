@@ -1,19 +1,9 @@
-        function _resetMiConteoLocal(msg) {
-            myAuditoriaConteo  = {};
-            myAuditoriaStatus  = estadoAreasVacio('pendiente');
-            myAuditoriaUnlocks = {};
-            auditoriaView      = 'selection';
-            auditoriaAreaActiva = null;
-            isAuditoriaMode    = false;
-            saveToLocalStorage({ skipSyncTrigger: true });
-            if (msg) showNotification(msg);
-            renderTab();
-        }
-        // NOTA: tras la unificación de abajo, _resetMiConteoLocal() ya no
-        // tiene ningún punto de llamada — se conserva sin eliminar (no se
-        // borra código existente en esta fase) por si una fase futura
-        // decide reutilizarla; su lógica está ahora duplicada de forma
-        // intencional y correcta dentro de handleAuditSessionChange().
+        // v5.26 — limpieza de código muerto: _resetMiConteoLocal() se quitó
+        // de aquí. Llevaba desde antes de la unificación de sesión de
+        // auditoría sin ningún punto de llamada real (su lógica quedó
+        // duplicada, a propósito, dentro de handleAuditSessionChange() más
+        // abajo) — verificado con una búsqueda del nombre en todo el
+        // repositorio antes de borrarla.
 
         // ══════════════════════════════════════════════════════════════════════
         //  AUTORIDAD CENTRAL DE CAMBIO DE SESIÓN DE AUDITORÍA
@@ -689,25 +679,11 @@ const usersList = Object.values(allUsersAuditoria);
             }
         }
 
-        /**
-         * Usuario guarda la corrección de un producto desbloqueado.
-         * Solo actualiza ESE producto; el resto del conteo permanece intacto.
-         */
-        async function guardarCorreccionProducto(prodId, area, enteras, abiertas) {
-            const key = prodId + '__' + area;
-            if (!myAuditoriaUnlocks[key]) {
-                showNotification('⚠️ Este producto no está habilitado para corrección');
-                return;
-            }
-            if (!myAuditoriaConteo[prodId]) myAuditoriaConteo[prodId] = {};
-            myAuditoriaConteo[prodId][area] = { enteras, abiertas, _corregidoEn: Date.now(), _ts: Date.now() }; // BUG-12 FIX
-            // Marcar el unlock como usado (evitar correcciones múltiples sin nueva autorización)
-            myAuditoriaUnlocks[key] = Object.assign({}, myAuditoriaUnlocks[key], { used: true });
-            saveToLocalStorage();
-            await syncMyAuditoriaToFirestore();
-            showNotification('✅ Corrección guardada');
-            renderTab();
-        }
+        // v5.26 — limpieza de código muerto: guardarCorreccionProducto()
+        // (guardaba la corrección de UN producto desbloqueado) se quitó de
+        // aquí — verificado que no tenía ningún punto de llamada (ni
+        // onclick en index.html ni referencia en ningún js/*.js) en todo
+        // el repositorio antes de borrarla.
 
         /**
          * Admin: reiniciar sesión de auditoría.
@@ -823,6 +799,15 @@ const usersList = Object.values(allUsersAuditoria);
             //    anterior, EXCEPTO el propio admin (BUG-6 FIX: evita que su
             //    propio delete dispare un loop de reset en su propio listener;
             //    su doc se sobrescribe explícitamente en el punto 3).
+            // v5.19 — PAPELERA: antes de borrar (o reescribir, en el caso del
+            // propio admin, punto 3) se guarda en papelera/ lo que cada persona
+            // llevaba contado, en ESTE MISMO batch. Si la papelera no se puede
+            // escribir, el batch entero falla y no se borra nada (js/53).
+            if (typeof papeleraAgregarConteosABatch === 'function') {
+                const docsPapelera = [];
+                snap.forEach(doc => { docsPapelera.push({ id: doc.id, data: doc.data() }); });
+                papeleraAgregarConteosABatch(batch, docsPapelera, sessionId);
+            }
             snap.forEach(doc => {
                 if (doc.id !== currentUserUid) batch.delete(doc.ref);
             });
@@ -905,6 +890,19 @@ const usersList = Object.values(allUsersAuditoria);
          * El usuario NO ve los conteos de los demás.
          */
         function exportarExcelMiConteo() {
+            // v5.26/hallazgo#32.8 — faltaba esta guarda: el botón del
+            // encabezado de Conteo se mostraba a CUALQUIER no-admin (incluido
+            // el Bartender por defecto, que NO tiene inventory.export — ver
+            // ROLES_SISTEMA_DEFECTO en js/50-roles-permisos.js), y la función
+            // exportaba sin comprobar nada. Mismo permiso que ya exige
+            // exportToExcel() (js/95-exportacion.js) y exportarInventarioCerrado()
+            // (js/75-auditoria-flujo.js) para cualquier otra salida de Excel
+            // del inventario — defensa en profundidad aunque el botón ya no
+            // se renderice para quien no tiene el permiso (ver js/85).
+            if (!hasPermission('inventory.export')) {
+                showNotification('⚠️ No tienes permiso para exportar el inventario');
+                return;
+            }
             const areasFinalizadas = AREAS_CONTEO
                 .filter(a => myAuditoriaStatus[a] === 'completada');
             if (areasFinalizadas.length === 0) {
@@ -1306,13 +1304,15 @@ const usersList = Object.values(allUsersAuditoria);
             const badge = document.getElementById('cloudSyncBadge');
             const dot   = document.getElementById('syncDot');
 
+            // R7d — cada estado lleva icono + palabra (el color nunca va solo) y
+            // los colores viven en CSS (.sy-insignia[data-sync]), no aquí.
             const cfg = {
-                ok:      { bg: '#06d6a0', icon: '☁️', text: 'Sincronizado',   pulse: false, dotState: 'ok',      dotTitle: 'Sincronizado ✓' },
-                syncing: { bg: '#4cc9f0', icon: '🔄', text: 'Sincronizando…', pulse: true,  dotState: 'syncing', dotTitle: 'Subiendo datos…' },
-                pending: { bg: '#ffd166', icon: '⏳', text: 'Pendiente',       pulse: false, dotState: 'pending', dotTitle: 'Cambios pendientes' },
-                error:   { bg: '#ff6b6b', icon: '⚠️', text: 'Error sync',     pulse: false, dotState: 'error',   dotTitle: 'Error de sincronización' },
-                offline: { bg: '#8b8ca8', icon: '📴', text: 'Sin conexión',   pulse: false, dotState: 'offline', dotTitle: 'Sin conexión' },
-                none:    { bg: '#50516a', icon: '☁️', text: 'Sin Firebase',   pulse: false, dotState: 'none',    dotTitle: 'Sin Firebase' }
+                ok:      { icono: 'circle-check',         text: 'Sincronizado',   pulse: false, dotState: 'ok',      dotTitle: 'Sincronizado' },
+                syncing: { icono: 'arrows-rotate fa-spin', text: 'Sincronizando…', pulse: true,  dotState: 'syncing', dotTitle: 'Subiendo datos…' },
+                pending: { icono: 'hourglass',            text: 'Pendiente',       pulse: false, dotState: 'pending', dotTitle: 'Cambios pendientes' },
+                error:   { icono: 'triangle-exclamation', text: 'Error sync',     pulse: false, dotState: 'error',   dotTitle: 'Error de sincronización' },
+                offline: { icono: 'xmark',                text: 'Sin conexión',   pulse: false, dotState: 'offline', dotTitle: 'Sin conexión' },
+                none:    { icono: 'circle-info',          text: 'Sin Firebase',   pulse: false, dotState: 'none',    dotTitle: 'Sin Firebase' }
             };
 
             if (!_db) { status = 'none'; }
@@ -1333,14 +1333,12 @@ const usersList = Object.values(allUsersAuditoria);
 
             // ── Badge del sidebar ────────────────────────────────────────
             if (badge) {
-                badge.style.background   = c.bg + '22';
-                badge.style.borderColor  = c.bg + '66';
-                badge.style.color        = c.bg;
-                badge.innerHTML = '<span style="margin-right:4px">' + c.icon + '</span>' +
-                    textLabel + lastSyncStr +
+                badge.setAttribute('data-sync', status in cfg ? status : 'none');
+                badge.setAttribute('role', 'status');
+                badge.innerHTML = '<i class="fa-solid fa-' + c.icono + '" aria-hidden="true"></i><span>' +
+                    textLabel + lastSyncStr + '</span>' +
                     (status !== 'none' && status !== 'syncing' ?
-                        ' <button onclick="syncToCloud()" title="Sincronizar ahora" style="margin-left:6px;background:transparent;border:1px solid currentColor;border-radius:4px;padding:1px 5px;cursor:pointer;font-size:0.7rem;color:inherit;opacity:0.75" aria-label="Sincronizar ahora">↑</button>' : '');
-                badge.style.animation    = c.pulse ? 'pulse 1.5s ease-in-out infinite' : 'none';
+                        '<button type="button" class="sy-insignia__btn" onclick="syncToCloud()" title="Sincronizar ahora" aria-label="Sincronizar ahora"><i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i></button>' : '');
             }
 
             // ── Semáforo en el header (círculo verde/amarillo/rojo) ──────

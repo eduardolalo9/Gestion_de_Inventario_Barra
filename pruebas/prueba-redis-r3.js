@@ -67,10 +67,12 @@ chk('★ El resumen de coincidencias y el vacío del buscador siguen ahí',
     /BusquedaUI\.resumen\('catalogo'/.test(rend) && /BusquedaUI\.vacio\('catalogo'/.test(rend));
 chk('★ La tarjeta de sincronización sigue en Inicio',
     /sync-card/.test(rend) && /toggleSyncEnabled\(\)/.test(rend));
-chk('★ Los reportes publicados siguen en Inicio (solo admin)',
-    /inicioReportesLista/.test(rend) && /generarYPublicarReporte\(\)/.test(rend));
+// v5.28 — por decisión de Eduardo (15-oct-2026) los reportes publicados
+// salieron de Inicio; siguen en Administración y en Historia.
+chk('★ Los reportes publicados ya no están en Inicio (siguen en Administración)',
+    !/inicioReportesLista/.test(rend) && /generarYPublicarReporte\(\)/.test(fs.readFileSync(path.join(RAIZ, 'js/50-roles-permisos.js'), 'utf8')));
 chk('★ El panel de mandos sigue siendo el de 83-panel.js',
-    /_panelTile\(/.test(panel) && /pm-tile/.test(panel) && /pm-barra/.test(panel));
+    /_panelTile\(/.test(panel) && /pm-tile/.test(panel) && !/pm-barra/.test(panel));   // v5.24: sin gráficas de barras
 chk('No se inventó una pestaña nueva para mover nada de Inicio',
     !/activeTab === 'tablero'/.test(rend) && !/case 'tablero'/.test(rend),
     'R3 era aspecto, no arquitectura de navegación');

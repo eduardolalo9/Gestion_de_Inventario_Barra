@@ -142,9 +142,12 @@ chk('confirmarImportacionRecetario() llama a saveToLocalStorage() y toma un resp
 // ═══ 6 · Integración en la UI ═══════════════════════════════════════════════
 chk('renderRecetarioTab() enruta a la vista previa / incidencias de importación antes que lista/ficha',
     /recetarioImportView === 'vista_previa' && _recetarioImportPendiente/.test(leer('js/91-recetario.js')));
-chk('Header de Recetario ofrece "Importar Excel" junto a "Nueva receta" / "Publicar recetario" (solo con recipe.edit)',
-    /recetarioImportarExcel\(\)/.test(render) &&
-    /activeTab === 'recetario'[\s\S]{0,1500}?recetarioImportarExcel\(\)/.test(render));
+// v5.18 (decisión de Eduardo, 6-oct-2026): importar el recetario se hace SOLO
+// desde el módulo "Importar desde Excel" (js/96-importar.js), que llama a este
+// mismo importador. El encabezado conserva "Nueva receta" / "Publicar recetario".
+chk('v5.18 · importar el recetario vive en el módulo Importar (y usa este mismo importador)',
+    !/activeTab === 'recetario'[\s\S]{0,1500}?recetarioImportarExcel\(\)/.test(render) &&
+    /recetarioImportarExcel\(\)/.test(fs.readFileSync(path.join(RAIZ, 'js/96-importar.js'), 'utf8')));
 chk('index.html declara #fileInputRecetario, propio y nunca compartido con #fileInput/#fileInputCompras',
     /id="fileInputRecetario"/.test(html) &&
     !/id="fileInput"[^>]*recetario/i.test(html));
