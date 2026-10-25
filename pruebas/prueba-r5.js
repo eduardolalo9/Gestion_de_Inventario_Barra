@@ -129,8 +129,13 @@ const buscApp = fs.readFileSync(path.join(RAIZ, 'js/80-buscador.js'), 'utf8');
 const iniIni  = render.indexOf('function renderInicioTab() {');
 const tabIni  = iniIni !== -1 ? render.slice(iniIni, render.indexOf('\n        }\n', iniIni)) : '';
 chk('La pestaña tiene buscador',            /BusquedaUI\.barra\('catalogo'/.test(tab));
+// LUPA: la barra ya no se pinta dentro de Inicio; la abre la lupa de la
+// cabecera (abrirBusquedaCabecera, js/80-buscador.js) con la MISMA clave
+// 'catalogo', y Inicio conserva la región donde caen los resultados. Misma
+// intención de antes: Inicio y Productos comparten motor y estado.
 chk('Usa el mismo motor que Inicio',
-    /BusquedaUI\.barra\('catalogo'/.test(tabIni) && /BusquedaUI\.region\('catalogo'/.test(tab),
+    /BusquedaUI\.barra\('catalogo'/.test(buscApp) && /BusquedaUI\.region\('catalogo'/.test(tabIni) &&
+    /BusquedaUI\.region\('catalogo'/.test(tab),
     'dos buscadores distintos darían resultados distintos para lo mismo');
 chk('Escape limpia la búsqueda',
     /case 'Escape':[\s\S]{0,400}?limpiar\(key, true\)/.test(buscUI));

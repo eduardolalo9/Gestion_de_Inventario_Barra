@@ -141,9 +141,14 @@ chk('La versión de caché subió por encima de 4.0 (FASE 5)',
  ['Pedidos', render, "function renderPedidosTab"], ['Conteo', inv, "function renderAuditoriaConteo"],
  ['Historia', inv, "function renderHistoriaTab"]].forEach(([n, src, fn]) => {
     const i = src.indexOf(fn); const cuerpo = i === -1 ? '' : src.slice(i, src.indexOf('\n        }\n', i));
-    chk(n + ' usa la barra unificada y una región de resultados',
-        /BusquedaUI\.barra\(/.test(cuerpo) && /BusquedaUI\.region\(/.test(cuerpo), fn);
+    // LUPA: Inicio ya no pinta la barra en su cuerpo (la abre la lupa de la
+    // cabecera, ver más abajo); conserva la región donde caen los resultados.
+    const conBarra = n !== 'Inicio';
+    chk(n + (conBarra ? ' usa la barra unificada y una región de resultados' : ' conserva la región de resultados del catálogo'),
+        (!conBarra || /BusquedaUI\.barra\(/.test(cuerpo)) && /BusquedaUI\.region\(/.test(cuerpo), fn);
 });
+chk('Inicio abre la barra unificada del catálogo desde la lupa de la cabecera (misma clave, sin barra duplicada)',
+    /function abrirBusquedaCabecera\(\)[\s\S]{0,1800}?BusquedaUI\.barra\('catalogo'/.test(app));
 chk('Ya no queda ningún input de búsqueda con oninput en línea',
     !/oninput="update(Search|Conteo|Pedidos|Historia)/.test(render + inv));
 chk('Las copias duplicadas de puntuación difusa desaparecieron',

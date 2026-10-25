@@ -218,6 +218,9 @@
         // ══════════════════════════════════════════════════════════════════
         function switchTab(tab) {
             activeTab = tab;
+            // LUPA: el panel de búsqueda es de Inicio; al irse a otra pestaña se
+            // retira (y con él sus ids, que Productos necesita para su propia barra).
+            if (tab !== 'inicio' && typeof cerrarBusquedaCabecera === 'function') cerrarBusquedaCabecera();
             // Navegación primaria: la barra inferior.
             document.querySelectorAll('#bottomTabBar .btab-item').forEach(btn => {
                 const activo = btn.dataset.btab === tab;
@@ -699,12 +702,20 @@
             // semana, estado del inventario y existencia de la semana.
             let html = (typeof renderPanelInicio === 'function') ? renderPanelInicio() : '';
 
-            // ── Búsqueda (FASE 6: barra unificada, comparte estado con Productos) ──
-            html += BusquedaUI.barra('catalogo', {
-                placeholder: 'Buscar por nombre, código, PV o grupo…',
-                etiqueta: 'Buscar productos del catálogo',
-                sticky: true
-            });
+            // ── Búsqueda ───────────────────────────────────────────────────────
+            // LUPA: la barra ya no vive aquí (obligaba a bajar hasta ella). Se abre
+            // con la lupa de la cabecera — abrirBusquedaCabecera(), js/80-buscador.js —
+            // sobre la misma clave 'catalogo', y los resultados se siguen pintando en
+            // la región de más abajo. Si llega aquí una consulta aplicada desde otra
+            // pantalla (p. ej. escrita en Productos), se avisa para que el filtro no
+            // quede escondido sin barra que lo explique.
+            if (searchTerm) {
+                html += '<div class="hdr-search-aviso">'
+                      + '<button type="button" class="sbx-btn" onclick="abrirBusquedaCabecera()">'
+                      + 'Búsqueda: “' + escapeHtml(searchTerm) + '” · editar</button>'
+                      + '<button type="button" class="sbx-btn" onclick="BusquedaUI.establecer(\'catalogo\', \'\')">Quitar</button>'
+                      + '</div>';
+            }
 
             // ── Pill-rail de grupos (horizontal, sin select) ───────────────────
             html += '<div class="grp-rail-wrap"><div class="grp-rail">';

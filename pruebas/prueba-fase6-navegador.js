@@ -52,6 +52,11 @@ const PUERTO = process.env.PUERTO || '8080';
     activeTab = 'inicio'; renderTab();
   });
 
+  // LUPA: Inicio ya no trae la barra en su cuerpo; la abre la lupa de la
+  // cabecera, que pinta la MISMA barra unificada (misma clave 'catalogo').
+  chk('Inicio no trae barra propia: antes de tocar la lupa no hay input del catálogo',
+      await p.evaluate(() => !document.getElementById('sbx-input-catalogo') && !!document.getElementById('sbx-res-catalogo')), '');
+  await p.click('#searchToggleBtn'); await p.waitForTimeout(250);
   const inp = '#sbx-input-catalogo';
   chk('Inicio tiene la barra unificada, con role="search" y etiqueta accesible',
       await p.evaluate(() => {
@@ -184,6 +189,11 @@ const PUERTO = process.env.PUERTO || '8080';
 
   // ── Productos comparte estado con Inicio ─────────────────────────────────
   await p.fill(inp, 'aperol'); await p.waitForTimeout(320);
+  // LUPA: se simula "consulta aplicada y panel ya no en pantalla" (lo que pasa
+  // si la consulta llega desde otra vista) retirando el panel SIN vaciar la
+  // consulta; cerrarlo de verdad la vacía. Así Productos sigue probando que lee
+  // el mismo estado y no hay dos barras con el mismo id.
+  await p.evaluate(() => { const pn = document.getElementById('hdrSearchPanel'); pn.hidden = true; pn.innerHTML = ''; _hdrBuscaAbierta = false; });
   const prod = await p.evaluate(() => {
     activeTab = 'productos'; renderTab();
     const i = document.getElementById('sbx-input-catalogo');
@@ -265,6 +275,7 @@ const PUERTO = process.env.PUERTO || '8080';
 
   // ── Móvil: teclado numérico ──────────────────────────────────────────────
   await p.evaluate(() => { activeTab = 'inicio'; renderTab(); });
+  await p.click('#searchToggleBtn'); await p.waitForTimeout(250);   // LUPA: abre el panel con la barra
   const modoVisible = await p.isVisible('#sbx-catalogo [data-sbx-accion="modo"]');
   if (modoVisible) await p.click('#sbx-catalogo [data-sbx-accion="modo"]');
   chk('En móvil, el botón 123 cambia el teclado a numérico y se recuerda',

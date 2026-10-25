@@ -247,7 +247,7 @@
 
         BusquedaUI.registrar('catalogo', {
             obtenerConsulta: function() { return searchTerm; },
-            alAplicar:  function(v) { searchTerm = v; },
+            alAplicar:  function(v) { searchTerm = v; _hdrBuscaSincronizarAviso(); },
             refrescar:  function() {
                 return _pintarRegionBusqueda('catalogo',
                     activeTab === 'productos' ? _renderProductosResultados() : _renderInicioResultados());
@@ -312,3 +312,107 @@
             precalentar: function() { _motorRecetas.indexar(recetas); },
             paso: 60
         });
+
+        // ═════════════════════════════════════════════════════════════════════
+        //  LUPA DE LA CABECERA — búsqueda del catálogo sin bajar por Inicio
+        //  ───────────────────────────────────────────────────────────────────
+        //  Antes el buscador del catálogo estaba en Inicio, debajo del panel y
+        //  los grupos: había que hacer scroll. Ahora vive en la cabecera: la
+        //  lupa abre un panel FLOTANTE (position:fixed, no empuja nada) con la
+        //  MISMA barra de BusquedaUI y la MISMA clave 'catalogo', así que el
+        //  motor, los recientes, los chips y los resultados son los de siempre;
+        //  los resultados se siguen pintando en la región de Inicio.
+        //
+        //  · Productos conserva su barra propia (es la pantalla del catálogo):
+        //    allí la lupa solo enfoca esa barra. Evita ids duplicados.
+        //  · En cualquier otra pestaña la lupa lleva primero a Inicio.
+        //  · La barra se pinta al abrir y se borra al cerrar: sus ids nunca
+        //    coexisten con los de Productos.
+        //  · Cerrar = vaciar la consulta (si no, Inicio quedaría filtrado sin
+        //    ninguna barra visible que lo explique).
+        // ═════════════════════════════════════════════════════════════════════
+
+        var _hdrBuscaAbierta = false;
+
+        // El aviso "Búsqueda: … · editar" de Inicio solo tiene sentido mientras haya
+        // consulta: se retira en cuanto se vacía (por la X, al cerrar o con "Quitar").
+        function _hdrBuscaSincronizarAviso() {
+            if (searchTerm) return;
+            var a = document.querySelector('.hdr-search-aviso');
+            if (a && a.parentNode) a.parentNode.removeChild(a);
+        }
+
+        function _hdrBuscaPosicionar() {
+            var panel = document.getElementById('hdrSearchPanel');
+            var head  = document.querySelector('.sticky.top-0.z-50');
+            if (!panel || !head) return;
+            var b = head.getBoundingClientRect().bottom;
+            panel.style.top = Math.max(0, Math.round(b)) + 'px';
+        }
+
+        function abrirBusquedaCabecera() {
+            // Productos ya tiene su barra: se enfoca en vez de duplicarla.
+            if (activeTab === 'productos') {
+                var propia = document.getElementById('sbx-input-catalogo');
+                if (propia) {
+                    try { propia.scrollIntoView({ block: 'center' }); } catch (_) {}
+                    propia.focus();
+                }
+                return;
+            }
+            if (activeTab !== 'inicio') switchTab('inicio');
+            var panel = document.getElementById('hdrSearchPanel');
+            if (!panel) return;
+            // Idempotente: abrir con el panel abierto solo devuelve el foco.
+            if (!_hdrBuscaAbierta) {
+                panel.innerHTML =
+                    '<div class="hdr-search__fila">'
+                    + BusquedaUI.barra('catalogo', {
+                        placeholder: 'Buscar por nombre, código, PV o grupo…',
+                        etiqueta: 'Buscar productos del catálogo'
+                    })
+                    + '<button type="button" class="hdr-search__cerrar" onclick="cerrarBusquedaCabecera()"'
+                    + ' aria-label="Cerrar búsqueda" title="Cerrar (Esc)">'
+                    + '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor">'
+                    + '<path stroke-linecap="round" stroke-width="2" d="M6 6l12 12M18 6L6 18"/></svg></button>'
+                    + '</div>';
+                _hdrBuscaPosicionar();
+                panel.hidden = false;
+                _hdrBuscaAbierta = true;
+                var btn = document.getElementById('searchToggleBtn');
+                if (btn) btn.setAttribute('aria-expanded', 'true');
+            }
+            var inp = document.getElementById('sbx-input-catalogo');
+            if (inp) inp.focus();
+        }
+
+        // La lupa alterna: un segundo toque cierra el panel.
+        function alternarBusquedaCabecera() {
+            if (_hdrBuscaAbierta) cerrarBusquedaCabecera();
+            else abrirBusquedaCabecera();
+        }
+
+        function cerrarBusquedaCabecera() {
+            if (!_hdrBuscaAbierta) return;
+            var panel = document.getElementById('hdrSearchPanel');
+            var hayConsulta = !!(typeof searchTerm !== 'undefined' && searchTerm);
+            // 1º se retira la barra (libera los ids), 2º se vacía la consulta.
+            if (panel) { panel.hidden = true; panel.innerHTML = ''; }
+            _hdrBuscaAbierta = false;
+            var btn = document.getElementById('searchToggleBtn');
+            if (btn) btn.setAttribute('aria-expanded', 'false');
+            if (hayConsulta) BusquedaUI.establecer('catalogo', '');
+            try { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); } catch (_) {}
+        }
+
+        // Cierres: la X, un segundo toque a la lupa, Esc (con el foco fuera del
+        // input; dentro, BusquedaUI lo usa para vaciar/soltar) y salir de Inicio
+        // (switchTab). NO se cierra por tocar fuera: se buscan varios productos
+        // seguidos (agregar al carrito, "Mostrar más", chips) sin perder la consulta.
+        document.addEventListener('keydown', function(e) {
+            if (!_hdrBuscaAbierta || e.key !== 'Escape') return;
+            if (e.target && e.target.classList && e.target.classList.contains('sbx__input')) return;
+            cerrarBusquedaCabecera();
+        });
+        window.addEventListener('resize', function() { if (_hdrBuscaAbierta) _hdrBuscaPosicionar(); }, { passive: true });
+        window.addEventListener('scroll', function() { if (_hdrBuscaAbierta) _hdrBuscaPosicionar(); }, { passive: true, capture: true });

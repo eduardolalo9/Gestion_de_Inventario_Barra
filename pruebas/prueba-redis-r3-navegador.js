@@ -53,7 +53,9 @@ const PUERTO = process.env.PUERTO || '8080';
     const t = document.getElementById('tabContent');
     return {
       panel:      !!t.querySelector('#pm-panel, .pm-panel'),
-      buscador:   !!t.querySelector('#sbx-input-catalogo, [id^="sbx-input"]'),
+      // LUPA: la barra ya no se pinta en Inicio; Inicio conserva la región de
+      // resultados del catálogo y la cabecera trae el botón que abre la barra.
+      buscador:   !!t.querySelector('#sbx-res-catalogo') && !!document.getElementById('searchToggleBtn'),
       rail:       t.querySelectorAll('.grp-pill').length,
       chips:      !!t.querySelector('[id^="sbx-chips"], .sbx-chip'),
       productos:  t.querySelectorAll('.prd-card').length,

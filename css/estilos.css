@@ -3730,3 +3730,58 @@ html[data-theme="light"] .vt-dia--ok { color: #fff; }
     box-shadow: var(--shadow-card);
 }
 .inv-modal__btn--primario:hover { background: var(--accent-hover, var(--accent)); }
+
+/* ══════════════════════════════════════════════════════════════════════
+   LUPA DE LA CABECERA — botón + panel flotante de búsqueda
+   ──────────────────────────────────────────────────────────────────────
+   El botón replica al de tema (#themeToggleBtn): mismo tamaño, forma y
+   colores; solo cambia el icono. El panel es position:fixed, así que no
+   empuja el contenido; su top lo calcula abrirBusquedaCabecera() según
+   la cabecera real (js/80-buscador.js).
+   ══════════════════════════════════════════════════════════════════════ */
+#searchToggleBtn {
+    width: 40px !important; height: 40px !important;
+    border-radius: var(--r-full) !important;
+    border: none !important;
+    background: transparent !important;
+    color: var(--txt-primary) !important;
+    position: relative;
+    transition: background 0.2s var(--ease-std) !important;
+    -webkit-tap-highlight-color: transparent;
+}
+/* Área táctil de 44×44 sin agrandar el icono ni mover la cabecera. */
+#searchToggleBtn::after { content: ""; position: absolute; inset: -2px; }
+#searchToggleBtn:hover,
+#searchToggleBtn:active { background: var(--border-mid) !important; transform: none !important; }
+#searchToggleBtn[aria-expanded="true"] { color: var(--accent) !important; background: var(--accent-dim) !important; }
+
+.hdr-search {
+    position: fixed; left: 0; right: 0; top: 56px;   /* top real: lo pone el JS */
+    z-index: 55;                                      /* sobre el contenido, bajo los modales (9000+) */
+    padding: 8px 12px;
+    pointer-events: none;                             /* solo la fila recibe toques */
+}
+.hdr-search[hidden] { display: none; }
+.hdr-search__fila {
+    pointer-events: auto;
+    max-width: 80rem; margin: 0 auto;
+    display: flex; align-items: center; gap: 4px;
+    padding: 4px 4px 4px 6px;
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    border-radius: 14px;
+    box-shadow: 0 12px 28px rgba(0,0,0,.45);
+}
+.hdr-search__fila .sbx { flex: 1; min-width: 0; margin-bottom: 0; }
+.hdr-search__cerrar {
+    flex-shrink: 0; width: 44px; height: 44px;
+    display: flex; align-items: center; justify-content: center;
+    background: transparent; border: 0; border-radius: var(--r-full);
+    color: var(--txt-secondary); cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+.hdr-search__cerrar:hover,
+.hdr-search__cerrar:active { background: var(--border-mid); color: var(--txt-primary); }
+.hdr-search__cerrar svg { width: 20px; height: 20px; }
+/* Aviso de Inicio cuando hay una búsqueda aplicada pero el panel está cerrado. */
+.hdr-search-aviso { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; }
