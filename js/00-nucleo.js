@@ -137,6 +137,19 @@
         let _ventasImportPendiente = null;
         let _ventasImportResultado = null;
         let activeTab = 'inicio';
+        // v5.33-TABS-BEGIN — pestañas reconocidas por la app (Etapa 0: blindaje de activeTab)
+        // TABS_VALIDAS: lista única de pestañas que renderTab sabe pintar. Cualquier valor
+        //   restaurado (localStorage, IndexedDB, respaldo) se valida contra ella.
+        // TABS_COMPARTIBLES: lista LITERAL y congelada de las pestañas que v5.32 reconoce.
+        //   Es lo único que puede viajar a Firestore mientras haya dispositivos en v5.32.
+        //   NO se deriva de TABS_VALIDAS: al agregar una pestaña nueva (p. ej. "perfil")
+        //   debe quedar fuera de esta lista hasta que todos los dispositivos se actualicen.
+        const TABS_VALIDAS = ['inicio', 'productos', 'pedidos', 'inventario', 'historia', 'compras', 'recetario', 'ventas', 'pedido_sugerido', 'importar', 'papelera', 'ajustes', 'notificaciones', 'admin'];
+        const TABS_COMPARTIBLES = Object.freeze(['inicio', 'productos', 'pedidos', 'inventario', 'historia', 'compras', 'recetario', 'ventas', 'pedido_sugerido', 'importar', 'papelera', 'ajustes', 'notificaciones', 'admin']);
+        function tabValida(t) { return typeof t === 'string' && TABS_VALIDAS.indexOf(t) !== -1; }
+        function tabSegura(t) { return tabValida(t) ? t : 'inicio'; }
+        function tabParaNube(t) { return (typeof t === 'string' && TABS_COMPARTIBLES.indexOf(t) !== -1) ? t : null; }
+        // v5.33-TABS-END
         let editingProductId = null;
         let searchTerm = '';
         let selectedGroup = 'Todos';

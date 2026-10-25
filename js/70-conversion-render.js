@@ -391,6 +391,8 @@
                 case 'ajustes':         content.innerHTML = renderAjustesTab(); break;
                 case 'notificaciones':  content.innerHTML = renderNotificacionesTab(); break;
                 case 'admin':           content.innerHTML = isAdmin() ? renderAdminTab() : renderInicioTab(); break;
+                // v5.33: pestaña desconocida → Inicio (solo pinta; no modifica activeTab, no guarda, no sincroniza)
+                default:                content.innerHTML = renderInicioTab(); break;
             }
 
             // FASE 6 — centinelas de carga incremental y altura del encabezado
