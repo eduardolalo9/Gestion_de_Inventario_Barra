@@ -54,7 +54,8 @@
             const storedArea  = localStorage.getItem('inventarioApp_selectedArea');
             const storedSearch = localStorage.getItem('inventarioApp_searchTerm');
 
-            if (storedTab)    activeTab     = storedTab;
+            // v5.33: un valor guardado inválido (p. ej. de una versión distinta) no debe dejar la pantalla en blanco
+            if (storedTab)    activeTab     = (typeof tabSegura === 'function') ? tabSegura(storedTab) : storedTab;
             if (storedGroup)  selectedGroup = storedGroup;
             if (storedArea)   selectedArea  = storedArea;
             // FASE 6 — la búsqueda del catálogo ya NO se restaura al abrir la app.
@@ -1160,7 +1161,6 @@
                     // auditoriaConteo → NO se persiste en Firestore porque es dato
                     //   CALCULADO en memoria a partir de allUsersAuditoria. Guardarlo
                     //   como canónico causaba corrupción al cargar en otro dispositivo.
-                    activeTab:         activeTab,
                     selectedArea:      selectedArea,
                     _lastModified:     Date.now(), // FIX 10: timestamp actual, no el del LS
                     _syncedAt:         Date.now(),
@@ -1170,6 +1170,10 @@
                     _lastWrittenBy:    currentUserUid || 'anonymous',
                     _lastWrittenRole:  currentUserRole || 'user'
                 };
+                // v5.33: solo viaja una pestaña que v5.32 conoce; si no, la CLAVE se omite (no undefined).
+                // Con set(...,{merge:true}) omitir la clave conserva el valor previo del documento.
+                const _tabNube = (typeof tabParaNube === 'function') ? tabParaNube(activeTab) : activeTab;
+                if (_tabNube) payload.activeTab = _tabNube;
 
                 // Parte de administrador: catálogo y estado global de auditoría.
                 //

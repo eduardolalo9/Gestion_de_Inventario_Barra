@@ -1150,7 +1150,8 @@ const usersList = Object.values(allUsersAuditoria);
                 orders      = _mergeArrayByIdPreferCloud(orders,      cloudOrders);
                 inventories = _mergeArrayByIdPreferCloud(inventories, cloudInventories);
                 cart        = data.cart        || [];
-                activeTab   = data.activeTab   || 'inicio';
+                // v5.33: la pestaña activa es estado de pantalla de CADA dispositivo; ya no se adopta la
+                // que llega de la nube (antes un dispositivo cambiaba la pantalla de otro, o la dejaba en blanco).
                 selectedArea = data.selectedArea || AREAS_CONTEO[0] || 'almacen';   // R6
                 // R6: la definicion de areas llega antes que el estado que la usa.
                 // Si se aplicara despues, auditoriaStatus se leeria contra las areas

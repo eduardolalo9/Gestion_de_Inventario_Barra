@@ -547,7 +547,7 @@ function _idbPruneSyncedQueue() {
                 _syncQueue = idbData.syncQueue;
             if (Array.isArray(idbData.cart))
                 cart = idbData.cart;
-            if (idbData.activeTab)  activeTab   = idbData.activeTab;
+            if (idbData.activeTab)  activeTab   = (typeof tabSegura === 'function') ? tabSegura(idbData.activeTab) : idbData.activeTab;   // v5.33: valida la pestaña restaurada
             if (idbData.selectedArea) selectedArea = idbData.selectedArea;
             if (idbData.selectedGroup) selectedGroup = idbData.selectedGroup;
             // FASE 4 — compras y movimientos. Solo se aplican si IDB trae algo
