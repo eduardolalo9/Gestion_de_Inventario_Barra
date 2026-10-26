@@ -492,47 +492,77 @@
                 && typeof _auditoriaSessionId !== 'undefined' && !!_auditoriaSessionId;
         }
 
-        function _fvsTarjetaHtml(f, tol, editable) {
+        // ── v5.35 — tabla compacta, filtro por grupo y «Diferencias ↑» ──────
+        //  Pedido de Eduardo (26-oct-2026): la misma información que tenían
+        //  las tarjetas (nombre, ID, unidad, lo contado por área con su
+        //  desglose, físico, sistema, diferencia con su etiqueta y neto en
+        //  dinero), en una tabla densa. En el teléfono se desplaza a lo ancho
+        //  con la columna del producto fija.
+        //  El estado de la vista (grupo elegido, orden) vive SOLO en memoria:
+        //  no se guarda, no se sincroniza y se reinicia al salir con Volver.
+        var _fvsVista = { grupo: null, difAsc: false };
+
+        function fvsReiniciarVista() { _fvsVista.grupo = null; _fvsVista.difAsc = false; }
+
+        /** «Grupo»: '' = todos los grupos. Solo cambia lo que se ve. */
+        function fvsElegirGrupo(valor) {
+            _fvsVista.grupo = (valor === undefined || valor === null || valor === '') ? null : String(valor);
+            renderTab();
+        }
+
+        /** «Diferencias ↑»: activa el orden global de menor a mayor; otro toque vuelve al orden por grupo. */
+        function fvsAlternarDifAsc() {
+            _fvsVista.difAsc = !_fvsVista.difAsc;
+            renderTab();
+        }
+
+        /** Opciones de la vista para la capa pura (las mismas para pantalla y Excel). */
+        function _fvsOpcionesVista() {
+            return { grupo: _fvsVista.grupo, difAsc: _fvsVista.difAsc, orden: _fvsOrden() };
+        }
+
+        function _fvsTono(f, tol) {
+            if (f.estado === 'pendiente') return 'pendiente';
+            return f.diferencia < -tol ? 'faltante' : (f.diferencia > tol ? 'sobrante' : 'coincide');
+        }
+
+        function _fvsFilaHtml(f, tol, editable, areasL, conGrupo) {
             var p = (typeof products !== 'undefined' && Array.isArray(products)) ? products.find(function(x) { return x.id === f.id; }) : null;
             var pendiente = f.estado === 'pendiente';
-            var tono = pendiente ? 'pendiente' : (f.diferencia < -tol ? 'faltante' : (f.diferencia > tol ? 'sobrante' : 'coincide'));
+            var tono = _fvsTono(f, tol);
             var etiqueta = { pendiente: 'Sin contar', faltante: 'Faltante', sobrante: 'Sobrante', coincide: 'Coincide' }[tono];
-            var areasL = _fvsAreasLista();
-            var h = '<div class="rc-card fvs-card fvs-card--' + tono + '" data-sbx-item>';
-            h += '<div class="rc-card__cab"><div style="min-width:0;flex:1;">';
-            h += '<div class="rc-card__nombre">' + resaltarBusqueda(f.nombre, _fvsSearchTerm) + '</div>';
-            h += '<div class="rc-card__sub">' + escapeHtml(String(f.id)) + (f.unidad ? ' · ' + escapeHtml(f.unidad) : '') + '</div>';
-            h += '</div>';
-            h += '<div class="fvs-dif fvs-dif--' + tono + '"><span class="fvs-dif__etq">' + etiqueta + '</span>';
-            if (!pendiente) {
-                h += '<span class="fvs-dif__val num">' + (f.diferencia > 0 ? '+' : '') + _fvsNum(f.diferencia) + '</span>'
-                   + '<span class="fvs-dif__neto num">' + _fvsMoneda(f.neto) + '</span>';
-            }
-            h += '</div></div>';
-
-            h += '<div class="rc-areas fvs-areas fvs-areas--n' + Math.min(areasL.length, 4) + '">';
+            var h = '<tr class="fvs-t__fila fvs-t__fila--' + tono + '" data-sbx-item>';
+            h += '<th scope="row" class="fvs-t__prod"><span class="fvs-t__nom">' + resaltarBusqueda(f.nombre, _fvsSearchTerm) + '</span>'
+               + '<span class="fvs-t__sub">' + escapeHtml(String(f.id)) + (f.unidad ? ' · ' + escapeHtml(f.unidad) : '')
+               + (conGrupo ? ' · ' + escapeHtml(f.grupo || 'General') : '') + '</span></th>';
             areasL.forEach(function(area) {
                 var reg = f.areas ? f.areas[area] : null;
-                var cuerpo = '<span class="rc-area__nombre">' + escapeHtml(_fvsEtiquetaArea(area)) + '</span>'
-                           + '<span class="rc-area__valor num">' + (reg ? _fvsFmtCant(p, reg.total) : '—') + '</span>'
-                           + '<span class="rc-area__det">' + escapeHtml(_fvsDesglose(p, reg)) + '</span>';
+                var cuerpo = '<span class="fvs-t__val num">' + (reg ? _fvsFmtCant(p, reg.total) : '—') + '</span>'
+                           + '<span class="fvs-t__det">' + escapeHtml(_fvsDesglose(p, reg)) + '</span>';
                 if (editable && p) {
-                    h += '<button type="button" class="rc-area fvs-area" data-fvs-accion="editar"'
+                    h += '<td class="fvs-t__area"><button type="button" class="fvs-t__celda" data-fvs-accion="editar"'
                        + ' data-fvs-pid="' + escapeHtml(String(f.id)) + '" data-fvs-area="' + escapeHtml(area) + '"'
                        + ' aria-label="Corregir ' + escapeHtml(f.nombre) + ' en ' + escapeHtml(_fvsEtiquetaArea(area)) + '">'
-                       + cuerpo + '<span class="fvs-area__lapiz" aria-hidden="true"><i class="fa-solid fa-pen"></i></span></button>';
+                       + cuerpo + '<i class="fa-solid fa-pen fvs-t__lapiz" aria-hidden="true"></i></button></td>';
                 } else {
-                    h += '<div class="rc-area fvs-area">' + cuerpo + '</div>';
+                    h += '<td class="fvs-t__area"><span class="fvs-t__celda">' + cuerpo + '</span></td>';
                 }
             });
-            h += '</div>';
+            h += '<td class="fvs-t__n num">' + (pendiente ? '—' : _fvsNum(f.fisico)) + '</td>';
+            h += '<td class="fvs-t__n num">' + _fvsNum(f.sistema) + '</td>';
+            h += '<td class="fvs-t__dif fvs-t__dif--' + tono + '"><span class="fvs-t__difval num">'
+               + (pendiente ? '—' : (f.diferencia > 0 ? '+' : '') + _fvsNum(f.diferencia)) + '</span>'
+               + '<span class="fvs-t__etq">' + etiqueta + '</span></td>';
+            h += '<td class="fvs-t__n fvs-t__neto fvs-t__dif--' + tono + ' num">' + (pendiente ? '—' : _fvsMoneda(f.neto)) + '</td>';
+            return h + '</tr>';
+        }
 
-            h += '<div class="fvs-card__pie num">'
-               + '<span>Físico <b>' + (pendiente ? '—' : _fvsNum(f.fisico)) + '</b></span>'
-               + '<span>Sistema <b>' + _fvsNum(f.sistema) + '</b></span>'
-               + '</div>';
-            h += '</div>';
-            return h;
+        function _fvsCabeceraTabla(areasL) {
+            var h = '<thead><tr><th scope="col" class="fvs-t__prod">Producto</th>';
+            areasL.forEach(function(a) { h += '<th scope="col" class="fvs-t__area">' + escapeHtml(_fvsEtiquetaArea(a)) + '</th>'; });
+            return h + '<th scope="col" class="fvs-t__n">Físico</th><th scope="col" class="fvs-t__n">Sistema</th>'
+                     + '<th scope="col" class="fvs-t__dif"><abbr title="Diferencia = físico − sistema">Dif.</abbr></th>'
+                     + '<th scope="col" class="fvs-t__n">Neto</th></tr></thead>';
         }
 
         function _renderFvsResultados() {
@@ -569,32 +599,84 @@
                 ? '<i class="fa-solid fa-hand-pointer" aria-hidden="true"></i> Toca un área para corregir lo contado: se guarda al instante como conteo del administrador.'
                 : '<i class="fa-solid fa-eye" aria-hidden="true"></i> Solo lectura: las correcciones las hace administración con el inventario abierto.') + '</p>';
 
-            if (r.items.length === 0) {
-                return { html: html + BusquedaUI.vacio('fvs', 'productos'), coincidencias: 0, total: r.total };
+            // v5.35 — el grupo elegido se aplica DESPUÉS de búsqueda y chips.
+            var vista = fisicoVsSistemaOrdenVisible(r.items, _fvsOpcionesVista());
+            var coinc = vista.filas.length;
+            var total = _fvsVista.grupo ? fisicoVsSistemaFiltrarGrupo(datos.filas, _fvsVista.grupo).length : r.total;
+
+            if (coinc === 0) {
+                return { html: html + BusquedaUI.vacio('fvs', 'productos'), coincidencias: 0, total: total };
             }
 
-            html += BusquedaUI.resumen('fvs', r.coincidencias, r.total, 'producto', 'productos');
-            html += '<div class="fvs-orden">Por grupo · diferencia ' + (orden === 'mayor_menor' ? 'mayor → menor' : 'menor → mayor') + '</div>';
-            var grupos = fisicoVsSistemaAgrupar(r.items, orden);
+            html += BusquedaUI.resumen('fvs', coinc, total, 'producto', 'productos');
+            html += '<div class="fvs-orden">' + (_fvsVista.grupo ? 'Grupo ' + escapeHtml(_fvsVista.grupo) + ' · ' : '')
+                 + (vista.modo === 'plano'
+                    ? 'Diferencias de menor a mayor (sin agrupar)'
+                    : 'Por grupo · diferencia ' + (orden === 'mayor_menor' ? 'mayor → menor' : 'menor → mayor')) + '</div>';
+
+            var areasL = _fvsAreasLista();
             var pintadas = 0;
-            grupos.forEach(function(g) {
-                if (pintadas >= lim) return;
-                var netoG = g.neto < 0 ? 'var(--danger)' : (g.neto > 0 ? 'var(--ok)' : 'var(--txt-secondary)');
-                html += '<section class="fvs-grupo" aria-label="Grupo ' + escapeHtml(g.grupo) + '">';
-                html += '<div class="fvs-grupo__cab"><span class="fvs-grupo__nom">' + escapeHtml(g.grupo) + '</span>'
-                     +  '<span class="fvs-grupo__dat">' + g.contados + ' contado' + (g.contados === 1 ? '' : 's')
-                     +  (g.pendientes ? ' · ' + g.pendientes + ' sin contar' : '')
-                     +  ' · <b class="num" style="color:' + netoG + ';">' + _fvsMoneda(g.neto) + '</b></span></div>';
-                html += '<div class="fvs-grupo__lista">';
-                g.filas.forEach(function(f) {
+            html += '<div class="fvs-t-wrap" role="region" aria-label="Tabla Físico vs Sistema" tabindex="0">';
+            html += '<table class="fvs-t">' + _fvsCabeceraTabla(areasL);
+            var columnas = areasL.length + 5;
+            if (vista.modo === 'plano') {
+                html += '<tbody>';
+                vista.filas.forEach(function(f) {
                     if (pintadas >= lim) return;
-                    html += _fvsTarjetaHtml(f, tol, editable);
+                    html += _fvsFilaHtml(f, tol, editable, areasL, true);
                     pintadas++;
                 });
-                html += '</div></section>';
+                html += '</tbody>';
+            } else {
+                vista.grupos.forEach(function(g) {
+                    if (pintadas >= lim) return;
+                    var netoG = g.neto < 0 ? 'var(--danger)' : (g.neto > 0 ? 'var(--ok)' : 'var(--txt-secondary)');
+                    html += '<tbody class="fvs-grupo" aria-label="Grupo ' + escapeHtml(g.grupo) + '">';
+                    html += '<tr class="fvs-t__grupo"><th scope="colgroup" colspan="' + columnas + '"><span class="fvs-t__gcab">'
+                         +  '<span class="fvs-grupo__nom">' + escapeHtml(g.grupo) + '</span>'
+                         +  '<span class="fvs-grupo__dat">' + g.contados + ' contado' + (g.contados === 1 ? '' : 's')
+                         +  (g.pendientes ? ' · ' + g.pendientes + ' sin contar' : '')
+                         +  ' · <b class="num" style="color:' + netoG + ';">' + _fvsMoneda(g.neto) + '</b></span></span></th></tr>';
+                    g.filas.forEach(function(f) {
+                        if (pintadas >= lim) return;
+                        html += _fvsFilaHtml(f, tol, editable, areasL, false);
+                        pintadas++;
+                    });
+                    html += '</tbody>';
+                });
+            }
+            html += '</table></div>';
+            html += BusquedaUI.centinela('fvs', coinc - lim);
+            return { html: html, coincidencias: coinc, total: total };
+        }
+
+        /**
+         * Controles de la vista: «Grupo», «Diferencias ↑» y «Exportar
+         * diferencias a Excel». Van FUERA de la región de resultados para que
+         * el buscador no los reescriba en cada tecla.
+         */
+        function _fvsControlesHtml(datos) {
+            if (!datos) return '';
+            var grupos = fisicoVsSistemaGrupos(datos.filas);
+            if (_fvsVista.grupo && !grupos.some(function(g) { return g.grupo === _fvsVista.grupo; })) _fvsVista.grupo = null;
+            var sel = _fvsVista.grupo;
+            var h = '<div class="fvs-ctl" role="group" aria-label="Organizar y exportar">';
+            h += '<label class="fvs-ctl__btn fvs-ctl__grupo' + (sel ? ' fvs-ctl__btn--on' : '') + '">'
+               + '<i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i>'
+               + '<span class="fvs-ctl__txt">Grupo<span class="fvs-ctl__val">' + escapeHtml(sel || 'Todos') + '</span></span>'
+               + '<i class="fa-solid fa-chevron-down fvs-ctl__flecha" aria-hidden="true"></i>'
+               + '<select id="fvsGrupoSel" class="fvs-ctl__sel" aria-label="Grupo" onchange="fvsElegirGrupo(this.value)">'
+               + '<option value=""' + (sel ? '' : ' selected') + '>Todos los grupos (' + datos.filas.length + ')</option>';
+            grupos.forEach(function(g) {
+                h += '<option value="' + escapeHtml(g.grupo) + '"' + (g.grupo === sel ? ' selected' : '') + '>' + escapeHtml(g.grupo) + ' (' + g.n + ')</option>';
             });
-            html += BusquedaUI.centinela('fvs', r.items.length - lim);
-            return { html: html, coincidencias: r.coincidencias, total: r.total };
+            h += '</select></label>';
+            h += '<button type="button" id="fvsDifAscBtn" class="fvs-ctl__btn' + (_fvsVista.difAsc ? ' fvs-ctl__btn--on' : '') + '"'
+               + ' aria-pressed="' + (_fvsVista.difAsc ? 'true' : 'false') + '" onclick="fvsAlternarDifAsc()"'
+               + ' title="' + (_fvsVista.difAsc ? 'Volver al orden por grupo' : 'Ordenar todas las diferencias de menor a mayor') + '">'
+               + '<i class="fa-solid fa-sort" aria-hidden="true"></i><span>Diferencias ↑</span></button>';
+            if (typeof fvsExportBotonHtml === 'function') h += fvsExportBotonHtml(datos, _fvsOpcionesVista());
+            return h + '</div>';
         }
 
         // ── v5.27 — corrección DIRECTA desde la tarjeta ──────────────────────
@@ -692,18 +774,21 @@
             var html = '<div class="audit-screen"><div class="if-card">';
             html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">';
             html += '<p class="if-card__titulo" style="margin:0;"><i class="fa-solid fa-file-chart-column" aria-hidden="true"></i> Físico vs Sistema</p>';
-            html += '<button type="button" class="audit-back-btn" onclick="auditoriaView=\'selection\'; _fvsSearchTerm=\'\'; renderTab();">'
+            html += '<button type="button" class="audit-back-btn" onclick="auditoriaView=\'selection\'; _fvsSearchTerm=\'\'; fvsReiniciarVista(); renderTab();">'
                  +  '<i class="fa-solid fa-chevron-left" aria-hidden="true"></i> Volver</button>';
             html += '</div>';
             html += '<p class="pm-nota" style="margin:0 0 10px;">Suma lo contado en todas las áreas del inventario '
                  +  'abierto y lo compara, producto por producto, contra lo que el sistema cree que hay. '
-                 +  'Agrupado por grupo del catálogo y ordenado por diferencia.</p>';
+                 +  'Agrupado por grupo del catálogo y ordenado por diferencia (físico − sistema).</p>';
             html += BusquedaUI.barra('fvs', {
                 placeholder: 'Buscar producto o código…',
                 etiqueta: 'Buscar en Físico vs Sistema',
                 sticky: true
             });
-            html += BusquedaUI.chips('fvs', _chipsFvs());
+            // v5.35 — con «Diferencias ↑» el orden lo decide ese botón: el chip de
+            // invertir el orden por grupo se oculta para no dar dos órdenes a la vez.
+            html += BusquedaUI.chips('fvs', _chipsFvs().filter(function(c) { return !(_fvsVista.difAsc && c.id === 'orden_desc'); }));
+            html += _fvsControlesHtml(fisicoVsSistemaCalcular());
             html += BusquedaUI.region('fvs', _renderFvsResultados().html);
             html += '</div></div>';
             return html;

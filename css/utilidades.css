@@ -835,3 +835,61 @@ table { border-collapse: collapse; }
 .pf-btn { width: 100%; min-height: 44px; margin-top: 10px; border-radius: 10px; font-family: inherit; font-size: .8125rem; font-weight: 700; cursor: pointer; }
 .pf-btn--sec { border: 1px solid var(--border-mid); background: transparent; color: var(--txt-primary); }
 .pf-btn--salir { border: 1px solid var(--border-mid); background: transparent; color: var(--danger); margin-top: 14px; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v5.35 — FÍSICO VS SISTEMA: tabla compacta, «Grupo», «Diferencias ↑» y
+   «Exportar diferencias a Excel». Solo tokens del sistema (claro y oscuro).
+   En el teléfono la tabla se desplaza a lo ancho con el producto fijo.
+   ══════════════════════════════════════════════════════════════════════════ */
+.fvs-ctl { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 2px 0 10px; }
+.fvs-ctl__btn { position: relative; display: inline-flex; align-items: center; gap: 7px; min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1.5px solid var(--border-mid); background: var(--card); color: var(--txt-primary); font-family: var(--f-head); font-size: .8125rem; font-weight: 700; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.fvs-ctl__btn:hover { border-color: var(--accent); }
+.fvs-ctl__btn:focus-visible, .fvs-ctl__grupo:focus-within { outline: 3px solid var(--accent); outline-offset: 2px; }
+.fvs-ctl__btn--on { border-color: var(--accent); background: var(--accent-dim); color: var(--accent); }
+.fvs-ctl__btn--excel { color: var(--accent); }
+.fvs-ctl__btn:disabled { opacity: .6; cursor: progress; }
+.fvs-ctl__txt { display: inline-flex; align-items: baseline; gap: 6px; min-width: 0; }
+.fvs-ctl__val { font-weight: 600; color: var(--txt-secondary); max-width: 42vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fvs-ctl__btn--on .fvs-ctl__val { color: inherit; }
+.fvs-ctl__flecha { font-size: .7rem; opacity: .7; }
+/* El <select> nativo cubre todo el botón: en Android abre el selector del sistema. 16 px evita el zoom de iOS. */
+.fvs-ctl__sel { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 16px; }
+.fvs-ctl__alcance { flex-basis: 100%; margin: 0; font-size: .72rem; line-height: 1.4; color: var(--txt-muted); }
+
+.fvs-t-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; border: 1px solid var(--border-mid); border-radius: var(--r-md); background: var(--card); }
+.fvs-t-wrap:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.fvs-t { width: 100%; border-collapse: separate; border-spacing: 0; font-size: .78rem; line-height: 1.25; color: var(--txt-primary); font-variant-numeric: tabular-nums; }
+.fvs-t th, .fvs-t td { padding: 5px 7px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.fvs-t thead th { background: var(--surface); font-size: .64rem; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--txt-secondary); white-space: nowrap; text-align: right; padding-top: 7px; padding-bottom: 7px; }
+.fvs-t thead th.fvs-t__prod { text-align: left; z-index: 3; background: var(--surface); }
+.fvs-t thead th.fvs-t__area { text-align: center; white-space: normal; max-width: 92px; line-height: 1.15; }
+.fvs-t abbr { text-decoration: none; cursor: help; }
+.fvs-t__prod { position: sticky; left: 0; z-index: 1; background: var(--card); text-align: left; font-weight: 400; min-width: 150px; max-width: 200px; box-shadow: 1px 0 0 var(--border-mid); }
+@media (min-width: 900px) { .fvs-t__prod { max-width: 360px; } }
+.fvs-t__nom { display: block; font-weight: 700; font-size: .8rem; overflow-wrap: anywhere; }
+.fvs-t__sub { display: block; font-size: .66rem; color: var(--txt-muted); overflow-wrap: anywhere; }
+.fvs-t__area { text-align: center; padding: 3px 4px; min-width: 70px; max-width: 110px; }
+.fvs-t__celda { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; width: 100%; min-height: 34px; padding: 2px 6px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: inherit; font: inherit; }
+button.fvs-t__celda { min-height: 44px; border-color: var(--border); background: var(--surface); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+button.fvs-t__celda:hover, button.fvs-t__celda:focus-visible { border-color: var(--accent); outline: none; }
+.fvs-t__val { font-family: var(--f-num); font-weight: 700; font-size: .82rem; }
+.fvs-t__det { font-size: .6rem; color: var(--txt-muted); white-space: nowrap; }
+.fvs-t__lapiz { position: absolute; top: 3px; right: 4px; font-size: .5rem; color: var(--txt-muted); }
+.fvs-t__n { text-align: right; white-space: nowrap; font-family: var(--f-num); }
+.fvs-t__dif { text-align: right; white-space: nowrap; }
+.fvs-t__difval { display: block; font-family: var(--f-num); font-weight: 800; font-size: .84rem; }
+.fvs-t__etq { display: block; font-size: .62rem; font-weight: 700; }
+.fvs-t__neto { font-weight: 700; }
+.fvs-t__dif--faltante { color: var(--danger); }
+.fvs-t__dif--sobrante { color: var(--ok); }
+.fvs-t__dif--coincide, .fvs-t__dif--pendiente { color: var(--txt-muted); }
+.fvs-t thead .fvs-t__dif { color: var(--txt-secondary); }
+.fvs-t__fila--faltante .fvs-t__prod { box-shadow: inset 3px 0 0 var(--danger), 1px 0 0 var(--border-mid); }
+.fvs-t__fila--sobrante .fvs-t__prod { box-shadow: inset 3px 0 0 var(--ok), 1px 0 0 var(--border-mid); }
+.fvs-t__fila--pendiente .fvs-t__nom, .fvs-t__fila--pendiente .fvs-t__n { color: var(--txt-secondary); }
+.fvs-t__grupo th { background: var(--surface); text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border-mid); white-space: nowrap; }
+/* La cabecera del grupo ocupa toda la fila: su texto se queda visible al desplazar a lo ancho. */
+.fvs-t__gcab { position: sticky; left: 8px; display: inline-block; }
+.fvs-t__grupo .fvs-grupo__nom { font-size: .8rem; margin-right: 10px; }
+.fvs-t__grupo .fvs-grupo__dat { font-size: .7rem; font-weight: 400; }
+.fvs-t__grupo .num { font-family: var(--f-num); }

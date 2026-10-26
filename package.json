@@ -79,6 +79,8 @@
     "test:v528nav": "node pruebas/prueba-v528-navegador.js",
     "test:v531nav": "node pruebas/prueba-v531-tema-navegador.js",
     "test:existnav": "node pruebas/prueba-v532-existencias-navegador.js",
+    "test:v535": "node pruebas/prueba-v535-fvs-tabla.js",
+    "test:v535nav": "node pruebas/prueba-v535-fvs-navegador.js",
     "test:v534": "node pruebas/prueba-v534-perfil.js",
     "test:v534nav": "node pruebas/prueba-v534-perfil-navegador.js",
     "test:v533": "node pruebas/prueba-v533-blindaje-pestana.js",

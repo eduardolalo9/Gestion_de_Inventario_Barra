@@ -65,7 +65,7 @@ chk('La hoja respeta la altura visible del móvil (100dvh)', /max-height: calc\(
 // ── Versión ──────────────────────────────────────────────────────────────
 const mV = /const APP_VERSION = '([\d.]+)'/.exec(sw);
 const vs = [...new Set([...idx.matchAll(/\?v=([\d.]+)/g)].map(m => m[1]))];
-chk('★ Versión 5.34: sw.js y todas las etiquetas ?v= de index.html coinciden', !!mV && mV[1] === '5.34' && vs.length === 1 && vs[0] === '5.34', (mV ? mV[1] : '?') + ' / ' + vs.join(','));
+chk('★ Versión ≥ 5.34: sw.js y todas las etiquetas ?v= de index.html coinciden', !!mV && parseFloat(mV[1]) >= 5.34 && vs.length === 1 && vs[0] === mV[1], (mV ? mV[1] : '?') + ' / ' + vs.join(','));
 
 // ── Capa de lectura, ejecutada de verdad en un contexto aislado ──────────
 const html = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');

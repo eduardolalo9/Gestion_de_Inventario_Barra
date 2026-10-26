@@ -77,6 +77,7 @@ const PRUEBAS = [
     'prueba-v532-exportar-existencias.js', // v5.32 — exportar existencias a Excel: capa pura, columnas exactas, solo lectura, sin ceros silenciosos
     'prueba-v533-blindaje-pestana.js', // v5.33 — Etapa 0: blindaje de activeTab (valida al restaurar, no se adopta de la nube, nunca envía "perfil")
     'prueba-v534-perfil.js', // v5.34 — Mi Perfil: overlay de solo lectura (no es pestaña, no escribe, escapado, integración, versión)
+    'prueba-v535-fvs-tabla.js', // v5.35 — Físico vs Sistema: Grupo, Diferencias ↑, orden visible, Excel (filas, vacíos, libro real), garantías
     'prueba-fase12.js',              // FASE 12 — folio #1001, anti-solapamiento y consistencia entre dispositivos
     'prueba-fisico-vs-sistema.js',   // FASE 11B (parte 1) — comparación físico vs. sistema
     'prueba-hotfix-4.22-movimientos.js', // HOTFIX 4.22 — recorte de movimientos y aviso de cuota

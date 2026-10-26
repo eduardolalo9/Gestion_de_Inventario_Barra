@@ -203,6 +203,70 @@
         }
 
         // ═════════════════════════════════════════════════════════════════════
+        //  v5.35 — FILTRO POR GRUPO Y ORDEN «DIFERENCIAS ↑» (capa pura)
+        //  ───────────────────────────────────────────────────────────────────
+        //  Solo ORDENAN y FILTRAN copias de las filas que ya calculó
+        //  fisicoVsSistemaCalcular(). No recalculan la diferencia, no tocan el
+        //  conteo, las existencias ni el orden guardado de products.
+        //  La pantalla y el Excel usan la MISMA función de orden
+        //  (fisicoVsSistemaOrdenVisible), así el archivo sale en el mismo
+        //  orden que se ve.
+        // ═════════════════════════════════════════════════════════════════════
+
+        /** ¿La fila tiene una diferencia numérica real? (pendiente / inválida → no) */
+        function _fvsTieneDif(f) {
+            return !!f && f.estado !== 'pendiente' && typeof f.diferencia === 'number' && isFinite(f.diferencia);
+        }
+
+        /** Grupos presentes en las filas, alfabéticos: [{ grupo, n }]. */
+        function fisicoVsSistemaGrupos(filas) {
+            var cuenta = {};
+            (filas || []).forEach(function(f) { var g = f.grupo || 'General'; cuenta[g] = (cuenta[g] || 0) + 1; });
+            return Object.keys(cuenta).sort(function(a, b) { return a.localeCompare(b, 'es'); })
+                .map(function(g) { return { grupo: g, n: cuenta[g] }; });
+        }
+
+        /** Solo las filas de un grupo. Sin grupo (null/'') → todas. Devuelve copia. */
+        function fisicoVsSistemaFiltrarGrupo(filas, grupo) {
+            var lista = (filas || []).slice();
+            if (grupo === null || grupo === undefined || grupo === '') return lista;
+            return lista.filter(function(f) { return (f.grupo || 'General') === grupo; });
+        }
+
+        /**
+         * «Diferencias ↑»: TODAS las filas por diferencia numérica, de menor a
+         * mayor (−5, −0.5, 0, 2…). Lo que no tiene diferencia (sin contar o un
+         * valor inválido) NO se vuelve 0: va al final, por nombre. Empates por
+         * nombre y luego por ID, para que el orden sea siempre el mismo.
+         */
+        function fisicoVsSistemaOrdenarDifAsc(filas) {
+            var porNombre = function(a, b) {
+                return String(a.nombre).localeCompare(String(b.nombre), 'es') || String(a.id).localeCompare(String(b.id), 'es');
+            };
+            return (filas || []).slice().sort(function(a, b) {
+                var ca = _fvsTieneDif(a), cb = _fvsTieneDif(b);
+                if (ca !== cb) return ca ? -1 : 1;
+                if (!ca) return porNombre(a, b);
+                return (a.diferencia - b.diferencia) || porNombre(a, b);
+            });
+        }
+
+        /**
+         * Orden visible de Físico vs Sistema, el mismo para pantalla y Excel.
+         * op: { grupo, difAsc, orden: 'menor_mayor'|'mayor_menor' }
+         * → { modo: 'plano'|'grupos', grupos: [..] (solo en 'grupos'), filas: [en orden] }
+         */
+        function fisicoVsSistemaOrdenVisible(filas, op) {
+            op = op || {};
+            var base = fisicoVsSistemaFiltrarGrupo(filas, op.grupo);
+            if (op.difAsc) return { modo: 'plano', grupos: null, filas: fisicoVsSistemaOrdenarDifAsc(base) };
+            var grupos = fisicoVsSistemaAgrupar(base, op.orden);
+            var planas = [];
+            grupos.forEach(function(g) { planas.push.apply(planas, g.filas); });
+            return { modo: 'grupos', grupos: grupos, filas: planas };
+        }
+
+        // ═════════════════════════════════════════════════════════════════════
         //  FASE 11B (parte 2) — PEDIDO SUGERIDO Y NIVELES DE ALERTA
         //  ───────────────────────────────────────────────────────────────────
         //  Autorizado por Eduardo (1-oct-2026). La "parte 2" que el cierre de

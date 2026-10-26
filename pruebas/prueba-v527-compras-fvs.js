@@ -420,11 +420,14 @@ const compraBase = (id, extra) => Object.assign({
     chk('El modal de FvS no salta al "siguiente" y se limpia al cerrar', /_reconteoEdicion \|\| !isAuditoriaMode \|\| !auditoriaAreaActiva \|\| _fvsEdicion\) return null;/.test(r70)
         && /_fvsEdicion = null;/.test(extraerFuncion(r70, 'closeInventarioModal')));
     {
-        const tj = extraerFuncion(ui85, '_fvsTarjetaHtml');
-        chk('La tarjeta es la del reconteo (rc-card / rc-areas) con un botón por área solo si se puede editar', /rc-card fvs-card/.test(tj)
-            && /rc-areas fvs-areas/.test(tj) && /editable && p/.test(tj) && /data-fvs-accion="editar"/.test(tj));
+        // v5.35 — la tarjeta pasó a ser una FILA de tabla compacta con la misma información;
+        // la corrección por área se conserva (un botón por área solo si se puede editar).
+        const tj = extraerFuncion(ui85, '_fvsFilaHtml');
+        chk('Cada producto es una fila de la tabla con un botón por área solo si se puede editar', /fvs-t__fila/.test(tj)
+            && /areasL\.forEach/.test(tj) && /editable && p/.test(tj) && /data-fvs-accion="editar"/.test(tj));
         const rr = extraerFuncion(ui85, '_renderFvsResultados');
-        chk('La lista se pinta por grupos con fisicoVsSistemaAgrupar y paginada', /fisicoVsSistemaAgrupar\(r\.items, orden\)/.test(rr) && /BusquedaUI\.centinela\('fvs'/.test(rr));
+        chk('La lista se pinta por grupos (fisicoVsSistemaAgrupar, vía fisicoVsSistemaOrdenVisible) y paginada', /fisicoVsSistemaOrdenVisible\(r\.items, _fvsOpcionesVista\(\)\)/.test(rr)
+            && /fisicoVsSistemaAgrupar\(base, op\.orden\)/.test(fvsSrc) && /BusquedaUI\.centinela\('fvs'/.test(rr));
         chk('Chip para invertir el orden (predeterminado: menor → mayor)', /orden_desc/.test(extraerFuncion(ui85, '_chipsFvs')) && /'mayor_menor' : 'menor_mayor'/.test(ui85));
     }
 
