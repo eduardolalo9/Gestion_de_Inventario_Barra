@@ -72,6 +72,7 @@ const PRUEBAS = [
     'prueba-v531-atras-navegador.js', // v5.31 — botón Atrás de Android: modales, Volver, pestañas, conteo intacto, doble Atrás en Inicio
     'prueba-v532-existencias-navegador.js', // v5.32 — exportar existencias: descarga real del .xlsx, 12 escenarios, Excel = app
     'prueba-v533-blindaje-navegador.js', // v5.33 — Etapa 0: blindaje de activeTab contra v5.32 real, 23 comprobaciones
+    'prueba-v534-perfil-navegador.js', // v5.34 — Mi Perfil en la app real: abrir/cerrar, Atrás, recarga, XSS, cero escrituras
     'prueba-conteo-compacto-navegador.js', // v5.11 — vista compacta del Conteo, en pantalla
     'prueba-tema-esmeralda-navegador.js', // v5.25 — Verde Esmeralda: barra oscura, fuentes, pasteles, tablet, migración de tema
     'prueba-actualizaciones-navegador.js', // v5.12 — despliegue simulado: detecta, avisa, actualiza con un toque, conserva datos

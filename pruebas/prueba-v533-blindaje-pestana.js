@@ -275,7 +275,7 @@ async function sincronizar(valorTab, admin, docNube) {
 
     const mV = /const\s+APP_VERSION\s*=\s*'([^']+)'/.exec(sw);
     const versionesHtml = [...new Set([...html.matchAll(/\?v=([0-9.]+)/g)].map(x => x[1]))];
-    chk('★ Versión 5.33: sw.js y todas las etiquetas ?v= de index.html coinciden', !!mV && mV[1] === '5.33' && igual(versionesHtml, ['5.33']), (mV ? mV[1] : '?') + ' / ' + versionesHtml.join(','));
+    chk('★ Versión ≥ 5.33: sw.js y todas las etiquetas ?v= de index.html coinciden', !!mV && parseFloat(mV[1]) >= 5.33 && igual(versionesHtml, [mV[1]]), (mV ? mV[1] : '?') + ' / ' + versionesHtml.join(','));
 
     const w = Math.max.apply(null, casos.map(c => c.n.length));
     console.log('\n  ── v5.33 · Etapa 0: blindaje de activeTab (lógica) ──\n');

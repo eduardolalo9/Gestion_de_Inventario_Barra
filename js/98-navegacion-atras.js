@@ -46,6 +46,8 @@
         var NAV_CAPAS = [
             { nombre: 'confirmación', abierta: function() { return !!document.getElementById('_cfmCancel'); },
               cerrar: function() { document.getElementById('_cfmCancel').click(); } },
+            { nombre: 'mi perfil', abierta: function() { return _navVisible('perfilOverlay'); },
+              cerrar: function() { return _navLlamar('cerrarMiPerfil'); } },
             { nombre: 'fecha de recuento', abierta: function() { return _navVisible('regFechaRecuentoModal'); },
               cerrar: function() { return _navLlamar('cerrarModalRegistrarFechaRecuento'); } },
             { nombre: 'nuevo inventario', abierta: function() { return _navVisible('nuevoInventarioModal'); },
