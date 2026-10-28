@@ -1,0 +1,30 @@
+# ══════════════════════════════════════════════════════════════════════════
+#  Normaliza los finales de línea a LF en todo el repositorio.
+#  ────────────────────────────────────────────────────────────────────────
+#  Por qué existe: Git para Windows (Git Bash / MSYS2) convierte LF → CRLF
+#  al hacer checkout cuando core.autocrlf está en "true" (su valor por
+#  defecto). Eso rompe en silencio:
+#    · herramientas/*.sh — un script de bash con CRLF falla con errores
+#      crípticos ("$'\r': command not found", "syntax error near...").
+#    · pruebas/*.js — varias pruebas estáticas buscan texto exacto con
+#      salto de línea literal (\n) para extraer funciones o medir el peso
+#      de un archivo; con CRLF esa búsqueda falla y la prueba se reporta
+#      en rojo aunque el código de la app esté bien (hallazgo del 26-oct-2026
+#      al publicar v5.35: prueba-v534-perfil.js, prueba-redis-r8.js y
+#      prueba-fase14.js fallaron 13 comprobaciones sin ningún cambio real).
+#  Con esta regla, Git guarda y entrega siempre LF sin importar el sistema
+#  operativo o la configuración personal de quien clona el repositorio.
+# ══════════════════════════════════════════════════════════════════════════
+* text=auto eol=lf
+
+# Binarios: nunca se tratan como texto ni se normalizan.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.zip binary
