@@ -172,7 +172,7 @@ chk('★ El exportador usa el MISMO orden visible que la pantalla', /fisicoVsSis
 const c85v = sinCom(funcion(src85, 'fvsElegirGrupo') + funcion(src85, 'fvsAlternarDifAsc') + funcion(src85, 'fvsReiniciarVista'));
 chk('★ Grupo y «Diferencias ↑» solo cambian la vista (sin guardar ni sincronizar)', c85v.length > 50 && !/saveToLocalStorage|syncToCloud|localStorage|_db/.test(c85v));
 chk('Volver reinicia la vista (grupo y orden) junto con la búsqueda', /_fvsSearchTerm=\\'\\'; fvsReiniciarVista\(\); renderTab\(\);/.test(src85));
-chk('Con «Diferencias ↑» se oculta el chip de invertir el orden (un solo orden a la vez)', /_chipsFvs\(\)\.filter\(function\(c\) \{ return !\(_fvsVista\.difAsc && c\.id === 'orden_desc'\); \}\)/.test(src85));
+chk('Con «Diferencias ↑» se oculta el chip de invertir el orden (un solo orden a la vez)', /_chipsFvs\(\)\.filter\(function\(c\) \{ return !\(\(_fvsVista\.difAsc \|\| _fvsVista\.difDesc\) && c\.id === 'orden_desc'\); \}\)/.test(src85));
 chk('La pantalla sigue negando el acceso sin inventory.viewAll', /function renderFisicoVsSistema\(\) \{\s*if \(!hasPermission\('inventory\.viewAll'\)\)/.test(src85));
 chk('La corrección por área se conserva (data-fvs-accion="editar", solo si se puede editar)', /if \(editable && p\)[\s\S]{0,120}data-fvs-accion="editar"/.test(funcion(src85, '_fvsFilaHtml')));
 chk('Botones «Grupo», «Diferencias ↑» y «Exportar diferencias a Excel» presentes', />Grupo<span/.test(src85) && /Diferencias ↑/.test(src85) && /Exportar diferencias a Excel/.test(src86));
@@ -181,7 +181,7 @@ chk('index.html carga js/97-exportar-diferencias en su orden numérico (antes de
 chk('sw.js lo calienta (WARM_URLS), no en PRECACHE', /'\.\/js\/97-exportar-diferencias\.js\?v=' \+ APP_VERSION/.test(sw) && !/PRECACHE_URLS\s*=\s*\[[^\]]*97-exportar-dif/.test(sw));
 const mV = /const APP_VERSION = '([\d.]+)'/.exec(sw);
 const vs = [...new Set([...idx.matchAll(/\?v=([\d.]+)/g)].map(m => m[1]))];
-chk('★ Versión 5.35: sw.js y todas las etiquetas ?v= coinciden', !!mV && mV[1] === '5.35' && vs.length === 1 && vs[0] === '5.35', (mV ? mV[1] : '?') + ' / ' + vs.join(','));
+chk('★ Versión ≥ 5.35: sw.js y todas las etiquetas ?v= coinciden', !!mV && parseFloat(mV[1]) >= 5.35 && vs.length === 1 && vs[0] === mV[1], (mV ? mV[1] : '?') + ' / ' + vs.join(','));
 const bloque = util.slice(util.indexOf('v5.35 — FÍSICO VS SISTEMA'));
 chk('★ Estilos en utilidades.css, solo tokens (cero hex, rgba() u oklch())', bloque.length > 1000 && !/#[0-9a-fA-F]{3,8}\b/.test(bloque) && !/rgba?\(|oklch\(/.test(bloque));
 chk('Controles táctiles de 44 px (botones, celda editable)', /\.fvs-ctl__btn \{[^}]*min-height: 44px/.test(bloque) && /button\.fvs-t__celda \{[^}]*min-height: 44px/.test(bloque));

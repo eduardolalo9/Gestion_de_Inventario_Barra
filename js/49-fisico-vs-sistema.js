@@ -252,13 +252,33 @@
         }
 
         /**
+         * «Diferencias ↓» (v5.36): TODAS las filas por diferencia numérica, de
+         * mayor a menor (+5, +2, 0, −0.5, −5…). Misma regla que la ascendente:
+         * lo sin diferencia NO se vuelve 0 y va al final, por nombre; empates
+         * por nombre y luego por ID.
+         */
+        function fisicoVsSistemaOrdenarDifDesc(filas) {
+            var porNombre = function(a, b) {
+                return String(a.nombre).localeCompare(String(b.nombre), 'es') || String(a.id).localeCompare(String(b.id), 'es');
+            };
+            return (filas || []).slice().sort(function(a, b) {
+                var ca = _fvsTieneDif(a), cb = _fvsTieneDif(b);
+                if (ca !== cb) return ca ? -1 : 1;
+                if (!ca) return porNombre(a, b);
+                return (b.diferencia - a.diferencia) || porNombre(a, b);
+            });
+        }
+
+        /**
          * Orden visible de Físico vs Sistema, el mismo para pantalla y Excel.
-         * op: { grupo, difAsc, orden: 'menor_mayor'|'mayor_menor' }
+         * op: { grupo, difAsc, difDesc, orden: 'menor_mayor'|'mayor_menor' }
+         * (difAsc y difDesc no se combinan: si llegan los dos, manda difAsc.)
          * → { modo: 'plano'|'grupos', grupos: [..] (solo en 'grupos'), filas: [en orden] }
          */
         function fisicoVsSistemaOrdenVisible(filas, op) {
             op = op || {};
             var base = fisicoVsSistemaFiltrarGrupo(filas, op.grupo);
+            if (!op.difAsc && op.difDesc) return { modo: 'plano', grupos: null, filas: fisicoVsSistemaOrdenarDifDesc(base) };
             if (op.difAsc) return { modo: 'plano', grupos: null, filas: fisicoVsSistemaOrdenarDifAsc(base) };
             var grupos = fisicoVsSistemaAgrupar(base, op.orden);
             var planas = [];

@@ -145,6 +145,7 @@
 
         function _fvsTextoAlcance(op) { return op && op.grupo ? 'Grupo «' + op.grupo + '»' : 'Todos los grupos'; }
         function _fvsTextoOrden(op) {
+            if (op && op.difDesc && !op.difAsc) return 'Diferencias de mayor a menor (sin agrupar)';
             if (op && op.difAsc) return 'Diferencias de menor a mayor (sin agrupar)';
             return 'Por grupo · diferencia ' + (op && op.orden === 'mayor_menor' ? 'mayor → menor' : 'menor → mayor');
         }
@@ -203,7 +204,7 @@
                 showNotification('⚠️ No hay un Inventario Físico abierto para comparar');
                 return { ok: false, motivo: 'sin_inventario' };
             }
-            var op = (typeof _fvsOpcionesVista === 'function') ? _fvsOpcionesVista() : { grupo: null, difAsc: false, orden: 'menor_mayor' };
+            var op = (typeof _fvsOpcionesVista === 'function') ? _fvsOpcionesVista() : { grupo: null, difAsc: false, difDesc: false, orden: 'menor_mayor' };
             var vista = fisicoVsSistemaOrdenVisible(datos.filas, op);
             if (!vista.filas.length) {
                 showNotification('⚠️ No hay productos en este grupo para exportar');

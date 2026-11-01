@@ -500,9 +500,9 @@
         //  con la columna del producto fija.
         //  El estado de la vista (grupo elegido, orden) vive SOLO en memoria:
         //  no se guarda, no se sincroniza y se reinicia al salir con Volver.
-        var _fvsVista = { grupo: null, difAsc: false };
+        var _fvsVista = { grupo: null, difAsc: false, difDesc: false };
 
-        function fvsReiniciarVista() { _fvsVista.grupo = null; _fvsVista.difAsc = false; }
+        function fvsReiniciarVista() { _fvsVista.grupo = null; _fvsVista.difAsc = false; _fvsVista.difDesc = false; }
 
         /** «Grupo»: '' = todos los grupos. Solo cambia lo que se ve. */
         function fvsElegirGrupo(valor) {
@@ -513,12 +513,20 @@
         /** «Diferencias ↑»: activa el orden global de menor a mayor; otro toque vuelve al orden por grupo. */
         function fvsAlternarDifAsc() {
             _fvsVista.difAsc = !_fvsVista.difAsc;
+            if (_fvsVista.difAsc) _fvsVista.difDesc = false;   // un solo orden a la vez
+            renderTab();
+        }
+
+        /** «Diferencias ↓» (v5.36): orden global de mayor a menor; otro toque vuelve al orden por grupo. */
+        function fvsAlternarDifDesc() {
+            _fvsVista.difDesc = !_fvsVista.difDesc;
+            if (_fvsVista.difDesc) _fvsVista.difAsc = false;   // un solo orden a la vez
             renderTab();
         }
 
         /** Opciones de la vista para la capa pura (las mismas para pantalla y Excel). */
         function _fvsOpcionesVista() {
-            return { grupo: _fvsVista.grupo, difAsc: _fvsVista.difAsc, orden: _fvsOrden() };
+            return { grupo: _fvsVista.grupo, difAsc: _fvsVista.difAsc, difDesc: _fvsVista.difDesc, orden: _fvsOrden() };
         }
 
         function _fvsTono(f, tol) {
@@ -611,7 +619,7 @@
             html += BusquedaUI.resumen('fvs', coinc, total, 'producto', 'productos');
             html += '<div class="fvs-orden">' + (_fvsVista.grupo ? 'Grupo ' + escapeHtml(_fvsVista.grupo) + ' · ' : '')
                  + (vista.modo === 'plano'
-                    ? 'Diferencias de menor a mayor (sin agrupar)'
+                    ? (_fvsVista.difDesc && !_fvsVista.difAsc ? 'Diferencias de mayor a menor (sin agrupar)' : 'Diferencias de menor a mayor (sin agrupar)')
                     : 'Por grupo · diferencia ' + (orden === 'mayor_menor' ? 'mayor → menor' : 'menor → mayor')) + '</div>';
 
             var areasL = _fvsAreasLista();
@@ -675,6 +683,10 @@
                + ' aria-pressed="' + (_fvsVista.difAsc ? 'true' : 'false') + '" onclick="fvsAlternarDifAsc()"'
                + ' title="' + (_fvsVista.difAsc ? 'Volver al orden por grupo' : 'Ordenar todas las diferencias de menor a mayor') + '">'
                + '<i class="fa-solid fa-sort" aria-hidden="true"></i><span>Diferencias ↑</span></button>';
+            h += '<button type="button" id="fvsDifDescBtn" class="fvs-ctl__btn' + (_fvsVista.difDesc ? ' fvs-ctl__btn--on' : '') + '"'
+               + ' aria-pressed="' + (_fvsVista.difDesc ? 'true' : 'false') + '" onclick="fvsAlternarDifDesc()"'
+               + ' title="' + (_fvsVista.difDesc ? 'Volver al orden por grupo' : 'Ordenar todas las diferencias de mayor a menor') + '">'
+               + '<i class="fa-solid fa-sort" aria-hidden="true"></i><span>Diferencias ↓</span></button>';
             if (typeof fvsExportBotonHtml === 'function') h += fvsExportBotonHtml(datos, _fvsOpcionesVista());
             return h + '</div>';
         }
@@ -787,7 +799,7 @@
             });
             // v5.35 — con «Diferencias ↑» el orden lo decide ese botón: el chip de
             // invertir el orden por grupo se oculta para no dar dos órdenes a la vez.
-            html += BusquedaUI.chips('fvs', _chipsFvs().filter(function(c) { return !(_fvsVista.difAsc && c.id === 'orden_desc'); }));
+            html += BusquedaUI.chips('fvs', _chipsFvs().filter(function(c) { return !((_fvsVista.difAsc || _fvsVista.difDesc) && c.id === 'orden_desc'); }));
             html += _fvsControlesHtml(fisicoVsSistemaCalcular());
             html += BusquedaUI.region('fvs', _renderFvsResultados().html);
             html += '</div></div>';

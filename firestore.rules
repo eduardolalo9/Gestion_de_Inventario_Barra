@@ -871,7 +871,18 @@
                                     && _idAnclaValido(fecha, request.resource.data)
                                     && request.resource.data.origen.inventoryId is string
                                     && request.resource.data.saldos is map;
-                   allow update, delete: if false;
+                   // Los cortes siguen siendo inmutables: NUNCA se editan.
+                   allow update: if false;
+                   // v5.36 — ÚNICA excepción: borrar un corte IMPORTADO desde Excel
+                   // (id 'YYYY-MM-DD_HHmm', tipo importacion_excel) con el mismo
+                   // permiso que lo registra. Los cortes contabilizados (fin de
+                   // mes / mitad de semana / inicial semanal) siguen sin poder
+                   // borrarse. La app copia el corte a la papelera en el MISMO
+                   // batch (js/96-importar.js, importarEliminarUltimoCorte), así
+                   // que si la copia falla, no se borra nada y todo es restaurable.
+                   allow delete: if hasPerm('inventory.post')
+                                    && resource.data.tipo == 'importacion_excel'
+                                    && fecha.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])_([01][0-9]|2[0-3])[0-5][0-9]$');
                  }
 
                  // ══════════════════════════════════════════════════════════
@@ -920,7 +931,9 @@
                                     && request.resource.data.rutaOriginal is string
                                     && !('restauradoEn' in request.resource.data)
                                     && ((request.resource.data.origen in ['conteos', 'reporte'] && isAdminUser())
-                                        || (request.resource.data.origen in ['producto', 'catalogo'] && hasPerm('catalog.edit')));
+                                        || (request.resource.data.origen in ['producto', 'catalogo'] && hasPerm('catalog.edit'))
+                                        // v5.36 — copia de un corte de existencias importado que se elimina
+                                        || (request.resource.data.origen == 'corte' && hasPerm('inventory.post')));
                    allow update: if isAdminUser()
                                     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['restauradoEn', 'restauradoPor'])
                                     && request.resource.data.restauradoPor == request.auth.uid

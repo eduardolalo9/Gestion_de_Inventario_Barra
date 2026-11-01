@@ -79,7 +79,7 @@ const PUERTO = process.env.PUERTO || '8080';
       partidos: [...document.querySelectorAll('[data-imp-plantilla]')].filter(b => b.getBoundingClientRect().height > 50).length
     };
   });
-  chk('★ El módulo muestra las 5 secciones (catálogo, recetas, existencias, compras, ventas)', hub.secciones.length === 5, hub.secciones.join(' · '));
+  chk('★ El módulo muestra las 5 secciones de importación (catálogo, recetas, existencias, compras, ventas) + el panel «Último corte importado» (v5.36, solo con inventory.post)', hub.secciones.length === 6 && hub.secciones[5] === 'Último corte importado' && hub.secciones.slice(0, 5).every(t => !/Último corte/.test(t)), hub.secciones.join(' · '));
   chk('Cada sección tiene "Subir archivo"', hub.subir === 5, String(hub.subir));
   chk('★ Catálogo, recetas y existencias ofrecen plantilla .xlsx y .csv',
       ['catalogo:xlsx', 'catalogo:csv', 'recetas:xlsx', 'recetas:csv', 'existencias:xlsx', 'existencias:csv'].every(x => hub.plantillas.indexOf(x) !== -1), hub.plantillas.join(','));

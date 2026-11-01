@@ -238,7 +238,7 @@ chk('La pantalla ofrece "Contabilizar como ancla del Total" y lo muestra en Hist
 // ═══ 7 · Reglas de Firestore ═══════════════════════════════════════════════
 const bloque = (reglas.match(/match \/anclasExistencia\/\{fecha\} \{[\s\S]*?\n                 \}/) || [''])[0];
 chk('Existe el bloque anclasExistencia/{fecha}', !!bloque);
-chk('★ Inmutable: create sí; update y delete no', /allow update, delete: if false;/.test(bloque));
+chk('★ Inmutable: create sí; update no; delete solo del corte IMPORTADO (v5.36)', /allow update: if false;/.test(bloque) && !/allow update, delete: if false;/.test(bloque) && /allow delete: if hasPerm\('inventory\.post'\)\s*&&\s*resource\.data\.tipo == 'importacion_excel'/.test(bloque));
 // v5.18 — el id se valida con _idAnclaValido (fecha, o fecha_HHmm para el corte importado).
 chk('Crear exige inventory.post, id válido (fecha o fecha_HHmm), tipo de ancla, origen y saldos',
     /hasPerm\('inventory\.post'\)/.test(bloque) && /_idAnclaValido\(fecha, request\.resource\.data\)/.test(bloque) &&

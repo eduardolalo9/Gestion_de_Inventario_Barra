@@ -26,7 +26,8 @@
             conteos:  { titulo: 'Conteos de un inventario anterior', icono: 'fa-clipboard-list' },
             producto: { titulo: 'Producto eliminado',                icono: 'fa-box' },
             catalogo: { titulo: 'Catálogo completo eliminado',       icono: 'fa-boxes-stacked' },
-            reporte:  { titulo: 'Reporte publicado eliminado',       icono: 'fa-file-chart-column' }
+            reporte:  { titulo: 'Reporte publicado eliminado',       icono: 'fa-file-chart-column' },
+            corte:    { titulo: 'Corte de existencias eliminado',    icono: 'fa-warehouse' }   // v5.36
         };
         var PAPELERA_MAX_BYTES = 700000;               // margen bajo el límite de 1 MiB por documento
         var PAPELERA_DIAS_PURGA = 30;
@@ -140,6 +141,33 @@
                     reporteId: String(reporteId),
                     contenido: data,
                     resumen: { titulo: String(data.titulo || data.nombre || data.tipo || 'Reporte'), fechaTs: data.fechaTs || null },
+                    borradoPor: opts.uidActor || null,
+                    borradoEn: ts
+                }
+            };
+        }
+
+        /**
+         * v5.36 — Registro de papelera para un corte de existencias importado
+         * que se elimina. Guarda el documento COMPLETO tal como estaba en
+         * anclasExistencia/{id}, para poder volver a crearlo idéntico.
+         */
+        function papeleraRegistroCorte(corteId, data, opts) {
+            opts = opts || {};
+            var ts = opts.ts || Date.now();
+            data = data || {};
+            var res = data.resumen || {};
+            return {
+                id: 'corte_' + corteId + '_' + ts,
+                data: {
+                    origen: 'corte', grupo: 'corte_' + corteId + '_' + ts, parte: 1, partes: 1,
+                    rutaOriginal: 'anclasExistencia/' + corteId,
+                    corteId: String(corteId),
+                    contenido: data,
+                    resumen: { titulo: 'Corte ' + corteId, fecha: data.fecha || null, hora: data.hora || null,
+                               archivo: (data.origen && data.origen.archivo) || null,
+                               productos: data.totalProductos || (data.saldos ? Object.keys(data.saldos).length : 0),
+                               neto: (typeof res.neto === 'number') ? res.neto : null },
                     borradoPor: opts.uidActor || null,
                     borradoEn: ts
                 }
@@ -307,6 +335,28 @@
         }
 
         /**
+         * v5.36 — Corte de existencias: se vuelve a crear anclasExistencia/{id}
+         * idéntico a como estaba, SOLO si ese id no existe ya (nunca pisa). Las
+         * reglas exigen inventory.post y un id válido; si faltan, el servidor
+         * lo rechaza y la papelera conserva el registro.
+         */
+        async function _papRestaurarCorte(g) {
+            var p = g.partes[0];
+            var id = p.corteId || String(p.rutaOriginal || '').split('/')[1];
+            if (!id || !p.contenido) throw new Error('El registro del corte está incompleto: no se restaura.');
+            var ref = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID).collection('anclasExistencia').doc(id);
+            var s = await ref.get();
+            if (s.exists) return { restaurados: 0, omitidos: 1 };
+            await ref.set(p.contenido);
+            if (typeof _registrarEnSyncQueue === 'function') {
+                _registrarEnSyncQueue({ tipo: 'restauracion_corte', detalle: 'Corte de existencias ' + id + ' restaurado de la papelera', corteId: id, uid: _papUid() });
+            }
+            if (typeof existenciaInvalidarInicial === 'function') existenciaInvalidarInicial();
+            if (typeof existenciaCargarInicial === 'function') existenciaCargarInicial(function() { if (typeof renderTab === 'function') renderTab(); });
+            return { restaurados: 1, omitidos: 0 };
+        }
+
+        /**
          * Conteos: entran al inventario ABIERTO, en el documento de la persona,
          * sin pisar nada de lo que ya contó en él. Transacción: lo que se lee
          * es lo que se compara.
@@ -363,6 +413,9 @@
             if (g.origen === 'producto' || g.origen === 'catalogo') {
                 return o.titulo + ' — ' + (rs.total || rs.productos || 0) + ' producto(s)';
             }
+            if (g.origen === 'corte') {
+                return o.titulo + ' — ' + (rs.titulo || p.corteId || '') + (rs.archivo ? ' · ' + rs.archivo : '') + ' · ' + (rs.productos || 0) + ' producto(s)';
+            }
             return o.titulo + ' — ' + (rs.titulo || p.reporteId || '');
         }
 
@@ -375,6 +428,7 @@
             var detalle = g.origen === 'conteos'
                 ? 'Las capturas vuelven al INVENTARIO ABIERTO, en el conteo de esa persona. Lo que ya contó en este inventario NO se pisa.'
                 : (g.origen === 'reporte' ? 'El reporte se vuelve a publicar si no existe.'
+                   : g.origen === 'corte' ? 'El corte vuelve a registrarse tal cual estaba (si ese id no existe) y el Total se recalcula desde él si es el más reciente.'
                    : 'Vuelven al catálogo los productos que no existan ya (los que existen no se tocan) y se publica el catálogo.');
             showConfirm('♻️ RESTAURAR DESDE LA PAPELERA\n\n' + _papTextoGrupo(g) + '\nBorrado el ' + _papFecha(g.borradoEn) + '\n\n' + detalle + '\n\n¿Restaurar?', async function() {
                 _papelera.accion = grupo; renderTab();
@@ -382,6 +436,7 @@
                     var r;
                     if (g.origen === 'conteos') r = await _papRestaurarConteos(g);
                     else if (g.origen === 'reporte') r = await _papRestaurarReporte(g);
+                    else if (g.origen === 'corte') r = await _papRestaurarCorte(g);
                     else r = await _papRestaurarProductos(g);
                     if (r.restaurados) await _papMarcarRestaurado(g);
                     showNotification(r.restaurados
@@ -524,6 +579,9 @@
                 var total = rs.total || g.partes.reduce(function(a, x) { return a + ((x.resumen || {}).productos || 0); }, 0);
                 return total + ' producto(s)' + (nombres.length ? ': ' + nombres.join(', ') + (total > nombres.length ? '…' : '') : '');
             }
+            if (g.origen === 'corte') {
+                return String(rs.titulo || p.corteId || '') + (rs.archivo ? ' · ' + rs.archivo : '') + ' · ' + (rs.productos || 0) + ' producto(s)';
+            }
             return String(rs.titulo || p.reporteId || '');
         }
 
@@ -533,6 +591,7 @@
         window.papeleraRegistrosConteo      = papeleraRegistrosConteo;
         window.papeleraRegistrosProductos   = papeleraRegistrosProductos;
         window.papeleraRegistroReporte      = papeleraRegistroReporte;
+        window.papeleraRegistroCorte        = papeleraRegistroCorte;
         window.papeleraFusionConteos        = papeleraFusionConteos;
         window.papeleraAgrupar              = papeleraAgrupar;
         window.papeleraVencidos             = papeleraVencidos;

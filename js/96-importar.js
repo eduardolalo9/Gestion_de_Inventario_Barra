@@ -717,6 +717,159 @@
                 });
         }
 
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  v5.36 — ELIMINAR EL ÚLTIMO CORTE IMPORTADO (con respaldo en papelera)
+        //  ────────────────────────────────────────────────────────────────────
+        //  Pedido de Eduardo (1-nov-2026), opción «Borrar con respaldo».
+        //  · Solo el ÚLTIMO corte con tipo 'importacion_excel'. Los cortes
+        //    contabilizados (fin de mes / mitad de semana) NO se pueden borrar:
+        //    las reglas de Firestore solo permiten el borrado de los importados.
+        //  · Exige inventory.post (el mismo permiso que registrar un corte).
+        //  · Antes de borrar se relee el servidor: si el «último» ya no es el
+        //    que se veía, no se borra nada y se avisa.
+        //  · La copia en la papelera y el borrado van en el MISMO batch: si la
+        //    copia no se puede escribir, NO se borra nada.
+        //  · Restaurar (Papelera) vuelve a crear el documento tal cual estaba.
+        //  Este bloque no toca conteos, catálogo, compras, ventas ni stock.
+        // ══════════════════════════════════════════════════════════════════════
+        var _impUltimoCorte = { estado: 'sin_cargar', corte: null };   // sin_cargar | cargando | ok | ninguno | sin_conexion | error
+
+        /** Pura: de [{id, data}] elige el corte IMPORTADO más reciente (fecha, hora, momento de registro). */
+        function importarElegirUltimoCorte(docs) {
+            var mejor = null;
+            (docs || []).forEach(function(d) {
+                var x = d && d.data;
+                if (!x || x.tipo !== 'importacion_excel') return;
+                var reg = (typeof x.contabilizadoEn === 'number' && isFinite(x.contabilizadoEn)) ? String(Math.max(0, Math.floor(x.contabilizadoEn))).padStart(16, '0') : '';
+                var clave = String(x.fecha || '') + ' ' + String(x.hora || '') + ' ' + reg;
+                if (!mejor || clave > mejor.clave) mejor = { id: d.id, data: x, clave: clave };
+            });
+            return mejor ? { id: mejor.id, data: mejor.data } : null;
+        }
+
+        async function _impLeerCortesServidor() {
+            var base = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID);
+            var snap = await base.collection('anclasExistencia').orderBy('fecha', 'desc').limit(15).get();
+            var out = [];
+            snap.forEach(function(doc) { out.push({ id: doc.id, data: doc.data() || {} }); });
+            return out;
+        }
+
+        function _impRepintarHub() {
+            if (typeof activeTab !== 'undefined' && activeTab === 'importar' && !_impPendiente && !_impResultado && !importarSeccion) renderTab();
+        }
+
+        /** Consulta el último corte importado. Solo se llama sola cuando el estado es 'sin_cargar' (sin bucles de repintado). */
+        function importarCargarUltimoCorte() {
+            if (typeof hasPermission !== 'function' || !hasPermission('inventory.post')) return;
+            if (_impUltimoCorte.estado === 'cargando') return;
+            if (typeof _db === 'undefined' || !_db || !navigator.onLine) { _impUltimoCorte = { estado: 'sin_conexion', corte: null }; return; }
+            _impUltimoCorte = { estado: 'cargando', corte: null };
+            _impLeerCortesServidor().then(function(docs) {
+                var c = importarElegirUltimoCorte(docs);
+                _impUltimoCorte = c ? { estado: 'ok', corte: c } : { estado: 'ninguno', corte: null };
+            }).catch(function(e) {
+                console.warn('[Importar] No se pudo consultar el último corte:', e);
+                _impUltimoCorte = { estado: 'error', corte: null };
+            }).then(_impRepintarHub);
+        }
+
+        function importarReintentarUltimoCorte() {
+            _impUltimoCorte = { estado: 'sin_cargar', corte: null };
+            importarCargarUltimoCorte();
+            renderTab();
+        }
+
+        async function importarEliminarUltimoCorte() {
+            if (!hasPermission('inventory.post')) { showNotification('⚠️ No tienes permiso para eliminar un corte de existencias'); return; }
+            if (typeof _db === 'undefined' || !_db) { showNotification('📴 Sin conexión a Firestore'); return; }
+            if (!navigator.onLine) { showNotification('📴 Sin conexión — conecta a internet para eliminar el corte'); return; }
+            var docs;
+            try { docs = await _impLeerCortesServidor(); }
+            catch (e) { console.error('[Importar] No se pudo leer los cortes:', e); showNotification('❌ No se pudo consultar los cortes. No se eliminó nada.'); return; }
+            var c = importarElegirUltimoCorte(docs);
+            if (!c) { _impUltimoCorte = { estado: 'ninguno', corte: null }; renderTab(); showNotification('ℹ️ No hay ningún corte importado que eliminar'); return; }
+            var visto = _impUltimoCorte.corte && _impUltimoCorte.corte.id;
+            if (visto && visto !== c.id) {
+                _impUltimoCorte = { estado: 'ok', corte: c }; renderTab();
+                showNotification('⚠️ El último corte cambió (ahora es ' + c.id + '). Revísalo y vuelve a intentar.');
+                return;
+            }
+            var reg = papeleraRegistroCorte(c.id, c.data, { uidActor: (typeof currentUserUid !== 'undefined') ? currentUserUid : null });
+            if (JSON.stringify(reg.data).length > PAPELERA_MAX_BYTES) {
+                showNotification('🛑 El corte es demasiado grande para guardarlo en la papelera. No se eliminó nada.');
+                return;
+            }
+            var est = (typeof existenciaInicialEstado === 'function') ? existenciaInicialEstado() : null;
+            var vigente = !!(est && est.ancla && est.ancla.id === c.id);
+            var ant = c.data.anclaAnterior;
+            var d = c.data;
+            showConfirm('🗑️ ELIMINAR EL ÚLTIMO CORTE IMPORTADO\n\nCorte: ' + c.id + (d.origen && d.origen.archivo ? ' · ' + d.origen.archivo : '') + '\n'
+                + (d.productosContados || 0) + ' producto(s) contados · registrado ' + (typeof d.contabilizadoEn === 'number' ? new Date(d.contabilizadoEn).toLocaleString('es-MX') : '—') + '\n\n'
+                + (vigente
+                    ? 'Es el corte VIGENTE: al eliminarlo, el Total de cada producto vuelve a calcularse desde ' + (ant && ant.fecha ? 'el corte anterior (' + ant.fecha + ')' : 'el corte anterior que exista (o el respaldo operativo si no hay ninguno)') + '.\n'
+                    : 'Hay un corte más nuevo vigente: el Total actual NO cambia.\n')
+                + '\nSe guarda una copia completa en la Papelera: se puede restaurar durante 30 días. Solo se elimina este corte; los cortes contabilizados no se tocan.\n\n¿Eliminar?',
+                async function() {
+                    try {
+                        if (typeof _crearBackupNombrado === 'function') _crearBackupNombrado('pre_eliminar_corte_' + Date.now());
+                        var base = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID);
+                        var batch = _db.batch();
+                        batch.set(base.collection('papelera').doc(reg.id), reg.data);
+                        batch.delete(base.collection('anclasExistencia').doc(c.id));
+                        await batch.commit();
+                    } catch (e) {
+                        console.error('[Importar] Error eliminando el corte:', e);
+                        var denegado = e && (e.code === 'permission-denied' || /permission/i.test(e.message || ''));
+                        showNotification(denegado ? '🛑 El servidor rechazó la eliminación (faltan las reglas nuevas: despliega firestore.rules). No se borró nada.'
+                                                  : '❌ No se pudo eliminar el corte: ' + (e && e.message ? e.message : 'error') + '. No se borró nada.');
+                        return;
+                    }
+                    // El corte YA se eliminó (con copia en la papelera): lo que sigue nunca debe decir «no se borró».
+                    try {
+                        if (typeof _registrarEnSyncQueue === 'function') {
+                            _registrarEnSyncQueue({ tipo: 'corte_existencias_eliminado', detalle: 'Corte de existencias importado ' + c.id + ' eliminado (copia en la papelera)',
+                                                    corteId: c.id, papeleraId: reg.id, motivo: 'Eliminación del último corte importado' });
+                        }
+                        if (typeof existenciaInvalidarInicial === 'function') existenciaInvalidarInicial();
+                        if (typeof existenciaCargarInicial === 'function') existenciaCargarInicial(function() { renderTab(); });
+                        _impUltimoCorte = { estado: 'sin_cargar', corte: null };
+                    } catch (e2) {
+                        console.warn('[Importar] Corte eliminado; falló una tarea posterior (se recalculará al recargar):', e2);
+                    }
+                    _impUltimoCorte = { estado: 'sin_cargar', corte: null };
+                    showNotification('✅ Corte ' + c.id + ' eliminado — copia en la Papelera');
+                    importarCargarUltimoCorte();
+                    renderTab();
+                });
+        }
+
+        function _renderImpUltimoCorte() {
+            if (typeof hasPermission !== 'function' || !hasPermission('inventory.post')) return '';
+            if (_impUltimoCorte.estado === 'sin_cargar') importarCargarUltimoCorte();
+            var u = _impUltimoCorte;
+            var h = '<section class="imp-sec" aria-labelledby="impUltTit"><div class="imp-sec__cab"><i class="fa-solid fa-warehouse imp-sec__ico" aria-hidden="true"></i>'
+                  + '<div id="impUltTit" class="imp-sec__tit">Último corte importado</div></div>';
+            if (u.estado === 'cargando' || u.estado === 'sin_cargar') {
+                h += '<div class="imp-sec__desc">Consultando…</div>';
+            } else if (u.estado === 'sin_conexion' || u.estado === 'error') {
+                h += '<div class="imp-sec__desc">' + (u.estado === 'sin_conexion' ? 'Sin conexión: no se puede consultar el último corte.' : 'No se pudo consultar el último corte.') + '</div>'
+                   + '<div class="imp-sec__acc"><button type="button" class="bt bt--secundario" data-imp-reintentar="1" onclick="importarReintentarUltimoCorte()">Reintentar</button></div>';
+            } else if (u.estado === 'ninguno') {
+                h += '<div class="imp-sec__desc">Todavía no hay cortes importados desde Excel.</div>';
+            } else {
+                var d = u.corte.data;
+                h += '<div class="imp-sec__desc"><b>' + escapeHtml(u.corte.id) + '</b>' + (d.origen && d.origen.archivo ? ' · ' + escapeHtml(d.origen.archivo) : '') + '<br>'
+                   + (d.productosContados || 0) + ' producto(s) contados'
+                   + (typeof d.contabilizadoEn === 'number' ? ' · registrado ' + escapeHtml(new Date(d.contabilizadoEn).toLocaleString('es-MX')) : '') + '</div>'
+                   + '<div class="imp-sec__acc"><button type="button" class="bt bt--peligro" id="impBtnEliminarCorte" onclick="importarEliminarUltimoCorte()">'
+                   + '<i class="fa-solid fa-trash" aria-hidden="true"></i> Eliminar último corte</button></div>'
+                   + '<div class="imp-ayuda">Se guarda una copia en la Papelera (30 días para restaurarla).</div>';
+            }
+            return h + '</section>';
+        }
+
         function _impDinero(n) {
             if (typeof n !== 'number' || !isFinite(n)) return '—';
             var s = Math.abs(n).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -862,6 +1015,7 @@
                 });
                 h += '</div></section>';
             });
+            h += _renderImpUltimoCorte();
             return h + '</div>';
         }
 
@@ -908,6 +1062,10 @@
         window.importarProcesarFilas     = importarProcesarFilas;
         window.importarAplicarCatalogo   = importarAplicarCatalogo;
         window.importarAplicarExistencias = importarAplicarExistencias;
+        window.importarElegirUltimoCorte = importarElegirUltimoCorte;
+        window.importarCargarUltimoCorte = importarCargarUltimoCorte;
+        window.importarReintentarUltimoCorte = importarReintentarUltimoCorte;
+        window.importarEliminarUltimoCorte = importarEliminarUltimoCorte;
         window.importarCancelar          = importarCancelar;
         window.importarVolver            = importarVolver;
         window.importarCambiarMomento    = importarCambiarMomento;

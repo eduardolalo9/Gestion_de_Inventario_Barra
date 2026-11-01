@@ -245,7 +245,7 @@ chk('Restaurar conteos: transacción y solo a un inventario abierto', /runTransa
 chk('★ Regla: totalPublicado — escribe quien lee ventas y compras, campos cerrados, hora del servidor',
     /match \/totalPublicado\/\{docName\}[\s\S]{0,200}allow read:\s+if _cuentaActiva\(\);[\s\S]{0,200}hasPerm\('sales\.read'\) && hasPerm\('purchases\.read'\)[\s\S]{0,400}keys\(\)\.hasOnly\([\s\S]{0,700}publicadoEn == request\.time[\s\S]{0,300}allow delete: if false;/.test(reglas));
 chk('★ Regla: papelera — lee admin, no se edita (solo restaurado), se vacía solo con más de 30 días',
-    /match \/papelera\/\{registroId\}[\s\S]{0,80}allow read:\s+if isAdminUser\(\);[\s\S]{0,1200}affectedKeys\(\)\.hasOnly\(\['restauradoEn', 'restauradoPor'\]\)[\s\S]{0,300}borradoEn < request\.time\.toMillis\(\) - 2592000000/.test(reglas));
+    /match \/papelera\/\{registroId\}[\s\S]{0,80}allow read:\s+if isAdminUser\(\);[\s\S]{0,1500}affectedKeys\(\)\.hasOnly\(\['restauradoEn', 'restauradoPor'\]\)[\s\S]{0,300}borradoEn < request\.time\.toMillis\(\) - 2592000000/.test(reglas));
 chk('Regla papelera: borradoEn a ±10 min del servidor y origen con su permiso', /borradoEn > request\.time\.toMillis\(\) - 600000/.test(reglas) && /origen in \['producto', 'catalogo'\] && hasPerm\('catalog\.edit'\)/.test(reglas));
 
 chk('js/47 consulta el publicado (producto y resumen) y avisa al publicador al cambiar el Total',

@@ -138,7 +138,7 @@ async function main() {
     chk('K2 · ★ el bartender NO puede registrar un corte', !(await intento(() => ancla(dbBart, '2026-10-02_1200').set(base('2026-10-02', '12:00')))));
     chk('K2 · el bartender sí lo puede leer', await intento(() => ancla(dbBart, corte.id).get()));
     chk('K2 · ★ nadie lo actualiza', !(await intento(() => ancla(dbAdmin, corte.id).update({ saldos: { TEQ: 99 } }))));
-    chk('K2 · ★ nadie lo borra', !(await intento(() => ancla(dbAdmin, corte.id).delete())));
+    chk('K2 · ★ el bartender NO borra un corte (v5.36: solo inventory.post, y solo los importados)', !(await intento(() => ancla(dbBart, corte.id).delete())));
     chk('K2 · un corte válido de otra hora sí entra', await intento(() => ancla(dbAdmin, '2026-10-02_0930').set(base('2026-10-02', '09:30'))));
     chk('K2 · los tipos de siempre siguen funcionando (mitad de semana, id = fecha)',
         await intento(() => ancla(dbAdmin, '2026-10-01').set({ fecha: '2026-10-01', tipo: 'mitad_de_semana', origen: { inventoryId: 'n' }, saldos: { TEQ: 1 } })));
