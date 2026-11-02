@@ -200,7 +200,7 @@ chk('Se cierra con X, con "Cerrar", tocando fuera o con Escape', /data-cd-cerrar
 // ═══ 9 · Reglas, archivos y versión ══════════════════════════════════════════
 chk('★ Regla: el corte importado usa id fecha_HHmm que coincide con fecha y hora del documento',
     /d\.tipo == 'importacion_excel'[\s\S]{0,400}id == d\.fecha \+ '_' \+ d\.hora\.split\(':'\)\[0\] \+ d\.hora\.split\(':'\)\[1\]/.test(reglas) &&
-    /tipo in \['fin_de_mes', 'mitad_de_semana', 'importacion_excel'\]/.test(reglas));
+    /tipo in \['fin_de_mes', 'mitad_de_semana', 'cierre_semanal', 'importacion_excel'\]/.test(reglas));
 chk('El motor lee hasta 6 anclas del mismo día y desempata por registro', /\.limit\(6\)\.get\(\)/.test(exis) && /registradoEn:/.test(exis));
 chk('index.html carga 89 tras 88 y 96 tras 95', html.indexOf('js/89-compras-detalle.js') > html.indexOf('js/88-compras.js') && html.indexOf('js/96-importar.js') > html.indexOf('js/95-exportacion.js'));
 chk('sw.js precalienta los dos archivos nuevos', /'\.\/js\/89-compras-detalle\.js\?v=' \+ APP_VERSION/.test(sw) && /'\.\/js\/96-importar\.js\?v=' \+ APP_VERSION/.test(sw));

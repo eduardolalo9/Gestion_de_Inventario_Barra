@@ -307,8 +307,9 @@ async function main() {
 
     chk('Q1 · ★ un corte de fin de mes puro ya NO se bloquea (antes de FASE 13 sí)',
         (await contarCortes()) === 1, 'avisos: ' + app._avisos.join(' | '));
-    chk('Q1 · y NO genera ningún inicial semanal (no cierra semana)',
-        (await contarIniciales()) === 0);
+    // v5.37 — decisión de Eduardo (1-nov-2026): el mensual también cierra la semana.
+    chk('Q1 · v5.37 — y además cierra la semana: genera UN inicial semanal (el de la semana siguiente)',
+        (await contarIniciales()) === 1);
 
     const corte1 = await leerCorteMensual('2026-09');
     if (corte1) {
@@ -334,8 +335,8 @@ async function main() {
     }
 
     const invMes1 = await leerInventario('inv-mes-1');
-    chk('Q1 · el inventario guarda mesDestino pero NO semanaDestino',
-        invMes1 && invMes1.mesDestino === '2026-09' && !invMes1.semanaDestino,
+    chk('Q1 · v5.37 — el inventario guarda mesDestino y semanaDestino (2026-10-05)',
+        invMes1 && invMes1.mesDestino === '2026-09' && invMes1.semanaDestino === '2026-10-05',
         JSON.stringify({ mesDestino: invMes1 && invMes1.mesDestino, semanaDestino: invMes1 && invMes1.semanaDestino }));
     chk('Q1 · el inventario queda CONTABILIZADO',
         invMes1 && invMes1.estado === 'CONTABILIZADO');

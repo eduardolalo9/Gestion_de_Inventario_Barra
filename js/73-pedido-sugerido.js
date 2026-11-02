@@ -217,6 +217,9 @@
                + '<option value="">Grupos</option>'
                + grupos.map(function(g) { return '<option value="' + escapeHtml(g) + '"' + (g === _ps.grupo ? ' selected' : '') + '>' + escapeHtml(g) + '</option>'; }).join('')
                + '</select><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></label>'
+               + (_psPuedeExportar() ? '<button type="button" class="mc-pill" id="psExportBtn" onclick="exportarPedidoSugeridoExcel()"'
+                    + ' title="Descargar en Excel todos los productos con pedido sugerido">'
+                    + '<i class="fa-solid fa-file-excel" aria-hidden="true"></i> Exportar Excel</button>' : '')
                + '</div>';
             h += BusquedaUI.barra('pedsug', { placeholder: 'Buscar por nombre, código o proveedor', etiqueta: 'Buscar en el pedido sugerido' });
             h += BusquedaUI.region('pedsug', _renderPedidoSugeridoResultados().html);
@@ -234,6 +237,130 @@
         function pedidoSugeridoGrupo(g) { _ps.grupo = String(g || ''); renderTab(); }
 
         function abrirPedidoSugerido() { switchTab('pedido_sugerido'); }
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  v5.37 — EXPORTAR EL PEDIDO SUGERIDO A EXCEL
+        //  ────────────────────────────────────────────────────────────────────
+        //  Pedido de Eduardo (1-nov-2026): «exportar en Excel todos los
+        //  productos con pedido sugerido». Alcance FIJO: todos los productos con
+        //  sugerido > 0 (pedidoSugeridoFilas con soloBajo). No lo recortan el
+        //  filtro de grupo, la búsqueda ni la selección: el archivo es la lista
+        //  completa de lo que hace falta pedir.
+        //  Columnas: Grupo · ID · Descripción · Unidad · Proveedor · Existencia ·
+        //            Stock mínimo · Pedido sugerido · Cantidad a pedir · Precio ·
+        //            Total estimado
+        //    Cantidad a pedir = la que se escribió en pantalla, o el sugerido.
+        //    Total estimado   = Cantidad a pedir × Precio (2 decimales). Sin
+        //                       precio → Precio y Total VACÍOS (no se inventan).
+        //  SOLO LEE: no escribe en el catálogo, el carrito ni Firestore.
+        // ══════════════════════════════════════════════════════════════════════
+        var PS_EXPORT_COLUMNAS = ['Grupo', 'ID', 'Descripción', 'Unidad', 'Proveedor', 'Existencia', 'Stock mínimo',
+                                  'Pedido sugerido', 'Cantidad a pedir', 'Precio', 'Total estimado'];
+        var _psExport = { enCurso: false };
+
+        function pedidoSugeridoExportNombre(fecha) {
+            var d = fecha || new Date();
+            var p = function(n) { return (n < 10 ? '0' : '') + n; };
+            return 'Pedido_Sugerido_' + d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + '.xlsx';
+        }
+
+        /** Pura: filas del Excel, ordenadas por grupo y nombre. cantidadDe(fila) → cantidad a pedir. */
+        function pedidoSugeridoExportFilas(filas, cantidadDe) {
+            var num = function(v) { return typeof v === 'number' && isFinite(v); };
+            return (filas || []).filter(function(f) { return f && num(f.sugerido) && f.sugerido > 0; })
+                .slice().sort(function(a, b) {
+                    return String(a.grupo).localeCompare(String(b.grupo), 'es') || String(a.nombre).localeCompare(String(b.nombre), 'es')
+                        || String(a.id).localeCompare(String(b.id), 'es');
+                })
+                .map(function(f) {
+                    var q = cantidadDe ? cantidadDe(f) : f.sugerido;
+                    if (!num(q) || q < 0) q = f.sugerido;
+                    var precio = (num(f.precio) && f.precio >= 0) ? f.precio : null;
+                    var total = precio !== null ? Math.round(q * precio * 100) / 100 : null;
+                    return { grupo: f.grupo || 'General', id: String(f.id), descripcion: String(f.nombre || ''), unidad: f.unidad || '',
+                             proveedor: f.proveedor || '', existencia: num(f.enStock) ? f.enStock : null, minimo: num(f.minimo) ? f.minimo : null,
+                             sugerido: f.sugerido, cantidad: q, precio: precio, total: total };
+                });
+        }
+
+        /** Arma el libro (sin escribirlo). X = la librería XLSX. */
+        function pedidoSugeridoExportLibro(X, filas, info) {
+            var aoa = [PS_EXPORT_COLUMNAS.slice()];
+            filas.forEach(function(f) {
+                aoa.push([f.grupo, f.id, f.descripcion, f.unidad, f.proveedor, f.existencia, f.minimo, f.sugerido, f.cantidad, f.precio, f.total]);
+            });
+            var ws = X.utils.aoa_to_sheet(aoa);
+            var CANT = '#,##0.00#;-#,##0.00#;0.00', MON = '"$"#,##0.00;-"$"#,##0.00;"$"0.00';
+            var fmt = { 5: CANT, 6: CANT, 7: CANT, 8: CANT, 9: MON, 10: MON };
+            for (var r = 1; r < aoa.length; r++) {
+                ws[X.utils.encode_cell({ r: r, c: 1 })] = { t: 's', v: filas[r - 1].id };   // "0012" sigue siendo "0012"
+                for (var c = 5; c <= 10; c++) {
+                    var ref = X.utils.encode_cell({ r: r, c: c });
+                    if (aoa[r][c] === null || aoa[r][c] === undefined) { delete ws[ref]; continue; }
+                    ws[ref] = { t: 'n', v: aoa[r][c], z: fmt[c] };
+                }
+            }
+            if (aoa.length > 1) {
+                var rt = aoa.length;   // fila de total (índice 0-based)
+                ws[X.utils.encode_cell({ r: rt, c: 9 })] = { t: 's', v: 'Total' };
+                var suma = filas.reduce(function(a, f) { return a + (f.total || 0); }, 0);
+                ws[X.utils.encode_cell({ r: rt, c: 10 })] = { t: 'n', v: Math.round(suma * 100) / 100, z: MON,
+                    f: 'SUM(' + X.utils.encode_cell({ r: 1, c: 10 }) + ':' + X.utils.encode_cell({ r: rt - 1, c: 10 }) + ')' };
+                ws['!ref'] = X.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rt, c: PS_EXPORT_COLUMNAS.length - 1 } });
+            }
+            ws['!cols'] = [{ wch: 16 }, { wch: 10 }, { wch: 42 }, { wch: 10 }, { wch: 22 }, { wch: 12 }, { wch: 13 },
+                           { wch: 16 }, { wch: 17 }, { wch: 12 }, { wch: 16 }];
+            ws['!autofilter'] = { ref: X.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(0, filas.length), c: PS_EXPORT_COLUMNAS.length - 1 } }) };
+            var sinPrecio = filas.filter(function(f) { return f.precio === null; }).length;
+            var inf = [['Concepto', 'Valor'], ['Generado', info.generado || ''], ['Usuario', info.usuario || ''], ['Versión de la app', info.version || ''],
+                       ['Productos con pedido sugerido', filas.length], ['Sin precio válido', sinPrecio],
+                       ['Alcance', 'Todos los productos con pedido sugerido (existencia por debajo del stock mínimo). No lo recortan el filtro de grupo, la búsqueda ni la selección.'],
+                       ['Pedido sugerido', 'Redondeo hacia arriba de (Stock mínimo − Existencia) en unidades de compra (la misma cifra de la pantalla).'],
+                       ['Cantidad a pedir', 'La cantidad escrita en la pantalla; si no se cambió, el pedido sugerido.'],
+                       ['Total estimado', 'Cantidad a pedir × Precio. Vacío = el producto no tiene precio válido en el catálogo (no se inventa).']];
+            var wsI = X.utils.aoa_to_sheet(inf);
+            wsI['!cols'] = [{ wch: 30 }, { wch: 110 }];
+            var wb = X.utils.book_new();
+            X.utils.book_append_sheet(wb, ws, 'Pedido sugerido');
+            X.utils.book_append_sheet(wb, wsI, 'Información');
+            wb.Props = { Title: 'Pedido sugerido', Author: info.usuario || 'BarInventory', CreatedDate: new Date() };
+            return wb;
+        }
+
+        function _psPuedeExportar() {
+            return typeof hasPermission === 'function' && hasPermission('inventory.export');
+        }
+
+        /** Botón «Exportar Excel». Devuelve { ok, motivo, nombre?, filas? } (lo leen las pruebas). */
+        function exportarPedidoSugeridoExcel() {
+            if (_psExport.enCurso) return { ok: false, motivo: 'en_curso' };
+            if (!_psPuedeExportar()) { showNotification('⚠️ No tienes permiso para exportar'); return { ok: false, motivo: 'sin_permiso' }; }
+            if (typeof XLSX === 'undefined') { showNotification('⏳ Cargando la librería de Excel… intenta en unos segundos'); return { ok: false, motivo: 'sin_xlsx' }; }
+            var filas = pedidoSugeridoExportFilas(pedidoSugeridoFilas(typeof products !== 'undefined' ? products : [], { soloBajo: true }), _psCantidad);
+            if (!filas.length) { showNotification('ℹ️ Ningún producto tiene pedido sugerido'); return { ok: false, motivo: 'sin_filas' }; }
+            _psExport.enCurso = true;
+            try {
+                var ahora = new Date();
+                var cuenta = (typeof _auth !== 'undefined' && _auth && _auth.currentUser) ? _auth.currentUser : null;
+                var info = { generado: ahora.toLocaleString('es-MX', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
+                             usuario: cuenta ? (cuenta.email || cuenta.uid) : ((typeof currentUserUid !== 'undefined' && currentUserUid) ? currentUserUid : 'Sin sesión'),
+                             version: (typeof _exVersionApp === 'function') ? _exVersionApp() : '' };
+                var nombre = pedidoSugeridoExportNombre(ahora);
+                var bytes = XLSX.write(pedidoSugeridoExportLibro(XLSX, filas, info), { bookType: 'xlsx', type: 'array', compression: true });
+                var fijo = (typeof existenciasExportCongelar === 'function') ? existenciasExportCongelar(XLSX, bytes, 1) : null;
+                if (typeof _fvsDescargar === 'function') _fvsDescargar(fijo || bytes, nombre);
+                else if (typeof _exDescargar === 'function') _exDescargar(fijo || bytes, nombre);
+                var sinPrecio = filas.filter(function(f) { return f.precio === null; }).length;
+                showNotification('✅ ' + nombre + ' — ' + filas.length + ' producto(s)' + (sinPrecio ? ' · ' + sinPrecio + ' sin precio' : ''));
+                return { ok: true, motivo: null, nombre: nombre, filas: filas };
+            } catch (e) {
+                console.error('[PedidoSugerido] Error al generar el Excel:', e);
+                showNotification('❌ No se pudo generar el Excel: ' + (e && e.message ? e.message : e));
+                return { ok: false, motivo: 'error_generar' };
+            } finally {
+                _psExport.enCurso = false;
+            }
+        }
 
         function pedidoSugeridoGenerar() {
             var filas = _psFilasBase();
@@ -299,3 +426,4 @@
         window.abrirPedidoSugerido = abrirPedidoSugerido;
         window.pedidoSugeridoGrupo = pedidoSugeridoGrupo;
         window.moduloCabecera = moduloCabecera;
+        window.exportarPedidoSugeridoExcel = exportarPedidoSugeridoExcel;

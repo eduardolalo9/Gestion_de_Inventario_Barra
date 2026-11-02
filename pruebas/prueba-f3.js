@@ -174,7 +174,7 @@ if (verif) {
 //  inicialDesdeCierre() — reutilizada, con un único ajuste (4-oct-2026)
 // ═══════════════════════════════════════════════════════════════════════════
 chk('★ inicialDesdeCierre() por fin tiene un llamador real',
-    /inicialDesdeCierre\(\{/.test(flujo),
+    /inicialDesdeCierre\((\{|datosCierre\))/.test(flujo),   // v5.37: recibe datosCierre (lo comparte con el mensual)
     'llevaba desde su creación sin conectarse a nada');
 chk('Conserva su guarda original (D-1 sigue sin desglose por área)',
     /function inicialDesdeCierre\(cierre\) \{[\s\S]{0,200}?if \(!cierre \|\| !cierre\.fecha\) return null;/.test(ciclo) &&

@@ -257,3 +257,68 @@
                 productosNoContados: noContados
             };
         }
+
+
+        /**
+         * v5.37 — inicialDesdeCierreMensual(cierre)
+         * ─────────────────────────────────────────
+         * Decisión de Eduardo (1-nov-2026): el inventario MENSUAL contabilizado
+         * también CIERRA LA SEMANA, aunque el último día del mes no sea domingo.
+         * Su físico pasa a ser el inicial de la semana siguiente, igual que el
+         * de un domingo.
+         *
+         * La diferencia con inicialDesdeCierre() es la FECHA del conteo: el
+         * documento guarda `fechaAncla` = el día del recuento mensual (no el
+         * domingo). Así el Total parte de ese conteo y suma las compras / resta
+         * las ventas desde el DÍA SIGUIENTE al recuento: lo comprado o vendido
+         * entre el recuento y el domingo NO se pierde (47-existencia.js usa
+         * fechaAncla en lugar de "el domingo anterior al lunes").
+         *
+         * Devuelve null si la fecha no es fin de mes o si es domingo (un
+         * domingo ya lo resuelve inicialDesdeCierre).
+         */
+        function inicialDesdeCierreMensual(cierre) {
+            if (!cierre || !cierre.fecha) return null;
+            var clase = clasificarRecuento(cierre.fecha);
+            if (!clase || !clase.esCorteMensual || clase.cierraSemana) return null;
+            var saldos = {};
+            var noContados = 0;
+            (cierre.productos || []).forEach(function(p) {
+                if (!p || !p.id) return;
+                if (p.contado === false) { noContados++; return; }
+                var t = Number(p.total);
+                if (!isFinite(t)) t = 0;
+                saldos[p.id] = Math.round(t * 1000) / 1000;
+            });
+            return {
+                semanaId:   semanaSiguiente(cierre.fecha),
+                fechaAncla: clase.fecha,
+                origen: {
+                    tipo:          'cierre_mensual',
+                    inventoryId:   cierre.inventoryId || null,
+                    numero:        (cierre.numero !== undefined) ? cierre.numero : null,
+                    fechaCierre:   clase.fecha,
+                    semanaCerrada: clase.semanaId
+                },
+                saldos:              saldos,
+                totalProductos:      Object.keys(saldos).length,
+                productosNoContados: noContados
+            };
+        }
+
+        /**
+         * v5.37 — Fecha del conteo del que salió un inicial semanal.
+         * Un inicial normal sale del domingo anterior a su lunes. Uno que salió
+         * de un inventario mensual (origen.tipo 'cierre_mensual') trae
+         * fechaAncla: se usa SOLO si es una fecha válida de la semana anterior
+         * (lunes a sábado); cualquier otro valor se ignora y se usa el domingo.
+         */
+        function fechaConteoDeInicial(semanaIdLunes, datos) {
+            var domingo = null;
+            var l = parseFechaLocal(semanaIdLunes);
+            if (l) domingo = fechaISOLocal(new Date(l.getFullYear(), l.getMonth(), l.getDate() - 1));
+            var fa = datos && datos.fechaAncla;
+            if (domingo && typeof fa === 'string' && parseFechaLocal(fa)
+                && semanaSiguiente(fa) === String(semanaIdLunes) && fa < domingo) return fa;
+            return domingo;
+        }

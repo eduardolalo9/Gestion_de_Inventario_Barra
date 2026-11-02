@@ -79,8 +79,9 @@ chk('Se avisa a qué semana pertenece la fecha',
     /clasificarRecuento\(f\.value\)/.test(flujo));
 chk('Se distingue el domingo, que cierra semana',
     /cl\.cierraSemana[\s\S]{0,200}?cierra la/.test(flujo));
-chk('Y el fin de mes, que NO cierra semana pero sí se puede contabilizar',
-    /No cierra semana[\s\S]{0,40}el inicial del lunes seguirá saliendo/.test(flujo),
+// v5.37 — decisión de Eduardo (1-nov-2026): el inventario mensual TAMBIÉN cierra la semana.
+chk('Y el fin de mes, que ahora también cierra la semana y queda como corte mensual',
+    /Inventario de fin de mes — al contabilizarlo cierra la[\s\S]{0,200}corte mensual/.test(flujo),
     'es la regla 4 dicha donde el administrador la necesita');
 // H-40 (hotfix 4.9): decisión explícita del dueño — un inventario fuera de
 // domingo/fin de mes NUNCA podrá contabilizarse (evaluarContabilizable lo

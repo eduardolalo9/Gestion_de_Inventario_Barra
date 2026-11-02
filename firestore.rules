@@ -856,7 +856,7 @@
                  // declara fecha ('YYYY-MM-DD') y hora ('HH:mm') que deben
                  // coincidir con el id. Los contabilizados siguen con id = fecha.
                  function _idAnclaValido(id, d) {
-                   return (d.tipo in ['fin_de_mes', 'mitad_de_semana']
+                   return (d.tipo in ['fin_de_mes', 'mitad_de_semana', 'cierre_semanal']
                            && _fechaAnclaValida(id) && d.fecha == id)
                        || (d.tipo == 'importacion_excel'
                            && id.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])_([01][0-9]|2[0-3])[0-5][0-9]$')
@@ -864,10 +864,13 @@
                            && d.hora.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$')
                            && id == d.fecha + '_' + d.hora.split(':')[0] + d.hora.split(':')[1]);
                  }
+                 // v5.37 — 'cierre_semanal': el conteo del DOMINGO de una semana que
+                 // ya cerró el inventario mensual (su inicial es inmutable): queda
+                 // como corte del Total, con id = fecha, igual que los demás.
                  match /anclasExistencia/{fecha} {
                    allow read: if _cuentaActiva();
                    allow create: if hasPerm('inventory.post')
-                                    && request.resource.data.tipo in ['fin_de_mes', 'mitad_de_semana', 'importacion_excel']
+                                    && request.resource.data.tipo in ['fin_de_mes', 'mitad_de_semana', 'cierre_semanal', 'importacion_excel']
                                     && _idAnclaValido(fecha, request.resource.data)
                                     && request.resource.data.origen.inventoryId is string
                                     && request.resource.data.saldos is map;

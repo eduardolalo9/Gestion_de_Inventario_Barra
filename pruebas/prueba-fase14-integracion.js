@@ -339,9 +339,14 @@ async function main() {
     chk('Z1 · el ancla es tipo fin_de_mes, con los mismos saldos que el corte',
         a1 && a1.tipo === 'fin_de_mes' && JSON.stringify(a1.saldos) === JSON.stringify(c1.saldos), JSON.stringify(a1 && a1.saldos));
     chk('Z1 · ★ la cabecera queda CONTABILIZADA con mesDestino y anclaDestino (la regla lo admite)',
-        i1.estado === 'CONTABILIZADO' && i1.mesDestino === '2026-09' && i1.anclaDestino === '2026-09-30', JSON.stringify(i1));
+        i1.estado === 'CONTABILIZADO' && i1.mesDestino === '2026-09' && i1.anclaDestino === '2026-09-30' && i1.semanaDestino === '2026-10-05', JSON.stringify(i1));
     chk('Z1 · un producto no contado no entra al ancla (nunca un cero inventado)', a1 && !('PRD-003' in a1.saldos));
-    chk('Z1 · no se genera ningún inicial semanal', (await contarIniciales()) === 0);
+    // v5.37 — decisión de Eduardo (1-nov-2026): el mensual también cierra la semana.
+    chk('Z1 · v5.37 — el mensual cierra la semana: UN inicial (semana 2026-10-05) con fechaAncla 2026-09-30', (await contarIniciales()) === 1);
+    let iniZ1 = null;
+    await testEnv.withSecurityRulesDisabled(async (ctx) => { const s = await ctx.firestore().doc(R + '/inventariosIniciales/2026-10-05').get(); iniZ1 = s.exists ? s.data() : null; });
+    chk('Z1 · v5.37 — ★ ese inicial tiene los mismos saldos del corte y fechaAncla (el Total parte del 30-sep, no del domingo)',
+        iniZ1 && iniZ1.fechaAncla === '2026-09-30' && iniZ1.origen && iniZ1.origen.tipo === 'cierre_mensual' && JSON.stringify(iniZ1.saldos) === JSON.stringify(c1.saldos), JSON.stringify(iniZ1));
 
     // ═══ Z4 — contabilizar otra vez no duplica ══════════════════════════
     const app1b = montarApp(dbAdmin, 'jefe', { admin: true });

@@ -55,10 +55,11 @@ const PUERTO = process.env.PUERTO || '8080';
   }), ['*']), base);
   chk('★ Mensual puro: "Siguiente paso: contabilizar" aparece (antes de FASE 13 se bloqueaba)',
       /Siguiente paso: contabilizar/.test(a.txt), a.txt.slice(0, 300));
-  chk('★ El botón dice "Contabilizar cierre de mes", no el genérico ni el combinado',
-      /Contabilizar cierre de mes/.test(a.txtBtnContab || ''), JSON.stringify(a.txtBtnContab));
-  chk('★ El texto habla del corte contable del mes, NO de una semana destino',
-      /corte contable del mes 2026-09/.test(a.txt) && !/stock inicial de la semana/.test(a.txt),
+  // v5.37 — decisión de Eduardo (1-nov-2026): el mensual también cierra la semana.
+  chk('★ El botón dice "Contabilizar (semana + mes)": el mensual cierra la semana y el mes',
+      /Contabilizar \(semana \+ mes\)/.test(a.txtBtnContab || ''), JSON.stringify(a.txtBtnContab));
+  chk('★ El texto habla del corte contable del mes Y del inicial de la semana siguiente',
+      /corte contable del mes 2026-09/.test(a.txt) && /stock inicial de la semana del 5 al 11 de octubre de 2026/.test(a.txt),
       a.txt.slice(0, 400));
   chk('Sigue avisando de que es irreversible', /irreversible/i.test(a.txt));
 

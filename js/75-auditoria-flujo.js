@@ -919,7 +919,13 @@
                     base.collection('anclasExistencia').where('fecha', '>', fecha).orderBy('fecha', 'desc').limit(1).get()
                 ]);
                 let desc = null;
-                ini.forEach(function(d) { desc = 'el inicial de la semana ' + d.id; });
+                ini.forEach(function(d) {
+                    // v5.37 — un inicial que salió del inventario MENSUAL vale desde
+                    // el día de ese conteo, no desde el domingo: solo es "más nuevo"
+                    // si ese día es posterior a la fecha que se quiere contabilizar.
+                    var fe = (typeof fechaConteoDeInicial === 'function') ? fechaConteoDeInicial(d.id, d.data() || {}) : null;
+                    if (!fe || fe > fecha) desc = 'el inicial de la semana ' + d.id;
+                });
                 anc.forEach(function(d) { desc = (desc ? desc + ' y ' : '') + 'el corte del ' + d.id; });
                 return { hay: !!desc, desc: desc };
             } catch (e) {
@@ -979,9 +985,14 @@
                                              + (inv.fechaRecuento || 'sin fecha de recuento') + ').' };
             }
             const hoy = hoyISO || ((typeof fechaISOLocal === 'function') ? fechaISOLocal(new Date()) : null);
-            const haceSemanal = !!clase.cierraSemana;
+            // v5.37 — decisión de Eduardo (1-nov-2026): el inventario MENSUAL
+            // también cierra la semana aunque no sea domingo. Su físico pasa a
+            // ser el inicial de la semana siguiente (inicialDesdeCierreMensual),
+            // con fechaAncla = el día del conteo. Sigue generando su ancla.
+            const semanalDesdeMensual = !clase.cierraSemana && !!clase.esCorteMensual;
+            const haceSemanal = !!clase.cierraSemana || semanalDesdeMensual;
             const haceMensual = !!clase.esCorteMensual;
-            const haceAncla   = !haceSemanal;            // fin de mes entre semana o mitad de semana
+            const haceAncla   = !clase.cierraSemana;     // fin de mes entre semana o mitad de semana
             if (haceAncla && hoy && clase.fecha > hoy) {
                 return { puede: false, motivo: 'El recuento está fechado ' + clase.fecha + ', en el futuro: un corte '
                                              + 'solo puede ser ancla del Total cuando su día ya llegó.' };
@@ -991,7 +1002,7 @@
             if (haceSemanal && !semanaDestino) return { puede: false, motivo: 'No se pudo calcular la semana destino.' };
             const mesId = haceMensual ? String(inv.fechaRecuento).slice(0, 7) : null;
             return { puede: true, tipo: clase.tipo, haceSemanal: haceSemanal, haceMensual: haceMensual,
-                     haceAncla: haceAncla,
+                     haceAncla: haceAncla, semanalDesdeMensual: semanalDesdeMensual, fecha: clase.fecha,
                      anclaTipo: haceAncla ? (haceMensual ? 'fin_de_mes' : 'mitad_de_semana') : null,
                      anclaFecha: haceAncla ? clase.fecha : null,
                      semanaDestino: semanaDestino, mesId: mesId };
@@ -1035,7 +1046,7 @@
                     showNotification('⚠️ ' + ev.motivo);
                     return;
                 }
-                const haceSemanal   = ev.haceSemanal;
+                let   haceSemanal   = ev.haceSemanal;
                 const haceMensual   = ev.haceMensual;
                 const semanaDestino = ev.semanaDestino;
                 const mesId         = ev.mesId;
@@ -1043,8 +1054,8 @@
                 // semana). Antes de nada: si ya hay un corte MÁS NUEVO, este
                 // no cambiaría el Total. Un recuento de mitad de semana se
                 // rechaza; un fin de mes sigue generando su corte mensual.
-                const anclaFecha    = ev.anclaFecha || null;
-                const anclaTipo     = ev.anclaTipo || null;
+                let   anclaFecha    = ev.anclaFecha || null;
+                let   anclaTipo     = ev.anclaTipo || null;
                 let   haceAncla     = !!ev.haceAncla;
                 let   anclaOmitida  = null;
                 if (haceAncla) {
@@ -1075,7 +1086,43 @@
                 let previoSemana = { existe: false };
                 let previoMes    = { existe: false };
                 let previoAncla  = { existe: false };
+                let semanaOmitida   = null;   // v5.37 — el mensual no cierra una semana que ya cerró el domingo
+                let semanaComoAncla = null;   // v5.37 — el domingo, si la semana ya la cerró el mensual
                 if (haceSemanal) previoSemana = await _verificarInicialExistente(semanaDestino, inventoryId);
+                if (haceSemanal && previoSemana.error) {
+                    showNotification('📴 No se pudo comprobar el inicial de la semana ' + semanaDestino + '. No se contabilizó nada — inténtalo con conexión estable.');
+                    return;
+                }
+                if (haceSemanal && previoSemana.existe && !previoSemana.mismoOrigen) {
+                    const origPrev = (previoSemana.datos && previoSemana.datos.origen) || {};
+                    if (ev.semanalDesdeMensual) {
+                        // La semana ya la cerró otro conteo (normalmente el del domingo):
+                        // gana ese. El mensual conserva su corte mensual y su ancla.
+                        haceSemanal = false;
+                        semanaOmitida = 'la semana ' + semanaDestino + ' ya tiene su inicial (Inventario Físico #'
+                                      + (previoSemana.origenNumero || previoSemana.origenId) + ')';
+                    } else if (origPrev.tipo === 'cierre_mensual') {
+                        // Domingo de una semana que ya cerró el inventario MENSUAL: el
+                        // domingo gana como corte del Total (es más nuevo), sin tocar el
+                        // inicial del mensual (es inmutable).
+                        const fd = ev.fecha;
+                        const post2 = await _anclaPosteriorA(fd);
+                        if (post2.error) {
+                            showNotification('📴 No se pudo comprobar si ya hay un corte más nuevo. No se contabilizó nada — inténtalo con conexión estable.');
+                            return;
+                        }
+                        if (post2.hay) {
+                            showNotification('🛑 Ya existe un corte más nuevo (' + post2.desc + '): este cierre no cambiaría el Total, así que no se contabiliza.');
+                            return;
+                        }
+                        haceSemanal = false;
+                        haceAncla   = true;
+                        anclaTipo   = 'cierre_semanal';
+                        anclaFecha  = fd;
+                        semanaComoAncla = 'la semana ' + semanaDestino + ' ya tiene el inicial del inventario mensual #'
+                                        + (previoSemana.origenNumero || previoSemana.origenId);
+                    }
+                }
                 if (haceMensual) previoMes    = await _verificarCorteMensualExistente(mesId, inventoryId);
                 if (haceAncla)   previoAncla  = await _verificarAnclaExistente(anclaFecha, inventoryId);
 
@@ -1127,12 +1174,14 @@
 
                 let inicial = null, corteMensual = null;
                 if (faltaSemana) {
-                    inicial = inicialDesdeCierre({
+                    const datosCierre = {
                         fecha:       inv.fechaRecuento,
                         inventoryId: inventoryId,
                         numero:      inv.numero,
                         productos:   saldos.productos
-                    });
+                    };
+                    // v5.37 — el inventario mensual entre semana también cierra la semana.
+                    inicial = ev.semanalDesdeMensual ? inicialDesdeCierreMensual(datosCierre) : inicialDesdeCierre(datosCierre);
                     if (!inicial) {
                         showNotification('⚠️ El cierre no arrastra a la semana siguiente (no cierra semana)');
                         return;
@@ -1169,10 +1218,12 @@
                 // ── Mensaje de confirmación — solo menciona lo que de verdad se va a escribir ──
                 let msg = '📘 CONTABILIZAR INVENTARIO FÍSICO #' + (inv.numero || numero) + '\n\n'
                          + 'Recuento: ' + inv.fechaRecuento + '\n';
-                if (faltaSemana) msg += 'Semana destino: ' + inicial.semanaId + '\n';
+                if (faltaSemana) msg += 'Semana destino: ' + inicial.semanaId
+                                      + (inicial.fechaAncla ? ' (el inventario mensual cierra la semana)' : '') + '\n';
                 if (faltaMes)    msg += 'Corte mensual: '  + corteMensual.mesId + '\n';
                 if (faltaAncla)  msg += 'Ancla del Total: ' + ancla.fecha
-                                      + (anclaTipo === 'mitad_de_semana' ? ' (recuento de mitad de semana)' : ' (fin de mes)') + '\n';
+                                      + (anclaTipo === 'mitad_de_semana' ? ' (recuento de mitad de semana)'
+                                         : anclaTipo === 'cierre_semanal' ? ' (cierre del domingo)' : ' (fin de mes)') + '\n';
                 msg += 'Productos: ' + saldos.totalProductos
                      + (saldos.enCero ? '  (' + saldos.enCero + ' en cero)' : '') + '\n'
                      + 'Total de unidades: ' + (Math.round(totalUnidades * 1000) / 1000) + '\n';
@@ -1191,7 +1242,12 @@
                          + '\n';
                 }
                 msg += '\n';
-                if (faltaSemana) msg += 'El resultado físico pasará a ser el stock inicial de esa semana.\n';
+                if (faltaSemana) msg += 'El resultado físico pasará a ser el stock inicial de esa semana'
+                                      + (inicial.fechaAncla ? ': el Total parte de este conteo y aplica entradas y consumo teórico '
+                                         + 'desde el día siguiente al ' + inicial.fechaAncla + ', aunque caigan antes del lunes' : '') + '.\n';
+                if (semanaOmitida)   msg += 'ℹ️ No se cierra la semana con este inventario: ' + semanaOmitida + '. Gana ese conteo.\n';
+                if (semanaComoAncla) msg += 'ℹ️ ' + semanaComoAncla.charAt(0).toUpperCase() + semanaComoAncla.slice(1)
+                                      + ': este domingo queda como corte del Total (es más nuevo) y el inicial no se toca.\n';
                 if (faltaMes)    msg += 'El corte mensual queda guardado para contabilidad, valorizado en dinero.\n';
                 if (faltaAncla)  msg += 'El Total de cada producto partirá de este conteo: entradas y consumo teórico '
                                       + 'se aplican solo desde el día siguiente al ' + ancla.fecha + '.\n';
@@ -1211,7 +1267,7 @@
                             if (faltaSemana) {
                                 const inicialRef = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
                                                       .collection('inventariosIniciales').doc(inicial.semanaId);
-                                batch.set(inicialRef, {
+                                const docInicial = {
                                     semanaId:            inicial.semanaId,
                                     origen:              inicial.origen,
                                     saldos:              inicial.saldos,
@@ -1222,7 +1278,10 @@
                                     contabilizadoPor:    currentUserUid,
                                     contabilizadoEn:     Date.now(),
                                     semanaOrigenDato:    inv.semanaIdOrigen || 'cabecera'
-                                });
+                                };
+                                // v5.37 — solo los iniciales que salen del inventario mensual
+                                if (inicial.fechaAncla) docInicial.fechaAncla = inicial.fechaAncla;
+                                batch.set(inicialRef, docInicial);
                             }
                             if (faltaMes) {
                                 const corteRef = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID)
@@ -2115,9 +2174,11 @@
                                  (cl.esCorteMensual ? ' y además es corte de fin de mes.' : '.');
                 if (btn) btn.disabled = false;
             } else if (cl.esCorteMensual) {
-                el.style.color = 'var(--amber)';
-                el.textContent = 'Corte de fin de mes. No cierra semana — el inicial del lunes seguirá saliendo '
-                                + 'del domingo, pero este corte sí se podrá contabilizar como corte mensual.';
+                // v5.37 — el inventario mensual también cierra la semana.
+                el.style.color = 'var(--ok)';
+                el.textContent = 'Inventario de fin de mes — al contabilizarlo cierra la ' + semana + ' (será el inicial '
+                                + 'de la semana siguiente, más las compras desde este día) y queda como corte mensual. '
+                                + 'Si además se contabiliza el domingo, el domingo es el corte más nuevo.';
                 if (btn) btn.disabled = false;
             } else {
                 // FASE 14 (decisión de Eduardo, 5-oct-2026): un recuento de

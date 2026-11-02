@@ -180,8 +180,9 @@ if (A) {
     const mensualPuro = A.evaluarContabilizable(Object.assign({}, base, { fechaRecuento: '2026-09-30' }));
     chk('★ Mensual puro (miércoles fin de mes): antes se bloqueaba — ahora se puede',
         mensualPuro.puede === true, JSON.stringify(mensualPuro));
-    chk('★ Mensual puro: NO genera inicial semanal, sí mesId',
-        mensualPuro.haceSemanal === false && mensualPuro.semanaDestino === null &&
+    // v5.37 — decisión de Eduardo (1-nov-2026): el mensual también cierra la semana.
+    chk('★ Mensual puro: cierra la semana (inicial de la siguiente, desde el mensual) y genera mesId',
+        mensualPuro.haceSemanal === true && mensualPuro.semanalDesdeMensual === true && mensualPuro.semanaDestino === '2026-10-05' &&
         mensualPuro.haceMensual === true && mensualPuro.mesId === '2026-09-30'.slice(0, 7),
         JSON.stringify(mensualPuro));
 
@@ -245,7 +246,7 @@ chk('★ Sigue siendo UN SOLO batch (atómico) incluso con dos destinos',
     (contab.match(/const batch = _db\.batch\(\);/g) || []).length === 1 &&
     (contab.match(/await batch\.commit\(\);/g) || []).length === 1);
 chk('★ El inicial semanal solo se crea si faltaba (faltaSemana)',
-    /if \(faltaSemana\) \{[\s\S]{0,400}?batch\.set\(inicialRef/.test(contab));
+    /if \(faltaSemana\) \{[\s\S]{0,1400}?batch\.set\(inicialRef/.test(contab));
 chk('★ El corte mensual solo se crea si faltaba (faltaMes)',
     /if \(faltaMes\) \{[\s\S]{0,400}?batch\.set\(corteRef/.test(contab) &&
     /\.collection\('cortesMensuales'\)/.test(contab));

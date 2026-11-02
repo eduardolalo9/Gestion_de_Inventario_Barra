@@ -135,7 +135,9 @@
                 if (rs[0]) rs[0].forEach(function(doc) {
                     var d = doc.data() || {};
                     cands.push({ tipo: 'inicial_semanal', id: doc.id, semanaId: doc.id,
-                                 fecha: anclaFechaDeInicial(doc.id), saldos: d.saldos || {}, origen: d.origen || null,
+                                 // v5.37 — un inicial que salió del inventario MENSUAL vale desde
+                                 // el día de ese conteo (fechaAncla), no desde el domingo.
+                                 fecha: (typeof fechaConteoDeInicial === 'function') ? fechaConteoDeInicial(doc.id, d) : anclaFechaDeInicial(doc.id), saldos: d.saldos || {}, origen: d.origen || null,
                                  registradoEn: (typeof d.contabilizadoEn === 'number') ? d.contabilizadoEn : undefined });
                 });
                 if (rs[1]) rs[1].forEach(function(doc) {

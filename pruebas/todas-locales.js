@@ -77,6 +77,7 @@ const PRUEBAS = [
     'prueba-v532-exportar-existencias.js', // v5.32 — exportar existencias a Excel: capa pura, columnas exactas, solo lectura, sin ceros silenciosos
     'prueba-v533-blindaje-pestana.js', // v5.33 — Etapa 0: blindaje de activeTab (valida al restaurar, no se adopta de la nube, nunca envía "perfil")
     'prueba-v534-perfil.js', // v5.34 — Mi Perfil: overlay de solo lectura (no es pestaña, no escribe, escapado, integración, versión)
+    'prueba-v537-mensual-y-pedido.js', // v5.37 — el mensual cierra la semana (fechaAncla, cierre_semanal) y Excel del pedido sugerido
     'prueba-v536-diferencias-desc.js', // v5.36 — Diferencias ↓ (función pura, pantalla, Excel)
     'prueba-v536-corte-eliminar.js', // v5.36 — eliminar último corte importado con respaldo en papelera (Firestore simulado), reglas estáticas
     'prueba-v535-fvs-tabla.js', // v5.35 — Físico vs Sistema: Grupo, Diferencias ↑, orden visible, Excel (filas, vacíos, libro real), garantías

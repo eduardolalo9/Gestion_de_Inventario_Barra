@@ -119,11 +119,11 @@
          * "se contó y dio cero" (decisión del 4-oct-2026).
          *
          * @param {object} cierre { fecha, inventoryId, numero, productos: [{id, total, contado?}] }
-         * @param {string} tipo   'fin_de_mes' | 'mitad_de_semana'
+         * @param {string} tipo   'fin_de_mes' | 'mitad_de_semana' | 'cierre_semanal' (v5.37: domingo de una semana que ya cerró el mensual)
          */
         function anclaDesdeCierre(cierre, tipo) {
             if (!cierre || !cierre.fecha || !_arrFecha(cierre.fecha)) return null;
-            if (tipo !== 'fin_de_mes' && tipo !== 'mitad_de_semana') return null;
+            if (tipo !== 'fin_de_mes' && tipo !== 'mitad_de_semana' && tipo !== 'cierre_semanal') return null;
             var saldos = {};
             var noContados = 0;
             (cierre.productos || []).forEach(function(p) {
@@ -261,6 +261,7 @@
             if (ancla.tipo === 'inicial_semanal') return 'Inicial semanal (conteo del ' + fecha + ')';
             if (ancla.tipo === 'fin_de_mes')      return 'Corte de fin de mes (' + fecha + ')';
             if (ancla.tipo === 'mitad_de_semana') return 'Recuento de mitad de semana (' + fecha + ')';
+            if (ancla.tipo === 'cierre_semanal')  return 'Cierre del domingo (' + fecha + ')';
             if (ancla.tipo === 'importacion_excel') return 'Corte importado de Excel (' + fecha + (ancla.hora ? ' ' + ancla.hora : '') + ')';
             return 'Conteo del ' + fecha;
         }

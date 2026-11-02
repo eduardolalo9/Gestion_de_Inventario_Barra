@@ -266,7 +266,7 @@
             });
         }
 
-        var EX_TIPOS_ANCLA = { inicial_semanal: 'Inicial semanal', fin_de_mes: 'Fin de mes', mitad_de_semana: 'Mitad de semana' };
+        var EX_TIPOS_ANCLA = { inicial_semanal: 'Inicial semanal', fin_de_mes: 'Fin de mes', mitad_de_semana: 'Mitad de semana', cierre_semanal: 'Cierre del domingo' };
         function _exTipoAncla(t) { return EX_TIPOS_ANCLA[t] || (t ? String(t) : 'Corte'); }
 
         /** Versión cargada (la del ?v= de este mismo archivo, que sube con cada versión). */

@@ -90,8 +90,9 @@ const PUERTO = process.env.PUERTO || '8080';
     return { disabled: document.getElementById('nuevoInvBtnCrear').disabled,
              aviso: document.getElementById('nuevoInvAvisoFecha').textContent };
   });
-  chk('★ Un fin de mes entre semana también se permite (corte mensual, no semanal)',
-      !finMes.disabled && /Corte de fin de mes/.test(finMes.aviso), JSON.stringify(finMes));
+  // v5.37 — el inventario de fin de mes también cierra la semana.
+  chk('★ Un fin de mes entre semana también se permite (cierra la semana y queda como corte mensual)',
+      !finMes.disabled && /Inventario de fin de mes — al contabilizarlo cierra la/.test(finMes.aviso) && /corte mensual/.test(finMes.aviso), JSON.stringify(finMes));
 
   // Defensa en profundidad: aunque el botón se reactive a la fuerza (devtools,
   // una carrera de eventos…), confirmarNuevoInventario() vuelve a comprobar.

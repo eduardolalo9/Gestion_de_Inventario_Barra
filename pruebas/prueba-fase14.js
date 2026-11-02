@@ -242,7 +242,7 @@ chk('★ Inmutable: create sí; update no; delete solo del corte IMPORTADO (v5.3
 // v5.18 — el id se valida con _idAnclaValido (fecha, o fecha_HHmm para el corte importado).
 chk('Crear exige inventory.post, id válido (fecha o fecha_HHmm), tipo de ancla, origen y saldos',
     /hasPerm\('inventory\.post'\)/.test(bloque) && /_idAnclaValido\(fecha, request\.resource\.data\)/.test(bloque) &&
-    /tipo in \['fin_de_mes', 'mitad_de_semana', 'importacion_excel'\]/.test(bloque) &&
+    /tipo in \['fin_de_mes', 'mitad_de_semana', 'cierre_semanal', 'importacion_excel'\]/.test(bloque) &&
     /origen\.inventoryId is string/.test(bloque) && /saldos is map/.test(bloque) &&
     /d\.fecha == id/.test(reglas) && /id == d\.fecha \+ '_' \+ d\.hora/.test(reglas));
 // v5.26 (hallazgo #9) — "cualquier autenticado" pasó a exigir además
