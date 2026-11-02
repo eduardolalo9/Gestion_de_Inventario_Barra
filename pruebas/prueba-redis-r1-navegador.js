@@ -57,14 +57,15 @@ const PUERTO = process.env.PUERTO || '8080';
              book: v('--book'), scrim: v('--scrim'), ok: v('--ok'),
              onAccent: v('--accent-on') };
   });
-  chk('★ v5.25 · El acento calculado (tema oscuro) es el esmeralda claro #54C398',
-      tok.accent.toUpperCase() === '#54C398', JSON.stringify(tok));
+  // v5.38 — «Ultra Pro Emerald» (2-nov-2026): acento #10B981, fondo #0A0E0C, superficies #121915.
+  chk('★ v5.38 · El acento calculado (tema oscuro) es el esmeralda #10B981',
+      tok.accent.toUpperCase() === '#10B981', JSON.stringify(tok));
   chk('Los alias nuevos resuelven (--brass, --ok, --book, --scrim)',
       !!tok.brass && !!tok.ok && !!tok.book && !!tok.scrim, JSON.stringify(tok));
   chk('El fondo del body usa el token, no un color del navegador',
       await p.evaluate(() => {
         const bg = getComputedStyle(document.body).backgroundColor;
-        return bg === 'rgb(10, 17, 14)';   // #0A110E
+        return bg === 'rgb(10, 14, 12)';   // #0A0E0C (v5.38)
       }),
       await p.evaluate(() => getComputedStyle(document.body).backgroundColor));
 
@@ -92,20 +93,21 @@ const PUERTO = process.env.PUERTO || '8080';
     };
   });
   chk('★ bg-white YA NO es blanco: es la superficie del tema oscuro',
-      util.bgWhite !== 'rgb(255, 255, 255)' && util.bgWhite === 'rgb(21, 33, 28)',
-      'calculado: ' + util.bgWhite + ' (esperado rgb(21, 33, 28) = #15211C)');
+      util.bgWhite !== 'rgb(255, 255, 255)' && util.bgWhite === 'rgb(18, 25, 21)',
+      'calculado: ' + util.bgWhite + ' (esperado rgb(18, 25, 21) = #121915)');
   chk('★ text-gray-900 YA NO es casi negro: es el texto claro del tema',
-      util.txt900 === 'rgb(235, 240, 237)',
+      util.txt900 === 'rgb(241, 245, 249)',
       'calculado: ' + util.txt900);
   chk('text-gray-600 resuelve al texto secundario del tema',
-      util.txt600 === 'rgb(183, 192, 188)', 'calculado: ' + util.txt600);
-  chk('border-gray-200 resuelve al borde del tema (translúcido)',
-      /rgba?\(216, 224, 220/.test(util.borde), 'calculado: ' + util.borde);
+      util.txt600 === 'rgb(148, 163, 184)', 'calculado: ' + util.txt600);
+  chk('border-gray-200 resuelve al borde del tema (v5.38: sólido #1E2B24)',
+      util.borde === 'rgb(30, 43, 36)', 'calculado: ' + util.borde);
   chk('El velo del modal usa --scrim, no negro al 60 %',
-      /rgba\(0, 5, 2/.test(util.velo), 'calculado: ' + util.velo);
+      /rgba\(0, 4, 2/.test(util.velo), 'calculado: ' + util.velo);
   chk('★ Las utilidades de layout funcionan sin Tailwind (flex, gap, radio, texto, sombra)',
       util.flexDisp === 'flex' && util.gap3 === '12px' &&
-      util.redondo !== '0px' && util.textoSm !== '' && util.sombra !== 'none',
+      // v5.38: la sombra de tarjeta es 'none' A PROPÓSITO en el oscuro sobrio (--shadow-card: none).
+      util.redondo !== '0px' && util.textoSm !== '' && typeof util.sombra === 'string',
       JSON.stringify(util));
 
   // ── D · Iconos locales ─────────────────────────────────────────────────
@@ -181,8 +183,8 @@ const PUERTO = process.env.PUERTO || '8080';
   chk('El kit está disponible en la app y pinta', !kit.falta);
   chk('★ El badge lleva la palabra del estado, no solo color',
       kit.badgeTexto === 'Sincronizado', 'texto: ' + kit.badgeTexto);
-  chk('★ La cifra sale en Manrope (--f-num, v5.25)',
-      /Manrope/.test(kit.cifraFuente || ''), 'fuente: ' + kit.cifraFuente);
+  chk('★ La cifra sale en IBM Plex Mono (--f-num, v5.38)',
+      /IBM Plex Mono/.test(kit.cifraFuente || ''), 'fuente: ' + kit.cifraFuente);
   chk('La cifra respeta los decimales pedidos', kit.cifraTexto === '8.65', 'texto: ' + kit.cifraTexto);
   chk('El monograma saca iniciales del nombre, sin imágenes',
       kit.monoTexto === 'DJ7', 'monograma: ' + kit.monoTexto);
@@ -192,7 +194,7 @@ const PUERTO = process.env.PUERTO || '8080';
   chk('★ Una fila accionable es un <button> de verdad (Tab la alcanza)',
       kit.filaEtiqueta === 'BUTTON', 'etiqueta: ' + kit.filaEtiqueta);
   chk('El campo tiene fondo hundido del tema, no blanco',
-      kit.inputFondo === 'rgb(10, 17, 14)', 'fondo: ' + kit.inputFondo);
+      kit.inputFondo === 'rgb(10, 14, 12)', 'fondo: ' + kit.inputFondo);   // v5.38: --bg #0A0E0C
   chk('La etiqueta del campo está asociada a su input con for/id',
       kit.labelFor && kit.labelFor === kit.inputId, kit.labelFor + ' / ' + kit.inputId);
   chk('El medidor dibuja sus segmentos y enciende la proporción correcta',

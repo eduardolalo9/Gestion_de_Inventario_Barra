@@ -117,7 +117,7 @@ const PUERTO = process.env.PUERTO || '8080';
   chk('El nombre sigue siendo el botón que abre la ficha del producto',
       card.nombreEsBoton === 'BUTTON' && card.fichaAttr === 'DJ7', JSON.stringify(card));
   chk('★ La existencia va a la DERECHA del nombre, en mono tabular',
-      card.cifraALaDerecha === true && /Manrope/.test(card.cifraFuente || ''),
+      card.cifraALaDerecha === true && /IBM Plex Mono/.test(card.cifraFuente || ''),
       JSON.stringify({ derecha: card.cifraALaDerecha, fuente: card.cifraFuente, texto: card.cifraTexto }));
   chk('★ Las acciones quedan bajo el nombre, en el renglón de los chips (el nombre se queda con el ancho de arriba)',
       card.accionesAlPie === true);
@@ -174,7 +174,7 @@ const PUERTO = process.env.PUERTO || '8080';
   // mitad (1.5) → "Advertencia producto bajo", en ámbar. No "Limitado": ese
   // umbral es < 1.5. (La primera versión de esta prueba lo calculó mal.)
   chk('ACEITUNA (1.70 de mínimo 3) sale como "Advertencia producto bajo", en ámbar del tema',
-      badges.texto === 'Advertencia producto bajo' && badges.color === 'rgb(240, 180, 41)',
+      badges.texto === 'Advertencia producto bajo' && badges.color === 'rgb(251, 191, 36)',   // v5.38: ámbar #FBBF24
       JSON.stringify(badges));
 
   // ── D · El pedido sugerido conserva su cantidad y su acción ────────────
@@ -208,14 +208,15 @@ const PUERTO = process.env.PUERTO || '8080';
       blancos: [...t.querySelectorAll('*')].filter(el => getComputedStyle(el).backgroundColor === 'rgb(255, 255, 255)' && !el.closest('.it-inv')).length,
       grpActivo: (() => {
         const a = t.querySelector('.grp-pill--active');
-        return a ? getComputedStyle(a).backgroundColor : null;
+        // v5.38: el chip se dibuja con ::after (30 px dentro del objetivo de 44); el activo lleva texto y borde esmeralda.
+        return a ? { texto: getComputedStyle(a).color, borde: getComputedStyle(a, '::after').borderTopColor } : null;
       })()
     };
   });
   chk('★ Ni un elemento con fondo blanco en toda la pantalla de Inicio',
       limpio.blancos === 0, 'blancos: ' + limpio.blancos);
-  chk('El grupo activo del rail se pinta en esmeralda sólido',
-      limpio.grpActivo === 'rgb(84, 195, 152)', 'color: ' + limpio.grpActivo);
+  chk('El grupo activo del rail se pinta en esmeralda (texto y borde de la pastilla)',
+      limpio.grpActivo && limpio.grpActivo.texto === 'rgb(16, 185, 129)' && limpio.grpActivo.borde === 'rgb(16, 185, 129)', JSON.stringify(limpio.grpActivo));
 
   chk('Sin errores de JS en toda la prueba', errs.length === 0, errs.join(' | '));
   await nav.close();

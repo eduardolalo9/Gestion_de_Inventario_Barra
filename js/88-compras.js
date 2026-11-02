@@ -1469,19 +1469,16 @@
 
             // ── Cabecera con el resumen ───────────────────────────────────────
             var r = _resumenCompras();
-            html += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">';
+            // v5.38 (densidad) — fila de KPIs en clases (css/densidad.css): 4 columnas
+            // de una sola línea de cifra mono, en lugar de tarjetas de 2×2.
+            html += '<div class="kpi-fila kpi-fila--4">';
             [['Documentos', r.documentos],
              ['Líneas', r.lineas],
              ['Proveedores', r.proveedores],
              ['Importe', _dineroMX(r.importe)]
             ].forEach(function(par) {
-                html += '<div style="flex:1;min-width:120px;background:var(--surface);'
-                      + 'border:1px solid var(--border-mid);border-radius:12px;padding:12px 14px">'
-                      + '<div style="font-size:1.25rem;font-weight:700;letter-spacing:-.02em">'
-                      + escapeHtml(String(par[1])) + '</div>'
-                      + '<div style="font-size:.72rem;color:var(--txt-secondary);'
-                      + 'text-transform:uppercase;letter-spacing:.05em;margin-top:3px">'
-                      + escapeHtml(par[0]) + '</div></div>';
+                html += '<div class="kpi"><div class="kpi__n">' + escapeHtml(String(par[1])) + '</div>'
+                      + '<div class="kpi__t">' + escapeHtml(par[0]) + '</div></div>';
             });
             html += '</div>';
             if (r.canceladas) {
@@ -1496,11 +1493,7 @@
             // hacen desde el módulo "Importar desde Excel" (js/96-importar.js),
             // decisión de Eduardo (6-oct-2026).
             if (hasPermission('purchases.create')) {
-                html += '<button type="button" onclick="comprasNuevaManual()" '
-                      + 'style="display:flex;align-items:center;gap:7px;padding:0 15px;min-height:44px;'
-                      + 'border-radius:var(--r-md);background:var(--surface);'
-                      + 'border:1px solid var(--border-mid);color:var(--txt-primary);'
-                      + 'font-weight:600;cursor:pointer">Capturar a mano</button>';
+                html += '<button type="button" class="bt bt--secundario bt--auto" onclick="comprasNuevaManual()">Capturar a mano</button>';
             }
             html += '</div>';
 

@@ -75,8 +75,9 @@ const PUERTO = process.env.PUERTO || '8080';
         tituloYEstadoJuntos: (() => { const a = t.querySelector('.if-card__titulo').getBoundingClientRect(), b = t.querySelector('.pm-estado--cab').getBoundingClientRect(); return Math.abs((a.top + a.bottom) / 2 - (b.top + b.bottom) / 2) < 12; })()
       };
     });
-    chk('[' + ANCHO + '] Inventario: conserva las 3 tarjetas de área (>= 72 px, piso FASE 10B) y todos los botones con texto', inv.tarjetas.length === 3 && inv.tarjetas.every(h => h >= 72) && inv.botones.length >= 9, JSON.stringify(inv));
-    chk('[' + ANCHO + '] Inventario: botones >= 48 px, texto >= 14 px y sin texto recortado (piso FASE 10B)', inv.botones.every(b => b[1] >= 48 && b[2] >= 14) && inv.recortes.length === 0, JSON.stringify(inv.botones));
+    // v5.38 — pisos de la densidad operativa: tarjeta de área 56 px, botón 44 px (objetivo táctil), texto 13 px.
+    chk('[' + ANCHO + '] Inventario: conserva las 3 tarjetas de área (>= 56 px, piso v5.38) y todos los botones con texto', inv.tarjetas.length === 3 && inv.tarjetas.every(h => h >= 56) && inv.botones.length >= 9, JSON.stringify(inv));
+    chk('[' + ANCHO + '] Inventario: botones >= 44 px, texto >= 13 px y sin texto recortado (piso v5.38)', inv.botones.every(b => b[1] >= 44 && b[2] >= 13) && inv.recortes.length === 0, JSON.stringify(inv.botones));
     chk('[' + ANCHO + '] Inventario: título y estado en el mismo renglón; el estado se lee completo', inv.tituloYEstadoJuntos && /INVENTARIO BARRA SINCRONIZADO/.test(inv.estado), JSON.stringify(inv));
     chk('[' + ANCHO + '] Inventario: la pantalla completa mide <= 1800 px (antes ~2330 px a 390)', inv.alto <= 1800, String(inv.alto));
     chk('[' + ANCHO + '] Inventario: sin desplazamiento horizontal (incluye el panel de conteos por usuario)', await sinDesborde());

@@ -34,15 +34,15 @@
         }
 
         function toggleTheme() {
-            const current = document.documentElement.getAttribute('data-theme') || 'light';
+            const current = document.documentElement.getAttribute('data-theme') || 'dark';
             applyTheme(current === 'dark' ? 'light' : 'dark');
         }
 
         function initTheme() {
-            let saved = 'light';   // v5.25: el tema de marca (Verde Esmeralda) es el claro
+            let saved = 'dark';    // v5.38: "Ultra Pro Emerald" — el oscuro es el predeterminado
             try {
                 let t = localStorage.getItem('inventarioApp_theme');
-                if (t !== 'dark' && t !== 'light') t = 'light';
+                if (t !== 'dark' && t !== 'light') t = 'dark';
                 saved = t;
             } catch (_) {}
             applyTheme(saved);

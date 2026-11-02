@@ -79,6 +79,8 @@
     "test:v528nav": "node pruebas/prueba-v528-navegador.js",
     "test:v531nav": "node pruebas/prueba-v531-tema-navegador.js",
     "test:existnav": "node pruebas/prueba-v532-existencias-navegador.js",
+    "test:v538": "node pruebas/prueba-v538-densidad.js",
+    "test:v538nav": "node pruebas/prueba-v538-densidad-navegador.js",
     "test:v537": "node pruebas/prueba-v537-mensual-y-pedido.js",
     "test:v537nav": "node pruebas/prueba-v537-navegador.js",
     "test:v536": "node pruebas/prueba-v536-diferencias-desc.js && node pruebas/prueba-v536-corte-eliminar.js",

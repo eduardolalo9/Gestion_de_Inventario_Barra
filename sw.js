@@ -29,7 +29,7 @@
 // pruebas/prueba-integridad-split.js falla si se desincronizan: un index.html
 // nuevo sirviendo un .js viejo desde cache es el fallo mas dificil de
 // diagnosticar que puede tener una PWA partida en archivos.
-const APP_VERSION = '5.37';
+const APP_VERSION = '5.38';
 const CACHE_NAME  = 'barinventory-v' + APP_VERSION;
 
 // SW8 FIX: OFFLINE_URL calculado desde el scope del SW en tiempo de ejecución.
@@ -78,9 +78,12 @@ const PRECACHE_URLS = [
 const WARM_URLS = [
     // v5.31 — tema minimalista claro. En WARM (PRECACHE tiene tope de 6): si faltara sin red, la app se ve con el tema esmeralda de siempre.
     './css/tema-minimal.css?v=' + APP_VERSION,
+    './css/densidad.css?v=' + APP_VERSION,   // v5.38 — capa de densidad operativa (va la última)
     // v5.25 — tipografías propias (Manrope y DM Sans): sin esto la primera carga sin red caería a la fuente del sistema.
-    './fonts/manrope-600.woff2', './fonts/manrope-700.woff2', './fonts/manrope-800.woff2',
-    './fonts/dm-sans-400.woff2', './fonts/dm-sans-500.woff2', './fonts/dm-sans-600.woff2', './fonts/dm-sans-700.woff2',
+    // v5.38 — Plus Jakarta Sans + IBM Plex Mono (sustituyen a Manrope y DM Sans)
+    './fonts/plus-jakarta-sans-400.woff2', './fonts/plus-jakarta-sans-500.woff2', './fonts/plus-jakarta-sans-600.woff2',
+    './fonts/plus-jakarta-sans-700.woff2', './fonts/plus-jakarta-sans-800.woff2',
+    './fonts/ibm-plex-mono-500.woff2', './fonts/ibm-plex-mono-600.woff2',
     './js/03-ui-kit.js?v=' + APP_VERSION,            // BI UI KIT (rediseño R1)
     './js/05-busqueda-motor.js?v=' + APP_VERSION,   // FASE 6
     './js/06-busqueda-ui.js?v=' + APP_VERSION,       // FASE 6

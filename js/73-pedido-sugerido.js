@@ -135,11 +135,27 @@
             return String(Math.round(n * 100) / 100);
         }
 
+        /**
+         * v5.38 — tarjeta DENSA (encargo «Ultra Pro Emerald»): una sola fila de
+         * ~60 px. El nombre tiene todo el ancho libre (hasta 2 renglones, ya no
+         * se corta a los 12 caracteres); Stock y Mín van apilados en una
+         * columna de cifras mono; «Pedir» es el campo editable. El estado
+         * (crítico / bajo) es una marca mínima: borde izquierdo de color Y la
+         * palabra en 9 px — el color nunca va solo.
+         */
+        function _psEstado(f) {
+            if (typeof f.enStock !== 'number' || typeof f.minimo !== 'number' || !(f.minimo > 0)) return null;
+            if (f.enStock < f.minimo / 2) return { clase: 'critico', txt: 'Crítico' };
+            if (f.enStock < f.minimo) return { clase: 'bajo', txt: 'Bajo' };
+            return null;
+        }
+
         function _psTarjeta(f) {
             var sel = !!(_ps.seleccion && _ps.seleccion[f.id]);
             var q = _psCantidad(f);
             var id = escapeHtml(String(f.id));
-            var h = '<div class="ps-card' + (sel ? ' ps-card--sel' : '') + '" data-sbx-item>';
+            var est = _psEstado(f);
+            var h = '<div class="ps-card' + (sel ? ' ps-card--sel' : '') + (est ? ' ps-card--' + est.clase : '') + '" data-sbx-item>';
             h += '<button type="button" class="ps-check' + (sel ? ' ps-check--on' : '') + '" role="checkbox" aria-checked="' + sel + '"'
                + ' data-ps-accion="marcar" data-ps-pid="' + id + '" aria-label="Incluir ' + escapeHtml(f.nombre) + ' en el pedido">'
                + '<span class="ps-check__c" aria-hidden="true">' + (sel ? '<i class="fa-solid fa-check"></i>' : '') + '</span></button>';
@@ -147,10 +163,13 @@
             h += '<div class="ps-card__nom">' + (typeof resaltarBusqueda === 'function' ? resaltarBusqueda(f.nombre, _ps.busqueda) : escapeHtml(f.nombre)) + '</div>';
             h += '<div class="ps-card__meta"><span class="ps-card__cod">' + id + '</span>'
                + (f.unidad ? '<span class="ps-uom">' + escapeHtml(f.unidad) + '</span>' : '')
+               + (est ? '<span class="ps-estado ps-estado--' + est.clase + '">' + est.txt + '</span>' : '')
                + (f.proveedor ? '<span class="ps-card__prov">' + escapeHtml(f.proveedor) + '</span>' : '') + '</div>';
             h += '</div>';
-            h += '<div class="ps-card__num"><span class="ps-card__etq">Stock</span><b class="num' + (typeof f.enStock === 'number' && f.enStock < f.minimo ? ' ps-bajo' : '') + '">' + _psNum(f.enStock) + '</b></div>';
-            h += '<div class="ps-card__num ps-card__num--muted"><span class="ps-card__etq">Mín</span><span class="num">' + _psNum(f.minimo) + '</span></div>';
+            h += '<div class="ps-card__cifras">'
+               + '<div class="ps-card__num"><span class="ps-card__etq">Stock</span><b class="num' + (typeof f.enStock === 'number' && f.enStock < f.minimo ? ' ps-bajo' : '') + '">' + _psNum(f.enStock) + '</b></div>'
+               + '<div class="ps-card__num ps-card__num--muted"><span class="ps-card__etq">Mín</span><span class="num">' + _psNum(f.minimo) + '</span></div>'
+               + '</div>';
             h += '<label class="ps-card__cant"><span class="ps-card__etq">Pedir</span>'
                + '<input type="text" inputmode="decimal" class="ps-input" value="' + (q > 0 ? q : 0) + '"'
                + ' data-ps-pid="' + id + '" aria-label="Cantidad a pedir de ' + escapeHtml(f.nombre) + '"></label>';

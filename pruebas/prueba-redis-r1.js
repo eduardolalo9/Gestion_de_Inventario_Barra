@@ -46,6 +46,7 @@ const leer = (f) => fs.readFileSync(path.join(RAIZ, f), 'utf8');
 const html  = leer('index.html');
 const util  = leer('css/utilidades.css');
 const esti  = leer('css/estilos.css');
+const dens  = leer('css/densidad.css');
 const kit   = leer('js/03-ui-kit.js');
 const sw    = leer('sw.js');
 const jsDir = fs.readdirSync(path.join(RAIZ, 'js')).filter(f => f.endsWith('.js'));
@@ -103,7 +104,7 @@ const utilidades = [...usadas].filter(c => !PREFIJOS_PROPIOS.test(c));
 function definida(clase) {
     const escapada = clase.replace(/[.:\/\[\]()]/g, (ch) => '\\\\?' + ch.replace(/[.[\]()]/g, '\\$&'));
     const re = new RegExp('\\.' + escapada + '(?![\\w-])');
-    return re.test(util) || re.test(esti);
+    return re.test(util) || re.test(esti) || re.test(dens);   // v5.38: + css/densidad.css
 }
 
 const huerfanas = utilidades.filter(c => !definida(c));
@@ -176,16 +177,17 @@ chk('El preflight que la app necesitaba se replicó (márgenes de títulos a cer
 // ═══ 4 · Tokens de Carbón & Latón ══════════════════════════════════════════
 const raiz = (/:root\s*\{([\s\S]*?)\n\}/.exec(esti) || ['', ''])[1];
 const claro = (/html\[data-theme="light"\]\s*\{([\s\S]*?)\n\}/.exec(esti) || ['', ''])[1];
-chk('★ v5.25 · El acento oscuro es esmeralda claro (oklch .74 .12 165), no el latón ni el azul anteriores',
-    /--accent:\s*#54C398/i.test(raiz) && !/#E8B55C/i.test(raiz) && !/#a8c7fa/i.test(raiz));
+// v5.38 — «Ultra Pro Emerald»: acento #10B981, texto encima #04130C, fondo #0A0E0C.
+chk('★ v5.38 · El acento oscuro es esmeralda #10B981, no el latón ni el azul anteriores',
+    /--accent:\s*#10B981/i.test(raiz) && !/#E8B55C/i.test(raiz) && !/#a8c7fa/i.test(raiz));
 chk('El texto sobre el acento oscuro es verde casi negro (contraste), no blanco',
-    /--accent-on:\s*#00190F/i.test(raiz));
+    /--accent-on:\s*#04130C/i.test(raiz));
 chk('Existen los alias nuevos (--brass, --ok, --warn, --info, --danger, --book)',
     ['--brass:', '--ok:', '--warn:', '--info:', '--danger:', '--book:'].every(t => raiz.includes(t)));
 chk('★ Los nombres viejos siguen existiendo (--green/--red/--amber/--sky): miles de reglas los usan',
     ['--green:', '--red:', '--amber:', '--sky:'].every(t => raiz.includes(t)));
-chk('El fondo oscuro es verde-carbón (oklch .17 .014 165), no negro plano',
-    /--bg:\s*#0A110E/i.test(raiz));
+chk('v5.38 · El fondo oscuro es casi negro con tinte verde (#0A0E0C)',
+    /--bg:\s*#0A0E0C/i.test(raiz));
 chk('★ v5.25 · El tema claro usa el esmeralda de marca (oklch .455 .09 165) con texto blanco encima',
     /--accent:\s*#10664A/i.test(claro) && /--accent-on:\s*#FFFFFF/i.test(claro));
 chk('El tema claro define también --book y --scrim (paridad con el oscuro)',

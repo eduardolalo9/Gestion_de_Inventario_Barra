@@ -34,13 +34,16 @@ html[data-theme="light"] {
     --border-mid:     rgba(31, 35, 33, .11);
     --border-strong:  rgba(31, 35, 33, .22);
     --scrim:          rgba(20, 24, 22, .40);
-    --accent:         #17694B;
-    --accent-hover:   #12573E;
+    /* v5.38 — esmeralda (familia de #10B981), oscurecido para pasar AA en claro:
+       #047857 = 4.9:1 sobre --surface y 5.5:1 de texto blanco encima. */
+    --accent:         #047857;
+    --accent-hover:   #065F46;
     --accent-on:      #FFFFFF;
-    --accent-container: rgba(23, 105, 75, .10);
-    --accent-dim:     rgba(23, 105, 75, .07);
-    --accent-dim2:    rgba(23, 105, 75, .13);
+    --accent-container: rgba(4, 120, 87, .10);
+    --accent-dim:     rgba(4, 120, 87, .07);
+    --accent-dim2:    rgba(4, 120, 87, .13);
     --txt-primary:    #1F2321;
+    --txt-disabled:   #8A908C;
     --txt-secondary:  #565C59;
     --txt-muted:      #5F6561;
     --shadow-xs:      0 1px 2px rgba(16, 24, 20, .04);
@@ -55,7 +58,7 @@ html[data-theme="light"] {
     --hero-linea:     rgba(31, 35, 33, .09);
     --hero-seg:       rgba(31, 35, 33, .10);
     --hero-btn-fg:    #FFFFFF;
-    --hero-btn-hover: #12573E;
+    --hero-btn-hover: #065F46;
     --hero-ok-bg:     #E3F1EA;
     --hero-ok-fg:     #0F5138;
     --hero-warn-bg:   #FFF1D6;

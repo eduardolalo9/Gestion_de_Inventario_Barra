@@ -145,8 +145,9 @@ const PUERTO = process.env.PUERTO || '8080';
   chk('★ Hay fecha de inicio y fecha fin', await p.evaluate(() => !!document.getElementById('ventasFechaInicio') && !!document.getElementById('ventasFechaFin')), '');
   chk('Con el periodo válido y verificado, "Confirmar" está habilitado',
       await p.evaluate(() => !document.getElementById('ventasBtnConfirmar').disabled), '');
-  chk('Los botones de la vista previa miden al menos 48 px de alto (pulgar)',
-      await p.evaluate(() => [...document.querySelectorAll('#tabContent .bt')].every(b => b.getBoundingClientRect().height >= 48)), '');
+  // v5.38 — piso de la densidad operativa: 44 px (objetivo táctil).
+  chk('Los botones de la vista previa miden al menos 44 px de alto (pulgar)',
+      await p.evaluate(() => [...document.querySelectorAll('#tabContent .bt')].every(b => Math.round(b.getBoundingClientRect().height) >= 44)), '');
 
   // Un solo día
   await p.evaluate(() => { _ventasCambiarPeriodo('inicio', '2026-09-23'); _ventasUnSoloDia(); });

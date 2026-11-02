@@ -4,7 +4,7 @@ const C = []; const chk = (n, ok, d) => C.push({ n, ok, d });
 const PUERTO = process.env.PUERTO || '8080';
 async function abrir(nav, tema, W, H) {
   const ctx = await nav.newContext({ viewport: { width: W, height: H } });
-  if (tema) await ctx.addInitScript(t => { try { localStorage.setItem('inventarioApp_theme', t); localStorage.setItem('inventarioApp_temaMarca', 'esmeralda'); } catch (e) {} }, tema);
+  if (tema) await ctx.addInitScript(t => { try { localStorage.setItem('inventarioApp_theme', t); localStorage.setItem('inventarioApp_temaMarca', 'ultra-pro'); } catch (e) {} }, tema);
   const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(String(e).slice(0, 200)));
   await p.goto('http://127.0.0.1:' + PUERTO + '/index.html', { waitUntil: 'load' });
   await p.evaluate(async () => { const rs = await navigator.serviceWorker.getRegistrations(); await Promise.all(rs.map(r => r.unregister())); const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); });
@@ -40,17 +40,19 @@ const lum = s => { const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(s || ''); if 
         sombraCerrada: cs(sb, 'boxShadow'), monoClases: mono.map(x => x.className), body: cs(document.body, 'backgroundColor') };
     });
     const T = '[' + tema + '] ';
-    chk(T + '★ La barra lateral es Noche Profunda (#101E18) en este tema', m.sbBg === 'rgb(16, 30, 24)', m.sbBg);
+    // v5.38 — «Ultra Pro Emerald» (2-nov-2026): cajón #0D1410, activo en esmeralda tenue con texto esmeralda,
+    // tarjeta de Inicio = superficie #121915 en oscuro, Plus Jakarta Sans + IBM Plex Mono, oscuro predeterminado.
+    chk(T + '★ La barra lateral es casi negra (#0D1410) en este tema', m.sbBg === 'rgb(13, 20, 16)', m.sbBg);
     chk(T + 'Sus textos son claros sobre fondo oscuro (luminancia > .6)', lum(m.sbItem) > 0.6 && lum(m.sbMuted) > 0.45, m.sbItem + ' / ' + m.sbMuted);
-    chk(T + '★ El destino activo es esmeralda #10664A con texto blanco', m.sbActivoBg === 'rgb(16, 102, 74)' && m.sbActivoColor === 'rgb(255, 255, 255)', m.sbActivoBg + ' / ' + m.sbActivoColor);
+    chk(T + '★ El destino activo va en esmeralda (fondo tenue y texto #10B981)', m.sbActivoBg === 'rgba(16, 185, 129, 0.16)' && m.sbActivoColor === 'rgb(16, 185, 129)', m.sbActivoBg + ' / ' + m.sbActivoColor);
     // v5.31 (tema minimalista claro, encargo de Eduardo 20-oct-2026) — en claro la tarjeta principal es blanca con texto carbón;
     // en oscuro sigue siendo la verde de v5.25 con texto blanco.
-    chk(T + '★ La tarjeta principal: blanca con texto carbón en claro; verde con texto blanco en oscuro',
+    chk(T + '★ La tarjeta principal: blanca con texto carbón en claro; superficie #121915 con texto claro en oscuro',
         tema === 'light' ? (m.heroBg === 'rgb(255, 255, 255)' && m.heroColor === 'rgb(31, 35, 33)')
-                         : (m.heroBg && lum(m.heroBg) < 0.4 && m.heroBg !== 'rgba(0, 0, 0, 0)' && m.heroColor === 'rgb(255, 255, 255)'), m.heroBg + ' / ' + m.heroColor);
+                         : (m.heroBg === 'rgb(18, 25, 21)' && m.heroColor === 'rgb(241, 245, 249)'), m.heroBg + ' / ' + m.heroColor);
     chk(T + '★ El encabezado mide 48 px', m.hd === 48, String(m.hd));
-    chk(T + '★ Títulos en Manrope y cuerpo en DM Sans', /Manrope/.test(m.h1Fuente) && /DM Sans/.test(m.cuerpo), m.h1Fuente + ' | ' + m.cuerpo);
-    chk(T + '★ Las fuentes propias se descargan del servidor (no caen a la del sistema)', m.fuentesOk && m.fuentesOk.some(f => /Manrope/.test(f)) && m.fuentesOk.some(f => /DM Sans/.test(f)), JSON.stringify(m.fuentesOk));
+    chk(T + '★ Títulos y cuerpo en Plus Jakarta Sans', /Plus Jakarta Sans/.test(m.h1Fuente) && /Plus Jakarta Sans/.test(m.cuerpo), m.h1Fuente + ' | ' + m.cuerpo);
+    chk(T + '★ Las fuentes propias se descargan del servidor (no caen a la del sistema)', m.fuentesOk && m.fuentesOk.some(f => /Plus Jakarta Sans/.test(f)) && m.fuentesOk.some(f => /IBM Plex Mono/.test(f)), JSON.stringify(m.fuentesOk));
     chk(T + 'Cerrada, la barra lateral no proyecta sombra al borde', m.sombraCerrada === 'none', m.sombraCerrada);
     chk(T + '★ El tema respeta la elección guardada', m.tema === tema, String(m.tema));
     chk(T + 'Sin errores de JS', errs.length === 0, errs.join(' | '));
@@ -82,18 +84,18 @@ const lum = s => { const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(s || ''); if 
     chk(T + 'Sin desplazamiento horizontal', !t.scroll && errs.length === 0, errs.join(' | '));
     await p.context().close();
   }
-  // Migración de una sola vez: sin marca → claro; con marca y 'dark' → oscuro
+  // v5.38 — Migración de una sola vez: sin marca → OSCURO; con marca y 'light' → claro
   {
     const ctx = await nav.newContext({ viewport: { width: 390, height: 844 } });
-    await ctx.addInitScript(() => { try { if (!sessionStorage.getItem('_sembrado')) { localStorage.setItem('inventarioApp_theme', 'dark'); sessionStorage.setItem('_sembrado', '1'); } } catch (e) {} });
+    await ctx.addInitScript(() => { try { if (!sessionStorage.getItem('_sembrado')) { localStorage.setItem('inventarioApp_theme', 'light'); sessionStorage.setItem('_sembrado', '1'); } } catch (e) {} });
     const p = await ctx.newPage();
     await p.goto('http://127.0.0.1:' + PUERTO + '/index.html', { waitUntil: 'load' }); await p.waitForTimeout(500);
     const a = await p.evaluate(() => document.documentElement.getAttribute('data-theme'));
-    chk('★ Un dispositivo con tema oscuro viejo y sin marca pasa UNA vez a claro', a === 'light', String(a));
-    await p.evaluate(() => localStorage.setItem('inventarioApp_theme', 'dark'));
+    chk('★ Un dispositivo con tema claro viejo y sin marca pasa UNA vez a oscuro', a === 'dark', String(a));
+    await p.evaluate(() => localStorage.setItem('inventarioApp_theme', 'light'));
     await p.reload({ waitUntil: 'load' }); await p.waitForTimeout(500);
     const b = await p.evaluate(() => document.documentElement.getAttribute('data-theme'));
-    chk('★ Después de la migración se respeta su elección (oscuro se queda oscuro)', b === 'dark', String(b));
+    chk('★ Después de la migración se respeta su elección (claro se queda claro)', b === 'light', String(b));
     await ctx.close();
   }
   await nav.close();

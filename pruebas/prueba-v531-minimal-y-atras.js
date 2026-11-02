@@ -38,7 +38,7 @@ const tok = n => (new RegExp('--' + n + ':\\s*(#[0-9A-Fa-f]{6})').exec(bClaro) |
 const lum = h => { const c = [1, 3, 5].map(i => parseInt(h.substr(i, 2), 16) / 255).map(x => x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
 const cr = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
 chk('Tarjetas blancas sobre fondo blanco cálido / gris perla', tok('card') === '#FFFFFF' && lum(tok('bg')) > 0.9 && tok('bg') !== '#FFFFFF');
-chk('Verde esmeralda bosque como color corporativo', tok('accent') === '#17694B');
+chk('v5.38 · Esmeralda (#047857, familia de #10B981) como color corporativo del claro', tok('accent') === '#047857');
 ['txt-primary', 'txt-secondary', 'txt-muted', 'accent'].forEach(t =>
     chk('Contraste ' + t + ' >= 4.5:1 sobre la superficie más oscura (' + tok('surface') + ')', tok(t) && cr(tok(t), tok('surface')) >= 4.5, tok(t) + ' ' + (tok(t) ? cr(tok(t), tok('surface')).toFixed(2) : '')));
 chk('Botón esmeralda con texto blanco >= 4.5:1', cr(tok('accent-on'), tok('accent')) >= 4.5);

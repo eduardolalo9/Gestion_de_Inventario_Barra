@@ -188,7 +188,7 @@ const datosRemotos = (extra) => Object.assign({
         await p.__ctx.close();
         return { sync, antesTab, r, foto, ls };
     }
-    const IGNORAR_LS = /_activeTab$|_lastModified$|_lastBackupTs$|_emergencySnapshot$|_preMergeBackup$|_syncQueue$|_deviceId|_auditUser$|_migrLog$/; // auditUser y migrLog llevan marcas de tiempo de sesión/migración (ruido ajeno a la pestaña)
+    const IGNORAR_LS = /_activeTab$|_lastModified$|_lastBackupTs$|_emergencySnapshot$|_preMergeBackup$|_syncQueue$|_deviceId|_auditUser$|_migrLog$|_theme$|_temaMarca$/;   // v5.38: el tema (presentación) cambió de predeterminado a propósito // auditUser y migrLog llevan marcas de tiempo de sesión/migración (ruido ajeno a la pestaña)
     const nuevoR = await guion(nuevo.base, 'compras');
     chk('★ C1 · v5.33: tras aplicar datos remotos con activeTab="compras", la pestaña local ("ventas") se conserva', nuevoR.r.tab === 'ventas' && nuevoR.r.largo > 0, JSON.stringify(nuevoR.r));
     const nuevoP = await guion(nuevo.base, 'perfil');

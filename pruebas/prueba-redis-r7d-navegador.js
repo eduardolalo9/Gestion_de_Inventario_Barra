@@ -192,7 +192,7 @@ const PUERTO = process.env.PUERTO || '8080';
     chk(T + '★ Historia: sin emoji ni style="…", con estado vacío de icono del kit', hs.emoji === '' && hs.estilos === 0 && hs.vacio, JSON.stringify(hs));
     chk(T + '★ Reporte publicado: "Descargar" ≥ 48 px y eliminar ≥ 44×44 con contraste ≥ 3 (sin SVG a mano)',
         hs.tarjetas === 1 && hs.desc >= 48 && hs.borrar && hs.borrar[0] >= 44 && hs.borrar[1] >= 44 && hs.borrar[2] >= 3, JSON.stringify([hs.desc, hs.borrar]));
-    chk(T + 'Los iconos de Historia tienen ancho real y la cifra va en Manrope', hs.sinIcono === 0 && /Manrope/i.test(hs.cifra), hs.sinIcono + ' / ' + hs.cifra);
+    chk(T + 'Los iconos de Historia tienen ancho real y la cifra va en IBM Plex Mono (v5.38)', hs.sinIcono === 0 && /IBM Plex Mono/i.test(hs.cifra), hs.sinIcono + ' / ' + hs.cifra);
     await p.evaluate(() => { _db = null; });
 
     // ══ F · INSIGNIA DE SINCRONÍA ═════════════════════════════════════════
@@ -224,7 +224,7 @@ const PUERTO = process.env.PUERTO || '8080';
       const b = document.getElementById('networkStatus');
       const r = b ? b.getBoundingClientRect() : null;
       const out = b ? { clase: b.className, rol: b.getAttribute('role'), icono: b.querySelector('i').getBoundingClientRect().width, emoji: M.emoji(b.innerText),
-                        texto: b.innerText.trim(), inline: b.getAttribute('style'), contraste: M.contraste(b), bottomLibre: window.innerHeight - r.bottom >= 80, ancho: r.width } : null;
+                        texto: b.innerText.trim(), inline: b.getAttribute('style'), contraste: M.contraste(b), bottomLibre: r.bottom <= document.getElementById('bottomTabBar').getBoundingClientRect().top + 1,   /* v5.38: la barra mide 56 px, no 80 */ ancho: r.width } : null;
       Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => true });
       const ex = document.getElementById('networkStatus'); if (ex) ex.remove();
       applyRoleUI();

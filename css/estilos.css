@@ -5,15 +5,14 @@
    Modo oscuro (navy) / Modo claro (slate)
    ================================================================= */
 
-/* v5.25 — Tipografías propias (sin Google Fonts): Manrope para encabezados y cifras,
-   DM Sans para cuerpo y tablas. Subconjunto latino (cubre el español). */
-@font-face{font-family:'Manrope';font-style:normal;font-weight:600;font-display:swap;src:url(../fonts/manrope-600.woff2) format('woff2');}
-@font-face{font-family:'Manrope';font-style:normal;font-weight:700;font-display:swap;src:url(../fonts/manrope-700.woff2) format('woff2');}
-@font-face{font-family:'Manrope';font-style:normal;font-weight:800;font-display:swap;src:url(../fonts/manrope-800.woff2) format('woff2');}
-@font-face{font-family:'DM Sans';font-style:normal;font-weight:400;font-display:swap;src:url(../fonts/dm-sans-400.woff2) format('woff2');}
-@font-face{font-family:'DM Sans';font-style:normal;font-weight:500;font-display:swap;src:url(../fonts/dm-sans-500.woff2) format('woff2');}
-@font-face{font-family:'DM Sans';font-style:normal;font-weight:600;font-display:swap;src:url(../fonts/dm-sans-600.woff2) format('woff2');}
-@font-face{font-family:'DM Sans';font-style:normal;font-weight:700;font-display:swap;src:url(../fonts/dm-sans-700.woff2) format('woff2');}
+/* v5.38 — Fuentes propias (offline, OFL): Plus Jakarta Sans + IBM Plex Mono (cifras). */
+@font-face{font-family:'Plus Jakarta Sans';font-weight:400;font-display:swap;src:url(../fonts/plus-jakarta-sans-400.woff2) format('woff2');}
+@font-face{font-family:'Plus Jakarta Sans';font-weight:500;font-display:swap;src:url(../fonts/plus-jakarta-sans-500.woff2) format('woff2');}
+@font-face{font-family:'Plus Jakarta Sans';font-weight:600;font-display:swap;src:url(../fonts/plus-jakarta-sans-600.woff2) format('woff2');}
+@font-face{font-family:'Plus Jakarta Sans';font-weight:700;font-display:swap;src:url(../fonts/plus-jakarta-sans-700.woff2) format('woff2');}
+@font-face{font-family:'Plus Jakarta Sans';font-weight:800;font-display:swap;src:url(../fonts/plus-jakarta-sans-800.woff2) format('woff2');}
+@font-face{font-family:'IBM Plex Mono';font-weight:500;font-display:swap;src:url(../fonts/ibm-plex-mono-500.woff2) format('woff2');}
+@font-face{font-family:'IBM Plex Mono';font-weight:600;font-display:swap;src:url(../fonts/ibm-plex-mono-600.woff2) format('woff2');}
 
 :root {
     /* ══════════════════════════════════════════════════════
@@ -29,23 +28,24 @@
        ══════════════════════════════════════════════════════ */
 
     /* ── Superficies (carbón azulado, nunca negro plano) ── */
-    --bg:             #0A110E;
-    --surface:        #101A15;
-    --card:           #15211C;
-    --card-high:      #1F2C26;
-    --border:         rgba(216,224,220,.09);
-    --border-mid:     rgba(216,224,220,.15);
-    --border-strong:  rgba(216,224,220,.27);
+    /* v5.38 — Ultra Pro Emerald (oscuro primero) */
+    --bg:             #0A0E0C;
+    --surface:        #0E1411;
+    --card:           #121915;
+    --card-high:      #19241E;
+    --border:         #1E2B24;
+    --border-mid:     #26362D;
+    --border-strong:  #3A4D42;
     /* Velo de modal: casi negro con tinte frío, no negro puro al 60 % */
-    --scrim:          rgba(0,5,2,.70);
+    --scrim:          rgba(0,4,2,.72);
 
     /* ── Identidad: latón cálido (NO oro saturado) ── */
-    --accent:         #54C398;
-    --accent-hover:   #69D6AA;
-    --accent-on:      #00190F;
-    --accent-container: rgba(84,195,152,.16);
-    --accent-dim:     rgba(84,195,152,.10);
-    --accent-dim2:    rgba(84,195,152,.18);
+    --accent:         #10B981;
+    --accent-hover:   #34D399;
+    --accent-on:      #04130C;
+    --accent-container: rgba(16,185,129,.16);
+    --accent-dim:     rgba(16,185,129,.10);
+    --accent-dim2:    rgba(16,185,129,.18);
     --brass:          var(--accent);
     --brass-hover:    var(--accent-hover);
     --brass-on:       var(--accent-on);
@@ -56,18 +56,18 @@
        para diferenciarse entre sí también en LUMINOSIDAD, no solo en
        tono: así un estado sigue siendo legible para quien no
        distingue verde de rojo. */
-    --green:          #5FD68A;
-    --green-dim:      rgba(95,214,138,0.13);
-    --green-dark:     #0B2E18;
-    --green-text:     #5FD68A;
-    --red:            #FF8A80;
-    --red-dim:        rgba(255,138,128,0.13);
-    --red-dark:       #5C0A06;
-    --red-text:       #FF8A80;
-    --amber:          #F0B429;
-    --amber-dim:      rgba(240,180,41,0.14);
+    --green:          #34D399;
+    --green-dim:      rgba(52,211,153,0.12);
+    --green-dark:     #062B1D;
+    --green-text:     #34D399;
+    --red:            #FB7185;
+    --red-dim:        rgba(251,113,133,0.12);
+    --red-dark:       #4C0519;
+    --red-text:       #FB7185;
+    --amber:          #FBBF24;
+    --amber-dim:      rgba(251,191,36,0.12);
     --sky:            #6FB2E8;
-    --sky-dim:        rgba(111,178,232,0.13);
+    --sky-dim:        rgba(111,178,232,0.12);
     /* Lila: contabilizado y corte mensual (FASE 13). Es un estado
        contable, distinto de "completado" (verde) y de "en proceso"
        (azul), y merecía su propio color en vez de reusar uno. */
@@ -86,14 +86,16 @@
     --danger-dim:     var(--red-dim);
 
     /* ── Texto ── */
-    --txt-primary:    #EBF0ED;
-    --txt-secondary:  #B7C0BC;
-    --txt-muted:      #97A19C;
+    /* v5.38 — #64748B no pasa AA como texto (3.8:1): solo --txt-disabled */
+    --txt-primary:    #F1F5F9;
+    --txt-secondary:  #94A3B8;
+    --txt-muted:      #8B97AA;
+    --txt-disabled:   #64748B;
 
     /* ── Sombras M3 (elevation + tonal tint) ── */
-    --shadow-xs:      0 1px 2px rgba(0,0,0,0.45);
-    --shadow-card:    0 1px 3px rgba(0,0,0,0.50), 0 1px 2px rgba(0,0,0,0.35);
-    --shadow-elev2:   0 3px 8px rgba(0,0,0,0.42), 0 1px 3px rgba(0,0,0,0.28);
+    --shadow-xs:      none;
+    --shadow-card:    none;
+    --shadow-elev2:   0 2px 6px rgba(0,0,0,0.40);
     --shadow-elev3:   0 6px 16px rgba(0,0,0,0.40), 0 2px 6px rgba(0,0,0,0.22);
     --shadow-modal:   0 24px 48px rgba(0,0,0,0.60), 0 8px 20px rgba(0,0,0,0.38);
 
@@ -118,7 +120,7 @@
     --accent-blue: var(--sky);
     --accent-green:var(--green);
     --shadow-mid:  var(--shadow-card);
-    --modal-bg:    #15211C;
+    --modal-bg:    #121915;
 
     /* ═══ v5.25 — "VERDE ESMERALDA BOSQUE" ═══════════════════════════════
        Valores en hex = el oklch del diseño (primario oklch(.455 .09 165), barra oklch(.22 .024 165), perla oklch(.975 .003 160)); se guardan en hex porque
@@ -128,50 +130,51 @@
        categoría. El tema CLARO es el de marca (valor por defecto); el oscuro
        es su variante. Los NOMBRES de los tokens no cambian (--accent,
        --green, --red…): cambian los valores, y la app entera lo sigue. */
-    --f-head: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
-    --f-body: 'DM Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
-    --f-num:  'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
-    --sidebar:        #101E18;   /* Noche Profunda */
-    --sidebar-2:      #192B23;
-    --sidebar-line:   #24382F;
-    --sidebar-fg:     #DFE7E3;
-    --sidebar-muted:  #A0AFA8;
-    --sidebar-sep:    #8B9D94;
-    --hero-bg:        #00563B;
-    --hero-fg:        #FFFFFF;
+    --f-head: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --f-body: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --f-num:  'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --f-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --sidebar:        #0D1410;
+    --sidebar-2:      #121915;
+    --sidebar-line:   #1E2B24;
+    --sidebar-fg:     #E2E8F0;
+    --sidebar-muted:  #94A3B8;
+    --sidebar-sep:    #8B97AA;
+    --hero-bg:        #121915;
+    --hero-fg:        #F1F5F9;
     --cat-whisky-bg:  #322843;  --cat-whisky-fg:  #DECEFF;
     --cat-gin-bg:     #163045;  --cat-gin-fg:     #B1DDFF;
     --cat-dest-bg:    #272C44; --cat-dest-fg:    #C9D5FF;
     --cat-lic-bg:     #0C333C; --cat-lic-fg:     #A2E4F4;
     /* v5.25 — paleta FIJA oscura (la usa la barra lateral en ambos temas) y piezas de la tarjeta principal.
        Se declaran aquí, no en el bloque final, para que ese bloque use solo tokens. */
-    --dk-border:        rgba(216,224,220,.09);
-    --dk-border-mid:    rgba(216,224,220,.15);
-    --dk-border-strong: rgba(216,224,220,.27);
-    --dk-txt-2:         #C4CDC8;
-    --dk-accent:        #54C398;
-    --dk-accent-hover:  #69D6AA;
-    --dk-accent-on:     #00190F;
-    --dk-accent-container: rgba(84,195,152,.16);
-    --dk-accent-dim:    rgba(84,195,152,.10);
-    --dk-accent-dim2:   rgba(84,195,152,.18);
-    --dk-green:   #60D68A;  --dk-green-dim: rgba(96,214,138,.13); --dk-green-dark: #0B2E18;
-    --dk-red:     #FF8A80;   --dk-red-dim:   rgba(255,138,128,.13);  --dk-red-dim2: rgba(255,138,128,.22);
-    --dk-amber:   #EFB428;   --dk-amber-dim: rgba(239,180,40,.14);
-    --dk-sky:     #6FB2E8;   --dk-sky-dim:   rgba(111,178,232,.13);
+    --dk-border:        #1E2B24;
+    --dk-border-mid:    #26362D;
+    --dk-border-strong: #3A4D42;
+    --dk-txt-2:         #CBD5E1;
+    --dk-accent:        #10B981;
+    --dk-accent-hover:  #34D399;
+    --dk-accent-on:     #04130C;
+    --dk-accent-container: rgba(16,185,129,.16);
+    --dk-accent-dim:    rgba(16,185,129,.10);
+    --dk-accent-dim2:   rgba(16,185,129,.18);
+    --dk-green:   #34D399;  --dk-green-dim: rgba(52,211,153,.12); --dk-green-dark: #062B1D;
+    --dk-red:     #FB7185;   --dk-red-dim:   rgba(251,113,133,.12);  --dk-red-dim2: rgba(251,113,133,.22);
+    --dk-amber:   #FBBF24;   --dk-amber-dim: rgba(251,191,36,.12);
+    --dk-sky:     #6FB2E8;   --dk-sky-dim:   rgba(111,178,232,.12);
     --dk-book:    #C9A0E8;  --dk-book-dim:  rgba(201,160,232,.14);
-    --sidebar-active: #10664A;
+    --sidebar-active: #0B3B2A;
     --sidebar-sombra: rgba(0,5,2,.45);
     --blanco:         #FFFFFF;
-    --hero-fg-2:      rgba(255,255,255,.86);
-    --hero-linea:     rgba(255,255,255,.22);
-    --hero-seg:       rgba(255,255,255,.24);
-    --hero-btn-fg:    #004B31;
-    --hero-btn-hover: #E7F6ED;
-    --hero-ok-bg:     #D3F9E3;  --hero-ok-fg:   #015636;
-    --hero-warn-bg:   #FFECB9;   --hero-warn-fg: #6F4100;
-    --sombra-hero:    0 8px 24px rgba(18,30,24,.18);
-    --sombra-barra:   0 -1px 0 var(--border-mid), 0 -6px 20px rgba(18,30,24,.06);
+    --hero-fg-2:      #94A3B8;
+    --hero-linea:     #1E2B24;
+    --hero-seg:       #26362D;
+    --hero-btn-fg:    #04130C;
+    --hero-btn-hover: #34D399;
+    --hero-ok-bg:     rgba(52,211,153,.12);  --hero-ok-fg:   #34D399;
+    --hero-warn-bg:   rgba(251,191,36,.12);  --hero-warn-fg: #FBBF24;
+    --sombra-hero:    none;
+    --sombra-barra:   0 -1px 0 var(--border);
 }
 
 /* ── TEMA CLARO M3 (Light Surface Scheme) ────────────────── */

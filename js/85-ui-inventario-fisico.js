@@ -789,9 +789,8 @@
             html += '<button type="button" class="audit-back-btn" onclick="auditoriaView=\'selection\'; _fvsSearchTerm=\'\'; fvsReiniciarVista(); renderTab();">'
                  +  '<i class="fa-solid fa-chevron-left" aria-hidden="true"></i> Volver</button>';
             html += '</div>';
-            html += '<p class="pm-nota" style="margin:0 0 10px;">Suma lo contado en todas las áreas del inventario '
-                 +  'abierto y lo compara, producto por producto, contra lo que el sistema cree que hay. '
-                 +  'Agrupado por grupo del catálogo y ordenado por diferencia (físico − sistema).</p>';
+            // v5.38 (densidad) — se retiró el párrafo descriptivo de la cabecera: la
+            // tabla y sus controles ya dicen qué es y cómo está ordenada.
             html += BusquedaUI.barra('fvs', {
                 placeholder: 'Buscar producto o código…',
                 etiqueta: 'Buscar en Físico vs Sistema',
@@ -1504,7 +1503,8 @@
             });
             html += BusquedaUI.chips('conteo', _chipsConteo(area, conteoRef));
 
-            html += '<p class="text-xs text-gray-400 mb-3 px-1">Conteo ciego — toca cada producto para ingresar la cantidad física</p>';
+            // v5.38 (densidad) — sin la línea "Conteo ciego — toca cada producto…":
+            // la insignia CONTEO CIEGO de la cabecera ya lo dice.
 
             // ── Barra de estado multiusuario para el área actual ─────────────────
             // FIX-06: bloque { } limpio en lugar de IIFE innecesario

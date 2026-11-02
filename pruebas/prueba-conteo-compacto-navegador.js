@@ -37,8 +37,9 @@ const PUERTO = process.env.PUERTO || '8080';
   });
   chk('★ La sección Áreas compacta existe y pinta las 3 áreas', m && m.n === 3, JSON.stringify(m));
   chk('★ Las tres áreas completadas con su botón caben en <= 480 px (antes 613 px)', m && m.alto <= 480, 'alto=' + (m && m.alto));
-  chk('★ Piso de ergonomía: cada tarjeta mide >= 72 px', m && m.hT.every(h => h >= 72), JSON.stringify(m && m.hT));
-  chk('★ Piso de ergonomía: cada botón mide >= 48 px y su texto >= 14 px', m && m.hB.length === 3 && m.hB.every(h => h >= 48) && m.fB.every(f => f >= 14), JSON.stringify(m && [m.hB, m.fB]));
+  // v5.38 — pisos de la densidad operativa: tarjeta 56 px, botón 44 px (objetivo táctil), texto 13 px.
+  chk('★ Piso de ergonomía: cada tarjeta mide >= 56 px', m && m.hT.every(h => h >= 56), JSON.stringify(m && m.hT));
+  chk('★ Piso de ergonomía: cada botón mide >= 44 px y su texto >= 13 px', m && m.hB.length === 3 && m.hB.every(h => Math.round(h) >= 44) && m.fB.every(f => f >= 13), JSON.stringify(m && [m.hB, m.fB]));
   chk('Separación entre áreas de 8 px', m && m.gap === 8, 'gap=' + (m && m.gap));
   chk('★ "Reabrir" conserva el nombre del área en aria-label', m && m.aria.join('|') === 'Reabrir Almacén|Reabrir Barra Restaurante|Reabrir Barra Bar', JSON.stringify(m && m.aria));
   chk('Estado y conteo comparten renglón', m && m.mismoRenglon);

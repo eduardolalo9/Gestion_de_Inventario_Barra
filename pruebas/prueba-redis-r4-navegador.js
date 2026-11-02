@@ -17,6 +17,7 @@
  * ═══════════════════════════════════════════════════════════════════════════
  */
 'use strict';
+// v5.38 — acento oscuro #10B981 = rgb(16, 185, 129); velo --scrim rgba(0,4,2,.72).
 const { chromium } = require('playwright');
 const PUERTO = process.env.PUERTO || '8080';
 
@@ -134,13 +135,13 @@ const GRIS_DE_FABRICA = /rgb\(239, 239, 239\)|buttonface/i;
     };
   });
   chk('★ El campo de enteras es mono tabular (es la cifra que se escribe)',
-      /Manrope/.test(modal.enteras.font || ''), modal.enteras.font);
+      /IBM Plex Mono/.test(modal.enteras.font || ''), modal.enteras.font);
   chk('★ El campo de enteras es grande de leer (≥ 20 px)',
       modal.enteras.size >= 20, 'tamaño: ' + modal.enteras.size);
   chk('★ El campo de enteras es táctil (≥ 48 px de alto)',
       modal.enteras.h >= 48, 'alto: ' + modal.enteras.h);
   chk('★ El campo de una botella abierta también es mono tabular y táctil',
-      /Manrope/.test(modal.abierta.font || '') && modal.abierta.h >= 44,
+      /IBM Plex Mono/.test(modal.abierta.font || '') && modal.abierta.h >= 44,
       JSON.stringify(modal.abierta));
   chk('★ "Agregar otra abierta" ya no pisa la etiqueta de al lado',
       modal.seSolapan === false, 'se solapaban: ' + modal.seSolapan);
@@ -148,15 +149,15 @@ const GRIS_DE_FABRICA = /rgb\(239, 239, 239\)|buttonface/i;
       !/rgb\(111, 178, 232\)/.test(modal.agregar.bg) && !GRIS_DE_FABRICA.test(modal.agregar.bg),
       'fondo: ' + modal.agregar.bg);
   chk('★ Guardar es el único latón del modal (el latón se gana)',
-      /rgb\(84, 195, 152\)/.test(modal.guardar.bg) &&
-      !/rgb\(84, 195, 152\)/.test(modal.agregar.bg) &&
-      !/rgb\(84, 195, 152\)/.test(modal.cancelar.bg),
+      /rgb\(16, 185, 129\)/.test(modal.guardar.bg) &&
+      !/rgb\(16, 185, 129\)/.test(modal.agregar.bg) &&
+      !/rgb\(16, 185, 129\)/.test(modal.cancelar.bg),
       JSON.stringify({ guardar: modal.guardar.bg, agregar: modal.agregar.bg, cancelar: modal.cancelar.bg }));
   chk('Cancelar y Guardar son táctiles (≥ 44 px)',
       modal.cancelar.h >= 44 && modal.guardar.h >= 44,
       JSON.stringify({ c: modal.cancelar.h, g: modal.guardar.h }));
   chk('El velo del modal usa el token del sistema, no un negro a mano',
-      /rgba?\(0, 5, 2/.test(modal.scrim) || /rgba\(0, 0, 0, 0\.7/.test(modal.scrim), modal.scrim);
+      /rgba?\(0, 4, 2/.test(modal.scrim) || /rgba\(0, 0, 0, 0\.7/.test(modal.scrim), modal.scrim);
 
   const sinGris = await p.evaluate((re) => {
     const rx = new RegExp(re, 'i');
@@ -201,7 +202,7 @@ const GRIS_DE_FABRICA = /rgb\(239, 239, 239\)|buttonface/i;
       cantidad.bloqueCantidad !== 'none' && cantidad.bloqueBotella === 'none',
       JSON.stringify(cantidad));
   chk('El campo de cantidad también es mono tabular y grande',
-      /Manrope/.test(cantidad.font || '') && cantidad.size >= 20, JSON.stringify(cantidad));
+      /IBM Plex Mono/.test(cantidad.font || '') && cantidad.size >= 20, JSON.stringify(cantidad));
   await p.evaluate(() => closeInventarioModal());
   await p.waitForTimeout(250);
 
@@ -230,7 +231,7 @@ const GRIS_DE_FABRICA = /rgb\(239, 239, 239\)|buttonface/i;
   chk('★ La tarjeta de conteo lleva el MISMO monograma que en Inicio',
       tarjeta.mono === 'ASH', 'monograma: ' + tarjeta.mono);
   chk('★ El total es la cifra grande de la tarjeta, a la derecha y en mono',
-      /Manrope/.test(tarjeta.totalFuente || '') && tarjeta.totalTam >= 15 &&
+      /IBM Plex Mono/.test(tarjeta.totalFuente || '') && tarjeta.totalTam >= 15 &&
       tarjeta.totalALaDerecha === true, JSON.stringify(tarjeta));
   /**
    * EL MISMO NÚMERO, UN SOLO VALOR.

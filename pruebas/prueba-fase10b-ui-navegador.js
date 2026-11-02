@@ -66,8 +66,9 @@ const PUERTO = process.env.PUERTO || '8080';
   // ── Inventario ABIERTO (admin) ──────────────────────────────────────────
   await montar('SINCRONIZADO'); await p.waitForTimeout(250);
   let m = await p.evaluate(MEDIDAS);
-  chk('★ Todos los botones de la pantalla miden al menos 48 px de alto (pulgar)', m.length >= 6 && m.every(b => Math.round(b.h) >= 48), JSON.stringify(m.filter(b => Math.round(b.h) < 48)));   // v5.30: redondeo (47.99997 px es 48)
-  chk('★ Todos los botones tienen texto de al menos 14 px (antes 11–12 px)', m.every(b => b.fs >= 14), JSON.stringify(m.filter(b => b.fs < 14)));
+// v5.38 — pisos de la densidad operativa (encargo «Ultra Pro Emerald», 2-nov-2026): botón 44 px (objetivo táctil), texto 13 px, tarjeta de área 56 px, separación 8 px.
+  chk('★ Todos los botones de la pantalla miden al menos 44 px de alto (pulgar)', m.length >= 6 && m.every(b => Math.round(b.h) >= 44), JSON.stringify(m.filter(b => Math.round(b.h) < 44)));   // v5.30: redondeo (47.99997 px es 48)
+  chk('★ Todos los botones tienen texto de al menos 13 px (antes 11–12 px)', m.every(b => b.fs >= 13), JSON.stringify(m.filter(b => b.fs < 13)));
   // v5.28 (pedido de Eduardo, 16-oct-2026: "más compacto") — las 4 acciones
   // del encabezado van en rejilla de 2 columnas (cada una ~la mitad del
   // ancho, 48 px de alto); "Cerrar Inventario Físico" sigue a lo ancho.
@@ -103,15 +104,15 @@ const PUERTO = process.env.PUERTO || '8080';
   // vertical negativo (-48): no están apilados. Entre renglones y entre
   // columnas se exigen los mismos 10 px.
   const hCol = await p.evaluate(() => { const g = document.querySelector('#tabContent .bt-pila--rejilla'); return g ? parseFloat(getComputedStyle(g).columnGap) : 10; });
-  chk('★ Entre botones hay al menos 10 px, apilados o lado a lado (no se tocan dos a la vez)', huecos.length > 0 && huecos.every(h => h >= 10 || h <= -40) && hCol >= 10, JSON.stringify([huecos, hCol]));
+  chk('★ Entre botones hay al menos 8 px, apilados o lado a lado (no se tocan dos a la vez)', huecos.length > 0 && huecos.every(h => h >= 8 || h <= -40) && hCol >= 8, JSON.stringify([huecos, hCol]));
   chk('No hay desplazamiento horizontal en un teléfono de 390 px',
       await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), '');
   chk('"Cerrar área para todos" y "Reabrir" ya no son enlaces diminutos dentro de la tarjeta del área',
       await p.evaluate(() => ![...document.querySelectorAll('.audit-area-card a')].length &&
           [...document.querySelectorAll('.if-area > .bt')].some(b => /Cerrar área para todos/.test(b.innerText)) &&
           [...document.querySelectorAll('.if-area > .bt')].some(b => /Reabrir/.test(b.innerText))), '');
-  chk('Las tarjetas de área miden al menos 72 px de alto',
-      await p.evaluate(() => [...document.querySelectorAll('.audit-area-card')].every(c => c.getBoundingClientRect().height >= 72)), '');
+  chk('Las tarjetas de área miden al menos 56 px de alto',
+      await p.evaluate(() => [...document.querySelectorAll('.audit-area-card')].every(c => c.getBoundingClientRect().height >= 56)), '');
   chk('Ya no aparece un segundo "Nuevo Inventario Físico" en la pantalla',
       !/Nuevo Inventario Físico|Cierra #7 primero/.test(await p.evaluate(() => document.getElementById('tabContent').innerText)), '');
   chk('Los datos van uno por fila (Recuento, Creado, Áreas, Usuarios contando)',
@@ -124,7 +125,7 @@ const PUERTO = process.env.PUERTO || '8080';
   // ── Inventario CERRADO: siguiente paso con botones grandes ──────────────
   await montar('CERRADO'); await p.waitForTimeout(250);
   m = await p.evaluate(MEDIDAS);
-  const aLoAncho = (b) => Math.round(b.h) >= 48 && b.w >= b.wp - 1;   // ocupa su contenedor (v5.30: alto redondeado)
+  const aLoAncho = (b) => Math.round(b.h) >= 44 && b.w >= b.wp - 1;   // ocupa su contenedor (v5.30: alto redondeado)
   chk('Con el inventario cerrado: "Contabilizar" y "Crear el siguiente" son botones grandes y apilados',
       m.some(b => /Contabilizar/.test(b.t) && aLoAncho(b)) && m.some(b => /Crear el siguiente/.test(b.t) && aLoAncho(b)),
       JSON.stringify(m.map(b => [b.t, Math.round(b.h), Math.round(b.w), Math.round(b.wp)])));
@@ -136,7 +137,7 @@ const PUERTO = process.env.PUERTO || '8080';
   await montar(null); await p.waitForTimeout(200);
   m = await p.evaluate(MEDIDAS);
   chk('Sin inventario: "Crear Inventario Físico" es el primer botón, grande y a lo ancho',
-      m.length >= 2 && /Crear Inventario Físico/.test(m[0].t) && m[0].h >= 48 && m[0].w >= 300, JSON.stringify(m));
+      m.length >= 2 && /Crear Inventario Físico/.test(m[0].t) && Math.round(m[0].h) >= 44 && m[0].w >= 300, JSON.stringify(m));
 
   // ── Modo claro: el contraste se sostiene ───────────────────────────────
   await p.evaluate(() => document.documentElement.setAttribute('data-theme', 'light'));
@@ -160,8 +161,8 @@ const PUERTO = process.env.PUERTO || '8080';
       fsCampo: parseFloat(getComputedStyle(document.getElementById('nuevoInvNombre')).fontSize)
     };
   });
-  chk('★ Modal: "Crear" y "Cancelar" apilados, a lo ancho, con separación', modal.apilados && modal.hueco >= 10 && modal.crear[1] > 280 && modal.cancelar[1] > 280, JSON.stringify(modal));
-  chk('Modal: botones de al menos 48 px', modal.crear[0] >= 48 && modal.cancelar[0] >= 48, JSON.stringify(modal));
+  chk('★ Modal: "Crear" y "Cancelar" apilados, a lo ancho, con separación', modal.apilados && modal.hueco >= 8 && modal.crear[1] > 280 && modal.cancelar[1] > 280, JSON.stringify(modal));
+  chk('Modal: botones de al menos 44 px', modal.crear[0] >= 44 && modal.cancelar[0] >= 44, JSON.stringify(modal));
   chk('Modal: campos de al menos 44 px con texto ≥ 16 px (el teclado del celular no hace zoom)', modal.campos.every(h => h >= 44) && modal.fsCampo >= 16, JSON.stringify(modal));
   chk('Modal: cada área es una fila de al menos 56 px que se marca tocándola completa', modal.areas.length === 3 && modal.areas.every(h => h >= 56), JSON.stringify(modal.areas));
   // Tocar la fila (no la casilla) desmarca el área
