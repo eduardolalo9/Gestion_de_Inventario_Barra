@@ -91,7 +91,8 @@ const PUERTO = process.env.PUERTO || '8080';
     });
     chk(T + '★ Ajustes (usuario): formulario sin emoji ni style; 3 campos ≥ 44 px y letra de 16 px (sin zoom en iOS)',
         fAj.emoji === '' && fAj.estilos === 0 && fAj.campos === 3 && fAj.altos.every(h => h >= 44) && fAj.fs === '16px', JSON.stringify(fAj));
-    chk(T + '"Enviar solicitud" mide ≥ 48 px', fAj.enviar >= 48, String(fAj.enviar));
+    // v5.39 — piso de la densidad operativa (decisión v5.38): botón 44 px (objetivo táctil).
+    chk(T + '"Enviar solicitud" mide ≥ 44 px', Math.round(fAj.enviar) >= 44, String(fAj.enviar));
 
     await p.evaluate(() => {
       _authzState.permissions = new Set(['*']); _authzState.roleId = 'ADMIN';
@@ -135,7 +136,7 @@ const PUERTO = process.env.PUERTO || '8080';
                altos: btns.map(b => M.alto(b)), prim: prim ? M.contraste(prim) : 0, warn: warn ? M.contraste(warn) : 0, succ: succ ? M.contraste(succ) : 0, h3 };
     });
     chk(T + '★ Admin: sin emoji de interfaz ni style="…"', ad.emoji === '' && ad.estilos === 0, JSON.stringify(ad).slice(0, 200));
-    chk(T + '★ Admin: todos los botones miden ≥ 48 px', ad.n >= 6 && ad.altos.every(h => h >= 48), ad.altos.join(','));
+    chk(T + '★ Admin: todos los botones miden ≥ 44 px', ad.n >= 6 && ad.altos.every(h => Math.round(h) >= 44), ad.altos.join(','));
     chk(T + '★ Admin: texto del botón primario contrasta ≥ 4.5 (antes blanco sobre latón)', ad.prim >= 4.5, String(ad.prim));
     chk(T + 'Admin: botones "warn" y "success" contrastan ≥ 4.5', ad.warn >= 4.5 && ad.succ >= 4.5, ad.warn + ' / ' + ad.succ);
     chk(T + 'Admin: los iconos de los títulos tienen ancho real', ad.h3 === 0, String(ad.h3));
@@ -190,8 +191,8 @@ const PUERTO = process.env.PUERTO || '8080';
                sinIcono: [...c.querySelectorAll('i.fa-solid')].filter(i => i.getBoundingClientRect().width < 6).length };
     });
     chk(T + '★ Historia: sin emoji ni style="…", con estado vacío de icono del kit', hs.emoji === '' && hs.estilos === 0 && hs.vacio, JSON.stringify(hs));
-    chk(T + '★ Reporte publicado: "Descargar" ≥ 48 px y eliminar ≥ 44×44 con contraste ≥ 3 (sin SVG a mano)',
-        hs.tarjetas === 1 && hs.desc >= 48 && hs.borrar && hs.borrar[0] >= 44 && hs.borrar[1] >= 44 && hs.borrar[2] >= 3, JSON.stringify([hs.desc, hs.borrar]));
+    chk(T + '★ Reporte publicado: "Descargar" ≥ 44 px y eliminar ≥ 44×44 con contraste ≥ 3 (sin SVG a mano)',
+        hs.tarjetas === 1 && Math.round(hs.desc) >= 44 && hs.borrar && hs.borrar[0] >= 44 && hs.borrar[1] >= 44 && hs.borrar[2] >= 3, JSON.stringify([hs.desc, hs.borrar]));
     chk(T + 'Los iconos de Historia tienen ancho real y la cifra va en IBM Plex Mono (v5.38)', hs.sinIcono === 0 && /IBM Plex Mono/i.test(hs.cifra), hs.sinIcono + ' / ' + hs.cifra);
     await p.evaluate(() => { _db = null; });
 

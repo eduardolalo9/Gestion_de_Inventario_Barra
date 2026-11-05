@@ -1088,31 +1088,28 @@
             // sin texto).
             filteredOrders.slice(0, lim).forEach((order, idx) => {
                 const delay = Math.min(idx * 50, 400);
-                html += '<div class="bi-card" data-sbx-item style="animation: tabContentIn 0.3s ease-out both; animation-delay:' + delay + 'ms">'
-                      + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:14px;"><div>'
-                      + '<h3 style="font-size:1.1rem;font-weight:700;color:var(--txt-primary);margin:0 0 2px;">' + resaltarBusqueda(order.id, _pedidosSearchTerm) + '</h3>'
-                      + '<p style="font-size:.82rem;color:var(--txt-secondary);margin:2px 0;">Proveedor: ' + resaltarBusqueda(order.supplier, _pedidosSearchTerm) + '</p>'
-                      + '<p style="font-size:.78rem;color:var(--txt-secondary);margin:2px 0;">Fecha: ' + escapeHtml(order.date) + '</p>';
-                if (order.deliveryDate) html += '<p style="font-size:.78rem;color:var(--txt-secondary);margin:2px 0;">Entrega: ' + escapeHtml(order.deliveryDate) + '</p>';
-                html += '</div><div style="display:flex;gap:8px;flex-shrink:0;">'
+                // v5.39 (densidad) — tarjeta de pedido en clases: una línea de cabecera
+                // (folio mono · proveedor · fecha) y una tabla compacta de 3 columnas.
+                html += '<div class="bi-card ped-card" data-sbx-item style="animation-delay:' + delay + 'ms">'
+                      + '<div class="ped-card__cab"><div class="ped-card__ident">'
+                      + '<h3 class="ped-card__id">' + resaltarBusqueda(order.id, _pedidosSearchTerm) + '</h3>'
+                      + '<p class="ped-card__meta">Proveedor: ' + resaltarBusqueda(order.supplier, _pedidosSearchTerm)
+                      + ' · Fecha: ' + escapeHtml(order.date)
+                      + (order.deliveryDate ? ' · Entrega: ' + escapeHtml(order.deliveryDate) : '') + '</p>';
+                html += '</div><div class="ped-card__acc">'
                       + '<button data-sbx-principal onclick="shareOrderWhatsApp(\'' + escapeHtml(order.id) + '\')" class="ui-icono-btn" aria-label="Compartir pedido ' + escapeHtml(order.id) + ' por WhatsApp" title="Compartir por WhatsApp"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg></button>'
                       + '<button onclick="deleteOrder(\'' + escapeHtml(order.id) + '\')" class="ui-icono-btn ui-icono-btn--peligro" aria-label="Eliminar pedido ' + escapeHtml(order.id) + '" title="Eliminar pedido"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>'
                       + '</div></div>'
-                      + '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;"><thead><tr style="background:var(--accent-dim);">'
-                      + '<th style="padding:10px;text-align:left;font-size:.8rem;font-weight:600;color:var(--txt-primary);">Nombre de Producto</th>'
-                      + '<th style="padding:10px;text-align:center;font-size:.8rem;font-weight:600;color:var(--txt-primary);">Unidad de Medida</th>'
-                      + '<th style="padding:10px;text-align:center;font-size:.8rem;font-weight:600;color:var(--txt-primary);">Cantidad</th></tr></thead><tbody>';
-                order.products.forEach(p => {
-                    html += '<tr style="border-top:1px solid var(--border-mid);"><td style="padding:10px;color:var(--txt-primary);">' + escapeHtml(p.name) + '</td>'
-                          + '<td style="padding:10px;text-align:center;color:var(--txt-secondary);">' + escapeHtml(p.unit) + '</td>'
-                          + '<td style="padding:10px;text-align:center;font-weight:600;color:var(--txt-primary);">' + p.quantity + '</td></tr>';
+                      + '<table class="ped-tabla"><thead><tr>'
+                      + '<th>Producto</th><th class="ped-tabla__c">Unidad</th><th class="ped-tabla__n">Cant.</th></tr></thead><tbody>';
+                (order.products || []).forEach(p => {
+                    html += '<tr><td>' + escapeHtml(p.name) + '</td>'
+                          + '<td class="ped-tabla__c">' + escapeHtml(p.unit) + '</td>'
+                          + '<td class="ped-tabla__n num">' + p.quantity + '</td></tr>';
                 });
-                html += '</tbody></table></div>'
-                      + '<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border-mid);text-align:right;">'
-                      + '<span style="font-size:1.05rem;font-weight:700;color:var(--txt-primary);">Total Productos: ' + (order.total || 0).toFixed(2) + '</span></div>';
-                if (order.note) html += '<div style="margin-top:10px;padding:10px 12px;border-radius:10px;background:var(--accent-dim);">'
-                      + '<p style="font-size:.82rem;font-weight:600;color:var(--txt-secondary);margin:0 0 3px;">Nota:</p>'
-                      + '<p style="color:var(--txt-primary);margin:0;">' + escapeHtml(order.note) + '</p></div>';
+                html += '</tbody></table>'
+                      + '<div class="ped-card__pie">Total Productos: <b class="num">' + (order.total || 0).toFixed(2) + '</b></div>';
+                if (order.note) html += '<div class="ped-card__nota"><b>Nota:</b> ' + escapeHtml(order.note) + '</div>';
                 html += '</div>';
             });
             html += '</div>';

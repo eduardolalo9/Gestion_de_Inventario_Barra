@@ -518,8 +518,8 @@
                 papeleraCargar().then(function() { if (activeTab === 'papelera') renderTab(); });
             }
             var h = '<div class="pap-wrap"><div class="pap-cab"><div class="pap-cab__tit">Papelera</div>'
-                  + '<div class="pap-cab__sub">Lo que se borró en el servidor se guarda aquí antes de borrarse: conteos al crear un inventario, '
-                  + 'productos y reportes. Se puede restaurar o descargar. Se vacía a mano, solo lo de más de ' + PAPELERA_DIAS_PURGA + ' días.</div></div>';
+                  // v5.39 (densidad) — una línea con la regla que importa (antes un párrafo de 4).
+                  + '<div class="pap-cab__sub">Restaurar o descargar. Se vacía a mano lo de más de ' + PAPELERA_DIAS_PURGA + ' días.</div></div>';
             if (_papelera.estado === 'cargando' || _papelera.estado === 'sin_cargar') {
                 return h + '<div class="pap-vacio">Cargando…</div></div>';
             }

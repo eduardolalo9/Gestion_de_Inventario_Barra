@@ -350,10 +350,8 @@
 
             var html = '<div class="adm-card aj-nuevo">';
             html += '<h3 class="ui-titulo--seccion"><i class="fa-solid fa-location-dot" aria-hidden="true"></i> Áreas de conteo</h3>';
-            html += '<p class="ui-nota">'
-                 +  'Cada área es una zona que se cuenta por separado y luego se totaliza. '
-                 +  'Almacén, Barra Restaurante y Barra Bar son fijas: puedes cambiarles el nombre, '
-                 +  'pero no eliminarlas, porque sus conteos están dentro de todos los inventarios ya cerrados.</p>';
+            // v5.39 (densidad) — una línea: lo único que el operador necesita saber aquí.
+            html += '<p class="ui-nota">Las 3 áreas fijas se renombran pero no se eliminan (están en los inventarios cerrados).</p>';
 
             def.forEach(function(a) {
                 var sistema  = _esAreaDeSistema(a.id);

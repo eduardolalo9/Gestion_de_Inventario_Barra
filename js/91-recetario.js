@@ -598,27 +598,28 @@
             }
 
             var html = BusquedaUI.resumen('recetario', res.coincidencias, res.total, 'receta', 'recetas');
-            html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;">';
+            // v5.39 (densidad) — tarjeta de receta en dos renglones cortos: nombre +
+            // insignia; debajo categoría · insumos y el costo a la derecha en mono.
+            html += '<div class="rec-lista">';
             lista.slice(0, lim).forEach(function(receta) {
                 var cr = costoReceta(receta);
                 var costoTxt = cr.incompleto ? 'Costo incompleto' : ('$' + cr.costo.toFixed(2));
-                html += '<div data-sbx-item onclick="_recetarioAbrirFicha(\'' + receta.id + '\')" ' +
-                        'style="cursor:pointer;background:var(--card);border:1px solid var(--border-mid);border-radius:14px;padding:14px 16px;">';
-                html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">';
-                html += '<p style="font-weight:700;color:var(--txt-primary);margin:0;">' + resaltarBusqueda(receta.nombre || '(sin nombre)', _recetarioSearchTerm) + '</p>';
+                html += '<div class="rec-card" data-sbx-item onclick="_recetarioAbrirFicha(\'' + receta.id + '\')">';
+                html += '<div class="rec-card__cab">';
+                html += '<p class="rec-card__nom">' + resaltarBusqueda(receta.nombre || '(sin nombre)', _recetarioSearchTerm) + '</p>';
                 if (!receta.activa) html += '<span style="font-size:.68rem;background:var(--card-high);color:var(--txt-muted);padding:2px 8px;border-radius:999px;white-space:nowrap;">Inactiva</span>';
                 // v5.26 (hallazgo #1) — sin PV esta receta no descuenta inventario al venderse: visible
                 // de un vistazo, no solo al entrar a la ficha.
                 else if (puedeEditar && !receta.pv) html += '<span style="font-size:.68rem;background:var(--warn-dim);color:var(--warn);padding:2px 8px;border-radius:999px;white-space:nowrap;">Sin PV</span>';
                 html += '</div>';
-                if (receta.categoria) html += '<p style="font-size:.78rem;color:var(--txt-secondary);margin:4px 0 0;">' + resaltarBusqueda(receta.categoria, _recetarioSearchTerm) + '</p>';
-                html += '<p style="font-size:.78rem;color:var(--txt-secondary);margin:6px 0 0;">' +
-                        receta.ingredientes.length + ' insumo' + (receta.ingredientes.length === 1 ? '' : 's') + '</p>';
+                html += '<div class="rec-card__meta"><span class="rec-card__det">'
+                      + (receta.categoria ? resaltarBusqueda(receta.categoria, _recetarioSearchTerm) + ' · ' : '')
+                      + receta.ingredientes.length + ' insumo' + (receta.ingredientes.length === 1 ? '' : 's') + '</span>';
                 if (puedeEditar) {
-                    html += '<p style="font-size:.85rem;font-weight:600;margin:8px 0 0;color:' +
-                            (cr.incompleto ? 'var(--warn)' : 'var(--accent)') + ';">' + costoTxt + '</p>';
+                    html += '<span class="rec-card__costo num" style="color:' +
+                            (cr.incompleto ? 'var(--warn)' : 'var(--accent)') + ';">' + costoTxt + '</span>';
                 }
-                html += '</div>';
+                html += '</div></div>';
             });
             html += '</div>';
             html += BusquedaUI.centinela('recetario', lista.length - lim);

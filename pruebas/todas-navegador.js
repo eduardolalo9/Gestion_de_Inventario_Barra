@@ -73,6 +73,7 @@ const PRUEBAS = [
     'prueba-v532-existencias-navegador.js', // v5.32 — exportar existencias: descarga real del .xlsx, 12 escenarios, Excel = app
     'prueba-v533-blindaje-navegador.js', // v5.33 — Etapa 0: blindaje de activeTab contra v5.32 real, 23 comprobaciones
     'prueba-v534-perfil-navegador.js', // v5.34 — Mi Perfil en la app real: abrir/cerrar, Atrás, recarga, XSS, cero escrituras
+    'prueba-v539-densidad-resto-navegador.js', // v5.39 — densidad en Pedidos, Recetario, Ventas, Ajustes, Admin, Importar, Papelera, Historia
     'prueba-v538-densidad-navegador.js', // v5.38 — densidad medida: barra 56 px, tarjetas, objetivos 44 px, contraste, oscuro por defecto
     'prueba-v537-navegador.js', // v5.37 — mensual cierra la semana (Firestore simulado) y Excel del pedido sugerido
     'prueba-v536-navegador.js', // v5.36 — Diferencias ↓ y Eliminar último corte importado (Firestore simulado)

@@ -994,7 +994,7 @@
 
         function _renderImpHub() {
             var h = '<div class="imp-cab"><div><div class="imp-cab__tit">Importar desde Excel</div>'
-                  + '<div class="imp-cab__sub">Descarga la plantilla, llénala y súbela. Todo se valida antes de guardar: duplicados, categorías vacías y números erróneos se marcan y no se aplica nada hasta corregirlos.</div></div></div>';
+                  + '<div class="imp-cab__sub">Nada se aplica hasta que la vista previa esté sin errores.</div></div></div>';
             h += '<div class="imp-grid">';
             IMPORTAR_SECCIONES.forEach(function(s) {
                 var puede = hasPermission(s.permiso);

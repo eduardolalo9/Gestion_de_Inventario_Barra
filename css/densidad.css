@@ -370,3 +370,133 @@ html body .it-modulo__ico { font-size: .875rem; margin-bottom: 2px; }
 .if-pantalla.if-pantalla--compacta .if-card .pm-paso { padding: 8px 10px; }
 .if-pantalla.if-pantalla--compacta .if-card .pm-paso__titulo { font-size: var(--d-fs); }
 .if-pantalla.if-pantalla--compacta .if-card .pm-paso__txt { font-size: var(--d-fs-sm); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   v5.39 — LO QUE FALTABA: Historia, Ventas, Ajustes, Admin, Recetario,
+   Importar, Papelera, Reconteo, Notificaciones y el kit (bi-*, ui-*).
+   Mismos pisos: objetivo táctil 44 px, cuerpo 13 px, cifras en mono.
+   Mi perfil NO se toca (decisión de Eduardo: queda como está).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Acciones del encabezado (Nueva, Publicar, Excel…) ─────────────────── */
+.hd-btn { min-height: 44px; padding: 0 10px; gap: 6px; border-radius: var(--d-radio-sm) !important; font-size: var(--d-fs) !important; font-weight: 700; box-shadow: none !important; }
+
+/* ── Kit: títulos de sección, notas, vacíos, filas, tarjetas ───────────── */
+.ui-titulo--seccion { font-size: var(--d-fs-etq); letter-spacing: .08em; margin: 0 0 6px; }
+.ui-titulo { font-size: var(--d-fs-tit); }
+.ui-nota { font-size: var(--d-fs-sm); line-height: 1.4; margin: 0 0 6px; }
+.ui-vacio { padding: 14px 12px; font-size: var(--d-fs); line-height: 1.4; }
+.ui-vacio i, .vs-vacio__ico, .ps-vacio i { font-size: 1rem !important; }
+.ui-vacio--caja { border-radius: var(--d-radio); border-color: var(--border); }
+.bi-card { padding: var(--d-pad-y) var(--d-pad) !important; border-radius: var(--d-radio) !important; box-shadow: none !important; }
+.bi-row { min-height: 44px; padding-block: 4px !important; gap: 8px !important; }
+.bi-row__nombre { font-size: var(--d-fs); }
+.bi-kpi__val { font-family: var(--f-num); font-size: 1.125rem !important; font-weight: 600 !important; }
+.bi-kpi__etq { font-size: var(--d-fs-etq) !important; }
+.bi-btn { min-height: 44px; border-radius: var(--d-radio-sm) !important; font-size: var(--d-fs) !important; box-shadow: none !important; }
+
+/* ── Historia ───────────────────────────────────────────────────────────── */
+.hs-seccion { margin-bottom: 10px; }
+.hs-cab { margin-bottom: 6px; gap: 6px; }
+
+/* ── Ventas ─────────────────────────────────────────────────────────────── */
+.vs-periodo { gap: 4px; margin-bottom: 4px; }
+.vs-pills { gap: 4px; margin-bottom: 4px; }
+.vs-btn { min-height: 44px; padding: 0 12px; border-radius: var(--d-radio-sm); font-size: var(--d-fs) !important; box-shadow: none !important; }
+.vs-btn--secundario { border-width: 1px; }
+.vs-btn__circulo { width: 16px; height: 16px; font-size: .6rem; }
+.vs-micro { margin: 2px 2px 4px; font-size: var(--d-fs-sm); }
+.vs-kpis { gap: 6px; margin-bottom: 6px; }
+.vs-kpi { padding: 6px 8px; border-radius: var(--d-radio); border-color: var(--border); }
+.vs-kpi__val { font-size: 15px; font-weight: 600; }
+.vs-kpi__lbl { font-size: 9px; letter-spacing: .06em; text-transform: uppercase; }
+.vs-kpi__ico { display: none; }
+.vs-fila { padding: 4px 0; gap: 8px; border-top-color: var(--border); }
+.vs-fila__nom { font-size: var(--d-fs); }
+.vs-fila__cant, .vs-fila__imp { font-family: var(--f-num); font-weight: 600; }
+.vs-vacio { padding: 14px 12px; border-radius: var(--d-radio); border-color: var(--border); }
+.vs-vacio__t { font-size: var(--d-fs); }
+.vs-vacio__s { font-size: var(--d-fs-sm); line-height: 1.4; }
+.vs-total { margin-top: 6px; padding: 4px 4px 4px 10px; border-radius: var(--d-radio); border-color: var(--border); font-size: var(--d-fs); }
+.vs-top, .vs-dias { padding: 8px 10px; }
+
+/* ── Ajustes y Admin ────────────────────────────────────────────────────── */
+.adm-card { padding: var(--d-pad-y) var(--d-pad); margin-bottom: 6px; border-radius: var(--d-radio); }
+.adm-stat { padding: 4px 0; min-height: 32px; font-size: var(--d-fs); }
+.adm-stat b, .adm-stat strong, .adm-stat span:last-child { font-family: var(--f-num); font-weight: 600; }
+.adm-btn { min-height: 44px; padding: 0 12px; border-radius: var(--d-radio-sm); font-size: var(--d-fs); margin-top: 6px; }
+.aj-area { padding: 6px 8px; margin-bottom: 4px; border-radius: var(--d-radio-sm); background: var(--card-high); border-color: var(--border); }
+.aj-area__icono { font-size: 1rem; min-width: 22px; }
+.aj-area__nombre { font-size: var(--d-fs); font-weight: 700; }
+.aj-area__id { font-family: var(--f-num); font-size: var(--d-fs-etq); }
+
+/* ── Recetario (tarjeta nueva en clases) ────────────────────────────────── */
+.rec-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 4px; }
+.rec-card { cursor: pointer; padding: 6px 10px; background: var(--card); border: 1px solid var(--border); border-radius: var(--d-radio); min-height: 44px; }
+.rec-card:hover { border-color: var(--border-strong); }
+.rec-card__cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; }
+.rec-card__nom { margin: 0; font-size: var(--d-fs); font-weight: 700; color: var(--txt-primary); line-height: 1.25; }
+.rec-card__cab > span { font-size: 9px !important; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; padding: 0 5px !important; border-radius: 3px !important; line-height: 14px; }
+.rec-card__meta { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-top: 2px; }
+.rec-card__det { font-size: var(--d-fs-sm); color: var(--txt-secondary); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rec-card__costo { font-family: var(--f-num); font-size: var(--d-fs); font-weight: 600; white-space: nowrap; }
+
+/* ── Importar desde Excel ───────────────────────────────────────────────── */
+.imp-cab { margin-bottom: 6px; }
+.imp-cab__tit, .pap-cab__tit { font-size: var(--d-fs-tit); font-weight: 800; }
+.imp-cab__sub, .pap-cab__sub { font-size: var(--d-fs-sm); line-height: 1.4; margin-top: 0; }
+.imp-wrap { gap: 6px !important; }
+.imp-sec { gap: 6px; padding: var(--d-pad); border-radius: var(--d-radio); border-color: var(--border); margin-bottom: 6px; }
+.imp-sec__cab { gap: 6px; }
+.imp-sec__ico { font-size: .9rem; }
+.imp-sec__tit { font-size: var(--d-fs); }
+.imp-sec__desc { font-size: var(--d-fs-sm); line-height: 1.4; }
+.imp-sec__acc { gap: 6px; }
+.imp-ayuda { font-size: var(--d-fs-etq); line-height: 1.35; }
+.imp-kpis { gap: 6px !important; }
+.imp-kpi { padding: 6px 8px !important; border-radius: var(--d-radio) !important; }
+.imp-tabla th { font-size: var(--d-fs-etq); padding: 4px 6px; }
+.imp-tabla td { font-size: var(--d-fs-sm); padding: 4px 6px; }
+
+/* ── Papelera ───────────────────────────────────────────────────────────── */
+.pap-lista { gap: 4px !important; }
+.pap-item { gap: 4px; padding: var(--d-pad-y) var(--d-pad); border-radius: var(--d-radio); border-color: var(--border); background: var(--card); }
+.pap-item__tit { font-size: var(--d-fs); }
+.pap-item__meta, .pap-item__txt { font-size: var(--d-fs-sm); }
+.pap-vacio { padding: 14px 12px; font-size: var(--d-fs); }
+
+/* ── Reconteo ───────────────────────────────────────────────────────────── */
+.rc-card { padding: var(--d-pad-y) var(--d-pad); border-radius: var(--d-radio); }
+.rc-card__nombre { font-size: var(--d-fs); font-weight: 700; }
+.rc-card__total { font-family: var(--f-num); font-weight: 600; }
+.rc-lista { gap: 4px !important; }
+.rc-area { padding: 4px 6px; }
+
+/* ── Notificaciones y avisos ────────────────────────────────────────────── */
+.nt-item, .notif-item { padding: var(--d-pad-y) var(--d-pad) !important; border-radius: var(--d-radio) !important; }
+
+/* La barra de búsqueda pegajosa ya no tapa el resumen de debajo */
+@media (max-width: 767px) { .sbx--sticky { margin: -6px 0 2px; padding: 4px 0; } }
+/* Títulos de tarjeta de Ajustes/Admin (estilos.css: .adm-card h3 a 15 px) y de sección del kit */
+.adm-card h3 { font-size: var(--d-fs); margin-bottom: 6px; gap: 6px; }
+.ui-titulo.ui-titulo--seccion, .adm-card h3.ui-titulo--seccion { font-size: var(--d-fs-etq); letter-spacing: .08em; color: var(--txt-secondary); }
+.vs-vacio__ico { width: 32px !important; height: 32px !important; margin-bottom: 4px !important; }
+
+/* ── Pedidos (tarjeta en clases, v5.39) ────────────────────────────────── */
+.ped-card { margin-bottom: 6px; }
+.ped-card__cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 4px; }
+.ped-card__ident { min-width: 0; }
+.ped-card__id { margin: 0; font-family: var(--f-num); font-size: var(--d-fs); font-weight: 600; color: var(--txt-primary); }
+.ped-card__meta { margin: 1px 0 0; font-size: var(--d-fs-sm); color: var(--txt-secondary); }
+.ped-card__acc { display: flex; gap: 4px; flex-shrink: 0; }
+.ped-tabla { width: 100%; border-collapse: collapse; }
+.ped-tabla th { padding: 4px 6px; font-size: var(--d-fs-etq); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--txt-muted); text-align: left; border-bottom: 1px solid var(--border-mid); }
+.ped-tabla td { padding: 4px 6px; font-size: var(--d-fs); color: var(--txt-primary); border-top: 1px solid var(--border); }
+.ped-tabla__c { text-align: center; color: var(--txt-secondary); }
+.ped-tabla__n { text-align: right; font-weight: 600; }
+th.ped-tabla__n, th.ped-tabla__c { color: var(--txt-muted); }
+.ped-card__pie { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--border); text-align: right; font-size: var(--d-fs); color: var(--txt-secondary); }
+.ped-card__pie b { color: var(--txt-primary); font-weight: 600; }
+.ped-card__nota { margin-top: 4px; padding: 4px 8px; border-radius: var(--d-radio-sm); background: var(--accent-dim); font-size: var(--d-fs-sm); color: var(--txt-primary); }
+.ui-icono-btn { width: 44px; height: 44px; border-radius: var(--d-radio-sm) !important; }
+.ped-card .ped-tabla th, .ped-card .ped-tabla td { padding: 4px 6px !important; line-height: 1.3; }
