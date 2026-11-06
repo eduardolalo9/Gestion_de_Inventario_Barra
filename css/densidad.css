@@ -549,3 +549,21 @@ th.ped-tabla__n, th.ped-tabla__c { color: var(--txt-muted); }
 .cn-reglas summary { min-height: 32px; display: flex; align-items: center; font-weight: 700; color: var(--txt-primary); cursor: pointer; }
 .cn-reglas ul { margin: 2px 0 4px; padding-left: 16px; line-height: 1.45; }
 .cn-pantalla { padding-bottom: 4px; }
+
+/* ── v5.41 · Compras: Importar Excel, rango de fechas de ingreso y resumen ── */
+.cp-acciones { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 8px; }
+.cp-acciones .bt { min-height: 44px; }
+.cp-rango { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; margin: 0 0 8px; }
+.cp-rango__campo { display: flex; flex-direction: column; gap: 2px; flex: 1 1 140px; min-width: 130px; }
+.cp-rango__etq { font-size: var(--d-fs-sm); font-weight: 700; color: var(--txt-secondary); text-transform: uppercase; letter-spacing: .04em; }
+.cp-rango__fecha { min-height: 44px; padding: 0 10px; border-radius: var(--d-radio); border: 1px solid var(--border-mid); background: var(--card); color: var(--txt-primary); font-family: var(--f-mono); font-size: var(--d-fs); color-scheme: dark; }
+html[data-theme="light"] .cp-rango__fecha { color-scheme: light; }
+.cp-rango__fecha:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.cp-rango__limpiar[hidden] { display: none; }
+.cp-periodo { display: flex; align-items: center; gap: 6px; margin: 6px 0; font-size: var(--d-fs-sm); color: var(--txt-secondary); }
+.cp-periodo b { color: var(--txt-primary); font-family: var(--f-mono); font-weight: 600; }
+.cp-aviso { margin: 0 0 8px; padding: 8px 10px; border-radius: var(--d-radio); border: 1px solid var(--border-mid); background: var(--card); font-size: var(--d-fs-sm); color: var(--txt-secondary); }
+.cp-aviso--alerta { border-color: var(--warn); color: var(--txt-primary); }
+/* Compras: «Proveedores» y «Total compras» no caben en 4 columnas a 390 px con el relleno normal; el texto pasa a 2 líneas en vez de cortarse. */
+.kpi-fila--compras .kpi { padding: 6px 5px; }
+.kpi-fila--compras .kpi__t { letter-spacing: 0; white-space: normal; line-height: 1.15; overflow: visible; text-overflow: clip; }

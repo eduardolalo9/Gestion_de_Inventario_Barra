@@ -100,9 +100,9 @@ chk('El aviso de "fecha no reconocible" usa var(--danger-dim)/var(--danger), no 
     !/rgba\(239,\s*68,\s*68/.test(fVista));
 chk('"Confirmar e importar" usa var(--ok-dim)/var(--ok), no #065f46/#86efac a mano',
     /background:var\(--ok-dim\);'\s*\+\s*'border:1px solid var\(--ok-dim\);color:var\(--ok\)/.test(fVista));
-// v5.18 — "Importar entrada de mercancía" se movió al módulo Importar desde Excel.
-chk('v5.18 · la pestaña ya no tiene botón de importar (vive en el módulo Importar)',
-    !/comprasImportarExcel\(\)/.test(fTab) && /comprasImportarExcel\(\)/.test(fs.readFileSync(path.join(RAIZ, 'js/96-importar.js'), 'utf8')));
+// v5.41 — el botón «Importar Excel» volvió a la pestaña (pedido de Eduardo, 6-nov-2026); el módulo Importar sigue llamando al mismo flujo.
+chk('v5.41 · la pestaña tiene «Importar Excel» y el módulo Importar sigue usando el mismo flujo',
+    /comprasImportarExcel\(\)/.test(fTab) && /comprasImportarExcel\(\)/.test(fs.readFileSync(path.join(RAIZ, 'js/96-importar.js'), 'utf8')));
 
 // ═══ 3 · COMPRAS — SIN EMOJI COMO ICONOGRAFÍA ══════════════════════════════
 chk('★ Ningún emoji de interfaz queda en renderVistaPreviaCompras/renderIncidenciasImportacion/renderComprasTab',

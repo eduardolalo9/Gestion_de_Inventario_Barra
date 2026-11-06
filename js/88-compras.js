@@ -100,13 +100,16 @@
         }
 
         // ── Resumen de la cabecera ────────────────────────────────────────────
-        function _resumenCompras() {
+        function _resumenCompras(lista) {
             // v5.27 — las canceladas no cuentan como documentos ni importe:
             // se informan aparte.
-            var activas = compras.filter(function(c) { return !compraCancelada(c); });
+            // v5.41 — `lista` opcional: el resumen del rango de fechas se calcula
+            // sobre las entradas del rango, no sobre todo lo cargado.
+            var base = Array.isArray(lista) ? lista : compras;
+            var activas = base.filter(function(c) { return !compraCancelada(c); });
             var r = { documentos: activas.length, lineas: 0, importe: 0,
                       proveedores: {}, ultima: null,
-                      canceladas: compras.length - activas.length };
+                      canceladas: base.length - activas.length };
             activas.forEach(function(c) {
                 r.lineas  += Array.isArray(c.lineas) ? c.lineas.length : 0;
                 r.importe += (c.importe || 0);
@@ -115,6 +118,248 @@
             });
             r.proveedores = Object.keys(r.proveedores).length;
             return r;
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  v5.41 — RANGO DE FECHAS DE INGRESO (pedido de Eduardo, 6-nov-2026)
+        //  ────────────────────────────────────────────────────────────────────
+        //  "Seleccionar la fecha para consultar las entradas que se generaron
+        //  dentro de la fecha": Desde / Hasta sobre la FECHA DE INGRESO (la
+        //  misma que agrupa la lista). La app solo trae al arrancar la semana
+        //  en curso y la anterior ("nunca todas las compras"), así que un rango
+        //  más viejo se CONSULTA al servidor, acotado, y vive en una caché
+        //  aparte de solo lectura: no toca `compras`, `movimientos` ni el
+        //  almacenamiento local, así que no mueve existencias ni sincroniza.
+        //  Los totales nunca fingen estar completos: sin conexión, con error o
+        //  con tope alcanzado, el resumen lo dice.
+        // ══════════════════════════════════════════════════════════════════════
+
+        var COMPRAS_RANGO_MAX = 500;            // tope por consulta (fecha de ingreso / fecha SAP)
+        var _comprasFiltroDesde = '';
+        var _comprasFiltroHasta = '';
+        var _comprasRangoCache = { clave: '', items: [], estado: 'ninguno', truncado: false, motivo: '' };
+
+        function _comprasFechaValida(s) {
+            return /^\d{4}-\d{2}-\d{2}$/.test(String(s || '')) && !!parseFechaLocal(String(s));
+        }
+        function comprasRangoActivo() { return !!(_comprasFiltroDesde || _comprasFiltroHasta); }
+        function _comprasClaveRango() { return _comprasFiltroDesde + '|' + _comprasFiltroHasta; }
+
+        /**
+         * comprasEnRango(lista, desde, hasta) — capa de datos, pura.
+         * Entradas cuya fecha de ingreso cae entre `desde` y `hasta`, AMBAS
+         * incluidas. Un extremo vacío o inválido queda abierto. Con un rango
+         * activo, una entrada sin fecha no se puede ubicar y se excluye.
+         */
+        function comprasEnRango(lista, desde, hasta) {
+            var d = _comprasFechaValida(desde) ? String(desde) : '';
+            var h = _comprasFechaValida(hasta) ? String(hasta) : '';
+            var base = Array.isArray(lista) ? lista : [];
+            if (!d && !h) return base.slice();
+            return base.filter(function(c) {
+                var f = _fechaIngresoDe(c);
+                if (!_comprasFechaValida(f)) return false;
+                return (!d || f >= d) && (!h || f <= h);
+            });
+        }
+
+        /**
+         * Lo que la pantalla puede mostrar con el rango actual: lo guardado en
+         * este dispositivo + lo consultado al servidor (la versión local gana:
+         * una cancelación hecha aquí no se pisa con una copia vieja).
+         */
+        function _comprasListaBase() {
+            if (!comprasRangoActivo()) return compras;
+            var porId = {};
+            if (_comprasRangoCache.clave === _comprasClaveRango()) {
+                _comprasRangoCache.items.forEach(function(c) { if (c && c.compraId) porId[c.compraId] = c; });
+            }
+            compras.forEach(function(c) { if (c && c.compraId) porId[c.compraId] = c; });
+            return comprasEnRango(Object.keys(porId).map(function(k) { return porId[k]; }),
+                                  _comprasFiltroDesde, _comprasFiltroHasta);
+        }
+
+        /** El alcance del resumen: rango + proveedor elegido (la búsqueda de texto no lo cambia). */
+        function _comprasAlcance() {
+            var base = _comprasListaBase();
+            if (!_comprasFiltroProveedor) return base;
+            return base.filter(function(c) { return _claveProveedorCompra(c) === _comprasFiltroProveedor; });
+        }
+
+        var _COMPRAS_RANGO_MOTIVOS = {
+            sin_permiso:      'tu usuario no puede leer compras',
+            sin_firestore:    'no hay conexión con la nube',
+            sin_conexion:     'sin conexión a internet',
+            error_red:        'falló la red',
+            permiso_denegado: 'el servidor rechazó la consulta',
+            error:            'no se pudo consultar'
+        };
+
+        /**
+         * comprasConsultarRango(desde, hasta) — consulta al servidor, acotada.
+         * Dos consultas de un solo campo (sin índice compuesto): por fecha de
+         * ingreso y por fecha del documento SAP (las entradas importadas antes
+         * de v5.27 no tienen fecha de ingreso). Después se filtra con la misma
+         * regla que la pantalla. Más recientes primero, tope COMPRAS_RANGO_MAX.
+         * @returns {Promise<{items, completo, truncado, motivo}>}
+         */
+        async function comprasConsultarRango(desde, hasta) {
+            var vacio = function(m) { return { items: [], completo: false, truncado: false, motivo: m }; };
+            if (!hasPermission('purchases.read')) return vacio('sin_permiso');
+            if (!_db)              return vacio('sin_firestore');
+            if (!navigator.onLine) return vacio('sin_conexion');
+            try {
+                var consulta = function(campo) {
+                    var q = _db.collection('compras');       // referencia propia por consulta: nunca se arrastran filtros
+                    if (desde) q = q.where(campo, '>=', desde);
+                    if (hasta) q = q.where(campo, '<=', hasta);
+                    return q.orderBy(campo, 'desc').limit(COMPRAS_RANGO_MAX).get();
+                };
+                var snaps = await Promise.all([consulta('fechaIngreso'), consulta('fecha')]);
+                var porId = {}, truncado = false;
+                snaps.forEach(function(snap) {
+                    if (snap.docs.length >= COMPRAS_RANGO_MAX) truncado = true;
+                    snap.docs.forEach(function(d) { var c = d.data(); if (c && c.compraId) porId[c.compraId] = c; });
+                });
+                var items = comprasEnRango(Object.keys(porId).map(function(k) { return porId[k]; }), desde, hasta);
+                return { items: items, completo: true, truncado: truncado, motivo: '' };
+            } catch (e) {
+                console.warn('[Compras] No se pudo consultar el rango ' + desde + ' → ' + hasta + ':', e);
+                if (e && e.code === 'permission-denied') return vacio('permiso_denegado');
+                return vacio((typeof _esErrorDeRed === 'function' && _esErrorDeRed(e)) ? 'error_red' : 'error');
+            }
+        }
+
+        function _comprasFechaCorta(iso) {
+            var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''));
+            return m ? (m[3] + '/' + m[2] + '/' + m[1]) : '';
+        }
+
+        function _comprasPeriodoTexto() {
+            var d = _comprasFiltroDesde, h = _comprasFiltroHasta;
+            if (!d && !h) return 'Todo lo cargado en este dispositivo (semana en curso y anterior)';
+            if (d && h && d === h) return 'Ingresos del <b>' + _comprasFechaCorta(d) + '</b>';
+            if (d && h) return 'Ingresos del <b>' + _comprasFechaCorta(d) + '</b> al <b>' + _comprasFechaCorta(h) + '</b>';
+            return d ? 'Ingresos desde el <b>' + _comprasFechaCorta(d) + '</b>' : 'Ingresos hasta el <b>' + _comprasFechaCorta(h) + '</b>';
+        }
+
+        /** KPIs + periodo + avisos de integridad. Se repinta solo al cambiar el rango o el proveedor. */
+        function _comprasResumenHtml() {
+            var r = _resumenCompras(_comprasAlcance());
+            var h = '<div class="kpi-fila kpi-fila--4 kpi-fila--compras">';
+            [['Entradas', r.documentos],
+             ['Proveedores', r.proveedores],
+             ['Total compras', _dineroMX(r.importe)],
+             ['Líneas', r.lineas]
+            ].forEach(function(par) {
+                h += '<div class="kpi"><div class="kpi__n">' + escapeHtml(String(par[1])) + '</div>'
+                   + '<div class="kpi__t">' + escapeHtml(par[0]) + '</div></div>';
+            });
+            h += '</div>';
+            h += '<div class="cp-periodo"><i class="fa-solid fa-calendar-days" aria-hidden="true"></i> <span>' + _comprasPeriodoTexto() + '</span></div>';
+            if (comprasRangoActivo() && _comprasRangoCache.clave === _comprasClaveRango()) {
+                var c = _comprasRangoCache;
+                if (c.estado === 'cargando') {
+                    h += '<div class="cp-aviso" role="status">Consultando las entradas en el servidor…</div>';
+                } else if (c.estado === 'parcial') {
+                    h += '<div class="cp-aviso cp-aviso--alerta" role="alert">Sin consultar el servidor (' + escapeHtml(_COMPRAS_RANGO_MOTIVOS[c.motivo] || _COMPRAS_RANGO_MOTIVOS.error)
+                       + '): solo se cuentan las entradas guardadas en este dispositivo. El rango puede estar incompleto.</div>';
+                } else if (c.truncado) {
+                    h += '<div class="cp-aviso cp-aviso--alerta" role="alert">Hay más de ' + COMPRAS_RANGO_MAX
+                       + ' entradas en este rango: se cuentan las más recientes. Acota las fechas para ver el resto.</div>';
+                }
+            }
+            if (r.canceladas) {
+                h += '<div class="cp-nota-canceladas"><i class="fa-solid fa-ban" aria-hidden="true"></i> '
+                   + r.canceladas + ' entrada' + (r.canceladas === 1 ? ' cancelada' : 's canceladas')
+                   + ' (no cuentan en el resumen ni en el Total)</div>';
+            }
+            return h;
+        }
+
+        function _comprasRangoHtml() {
+            var campo = function(id, etq, valor, extra, campoNom) {
+                return '<label class="cp-rango__campo" for="' + id + '"><span class="cp-rango__etq">' + etq + '</span>'
+                     + '<input type="date" id="' + id + '" class="cp-rango__fecha" value="' + escapeHtml(valor) + '"' + extra
+                     + ' onchange="comprasCambiarRango(\'' + campoNom + '\', this.value)"></label>';
+            };
+            return '<div class="cp-rango" role="group" aria-label="Rango de fechas de ingreso">'
+                 + campo('cp-desde', 'Desde', _comprasFiltroDesde, _comprasFiltroHasta ? ' max="' + escapeHtml(_comprasFiltroHasta) + '"' : '', 'desde')
+                 + campo('cp-hasta', 'Hasta', _comprasFiltroHasta, _comprasFiltroDesde ? ' min="' + escapeHtml(_comprasFiltroDesde) + '"' : '', 'hasta')
+                 + '<button type="button" id="cp-rango-limpiar" class="bt bt--secundario bt--auto cp-rango__limpiar"'
+                 + (comprasRangoActivo() ? '' : ' hidden') + ' onclick="comprasLimpiarRango()">'
+                 + '<i class="fa-solid fa-xmark" aria-hidden="true"></i> Quitar fechas</button></div>';
+        }
+
+        function _comprasMostrandoLista() { return compras.length > 0 || comprasRangoActivo(); }
+
+        /** Repinta lo que depende del rango sin reconstruir la pantalla (los campos de fecha no se tocan). */
+        function _comprasRefrescarPanel() {
+            var res = document.getElementById('cp-resumen');
+            if (!res) return;                                   // la pestaña no está en pantalla
+            if (!!document.getElementById('sbx-res-compras') !== _comprasMostrandoLista()) {
+                if (typeof renderTab === 'function') renderTab();   // cambia la estructura (lista ↔ estado vacío)
+                return;
+            }
+            res.innerHTML = _comprasResumenHtml();
+            var pv = document.getElementById('cp-prov-wrap');
+            if (pv) pv.innerHTML = _comprasSelectorProveedor();
+            var lim = document.getElementById('cp-rango-limpiar');
+            if (lim) lim.hidden = !comprasRangoActivo();
+            var d = document.getElementById('cp-desde'), h = document.getElementById('cp-hasta');
+            if (d) { d.value = _comprasFiltroDesde; if (_comprasFiltroHasta) d.setAttribute('max', _comprasFiltroHasta); else d.removeAttribute('max'); }
+            if (h) { h.value = _comprasFiltroHasta; if (_comprasFiltroDesde) h.setAttribute('min', _comprasFiltroDesde); else h.removeAttribute('min'); }
+            if (typeof BusquedaUI !== 'undefined') BusquedaUI.refrescar('compras');
+        }
+
+        function _comprasIniciarConsulta() {
+            if (!comprasRangoActivo()) {
+                _comprasRangoCache = { clave: '', items: [], estado: 'ninguno', truncado: false, motivo: '' };
+                _comprasRefrescarPanel();
+                return;
+            }
+            var clave = _comprasClaveRango();
+            _comprasRangoCache = { clave: clave, items: [], estado: 'cargando', truncado: false, motivo: '' };
+            _comprasRefrescarPanel();
+            var desde = _comprasFiltroDesde, hasta = _comprasFiltroHasta;
+            return comprasConsultarRango(desde, hasta).then(function(res) {
+                if (_comprasRangoCache.clave !== clave) return;     // el usuario ya cambió el rango
+                _comprasRangoCache = { clave: clave, items: res.items, estado: res.completo ? 'ok' : 'parcial',
+                                       truncado: !!res.truncado, motivo: res.motivo || '' };
+                _comprasRefrescarPanel();
+            }).catch(function(e) {
+                if (_comprasRangoCache.clave !== clave) return;
+                console.warn('[Compras] La consulta del rango falló:', e);
+                _comprasRangoCache = { clave: clave, items: [], estado: 'parcial', truncado: false, motivo: 'error' };
+                _comprasRefrescarPanel();
+            });
+        }
+
+        function comprasCambiarRango(campo, valor) {
+            var v = String(valor || '').trim();
+            if (v && !_comprasFechaValida(v)) v = '';
+            if (campo === 'desde') {
+                _comprasFiltroDesde = v;
+                if (v && _comprasFiltroHasta && v > _comprasFiltroHasta) _comprasFiltroHasta = v;   // nunca un rango al revés
+            } else {
+                _comprasFiltroHasta = v;
+                if (v && _comprasFiltroDesde && v < _comprasFiltroDesde) _comprasFiltroDesde = v;
+            }
+            return _comprasIniciarConsulta();
+        }
+
+        function comprasLimpiarRango() {
+            _comprasFiltroDesde = '';
+            _comprasFiltroHasta = '';
+            return _comprasIniciarConsulta();
+        }
+
+        /** Busca una compra por id: lo guardado aquí primero, luego lo consultado por rango. */
+        function comprasBuscarPorId(compraId) {
+            var id = String(compraId);
+            var c = compras.find(function(x) { return x && String(x.compraId) === id; });
+            if (c) return c;
+            return _comprasRangoCache.items.find(function(x) { return x && String(x.compraId) === id; }) || null;
         }
 
         // ══════════════════════════════════════════════════════════════════════
@@ -1467,38 +1712,28 @@
 
             var html = '<div style="padding:4px 0 8px">';
 
-            // ── Cabecera con el resumen ───────────────────────────────────────
-            var r = _resumenCompras();
-            // v5.38 (densidad) — fila de KPIs en clases (css/densidad.css): 4 columnas
-            // de una sola línea de cifra mono, en lugar de tarjetas de 2×2.
-            html += '<div class="kpi-fila kpi-fila--4">';
-            [['Documentos', r.documentos],
-             ['Líneas', r.lineas],
-             ['Proveedores', r.proveedores],
-             ['Importe', _dineroMX(r.importe)]
-            ].forEach(function(par) {
-                html += '<div class="kpi"><div class="kpi__n">' + escapeHtml(String(par[1])) + '</div>'
-                      + '<div class="kpi__t">' + escapeHtml(par[0]) + '</div></div>';
-            });
-            html += '</div>';
-            if (r.canceladas) {
-                html += '<div class="cp-nota-canceladas"><i class="fa-solid fa-ban" aria-hidden="true"></i> '
-                      + r.canceladas + ' entrada' + (r.canceladas === 1 ? ' cancelada' : 's canceladas')
-                      + ' (no cuentan en el resumen ni en el Total)</div>';
-            }
-
             // ── Acciones ──────────────────────────────────────────────────────
-            html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">';
-            // v5.18 — importar ya no vive aquí: todas las importaciones se
-            // hacen desde el módulo "Importar desde Excel" (js/96-importar.js),
-            // decisión de Eduardo (6-oct-2026).
+            // v5.41 — «Importar Excel» vuelve a Compras (pedido de Eduardo,
+            // 6-nov-2026; revierte lo decidido en v5.18). Es el MISMO flujo de
+            // siempre — comprasImportarExcel() → vista previa → fecha de ingreso
+            // → verificación de duplicados → confirmar — con el mismo permiso
+            // (purchases.import). «Importar desde Excel» (menú Más) sigue ahí.
+            html += '<div class="cp-acciones">';
+            if (hasPermission('purchases.import')) {
+                html += '<button type="button" class="bt bt--primario bt--auto" onclick="comprasImportarExcel()">'
+                      + '<i class="fa-solid fa-file-excel" aria-hidden="true"></i> Importar Excel</button>';
+            }
             if (hasPermission('purchases.create')) {
                 html += '<button type="button" class="bt bt--secundario bt--auto" onclick="comprasNuevaManual()">Capturar a mano</button>';
             }
             html += '</div>';
 
+            // ── Rango de fechas de ingreso y resumen ──────────────────────────
+            html += _comprasRangoHtml();
+            html += '<div id="cp-resumen">' + _comprasResumenHtml() + '</div>';
+
             // ── Lista ─────────────────────────────────────────────────────────
-            if (compras.length === 0) {
+            if (!_comprasMostrandoLista()) {
                 html += '<div style="text-align:center;padding:42px 18px;'
                       + 'background:var(--surface);border:1px solid var(--border-mid);'
                       + 'border-radius:12px">'
@@ -1506,8 +1741,9 @@
                       + '<div style="font-weight:600;margin-bottom:6px">Todavía no hay compras registradas</div>'
                       + '<div style="color:var(--txt-secondary);font-size:.88rem;max-width:420px;'
                       + 'margin:0 auto;line-height:1.55">'
-                      + 'Importa el Excel de entrada de mercancía de SAP desde el módulo Importar desde Excel (menú Más), o captura una a mano. '
-                      + 'Antes de guardar nada verás un resumen por proveedor y fecha para revisarlo.'
+                      + 'Importa el Excel de entrada de mercancía de SAP con el botón Importar Excel, o captura una a mano. '
+                      + 'Antes de guardar nada verás un resumen por proveedor y fecha para revisarlo. '
+                      + 'Para ver entradas más antiguas, elige un rango de fechas.'
                       + '</div></div>';
             } else {
                 // v5.27 — buscador por producto y filtro por proveedor (pedido de
@@ -1519,7 +1755,7 @@
                     etiqueta: 'Buscar compras por producto, código o folio',
                     sticky: true
                 });
-                html += _comprasSelectorProveedor();
+                html += '<div id="cp-prov-wrap">' + _comprasSelectorProveedor() + '</div>';
                 html += BusquedaUI.region('compras', _renderComprasResultados().html);
             }
 
@@ -1562,15 +1798,17 @@
         }
 
         function _comprasSelectorProveedor() {
-            var provs = comprasProveedores(compras);
-            // Un proveedor elegido que ya no está (p.ej. tras recargar) no deja la lista vacía.
+            // v5.41 — los proveedores son los del rango de fechas activo.
+            var base = _comprasListaBase();
+            var provs = comprasProveedores(base);
+            // Un proveedor elegido que ya no está (p.ej. tras recargar o cambiar el rango) no deja la lista vacía.
             if (_comprasFiltroProveedor && !provs.some(function(p) { return p.clave === _comprasFiltroProveedor; })) {
                 _comprasFiltroProveedor = '';
             }
             var h = '<div class="cp-filtro">'
                   + '<label class="cp-filtro__etq" for="cp-filtro-prov"><i class="fa-solid fa-truck" aria-hidden="true"></i> Proveedor</label>'
                   + '<select id="cp-filtro-prov" class="cp-filtro__sel" onchange="comprasFiltrarProveedor(this.value)">'
-                  + '<option value="">Todos los proveedores (' + compras.length + ')</option>';
+                  + '<option value="">Todos los proveedores (' + base.length + ')</option>';
             provs.forEach(function(p) {
                 h += '<option value="' + escapeHtml(p.clave) + '"' + (p.clave === _comprasFiltroProveedor ? ' selected' : '') + '>'
                    + escapeHtml(p.nombre) + ' (' + p.n + ')</option>';
@@ -1580,6 +1818,9 @@
 
         function comprasFiltrarProveedor(clave) {
             _comprasFiltroProveedor = String(clave || '');
+            // v5.41 — el resumen sigue al proveedor elegido.
+            var res = document.getElementById('cp-resumen');
+            if (res) res.innerHTML = _comprasResumenHtml();
             if (typeof BusquedaUI !== 'undefined') BusquedaUI.refrescar('compras');
         }
 
@@ -1660,8 +1901,17 @@
 
         function _renderComprasResultados() {
             var consulta = (typeof _comprasSearchTerm !== 'undefined') ? _comprasSearchTerm : '';
-            var r = comprasFiltrar(compras, consulta, _comprasFiltroProveedor);
+            var r = comprasFiltrar(_comprasListaBase(), consulta, _comprasFiltroProveedor);
             if (!r.items.length) {
+                // v5.41 — un rango sin entradas no es «un filtro de más»: se dice cuál rango y se ofrece quitarlo.
+                if (comprasRangoActivo() && !consulta && !_comprasFiltroProveedor) {
+                    var cargando = _comprasRangoCache.clave === _comprasClaveRango() && _comprasRangoCache.estado === 'cargando';
+                    return { html: '<div class="sbx-vacio" role="note"><div class="sbx-vacio__icono" aria-hidden="true"><i class="fa-solid fa-calendar-days"></i></div>'
+                        + '<div class="sbx-vacio__titulo">' + (cargando ? 'Consultando entradas…' : 'Sin entradas en este rango') + '</div>'
+                        + (cargando ? '' : '<div class="sbx-vacio__texto">No hay entradas con fecha de ingreso en el periodo elegido.</div>'
+                        + '<div class="sbx-vacio__acciones"><button type="button" class="sbx-btn" onclick="comprasLimpiarRango()">Quitar fechas</button></div>')
+                        + '</div>', coincidencias: 0, total: 0 };
+                }
                 return { html: BusquedaUI.vacio('compras', 'compras'), coincidencias: 0, total: r.total };
             }
             var lim = BusquedaUI.limite('compras');

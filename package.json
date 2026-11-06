@@ -81,6 +81,8 @@
     "test:existnav": "node pruebas/prueba-v532-existencias-navegador.js",
     "test:v540": "node pruebas/prueba-v540.js",
     "test:v540nav": "node pruebas/prueba-v540-navegador.js",
+    "test:v541": "node pruebas/prueba-v541.js",
+    "test:v541nav": "node pruebas/prueba-v541-navegador.js",
     "test:v539nav": "node pruebas/prueba-v539-densidad-resto-navegador.js",
     "test:v538": "node pruebas/prueba-v538-densidad.js",
     "test:v538nav": "node pruebas/prueba-v538-densidad-navegador.js",

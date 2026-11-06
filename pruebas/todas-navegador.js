@@ -74,6 +74,7 @@ const PRUEBAS = [
     'prueba-v533-blindaje-navegador.js', // v5.33 — Etapa 0: blindaje de activeTab contra v5.32 real, 23 comprobaciones
     'prueba-v534-perfil-navegador.js', // v5.34 — Mi Perfil en la app real: abrir/cerrar, Atrás, recarga, XSS, cero escrituras
     'prueba-v540-navegador.js', // v5.40 — recetario (insumo, menú ⋮), regla de ceros y control de negativos
+    'prueba-v541-navegador.js', // v5.41 — Compras: Importar Excel, rango de fechas de ingreso y resumen
     'prueba-v539-densidad-resto-navegador.js', // v5.39 — densidad en Pedidos, Recetario, Ventas, Ajustes, Admin, Importar, Papelera, Historia
     'prueba-v538-densidad-navegador.js', // v5.38 — densidad medida: barra 56 px, tarjetas, objetivos 44 px, contraste, oscuro por defecto
     'prueba-v537-navegador.js', // v5.37 — mensual cierra la semana (Firestore simulado) y Excel del pedido sugerido

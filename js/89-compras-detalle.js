@@ -114,7 +114,9 @@
         /** Abre la ventana con el detalle de una compra y su proveedor. */
         function comprasVerDetalle(compraId) {
             var lista = (typeof compras !== 'undefined' && Array.isArray(compras)) ? compras : [];
-            var c = lista.find(function(x) { return String(x.compraId) === String(compraId); });
+            // v5.41 — una entrada de un rango de fechas viejo no está en `compras`: se busca también en lo consultado.
+            var c = (typeof comprasBuscarPorId === 'function') ? comprasBuscarPorId(compraId)
+                  : lista.find(function(x) { return String(x.compraId) === String(compraId); });
             if (!c) { showNotification('⚠️ No se encontró esa compra en este dispositivo'); return; }
             comprasCerrarDetalle();
             var d = comprasDetalleDatos(c, lista, (typeof products !== 'undefined') ? products : []);

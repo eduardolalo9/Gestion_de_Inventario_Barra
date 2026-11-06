@@ -78,6 +78,7 @@ const PRUEBAS = [
     'prueba-v533-blindaje-pestana.js', // v5.33 — Etapa 0: blindaje de activeTab (valida al restaurar, no se adopta de la nube, nunca envía "perfil")
     'prueba-v534-perfil.js', // v5.34 — Mi Perfil: overlay de solo lectura (no es pestaña, no escribe, escapado, integración, versión)
     'prueba-v540.js', // v5.40 — control de negativos (pura), regla de ceros, recetario por insumo y menú ⋮
+    'prueba-v541.js', // v5.41 — Compras: rango de fechas de ingreso (consulta acotada) e Importar Excel
     'prueba-v538-densidad.js', // v5.38 — Ultra Pro Emerald: tokens, contraste, fuentes propias, capa de densidad, oscuro predeterminado
     'prueba-v537-mensual-y-pedido.js', // v5.37 — el mensual cierra la semana (fechaAncla, cierre_semanal) y Excel del pedido sugerido
     'prueba-v536-diferencias-desc.js', // v5.36 — Diferencias ↓ (función pura, pantalla, Excel)

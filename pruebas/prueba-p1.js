@@ -33,10 +33,11 @@ const C=[]; const chk=(n,ok,d)=>C.push({n,ok,d});
     return {txt:t, botones:[...document.querySelectorAll('#tabContent button')].map(b=>b.textContent.trim())}; });
   chk('Con 0 compras muestra el mensaje de vacío',
       vacio.txt.includes('Todavía no hay compras registradas'), vacio.txt.slice(0,90));
-  // v5.18 — importar se mudó al módulo "Importar desde Excel" (decisión de Eduardo);
-  // la pestaña conserva "Capturar a mano" y el texto indica dónde importar.
-  chk('Ofrece capturar a mano y dice dónde importar (módulo Importar desde Excel)',
-      !vacio.botones.some(b=>b.includes('Importar')) && vacio.botones.some(b=>b.includes('a mano')) && vacio.txt.includes('Importar desde Excel'),
+  // v5.41 — Eduardo (6-nov-2026) pidió «Importar Excel» de vuelta en Compras (había salido en v5.18).
+  // Con 0 compras la pestaña ofrece importar y capturar a mano, y el texto lo explica; el rango
+  // de fechas sigue disponible (se puede consultar entradas que aún no están cargadas).
+  chk('Ofrece «Importar Excel» y «Capturar a mano», y el texto dice cómo empezar',
+      vacio.botones.some(b=>b === 'Importar Excel') && vacio.botones.some(b=>b.includes('a mano')) && vacio.txt.includes('botón Importar Excel'),
       JSON.stringify(vacio.botones));
 
   // ── Con compras: totaliza bien ──
