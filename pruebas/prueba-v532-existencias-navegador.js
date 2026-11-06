@@ -195,7 +195,8 @@ function rutaXlsxLocal() {
   chk('★ 2 · Existencia registrada en el corte: RON = 10 (no la suma de áreas 99)', m1.A0 && m1.A0[4] === 10, JSON.stringify(m1.A0));
   chk('★ 3 · Entrada 0 → 12: VODKA (saldo 0 en el corte + compra de 12) = 12', m1.B0 && m1.B0[4] === 12, JSON.stringify(m1.B0));
   chk('★ 5 · Salida por consumo: TEQUILA = corte 2 − 5 × 0.06 = 1.7', m1.V1 && m1.V1[4] === 1.7, JSON.stringify(m1.V1));
-  chk('★ 6 · Varias áreas sin doble conteo: JARABE (sin corte) = 2 + 3 + 1.5 = 6.5 (el área que ya no existe no suma)', m1.M1 && m1.M1[4] === 6.5, JSON.stringify(m1.M1));
+  // v5.40 — regla de ceros: con corte vigente, lo que no entró al corte arranca en 0 (la suma de áreas ya no se usa).
+  chk('★ 6 · v5.40 · JARABE (no entró al corte) = 0, no la suma de áreas 6.5 ni el área vieja', m1.M1 && m1.M1[4] === 0, JSON.stringify(m1.M1));
   chk('★ 6 · Producto con corte: GINEBRA = 4 del corte, no + 57 de áreas', m1.M2 && m1.M2[4] === 4, JSON.stringify(m1.M2));
   chk('★ 11 · Caracteres especiales intactos y ID "0012" como texto', m1['0012'] && m1['0012'][2] === 'Licor "Café" & Ñandú <b>, 1/2 L 🍸'
       && m1['0012'][0] === 'Licores, Cremas & Más' && x1.tiposId.B2 === 's' && Object.values(x1.tiposId).every(t => t === 's'), JSON.stringify({ f: m1['0012'], t: x1.tiposId }));
@@ -217,7 +218,7 @@ function rutaXlsxLocal() {
   // ── 5 · Ajuste por conteo físico (producto sin corte) ───────────────────
   await p.evaluate(() => { inventarioConteo = { M1: { barra1: { enteras: 1, abiertas: [] } } }; syncStockByAreaFromConteo(); });
   e = await exportar(true); m = mapa(await leerXlsx(e.nuevas[0])); ui = await stockUI();
-  chk('★ 5 · Ajuste por conteo: JARABE barra1 3 → 1 ⇒ 2 + 1 + 1.5 = 4.5 en Excel y en la app', m.M1[4] === 4.5 && ui.M1 === 4.5, JSON.stringify({ xl: m.M1, ui: ui.M1 }));
+  chk('★ 5 · v5.40 · Un conteo por área sin contabilizar no mueve el Total: JARABE sigue en 0 en Excel y en la app', m.M1[4] === 0 && ui.M1 === 0, JSON.stringify({ xl: m.M1, ui: ui.M1 }));
 
   // ── 1 · Producto nuevo creado con el formulario real → 0 ─────────────────
   await p.evaluate(() => {
@@ -238,15 +239,16 @@ function rutaXlsxLocal() {
   // ── 3/B · Producto nuevo + compra de 12 (CAUSA RAÍZ del caso B) ──────────
   await p.evaluate(() => window.__compra('C3', [['N1', 12]]));
   e = await exportar(false);
-  chk('★ Caso B · Compra a un producto sin saldo en el corte: se AVISA antes de descargar (con el ID) y Cancelar no descarga',
-      e.hubo && /N1/.test(e.textoConfirm) && /NO suma/.test(e.textoConfirm) && e.nuevas.length === 0 && e.toasts.some(t => /cancelada/.test(t)) && e.boton,
-      JSON.stringify({ hubo: e.hubo, t: e.textoConfirm.slice(0, 300), n: e.nuevas.length, toasts: e.toasts }));
+  // v5.40 — CAUSA RAÍZ DEL CASO B RESUELTA: lo que no entró al corte arranca en 0 y SÍ suma sus compras.
+  chk('★ Caso B · v5.40 · Ya no hay aviso «NO suma» (la compra sí entra); Cancelar sigue sin descargar',
+      !/NO suma/.test(e.textoConfirm || '') && (!e.hubo || (e.nuevas.length === 0 && e.toasts.some(t => /cancelada/.test(t)))) && e.boton,
+      JSON.stringify({ hubo: e.hubo, t: (e.textoConfirm || '').slice(0, 300), n: e.nuevas.length, toasts: e.toasts }));
   e = await exportar(true); const xB = await leerXlsx(e.nuevas[0]); m = mapa(xB); ui = await stockUI();
   const audN1 = (xB.hojas['Auditoría'] || []).find(f => f[0] === 'N1');
-  chk('Caso B · Comportamiento ACTUAL documentado: la app y el Excel muestran 0 (no 12); la Auditoría muestra las 12 entradas no reflejadas',
-      m.N1[4] === 0 && ui.N1 === 0 && audN1 && audN1[5] === 12 && /no reflejadas/.test(audN1[8] || ''), JSON.stringify({ xl: m.N1, ui: ui.N1, aud: audN1 }));
+  chk('★ Caso B · v5.40 · Producto nuevo + compra de 12 = 0 + 12 = 12 en la app y en el Excel; la Auditoría: Oficial, corte 0, entradas 12, «arranca en 0»',
+      m.N1[4] === 12 && ui.N1 === 12 && audN1 && /Oficial/.test(audN1[3]) && audN1[4] === 0 && audN1[5] === 12 && /arranca en 0/.test(audN1[8] || ''), JSON.stringify({ xl: m.N1, ui: ui.N1, aud: audN1 }));
   chk('12 · Excel = app también en el caso B (el Excel no inventa una cifra distinta a la pantalla)', coincide(m, ui), JSON.stringify(ui));
-  chk('El aviso importante queda escrito en la hoja Información', (xB.hojas['Información'] || []).some(f => /importante/.test(f[0] || '') && /N1/.test(f[1] || '')));
+  chk('La hoja Información explica que lo que no entró al corte arranca en 0', (xB.hojas['Información'] || []).some(f => /^Aviso/.test(f[0] || '') && /arrancan en 0/.test(f[1] || '')), JSON.stringify(xB.hojas['Información']));
 
   // ── Sincronización incompleta: sin conexión ──────────────────────────────
   await p.evaluate(() => { products = products.filter(q => q.id !== 'N1'); movimientos = movimientos.filter(q => q.productoId !== 'N1'); });

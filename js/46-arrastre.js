@@ -115,7 +115,7 @@
          * anclaDesdeCierre(cierre, tipo)
          * El documento de anclasExistencia/{fecha} a partir del físico de un
          * cierre. Mismo criterio que inicialDesdeCierre(): un producto que
-         * nadie contó (contado === false) NO entra — "nadie lo tocó" no es
+         * nadie contó (contado === false) — v5.40: entra en 0 (regla de Eduardo, 6-nov-2026); antes no entraba — "nadie lo tocó" no es
          * "se contó y dio cero" (decisión del 4-oct-2026).
          *
          * @param {object} cierre { fecha, inventoryId, numero, productos: [{id, total, contado?}] }
@@ -128,7 +128,8 @@
             var noContados = 0;
             (cierre.productos || []).forEach(function(p) {
                 if (!p || !p.id) return;
-                if (p.contado === false) { noContados++; return; }
+                // v5.40 — regla de Eduardo (6-nov-2026): lo que nadie contó entra en 0, nunca vacío.
+                if (p.contado === false) { noContados++; p = { id: p.id, total: 0, precio: p.precio }; }
                 var t = Number(p.total);
                 if (!isFinite(t)) t = 0;
                 saldos[p.id] = Math.round(t * 1000) / 1000;

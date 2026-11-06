@@ -104,8 +104,9 @@ const PUERTO = process.env.PUERTO || '8080';
   await p.evaluate(() => toggleRecetaActiva(recetas[0].id));
   await p.waitForTimeout(100);
   chk('Desactivar marca la receta como inactiva', await p.evaluate(() => recetas[0].activa === false), '');
-  ficha = await p.evaluate(() => document.getElementById('tabContent').innerText);
-  chk('La ficha ofrece "Activar" cuando está inactiva', /Activar/.test(ficha), '');
+  // v5.40 — Editar / Activar / Eliminar viven en el menú ⋮ de la ficha (no sueltos).
+  ficha = await p.evaluate(() => { const m = document.querySelector('#tabContent .rec-menu__lista'); return m ? m.textContent : ''; });
+  chk('La ficha ofrece "Activar" (en su menú ⋮) cuando está inactiva', /Activar/.test(ficha) && !/Desactivar/.test(ficha), ficha);
   await p.evaluate(() => toggleRecetaActiva(recetas[0].id));
 
   // ── Búsqueda en la lista ────────────────────────────────────────────────

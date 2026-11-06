@@ -1253,6 +1253,9 @@
                 return '<div class="vt-wrap">' + renderIncidenciasVentas(_ventasImportResultado) + '</div>';
             }
 
+            // v5.40 — Control de negativos (js/94-control-negativos.js).
+            if (typeof controlNegativosActivo === 'function' && controlNegativosActivo()) return renderControlNegativos();
+
             var puedeImportar = hasPermission('sales.import');
             var d = _vsDatos();
             var esMes = _vs.vista === 'mes';
@@ -1269,6 +1272,14 @@
                   + '<button type="button" class="vs-btn vs-btn--secundario" onclick="ventasExportarExcel()"' + (hayDatos ? '' : ' disabled') + '>'
                   + '<i class="fa-solid fa-download" aria-hidden="true"></i> Exportar</button>'
                   + '</div>';
+            // v5.40 — acceso al Control de negativos, con cuántos insumos están por debajo de cero.
+            if (typeof controlNegativosAbrir === 'function' && hasPermission('purchases.read')) {
+                var nNeg = (typeof controlNegativosConteo === 'function') ? controlNegativosConteo() : null;
+                html += '<button type="button" class="ps-acceso cn-acceso' + (nNeg ? ' cn-acceso--neg' : '') + '" onclick="controlNegativosAbrir()">'
+                      + '<i class="fa-solid fa-scale-unbalanced" aria-hidden="true"></i><span>Control de negativos</span>'
+                      + (nNeg ? '<b class="cn-acceso__n num">' + nNeg + '</b>' : '')
+                      + '<i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button>';
+            }
 
             if (!_vsEsActiva()) {
                 html += '<div class="vs-aviso" role="status"><i class="fa-solid fa-circle-info" aria-hidden="true"></i> '

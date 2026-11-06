@@ -322,8 +322,9 @@ async function main() {
             'esperado ' + r3(p1) + '/' + r3(p2) + ' · recibido ' +
             inicial.saldos['PRD-001'] + '/' + inicial.saldos['PRD-002']);
 
-        chk('F12 · ★ un producto sin contar NO entra al inicial (corrección 4-oct-2026, pedido real de Eduardo)',
-            !('PRD-003' in inicial.saldos),
+        // v5.40 — REGLA NUEVA DE EDUARDO (6-nov-2026): lo que nadie contó entra en 0.
+        chk('F12 · ★ v5.40 · un producto sin contar entra al inicial en 0 (nunca vacío)',
+            inicial.saldos['PRD-003'] === 0,
             'antes entraba como cero explícito; ahora existenciaOficial() cae sola al stock operativo de PRD-003 — sin inventarle un cero que infle el pedido sugerido');
         chk('F12 · el inicial reporta cuántos productos quedaron fuera por no contarse',
             inicial.productosNoContados === 1, 'recibido ' + inicial.productosNoContados);

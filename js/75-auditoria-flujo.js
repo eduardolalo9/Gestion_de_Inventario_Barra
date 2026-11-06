@@ -822,7 +822,8 @@
             var conPrecio = 0, sinPrecio = 0, valorTotal = 0, noContados = 0;
             (cierre.productos || []).forEach(function(p) {
                 if (!p || !p.id) return;
-                if (p.contado === false) { noContados++; return; }
+                // v5.40 — regla de Eduardo (6-nov-2026): lo que nadie contó entra en 0, nunca vacío.
+                if (p.contado === false) { noContados++; p = { id: p.id, total: 0, precio: p.precio }; }
                 var t = Number(p.total);
                 if (!isFinite(t)) t = 0;
                 // Mismo redondeo a 3 decimales que el inicial semanal, por la
@@ -1228,8 +1229,8 @@
                      + (saldos.enCero ? '  (' + saldos.enCero + ' en cero)' : '') + '\n'
                      + 'Total de unidades: ' + (Math.round(totalUnidades * 1000) / 1000) + '\n';
                 if (saldos.noContados) {
-                    msg += '⚠️ ' + saldos.noContados + ' producto(s) sin contar — conservan su stock '
-                         + 'operativo actual (suma de las áreas), NO entran con cero.\n';
+                    msg += '⚠️ ' + saldos.noContados + ' producto(s) sin contar en ninguna área — entran en 0 '
+                         + '(su Total será 0 + entradas − consumo teórico desde este corte).\n';
                 }
                 if (faltaMes) {
                     msg += 'Valor estimado del corte: '

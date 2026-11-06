@@ -120,16 +120,14 @@
                 var origen  = r ? r.origen : 'operativo_no_reconciliado';
                 if (!r || !r.hayInicial) sinInicial++;
 
-                if (fisico === null) {
-                    pendientes++;
-                    filas.push({
-                        id: p.id, nombre: p.name || p.id, estado: 'pendiente',
-                        fisico: null, sistema: sistema, diferencia: null, neto: null,
-                        origenSistema: origen,
-                        grupo: p.group || 'General', unidad: p.unit || '', areas: porArea.areas
-                    });
-                    return;
-                }
+                // v5.40 — REGLA DE EDUARDO (6-nov-2026): "si no hay número contado
+                // en los almacenes se pone en ceros, nunca se pone vacío". Un
+                // producto que nadie contó en ninguna área cuenta como 0 físico
+                // (lo mismo que se va a contabilizar al cerrar), y se marca
+                // 'sin_contar' para que la pantalla lo diga: no es lo mismo verlo
+                // en cero que haberlo contado en cero.
+                var sinContar = (fisico === null);
+                if (sinContar) { pendientes++; fisico = 0; }
 
                 var precio = (typeof p.precio === 'number') ? p.precio : 0;
                 var dif  = redondear(fisico - sistema);
@@ -139,7 +137,7 @@
                 if (dif >  tol) totalSobrante += dif;
 
                 filas.push({
-                    id: p.id, nombre: p.name || p.id, estado: 'contado',
+                    id: p.id, nombre: p.name || p.id, estado: sinContar ? 'sin_contar' : 'contado',
                     fisico: fisico, sistema: sistema, diferencia: dif, neto: neto,
                     origenSistema: origen,
                     grupo: p.group || 'General', unidad: p.unit || '', areas: porArea.areas
@@ -184,8 +182,10 @@
                 var g = f.grupo || 'General';
                 if (!mapa[g]) mapa[g] = { grupo: g, filas: [], contados: 0, pendientes: 0, neto: 0 };
                 mapa[g].filas.push(f);
-                if (f.estado === 'pendiente') mapa[g].pendientes++;
-                else { mapa[g].contados++; mapa[g].neto += (f.neto || 0); }
+                if (f.estado === 'pendiente') { mapa[g].pendientes++; return; }
+                // v5.40 — lo sin contar vale 0: entra al neto, y se cuenta aparte.
+                if (f.estado === 'sin_contar') mapa[g].pendientes++; else mapa[g].contados++;
+                mapa[g].neto += (f.neto || 0);
             });
             var porNombre = function(a, b) { return String(a.nombre).localeCompare(String(b.nombre), 'es'); };
             return Object.keys(mapa).sort(function(a, b) { return a.localeCompare(b, 'es'); }).map(function(k) {

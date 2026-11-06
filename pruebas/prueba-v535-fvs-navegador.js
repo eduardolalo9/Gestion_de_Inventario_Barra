@@ -87,12 +87,13 @@ const num = (t) => { const m = /^([+-]?)([\d,]+\.\d+)/.exec(t.replace(/\s/g, '')
       fA && fA.sub === 'A · Botellas' && fA.celdas.length === 3 + 4 && /^6 Botellas/.test(fA.celdas[0]) && /— sin contar/.test(fA.celdas[1])
       && fA.celdas[3] === '6.00' && fA.celdas[4] === '10.00' && fA.celdas[5] === '-4.00 Faltante' && fA.celdas[6] === '-$400.00', JSON.stringify(fA));
   const fC = f.find(x => x.nombre === 'VODKA SIN CONTAR');
-  chk('★ Sin contar: «—» y «Sin contar», nunca una diferencia ni un neto inventados', fC && fC.celdas[3] === '—' && fC.celdas[5] === '— Sin contar' && fC.celdas[6] === '—', JSON.stringify(fC));
+  // v5.40 — regla de ceros: lo no contado cuenta 0 → físico 0.00, faltante −5 y su neto (marcado «sin contar»).
+  chk('★ v5.40 · Sin contar: físico 0, diferencia −5 «Faltante · sin contar» y neto −$100 (nunca vacío)', fC && fC.celdas[3] === '0.00' && /^-5\.00 Faltante · sin contar$/.test(fC.celdas[5]) && fC.celdas[6] === '-$100.00', JSON.stringify(fC));
   const t1 = await p.evaluate(() => document.getElementById('tabContent').innerText);
   const cabG = await p.evaluate(() => Array.from(document.querySelectorAll('tr.fvs-t__grupo')).map(r => r.querySelector('.fvs-grupo__nom').textContent + ' | ' + r.querySelector('.fvs-grupo__dat').textContent));
   chk('Encabezados de grupo con contados, sin contar y neto (como antes)', JSON.stringify(cabG) === JSON.stringify(
-      ['CERVEZA | 1 contado · $0.00', 'RON | 2 contados · $150.00', 'TEQUILA | 2 contados · $200.00', 'VODKA | 0 contados · 1 sin contar · $0.00']), JSON.stringify(cabG));
-  chk('Neto total intacto: −400 + 150 + 0 + 0 + 600 = $350.00', /\$350\.00/.test(t1));
+      ['CERVEZA | 1 contado · $0.00', 'RON | 2 contados · $150.00', 'TEQUILA | 2 contados · $200.00', 'VODKA | 0 contados · 1 sin contar · -$100.00']), JSON.stringify(cabG));
+  chk('v5.40 · Neto total con el sin contar en 0: −400 + 150 + 0 + 0 + 600 − 100 = $250.00', /\$250\.00/.test(t1), t1.slice(0, 400));
 
   const med = await p.evaluate(() => {
     // La fila con el nombre a propósito larguísimo envuelve a más líneas (no se corta): se mide aparte.
@@ -131,9 +132,10 @@ const num = (t) => { const m = /^([+-]?)([\d,]+\.\d+)/.exec(t.replace(/\s/g, '')
   f = await filasTabla(p);
   const difs = f.map(x => num(x.celdas[5]));
   const contadas = difs.filter(d => d !== null);
-  chk('★ «Diferencias ↑»: −4, −2, 0, +2, +3 y lo sin contar al final (orden numérico)', JSON.stringify(difs) === JSON.stringify([-4, -2, 0, 2, 3, null]), JSON.stringify(difs));
-  chk('Las 6 filas siguen ahí, ahora sin cabeceras de grupo (el grupo va en cada fila)', f.length === 6 && contadas.length === 5
-      && (await p.evaluate(() => document.querySelectorAll('tr.fvs-t__grupo').length)) === 0 && f[0].sub === 'A · Botellas · TEQUILA');
+  // v5.40 — el sin contar ya tiene diferencia (−5): ordena como cualquier otra.
+  chk('★ «Diferencias ↑»: −5 (sin contar), −4, −2, 0, +2, +3 (orden numérico)', JSON.stringify(difs) === JSON.stringify([-5, -4, -2, 0, 2, 3]), JSON.stringify(difs));
+  chk('Las 6 filas siguen ahí, ahora sin cabeceras de grupo (el grupo va en cada fila)', f.length === 6 && contadas.length === 6
+      && (await p.evaluate(() => document.querySelectorAll('tr.fvs-t__grupo').length)) === 0 && f[1].sub === 'A · Botellas · TEQUILA', JSON.stringify(f.map(x => x.sub)));
   chk('El botón queda marcado (aria-pressed) y el chip de invertir orden se oculta', await p.evaluate(() => document.getElementById('fvsDifAscBtn').getAttribute('aria-pressed') === 'true'
       && !document.querySelector('[data-sbx-filtro="orden_desc"]') && !!document.querySelector('[data-sbx-filtro="solo_dif"]')));
   await p.selectOption('#fvsGrupoSel', 'TEQUILA'); await p.waitForTimeout(250);
@@ -147,7 +149,7 @@ const num = (t) => { const m = /^([+-]?)([\d,]+\.\d+)/.exec(t.replace(/\s/g, '')
   // ── Búsqueda y chips siguen funcionando ──
   await p.click('[data-sbx-filtro="solo_dif"]'); await p.waitForTimeout(200);
   f = await filasTabla(p);
-  chk('«Solo con diferencias» sigue funcionando (quita coincide y sin contar)', f.length === 4 && !f.some(x => /VODKA|COINCIDE/.test(x.nombre)), f.map(x => x.nombre).join(','));
+  chk('«Solo con diferencias» sigue funcionando (quita lo que coincide; v5.40: el sin contar se queda, es faltante)', f.length === 5 && !f.some(x => /COINCIDE/.test(x.nombre)) && f.some(x => /VODKA/.test(x.nombre)), f.map(x => x.nombre).join(','));
   await p.click('[data-sbx-filtro="solo_dif"]'); await p.waitForTimeout(150);
   await p.fill('#sbx-input-fvs', 'ron'); await p.waitForTimeout(400);
   f = await filasTabla(p);
@@ -187,7 +189,7 @@ const num = (t) => { const m = /^([+-]?)([\d,]+\.\d+)/.exec(t.replace(/\s/g, '')
     const r = (id) => aoa.find(x => x[1] === id);
     chk('★ Faltante: sistema 10, contada 6, diferencia −4, precio 100, total −400', JSON.stringify(r('A')) === JSON.stringify(['TEQUILA', 'A', 'TEQUILA FALTANTE', 'Botellas', 10, 6, -4, 100, -400]), JSON.stringify(r('A')));
     chk('★ Sobrante en dos áreas: contada 5 (3 + 2), +3 × 50 = 150', JSON.stringify(r('B').slice(4)) === JSON.stringify([2, 5, 3, 50, 150]), JSON.stringify(r('B')));
-    chk('★ Sin contar: sale, con sistema 5, y contada/diferencia/total VACÍOS', JSON.stringify(r('C').slice(4)) === JSON.stringify([5, null, null, 20, null]), JSON.stringify(r('C')));
+    chk('★ v5.40 · Sin contar: sale con sistema 5, contada 0, diferencia −5 y total −100 (nunca vacío)', JSON.stringify(r('C').slice(4)) === JSON.stringify([5, 0, -5, 20, -100]), JSON.stringify(r('C')));
     chk('★ Sin precio: precio y total VACÍOS, diferencia −2 conservada', JSON.stringify(r('E').slice(4)) === JSON.stringify([24, 22, -2, null, null]), JSON.stringify(r('E')));
     chk('Coincide: diferencia 0 y total 0 (no vacíos)', r('D')[6] === 0 && r('D')[8] === 0, JSON.stringify(r('D')));
     chk('ID "0012" como texto (no 12)', ws['B' + (aoa.findIndex(x => x[1] === '0012') + 1)].t === 's');

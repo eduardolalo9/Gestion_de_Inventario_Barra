@@ -192,14 +192,16 @@ const conNoContado = A.inicialDesdeCierre({ fecha: '2026-09-13', inventoryId: 'I
     productos: [ { id: 'SI-CONTADO', total: 4, contado: true },
                  { id: 'NO-CONTADO', total: 0, contado: false },
                  { id: 'SIN-CAMPO',  total: 2 } ] });
-chk('★ Un producto con contado:false no entra a saldos — ni ausente por accidente, ni cero inventado',
-    !('NO-CONTADO' in conNoContado.saldos) && conNoContado.saldos['SI-CONTADO'] === 4,
+// v5.40 — REGLA NUEVA DE EDUARDO (6-nov-2026): lo que nadie contó entra en 0 («nunca se pone vacío»),
+// y un producto sin línea en el corte vigente vale 0 + compras − ventas. Reemplaza la del 4-oct-2026.
+chk('★ v5.40 · Un producto con contado:false entra a saldos en 0 (nunca vacío)',
+    conNoContado.saldos['NO-CONTADO'] === 0 && conNoContado.saldos['SI-CONTADO'] === 4,
     JSON.stringify(conNoContado.saldos));
 eq('Sin el campo `contado` (compatibilidad con cierres anteriores a esta fecha), se sigue contando',
     conNoContado.saldos['SIN-CAMPO'], 2);
-eq('totalProductos ya no incluye al que no se contó',
-    conNoContado.totalProductos, 2);
-eq('Se reporta cuántos quedaron fuera por no contarse',
+eq('v5.40 · totalProductos incluye al que no se contó (en 0)',
+    conNoContado.totalProductos, 3);
+eq('Se reporta cuántos entraron en 0 por no contarse',
     conNoContado.productosNoContados, 1);
 
 // ═══ 8 · Etiqueta legible ═════════════════════════════════════════════════

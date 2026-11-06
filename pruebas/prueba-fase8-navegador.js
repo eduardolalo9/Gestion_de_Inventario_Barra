@@ -54,8 +54,9 @@ const PUERTO = process.env.PUERTO || '8080';
   // El cálculo sigue en existenciaComparacion() y las dos cifras siguen en la ficha del producto.
   chk('★ v5.24 · Inicio ya no muestra la tarjeta de comparación de existencias', comp.txt === '' && comp.barras.length === 0, comp.txt.slice(0, 120));
   const cmp = await p.evaluate(() => existenciaComparacion());
-  chk('★ La capa de existencia sigue comparando: coinciden 2 de 3, difiere 1, uno sin inicial',
-      cmp && cmp.coinciden === 2 && cmp.comparados === 3 && cmp.sinInicial === 1, JSON.stringify(cmp && { c: cmp.coinciden, n: cmp.comparados, s: cmp.sinInicial }));
+  // v5.40 — regla de ceros: N no está en el corte → su inicial es 0 (Total 0), ya no "sin inicial".
+  chk('★ La capa de existencia sigue comparando: coinciden 2 de 4, difieren 2 (A y N, que arranca en 0), ninguno sin inicial',
+      cmp && cmp.coinciden === 2 && cmp.comparados === 4 && cmp.sinInicial === 0, JSON.stringify(cmp && { c: cmp.coinciden, n: cmp.comparados, s: cmp.sinInicial }));
   chk('★ Un nombre con HTML no se ejecuta en el panel',
       await p.evaluate(() => window.__xss === undefined && !document.querySelector('.pm-panel img')), '');
 
@@ -74,11 +75,11 @@ const PUERTO = process.env.PUERTO || '8080';
   chk('La ficha explica que por ahora manda la operativa', /manda la operativa/i.test(f), '');
   await p.keyboard.press('Escape'); await p.waitForTimeout(100);
 
-  // Un producto sin inicial lo dice, en vez de enseñar un número inventado.
+  // v5.40 — un producto que no entró al corte arranca en 0 y la ficha lo explica.
   await p.evaluate(() => abrirFichaProducto('N'));
   const fn = await p.evaluate(() => (document.getElementById('pm-ficha-wrap') || {}).innerText || '');
-  chk('★ Sin inicial, la ficha lo dice en vez de comparar contra cero',
-      /(Sin inicial contabilizado|Sin corte contabilizado vigente|no entró al último corte)/.test(fn.replace(/\s+/g, ' ')), fn.slice(0, 300));   // FASE 14: texto del ancla
+  chk('★ v5.40 · Fuera del corte, la ficha explica que arranca en 0 (0 + compras − ventas)',
+      /no entró al último corte/i.test(fn.replace(/\s+/g, ' ')) && /arranca en 0/i.test(fn), fn.slice(0, 300));
   await p.keyboard.press('Escape'); await p.waitForTimeout(100);
 
   // EL INTERRUPTOR: ya está encendido por defecto en la app real (FASE 11B),
@@ -93,10 +94,11 @@ const PUERTO = process.env.PUERTO || '8080';
     EXISTENCIA_FUENTE_OFICIAL_ACTIVA = false;
     return { tiles: t, bajo: bajo };
   });
-  chk('★ Encender la fuente oficial cambia de verdad quién está bajo mínimo',
-      tras.bajo.length === 1 && tras.bajo[0] === 'B', JSON.stringify(tras.bajo));
-  chk('★ …y el indicador del panel lo refleja (de 2 a 1)',
-      /1 BAJO M[ÍI]NIMO/i.test(tras.tiles[1] || ''), tras.tiles[1]);
+  // v5.40 — con la oficial: A sale (16 ≥ 10), B sigue (2 < 4) y N entra (arranca en 0 < 1).
+  chk('★ Encender la fuente oficial cambia de verdad quién está bajo mínimo (A sale, N entra en 0)',
+      tras.bajo.length === 2 && tras.bajo[0] === 'B' && tras.bajo[1] === 'N', JSON.stringify(tras.bajo));
+  chk('★ …y el indicador del panel lo refleja (2: B y N)',
+      /2 BAJO M[ÍI]NIMO/i.test(tras.tiles[1] || ''), tras.tiles[1]);
 
   const vuelta = await p.evaluate(() => { renderTab(); return document.querySelectorAll('.pm-tile')[1].innerText.replace(/\s+/g, ' ').trim(); });
   chk('Apagar la bandera devuelve la app a la cifra operativa', /2 BAJO M[ÍI]NIMO/i.test(vuelta), vuelta);

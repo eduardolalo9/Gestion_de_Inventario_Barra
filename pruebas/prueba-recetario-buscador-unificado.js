@@ -70,7 +70,8 @@ chk('★ El PV se trata como código exacto (codigo:true) — solo existe si la 
 chk('La categoría pesa como el grupo del catálogo (peso 1, texto libre)',
     /\{ nombre: 'categoria',\s*peso: 1 \}/.test(busc));
 chk('★ _buscarRecetario() usa el motor sobre el arreglo real `recetas` y la variable de consulta real',
-    /function _buscarRecetario\(\) \{\s*return _motorRecetas\.buscar\(recetas, _recetarioSearchTerm\);\s*\}/.test(busc));
+    // v5.40: además, el chip «Insumo» usa _motorRecetasInsumo sobre el mismo arreglo y la misma consulta.
+    /function _buscarRecetario\(\) \{[\s\S]{0,400}return _motorRecetasInsumo\.buscar\(recetas, _recetarioSearchTerm\);[\s\S]{0,40}return _motorRecetas\.buscar\(recetas, _recetarioSearchTerm\);\s*\}/.test(busc));
 
 // ═══ 2 · EL REGISTRO EN BusquedaUI — MISMA BARRA, MISMOS ATAJOS ════════════
 chk('★ Existe BusquedaUI.registrar(\'recetario\', …) — la misma barra, el mismo resaltado, los mismos atajos de teclado que Inicio',
@@ -94,8 +95,8 @@ chk('★ _renderRecetarioLista() ahora pinta la barra compartida (BusquedaUI.bar
     /function _renderRecetarioLista\(\) \{\s*var html = BusquedaUI\.barra\('recetario', \{/.test(rec));
 chk('★ La región de resultados se arma con BusquedaUI.region(\'recetario\', …) — lo que permite el refresco incremental',
     /html \+= BusquedaUI\.region\('recetario', _renderRecetarioResultados\(\)\.html\);/.test(rec));
-chk('El placeholder menciona nombre, código Y categoría — las tres claves del motor',
-    /placeholder: 'Buscar receta por nombre, código o categoría…'/.test(rec));
+chk('v5.40 · El placeholder menciona receta, código e insumo (los dos modos de búsqueda)',
+    /placeholder: 'Buscar receta, código o insumo…'/.test(rec));
 
 // ═══ 4 · _renderRecetarioResultados() — EL MISMO TRATO QUE INICIO ══════════
 const fRes = funcion(rec, '_renderRecetarioResultados');
@@ -113,7 +114,7 @@ chk('★ Pagina con BusquedaUI.centinela (\"Mostrar N más\") — antes pintaba 
 chk('★ Cada tarjeta lleva data-sbx-item — habilita la navegación con flechas del teclado (igual que Inicio/Pedidos/Historia)',
     /data-sbx-item onclick="_recetarioAbrirFicha/.test(fRes));
 chk('★ El nombre y la categoría se resaltan con el mismo resaltarBusqueda() del motor compartido (antes: texto plano)',
-    /resaltarBusqueda\(receta\.nombre \|\| '\(sin nombre\)', _recetarioSearchTerm\)/.test(fRes) &&
+    /resaltarBusqueda\(receta\.nombre \|\| '\(sin nombre\)', porInsumo \? '' : _recetarioSearchTerm\)/.test(fRes) &&
     /resaltarBusqueda\(receta\.categoria, _recetarioSearchTerm\)/.test(fRes));
 chk('Sin consulta activa, se alfabetiza por nombre (el motor no reordena una lista sin consulta — ver 05-busqueda-motor.js)',
     /if \(!\(_recetarioSearchTerm \|\| ''\)\.trim\(\)\) \{[\s\S]{0,600}?localeCompare/.test(fRes));

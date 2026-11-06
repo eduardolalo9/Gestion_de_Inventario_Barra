@@ -109,8 +109,10 @@ if (api) {
         api.entradas().A === 4, JSON.stringify(api.entradas()));
 
     const n = api.oficial(P_N);
-    chk('★ Un producto sin línea en el inicial usa el respaldo, no cero',
-        n.valor === 7 && n.origen === 'operativo_no_reconciliado', JSON.stringify(n));
+    // v5.40 — REGLA NUEVA DE EDUARDO (6-nov-2026): lo que nadie contó entra en 0 («nunca se pone vacío»),
+    // y un producto sin línea en el corte vigente vale 0 + compras − ventas. Reemplaza la del 4-oct-2026.
+    chk('★ v5.40 · Un producto sin línea en el inicial vale 0 + compras − ventas (no el respaldo operativo)',
+        n.valor === 0 && n.origen === 'oficial' && n.inicial === 0 && n.inicialCero === true, JSON.stringify(n));
 
     // ── Ventas: hoy vacías (FASE 10), pero la resta ya está enchufada ───────
     chk('Las ventas hoy son un hueco explícito (FASE 10)',
@@ -143,10 +145,11 @@ if (api) {
     ctx.products = [P_A, P_B, P_N];
     api.setInicial({ semana: SEM, estado: 'ok', saldos: { A: 12, B: 2.0005 }, origen: null });
     const c = api.comparar();
-    chk('La comparación solo mide lo comparable',
-        c.comparados === 2 && c.sinInicial === 1, JSON.stringify(c).slice(0, 160));
+    // v5.40: con corte vigente, el producto sin línea (N) también es comparable (inicial 0).
+    chk('La comparación mide todo lo que tiene corte (v5.40: también el que entra en 0)',
+        c.comparados === 3 && c.sinInicial === 0, JSON.stringify(c).slice(0, 160));
     chk('★ Una diferencia por debajo de la tolerancia cuenta como coincidencia',
-        c.coinciden === 1 && c.difieren === 1, JSON.stringify(c).slice(0, 160));
+        c.coinciden === 1 && c.difieren === 2, JSON.stringify(c).slice(0, 160));
     chk('La diferencia se reporta con signo (oficial − operativa)',
         c.filas[0].id === 'A' && c.filas[0].dif === 7, JSON.stringify(c.filas[0]));
 

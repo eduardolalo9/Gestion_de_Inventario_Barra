@@ -61,13 +61,14 @@ const fila = (id) => datos.filas.find(f => f.id === id);
 
 // ═══ 1 · Convención de la app (no se cambia) ══════════════════════════════
 chk('Convención intacta: diferencia = físico − sistema (A: 6 − 10 = −4; neto −400)', fila('A').diferencia === -4 && fila('A').neto === -400);
-chk('Sin contar → diferencia null (no 0); sí trae «Sistema»', fila('C').estado === 'pendiente' && fila('C').diferencia === null && fila('C').fisico === null && fila('C').sistema === 5);
+// v5.40 — REGLA NUEVA DE EDUARDO (6-nov-2026): lo que nadie contó cuenta como 0, nunca vacío.
+chk('v5.40 · Sin contar → físico 0 y diferencia −5 (marcado sin_contar); trae «Sistema»', fila('C').estado === 'sin_contar' && fila('C').diferencia === -5 && fila('C').fisico === 0 && fila('C').sistema === 5);
 
 // ═══ 2 · «Diferencias ↑» ══════════════════════════════════════════════════
 const filasCopia = JSON.stringify(datos.filas);
 const asc = vm.runInContext('fisicoVsSistemaOrdenarDifAsc(fisicoVsSistemaCalcular().filas)', ctx);
-chk('★ Orden ascendente NUMÉRICO: −4, −0.5, 0, +1.25, +3 y lo sin contar al final',
-    JSON.stringify(asc.map(f => f.id)) === JSON.stringify(['A', 'E', 'D', '0012', 'B', 'C']), asc.map(f => f.id + ':' + f.diferencia).join(' '));
+chk('★ Orden ascendente NUMÉRICO: −5 (sin contar = 0), −4, −0.5, 0, +1.25, +3',
+    JSON.stringify(asc.map(f => f.id)) === JSON.stringify(['C', 'A', 'E', 'D', '0012', 'B']), asc.map(f => f.id + ':' + f.diferencia).join(' '));
 const raras = [
     { id: 'x1', nombre: 'Z', estado: 'contado', diferencia: 10 }, { id: 'x2', nombre: 'Y', estado: 'contado', diferencia: -10 },
     { id: 'x3', nombre: 'X', estado: 'contado', diferencia: 2 },  { id: 'x4', nombre: 'W', estado: 'contado', diferencia: NaN },
@@ -114,14 +115,14 @@ chk('★ Columnas EXACTAS y en orden', JSON.stringify(vm.runInContext('FVS_EXPOR
 const ex = vm.runInContext('fvsExportFilas(fisicoVsSistemaOrdenVisible(fisicoVsSistemaCalcular().filas, { difAsc: true }).filas, function(id) { return products.find(function(p) { return p.id === id; }); })', ctx);
 const e = (id) => ex.find(f => f.id === id);
 chk('★ Contado: sistema, contada, diferencia (con signo), precio y total = diferencia × precio', JSON.stringify(e('A')) === JSON.stringify(
-    { grupo: 'TEQUILA', id: 'A', descripcion: 'TEQUILA A', unidad: 'Botellas', sistema: 10, contada: 6, diferencia: -4, precio: 100, total: -400, estado: 'contado' }), JSON.stringify(e('A')));
+    { grupo: 'TEQUILA', id: 'A', descripcion: 'TEQUILA A', unidad: 'Botellas', sistema: 10, contada: 6, diferencia: -4, precio: 100, total: -400, estado: 'contado', sinContar: false }), JSON.stringify(e('A')));
 chk('★ El total coincide con el «Neto» de la app en cada producto con precio válido', ['A', 'B', 'D'].every(id => e(id).total === fila(id).neto), ['A', 'B', 'D'].map(id => e(id).total + '/' + fila(id).neto).join(' '));
-chk('★ Sin contar: la fila SALE, con «Sistema», y contada/diferencia/total VACÍOS (no 0)', e('C') && e('C').sistema === 5 && e('C').contada === null && e('C').diferencia === null && e('C').total === null && e('C').precio === 20);
+chk('★ v5.40 · Sin contar: contada 0, diferencia −5 y total −100 (nunca vacío), marcada sinContar', e('C') && e('C').sistema === 5 && e('C').contada === 0 && e('C').diferencia === -5 && e('C').total === -100 && e('C').precio === 20 && e('C').sinContar === true, JSON.stringify(e('C')));
 chk('★ Sin precio: Precio y Precio total VACÍOS (no se inventa); la diferencia sí sale (−0.5)', e('E').precio === null && e('E').total === null && e('E').diferencia === -0.5);
 chk('Precio inválido (texto) = sin precio, no NaN ni 0', e('0012').precio === null && e('0012').total === null && e('0012').diferencia === 1.25);
 chk('Diferencia cero: 0 (no vacío) y total 0 sin "-0"', e('D').diferencia === 0 && e('D').total === 0 && !Object.is(e('D').total, -0));
 chk('Negativos conservan su signo (faltante en dinero negativo)', e('A').total < 0 && e('E').diferencia < 0);
-chk('★ El Excel sale en el mismo orden visible', JSON.stringify(ex.map(f => f.id)) === JSON.stringify(['A', 'E', 'D', '0012', 'B', 'C']));
+chk('★ El Excel sale en el mismo orden visible', JSON.stringify(ex.map(f => f.id)) === JSON.stringify(['C', 'A', 'E', 'D', '0012', 'B']));
 chk('★ Calcular/exportar NO modificó products ni el conteo', JSON.stringify(ctx.products) === antesProductos && JSON.stringify(ctx.auditoriaConteo) === antesConteo);
 
 // ═══ 6 · Libro .xlsx real (SheetJS 0.18.5) ════════════════════════════════
@@ -142,12 +143,14 @@ if (!X) {
     chk('★ Encabezados: las 9 columnas, en el orden pedido', JSON.stringify(aoa[0]) === JSON.stringify(vm.runInContext('FVS_EXPORT_COLUMNAS', ctx)), JSON.stringify(aoa[0]));
     chk('Una fila por producto (6) y nada más', aoa.length === 7);
     chk('★ Cantidades, diferencia, precio y total son NÚMEROS en Excel (no texto)', ['E2', 'F2', 'G2', 'H2', 'I2'].every(r => ws[r] && ws[r].t === 'n'), ['E2', 'F2', 'G2', 'H2', 'I2'].map(r => ws[r] && ws[r].t).join(','));
-    chk('ID como texto (el código "0012" no se vuelve 12)', ws['B5'] && ws['B5'].t === 's' && ws['B5'].v === '0012', JSON.stringify(ws['B5']));
+    const r0012 = 'B' + (aoa.findIndex(r => r[1] === '0012') + 1);
+    chk('ID como texto (el código "0012" no se vuelve 12)', ws[r0012] && ws[r0012].t === 's' && ws[r0012].v === '0012', JSON.stringify(ws[r0012]));
     const filaC = aoa.findIndex(r => r[1] === 'C');
-    chk('★ Sin contar: celdas vacías en Excel (no 0)', aoa[filaC][4] === 5 && aoa[filaC][5] === null && aoa[filaC][6] === null && aoa[filaC][8] === null, JSON.stringify(aoa[filaC]));
+    chk('★ v5.40 · Sin contar: contada 0, diferencia −5, total −100 en Excel (nunca vacío)', aoa[filaC][4] === 5 && aoa[filaC][5] === 0 && aoa[filaC][6] === -5 && aoa[filaC][8] === -100, JSON.stringify(aoa[filaC]));
     const filaE = aoa.findIndex(r => r[1] === 'E');
     chk('★ Sin precio: Precio y Precio total vacíos en Excel', aoa[filaE][7] === null && aoa[filaE][8] === null && aoa[filaE][6] === -0.5, JSON.stringify(aoa[filaE]));
-    chk('Valores negativos intactos en el archivo', aoa[1][6] === -4 && aoa[1][8] === -400, JSON.stringify(aoa[1]));
+    const filaA = aoa.findIndex(r => r[1] === 'A');
+    chk('Valores negativos intactos en el archivo', aoa[filaA][6] === -4 && aoa[filaA][8] === -400, JSON.stringify(aoa[filaA]));
     chk('Formatos numéricos: cantidades, diferencia con signo y moneda', /0\.00#/.test(ws['E2'].z || '') && /^\+/.test(ws['G2'].z || '') && /\$/.test(ws['I2'].z || ''), [ws['E2'].z, ws['G2'].z, ws['I2'].z].join(' | '));
     chk('Filtros de Excel en el encabezado (A1:I7)', ws['!autofilter'] && ws['!autofilter'].ref === 'A1:I7', JSON.stringify(ws['!autofilter']));
     chk('Anchos de columna definidos para las 9', Array.isArray(ws['!cols']) && ws['!cols'].length === 9);
@@ -155,8 +158,8 @@ if (!X) {
     const xml = Buffer.from(X.CFB.find(z, '/xl/worksheets/sheet1.xml').content).toString('utf8');
     chk('★ Fila de encabezados congelada (pane ySplit=1 frozen)', !!fijo && /<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"\/>/.test(xml));
     const inf = X.utils.sheet_to_json(wb2.Sheets['Información'], { header: 1 });
-    chk('Hoja «Información»: alcance, orden, sin contar y sin precio explicados', inf.some(r => r[0] === 'Sin contar' && r[1] === 1) && inf.some(r => r[0] === 'Sin precio válido' && r[1] === 2)
-        && inf.some(r => r[0] === 'Celdas vacías' && /no es cero/.test(r[1])) && inf.some(r => r[0] === 'Alcance'));
+    chk('Hoja «Información»: alcance, orden, sin contar y sin precio explicados', inf.some(r => r[0] === 'Sin contar (cuentan como 0)' && r[1] === 1) && inf.some(r => r[0] === 'Sin precio válido' && r[1] === 2)
+        && inf.some(r => r[0] === 'Sin contar' && /cuenta como 0/.test(r[1])) && inf.some(r => r[0] === 'Alcance'));
     fs.mkdirSync(path.join(require('os').tmpdir(), 'bi-v535'), { recursive: true });
     fs.writeFileSync(path.join(require('os').tmpdir(), 'bi-v535', 'pura.xlsx'), Buffer.from(fijo || bytes));
 }

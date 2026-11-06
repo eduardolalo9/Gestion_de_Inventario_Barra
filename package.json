@@ -79,6 +79,8 @@
     "test:v528nav": "node pruebas/prueba-v528-navegador.js",
     "test:v531nav": "node pruebas/prueba-v531-tema-navegador.js",
     "test:existnav": "node pruebas/prueba-v532-existencias-navegador.js",
+    "test:v540": "node pruebas/prueba-v540.js",
+    "test:v540nav": "node pruebas/prueba-v540-navegador.js",
     "test:v539nav": "node pruebas/prueba-v539-densidad-resto-navegador.js",
     "test:v538": "node pruebas/prueba-v538-densidad.js",
     "test:v538nav": "node pruebas/prueba-v538-densidad-navegador.js",

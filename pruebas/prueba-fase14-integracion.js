@@ -340,7 +340,7 @@ async function main() {
         a1 && a1.tipo === 'fin_de_mes' && JSON.stringify(a1.saldos) === JSON.stringify(c1.saldos), JSON.stringify(a1 && a1.saldos));
     chk('Z1 · ★ la cabecera queda CONTABILIZADA con mesDestino y anclaDestino (la regla lo admite)',
         i1.estado === 'CONTABILIZADO' && i1.mesDestino === '2026-09' && i1.anclaDestino === '2026-09-30' && i1.semanaDestino === '2026-10-05', JSON.stringify(i1));
-    chk('Z1 · un producto no contado no entra al ancla (nunca un cero inventado)', a1 && !('PRD-003' in a1.saldos));
+    chk('Z1 · v5.40 · un producto no contado entra al ancla en 0 (regla de Eduardo)', a1 && a1.saldos['PRD-003'] === 0);
     // v5.37 — decisión de Eduardo (1-nov-2026): el mensual también cierra la semana.
     chk('Z1 · v5.37 — el mensual cierra la semana: UN inicial (semana 2026-10-05) con fechaAncla 2026-09-30', (await contarIniciales()) === 1);
     let iniZ1 = null;

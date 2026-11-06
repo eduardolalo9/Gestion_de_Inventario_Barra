@@ -73,6 +73,8 @@
                     existencia:  valido ? _exRed(v) : null,
                     origen:      r.fuente === 'publicado' ? 'publicado' : (r.origen === 'oficial' ? 'oficial' : 'respaldo'),
                     inicial:     (typeof r.inicial === 'number') ? r.inicial : null,
+                    // v5.40 — no entró al corte: arranca en 0 (0 + compras − consumo), nunca vacío.
+                    inicialCero: r.inicialCero === true,
                     entradas:    Number(r.entradas) || 0,
                     ventas:      Number(r.ventas) || 0,
                     operativa:   (typeof r.operativa === 'number' && isFinite(r.operativa)) ? _exRed(r.operativa) : null
@@ -129,6 +131,10 @@
             if (respaldo.length && ctx.estado === 'ok') {
                 av.push({ grave: false, texto: respaldo.length + ' producto(s) sin saldo en el corte: su existencia es la suma de áreas del conteo (respaldo).' });
             }
+            var enCero = filas.filter(function(f) { return f.inicialCero; });
+            if (enCero.length) {
+                av.push({ grave: false, texto: enCero.length + ' producto(s) no entraron al corte (nadie los contó o se dieron de alta después): arrancan en 0 y su existencia es 0 + compras − consumo.' });
+            }
             if (negativos.length) av.push({ grave: false, texto: negativos.length + ' producto(s) con existencia negativa (el consumo teórico supera corte + compras).' });
             if (ctx.noNumericos && ctx.noNumericos.length) av.push({ grave: true, texto: ctx.noNumericos.length + ' producto(s) sin cifra válida: la celda queda vacía, no en 0.' });
             if (ctx.duplicados && ctx.duplicados.length) av.push({ grave: false, texto: 'ID repetido en el catálogo, exportado una sola vez: ' + ctx.duplicados.join(', ') + '.' });
@@ -174,6 +180,7 @@
                 var obs = '';
                 if (f.origen === 'respaldo' && f.entradas > 0) obs = 'Compras no reflejadas en la existencia: ' + f.entradas;
                 else if (f.existencia === null) obs = 'Sin cifra válida';
+                else if (f.inicialCero) obs = 'No entró al corte: arranca en 0' + (f.existencia < 0 ? ' · existencia negativa' : '');
                 else if (f.existencia < 0) obs = 'Existencia negativa';
                 aud.push([f.id, f.descripcion, f.existencia === null ? '' : f.existencia, _exTextoOrigen(f.origen),
                           f.inicial === null ? '' : f.inicial, f.entradas, f.ventas, f.operativa === null ? '' : f.operativa, obs]);

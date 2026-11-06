@@ -551,6 +551,84 @@
         }
         window.renderRecetarioTab = renderRecetarioTab;
 
+        // ══════════════════════════════════════════════════════════════════
+        //  v5.40 — MENÚ DE TRES PUNTOS (Editar · Desactivar/Activar · Eliminar)
+        //  Pedido de Eduardo (6-nov-2026): las acciones no se muestran sueltas en
+        //  la tarjeta; cada receta tiene un botón ⋮ que las despliega. Mismas
+        //  funciones y mismo permiso (recipe.edit) de siempre; Eliminar sigue
+        //  pidiendo confirmación. El menú se abre y cierra en el DOM (sin
+        //  repintar la lista): Escape, tocar fuera o elegir una opción lo cierran.
+        // ══════════════════════════════════════════════════════════════════
+        function _recetaMenuHtml(r) {
+            var id = escapeHtml(String(r.id));
+            var nom = escapeHtml(r.nombre || 'receta');
+            return '<div class="rec-menu" data-rec-menu-wrap>'
+                 + '<button type="button" class="rec-menu__btn" data-rec-menu="' + id + '" aria-haspopup="menu" aria-expanded="false"'
+                 + ' aria-label="Opciones de ' + nom + '" title="Opciones"><i class="fa-solid fa-ellipsis-vertical" aria-hidden="true"></i></button>'
+                 + '<div class="rec-menu__lista" role="menu" hidden>'
+                 + '<button type="button" role="menuitem" class="rec-menu__item" data-rec-accion="editar" data-rec-id="' + id + '"><i class="fa-solid fa-pen" aria-hidden="true"></i> Editar</button>'
+                 + '<button type="button" role="menuitem" class="rec-menu__item" data-rec-accion="activar" data-rec-id="' + id + '"><i class="fa-solid ' + (r.activa ? 'fa-eye-slash' : 'fa-eye') + '" aria-hidden="true"></i> ' + (r.activa ? 'Desactivar' : 'Activar') + '</button>'
+                 + '<button type="button" role="menuitem" class="rec-menu__item rec-menu__item--peligro" data-rec-accion="eliminar" data-rec-id="' + id + '"><i class="fa-solid fa-trash" aria-hidden="true"></i> Eliminar</button>'
+                 + '</div></div>';
+        }
+
+        function _recetaMenuCerrarTodos(excepto) {
+            if (typeof document === 'undefined') return;
+            Array.prototype.forEach.call(document.querySelectorAll('[data-rec-menu-wrap]'), function(w) {
+                if (w === excepto) return;
+                var l = w.querySelector('.rec-menu__lista'), b = w.querySelector('[data-rec-menu]');
+                if (l && !l.hidden) { l.hidden = true; if (b) b.setAttribute('aria-expanded', 'false'); }
+            });
+        }
+
+        if (typeof document !== 'undefined' && document.addEventListener) {
+            // Captura: se resuelve ANTES del onclick de la tarjeta (que abriría la ficha).
+            document.addEventListener('click', function(e) {
+                var t = e.target && e.target.closest ? e.target : null;
+                if (!t) return;
+                var btn = t.closest('[data-rec-menu]');
+                var item = t.closest('[data-rec-accion]');
+                if (btn) {
+                    e.stopPropagation(); e.preventDefault();
+                    var wrap = btn.closest('[data-rec-menu-wrap]'), lista = wrap.querySelector('.rec-menu__lista');
+                    var abrir = lista.hidden;
+                    _recetaMenuCerrarTodos(wrap);
+                    lista.hidden = !abrir;
+                    btn.setAttribute('aria-expanded', abrir ? 'true' : 'false');
+                    if (abrir) { var p = lista.querySelector('[role="menuitem"]'); if (p) p.focus(); }
+                    return;
+                }
+                if (item) {
+                    e.stopPropagation(); e.preventDefault();
+                    var id = item.getAttribute('data-rec-id'), acc = item.getAttribute('data-rec-accion');
+                    _recetaMenuCerrarTodos(null);
+                    if (acc === 'editar') openRecetaModal(id);
+                    else if (acc === 'activar') toggleRecetaActiva(id);
+                    else if (acc === 'eliminar') eliminarReceta(id);
+                    return;
+                }
+                if (!t.closest('[data-rec-menu-wrap]')) _recetaMenuCerrarTodos(null);
+            }, true);
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') _recetaMenuCerrarTodos(null);
+            });
+        }
+
+        /** Nombres de los insumos de la receta que coinciden con la búsqueda (sin tildes, por palabras). */
+        function _recetaInsumosCoinciden(r, q) {
+            var norm = function(s) { return (typeof normalizarBusqueda === 'function') ? normalizarBusqueda(s) : String(s || '').toLowerCase(); };
+            var palabras = norm(q).split(' ').filter(Boolean);
+            if (!palabras.length) return [];
+            var out = [];
+            (r.ingredientes || []).forEach(function(ing) {
+                var p = (typeof products !== 'undefined' && Array.isArray(products)) ? products.find(function(x) { return x.id === ing.productoId; }) : null;
+                var nombre = (p && p.name) || ing.descripcionExcel || ing.productoId || '';
+                var texto = norm(nombre + ' ' + (ing.productoId || ''));
+                if (palabras.every(function(w) { return texto.indexOf(w) !== -1; })) out.push(nombre);
+            });
+            return out;
+        }
+
         // REDISEÑO — la lista del Recetario ahora usa la misma barra de
         // búsqueda que Inicio (ver js/80-buscador.js, registro 'recetario'):
         // antes tenía su propio <input> con comparación de subcadena a mano
@@ -560,16 +638,26 @@
         // sola en cada tecleo, sin repintar la barra entera.
         function _renderRecetarioLista() {
             var html = BusquedaUI.barra('recetario', {
-                placeholder: 'Buscar receta por nombre, código o categoría…',
+                placeholder: 'Buscar receta, código o insumo…',
                 etiqueta: 'Buscar recetas',
                 sticky: true
             });
+            // v5.40 — dos modos de búsqueda excluyentes (pedido de Eduardo, 6-nov-2026):
+            // «Receta» busca por nombre / código PV / categoría (el producto que se
+            // vende); «Insumo» busca las recetas que llevan ese insumo.
+            var f = BusquedaUI.filtros('recetario');
+            if (!f.porReceta && !f.porInsumo) f.porReceta = true;
+            html += BusquedaUI.chips('recetario', [
+                { id: 'porReceta', etiqueta: 'Receta', grupo: 'modo' },
+                { id: 'porInsumo', etiqueta: 'Insumo', grupo: 'modo' }
+            ]);
             html += BusquedaUI.region('recetario', _renderRecetarioResultados().html);
             return html;
         }
 
         function _renderRecetarioResultados() {
             var puedeEditar = hasPermission('recipe.edit');
+            var porInsumo = BusquedaUI.filtroActivo('recetario', 'porInsumo');
 
             if (recetas.length === 0) {
                 return {
@@ -606,12 +694,19 @@
                 var costoTxt = cr.incompleto ? 'Costo incompleto' : ('$' + cr.costo.toFixed(2));
                 html += '<div class="rec-card" data-sbx-item onclick="_recetarioAbrirFicha(\'' + receta.id + '\')">';
                 html += '<div class="rec-card__cab">';
-                html += '<p class="rec-card__nom">' + resaltarBusqueda(receta.nombre || '(sin nombre)', _recetarioSearchTerm) + '</p>';
+                html += '<p class="rec-card__nom">' + resaltarBusqueda(receta.nombre || '(sin nombre)', porInsumo ? '' : _recetarioSearchTerm) + '</p>';
                 if (!receta.activa) html += '<span style="font-size:.68rem;background:var(--card-high);color:var(--txt-muted);padding:2px 8px;border-radius:999px;white-space:nowrap;">Inactiva</span>';
                 // v5.26 (hallazgo #1) — sin PV esta receta no descuenta inventario al venderse: visible
                 // de un vistazo, no solo al entrar a la ficha.
                 else if (puedeEditar && !receta.pv) html += '<span style="font-size:.68rem;background:var(--warn-dim);color:var(--warn);padding:2px 8px;border-radius:999px;white-space:nowrap;">Sin PV</span>';
+                if (puedeEditar) html += _recetaMenuHtml(receta);
                 html += '</div>';
+                if (porInsumo && (_recetarioSearchTerm || '').trim()) {
+                    var coinc = _recetaInsumosCoinciden(receta, _recetarioSearchTerm);
+                    if (coinc.length) html += '<div class="rec-card__insumo"><i class="fa-solid fa-flask" aria-hidden="true"></i> '
+                        + coinc.slice(0, 2).map(function(n) { return resaltarBusqueda(n, _recetarioSearchTerm); }).join(' · ')
+                        + (coinc.length > 2 ? ' +' + (coinc.length - 2) : '') + '</div>';
+                }
                 html += '<div class="rec-card__meta"><span class="rec-card__det">'
                       + (receta.categoria ? resaltarBusqueda(receta.categoria, _recetarioSearchTerm) + ' · ' : '')
                       + receta.ingredientes.length + ' insumo' + (receta.ingredientes.length === 1 ? '' : 's') + '</span>';
@@ -646,14 +741,9 @@
             // importación (Recetario-2) — nunca lo llena el editor manual.
             if (r.pv) html += '<p style="color:var(--txt-secondary);font-size:.76rem;margin:4px 0 0;">Código: ' + escapeHtml(r.pv) + '</p>';
             html += '</div>';
-            if (puedeEditar) {
-                html += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
-                html += '<button onclick="openRecetaModal(\'' + r.id + '\')" style="padding:8px 16px;border-radius:999px;border:none;background:var(--accent);color:var(--accent-on);font-size:.8rem;font-weight:600;cursor:pointer;">Editar</button>';
-                html += '<button onclick="toggleRecetaActiva(\'' + r.id + '\')" style="padding:8px 16px;border-radius:999px;border:1px solid var(--border-mid);background:transparent;color:var(--txt-secondary);font-size:.8rem;cursor:pointer;">' +
-                        (r.activa ? 'Desactivar' : 'Activar') + '</button>';
-                html += '<button onclick="eliminarReceta(\'' + r.id + '\')" style="padding:8px 16px;border-radius:999px;border:1px solid var(--danger-dim);background:transparent;color:var(--danger);font-size:.8rem;cursor:pointer;">Eliminar</button>';
-                html += '</div>';
-            }
+            // v5.40 — Editar / Desactivar / Eliminar ya no son tres botones sueltos:
+            // van en el menú de tres puntos, igual que en cada tarjeta de la lista.
+            if (puedeEditar) html += _recetaMenuHtml(r);
             html += '</div>';
 
             html += '<div style="margin-top:18px;">';

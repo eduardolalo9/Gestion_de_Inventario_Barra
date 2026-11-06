@@ -57,18 +57,20 @@ const PUERTO = process.env.PUERTO || '8080';
   await p.waitForTimeout(200);
   const t1 = await p.evaluate(() => document.getElementById('tabContent').innerText);
   chk('Abre la pantalla con el título correcto', /Físico vs Sistema/.test(t1), t1.slice(0, 80));
-  chk('★ Muestra 2 contados y 1 pendiente', /2 contados/.test(t1) && /1 pendiente/.test(t1), t1.slice(0, 300));
+  // v5.40 — regla de ceros: lo no contado cuenta 0 (sale como «sin contar», con su faltante).
+  chk('★ Muestra 2 contados y 1 sin contar (cuenta 0)', /2 contados/.test(t1) && /1 sin contar \(cuentan 0\)/.test(t1), t1.slice(0, 300));
   chk('★ El faltante de A se ve (físico 6 contra sistema 10)', /TEQUILA FALTANTE/.test(t1) && /Faltante/.test(t1), '');
   chk('★ El sobrante de B se ve', /RON SOBRANTE/.test(t1) && /Sobrante/.test(t1), '');
   chk('★ El pendiente dice "sin contar", nunca una diferencia inventada',
       /VODKA SIN CONTAR/.test(t1) && /[Ss]in contar/.test(t1), '');
-  chk('Neto en dinero: -4×100 + 3×50 = -$250 (signo antes del símbolo)', /-\$250\.00/.test(t1.replace(/\s/g, ' ')), t1);
+  chk('Neto en dinero: -4×100 + 3×50 − 5×20 (sin contar = 0) = -$350 (signo antes del símbolo)', /-\$350\.00/.test(t1.replace(/\s/g, ' ')), t1);
 
   // ── Chip "solo con diferencias": oculta el pendiente de la lista ─────────
   await p.evaluate(() => document.querySelector('[data-sbx-filtro="solo_dif"]').click());
   await p.waitForTimeout(150);
   const t2 = await p.evaluate(() => document.getElementById('sbx-res-fvs').innerText);
-  chk('★ "Solo con diferencias" quita el pendiente de la lista', !/VODKA SIN CONTAR/.test(t2), t2.slice(0, 200));
+  // v5.40 — el sin contar ES un faltante (0 contra 5), así que se queda en «Solo con diferencias».
+  chk('★ "Solo con diferencias" conserva el sin contar (faltante de 5 al contar 0)', /VODKA SIN CONTAR/.test(t2), t2.slice(0, 200));
   chk('…pero conserva faltante y sobrante', /TEQUILA FALTANTE/.test(t2) && /RON SOBRANTE/.test(t2), '');
 
   // ── Buscador ──────────────────────────────────────────────────────────

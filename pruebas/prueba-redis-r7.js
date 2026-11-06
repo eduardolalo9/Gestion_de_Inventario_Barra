@@ -178,8 +178,9 @@ chk('★ "← Volver al recetario" usa fa-chevron-left, como los demás botones 
     /fa-solid fa-chevron-left" aria-hidden="true"><\/i> Volver al recetario/.test(fFicha));
 chk('★ Los botones Editar/Activar/Eliminar de la ficha no tienen fallback muerto ni hex a mano',
     !DEAD_FALLBACK.test(fFicha) && !/#dc2626/.test(fFicha) && !/#d97706/.test(fFicha));
-chk('★ "Eliminar" usa var(--danger-dim) de borde, no rgba(220,38,38,.35) a mano',
-    /border:1px solid var\(--danger-dim\)/.test(fFicha) && !/rgba\(220,\s*38,\s*38/.test(fFicha));
+// v5.40 — Editar/Desactivar/Eliminar pasaron al menú de tres puntos (_recetaMenuHtml + css/densidad.css .rec-menu__item--peligro).
+chk('★ "Eliminar" va en el menú ⋮ con el tono de peligro del tema (sin rgba a mano)',
+    /_recetaMenuHtml\(r\)/.test(fFicha) && /rec-menu__item--peligro/.test(recJs) && !/rgba\(220,\s*38,\s*38/.test(fFicha));
 chk('★ La tabla de ingredientes de la ficha usa var(--danger)/var(--warn), sin hex a mano',
     /color:var\(--danger\)/.test(fFicha) && /color:var\(--warn\)/.test(fFicha));
 chk('Ningún color hex a mano queda en js/91-recetario.js',

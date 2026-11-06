@@ -45,7 +45,8 @@ const PUERTO = process.env.PUERTO || '8080';
   // ── 1 · El Total sale del ancla ──────────────────────────────────────────
   const tot = await p.evaluate(() => ({ teq: existenciaOficial(products[0]), lim: existenciaOficial(products[1]) }));
   chk('★ Total del tequila = corte 1 − 5×0.06 = 0.7 (venta posterior al corte)', tot.teq.valor === 0.7 && tot.teq.origen === 'oficial', JSON.stringify(tot.teq));
-  chk('Un insumo que no entró al corte usa el respaldo (limón = 4 de áreas)', tot.lim.valor === 4 && tot.lim.origen === 'operativo_no_reconciliado', JSON.stringify(tot.lim));
+  // v5.40 — regla de ceros: lo que no entró al corte arranca en 0 (ya no usa el respaldo de áreas).
+  chk('★ v5.40 · Un insumo que no entró al corte arranca en 0: limón = 0 − 5×0.03 = −0.15 (oficial, no el 4 de áreas)', tot.lim.valor === -0.15 && tot.lim.origen === 'oficial' && tot.lim.inicialCero === true, JSON.stringify(tot.lim));
 
   await p.evaluate(() => { document.documentElement.setAttribute('data-theme', 'dark'); activeTab = 'inicio'; renderTab(); });
   await p.waitForTimeout(300);
@@ -101,14 +102,17 @@ const PUERTO = process.env.PUERTO || '8080';
   chk('★ Simular NO escribe nada (ningún guardado, ventas en memoria intactas)',
       sim.escrituras === 0 && antesVentas === await p.evaluate(() => JSON.stringify(ventas)), String(sim.escrituras));
   chk('★ Efecto: ventas posteriores al corte → "bajan el Total"', sim.s && sim.s.efecto === 'baja_total' && /bajan el Total/.test(sim.txt), sim.s && sim.s.efecto);
-  // Tequila: Total 0.7 − 20×0.06 = −0.5 → faltante 0.5 × $350 = $175. Limón: respaldo 4 − 0.6 → alcanza. Ginebra: 5 − 0.6 → alcanza.
+  // Tequila: Total 0.7 − 20×0.06 = −0.5 → faltante 0.5 × $350 = $175.
+  // v5.40 — Limón: arranca en 0 (fuera del corte) → −0.15 − 0.6 → no alcanza, faltante 0.6, sin precio. Ginebra: 5 − 0.6 → alcanza.
   const teq = sim.s && sim.s.noAlcanzan.find(x => x.productoId === 'TEQ');
-  chk('★ Señala el insumo que el Total no cubre: tequila, faltante 0.5, costo $175',
-      sim.s && sim.s.totalNoAlcanzan === 1 && teq && teq.faltante === 0.5 && teq.costoFaltante === 175, JSON.stringify(sim.s && sim.s.noAlcanzan));
-  chk('La tabla "Insumos que el Total no cubre" tiene una fila y muestra el costo en pesos',
-      sim.filas === 1 && /\$175\.00/.test(sim.txt), sim.txt.slice(0, 600));
+  const lim = sim.s && sim.s.noAlcanzan.find(x => x.productoId === 'LIM');
+  chk('★ Señala los insumos que el Total no cubre: tequila (faltante 0.5, $175) y limón (faltante 0.6, sin precio)',
+      sim.s && sim.s.totalNoAlcanzan === 2 && teq && teq.faltante === 0.5 && teq.costoFaltante === 175
+      && lim && lim.faltante === 0.6 && lim.costoFaltante === null, JSON.stringify(sim.s && sim.s.noAlcanzan));
+  chk('La tabla "Insumos que el Total no cubre" tiene dos filas y el costo en pesos ($175, el limón sin precio)',
+      sim.filas === 2 && /\$175\.00/.test(sim.txt) && /sin precio/.test(sim.txt), sim.txt.slice(0, 600));
   chk('Avisa el producto vendido sin receta (no se descuenta de nada)', /1 producto\(s\) sin receta/.test(sim.txt) && /TE GOURMET/.test(sim.txt));
-  chk('Marca el insumo que usa el respaldo (limón, no entró al corte)', sim.s && sim.s.enRespaldo === 1 && /respaldo/.test(sim.txt));
+  chk('v5.40 · Ya no hay insumos «en respaldo» con corte vigente (lo no contado arranca en 0)', sim.s && sim.s.enRespaldo === 0 && !/respaldo/.test(sim.txt), sim.s && String(sim.s.enRespaldo));
 
   const ovf = await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
   chk('Sin desborde horizontal a 390 px con la simulación abierta', ovf);
@@ -143,7 +147,7 @@ const PUERTO = process.env.PUERTO || '8080';
   await p.click('#ventasBtnConfirmar'); await p.waitForTimeout(150);
   const conf = await p.evaluate(() => ({ msg: window.__msg, escrituras: window.__escrituras.length }));
   chk('★ Procesar pide confirmación con el resumen (insumos, no alcanzan, desviación) ANTES de escribir',
-      conf.escrituras === 0 && /PROCESAR VENTA/.test(conf.msg || '') && /1 insumo\(s\) no alcanzan · desviación \$175\.00/.test(conf.msg || ''), conf.msg);
+      conf.escrituras === 0 && /PROCESAR VENTA/.test(conf.msg || '') && /2 insumo\(s\) no alcanzan · desviación \$175\.00 \(\+1 sin precio\)/.test(conf.msg || ''), conf.msg);
   await p.evaluate(async () => { await window.__cb(); }); await p.waitForTimeout(300);
   const fin = await p.evaluate(() => ({ escrituras: window.__escrituras, txt: document.getElementById('tabContent').innerText,
                                        res: _ventasImportResultado }));

@@ -93,6 +93,25 @@
             ]
         });
 
+        // v5.40 — Búsqueda de recetas POR INSUMO (pedido de Eduardo, 6-nov-2026):
+        // "¿en qué recetas va el tequila 1800?". Indexa el nombre y el código de
+        // cada insumo de la receta (del catálogo; si el insumo no está en el
+        // catálogo, la descripción que traía el Excel).
+        function _recetaInsumosTexto(r) {
+            return (r && Array.isArray(r.ingredientes) ? r.ingredientes : []).map(function(ing) {
+                var p = (typeof products !== 'undefined' && Array.isArray(products))
+                    ? products.find(function(x) { return x.id === ing.productoId; }) : null;
+                return (p && p.name) || ing.descripcionExcel || '';
+            }).join(' · ');
+        }
+        var _motorRecetasInsumo = crearMotorBusqueda({
+            claves: [
+                { nombre: 'insumos', peso: 3, obtener: _recetaInsumosTexto },
+                { nombre: 'codigos', peso: 2, codigo: true,
+                  obtener: function(r) { return (r && Array.isArray(r.ingredientes) ? r.ingredientes : []).map(function(i) { return i.productoId || ''; }).join(' '); } }
+            ]
+        });
+
         // ── Catálogo (Inicio + Productos comparten estado) ──────────────────
 
         function _bajoMinimo(p) {
@@ -243,6 +262,11 @@
         // ── Recetario ────────────────────────────────────────────────────────
 
         function _buscarRecetario() {
+            // v5.40 — chip «Insumo»: busca dentro de los insumos de cada receta.
+            if (BusquedaUI.filtroActivo('recetario', 'porInsumo')) {
+                // (El índice se invalida solo si cambia el nombre de un insumo: firma por elemento.)
+                return _motorRecetasInsumo.buscar(recetas, _recetarioSearchTerm);
+            }
             return _motorRecetas.buscar(recetas, _recetarioSearchTerm);
         }
 

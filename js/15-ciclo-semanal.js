@@ -209,7 +209,9 @@
          * llame se acuerde de comprobarlo.
          *
          * Decisión de Eduardo (4-oct-2026): un producto que nadie contó
-         * (p.contado === false, lo calcula _saldosDesdeSnapshot) NO entra a
+         * v5.40 (6-nov-2026) — DECISIÓN NUEVA DE EDUARDO, reemplaza la de abajo: lo que
+         * nadie contó entra en 0 ("nunca se pone vacío"). Histórico de la anterior:
+         * (p.contado === false, lo calcula _saldosDesdeSnapshot) NO entraba a
          * saldos. No es lo mismo "se contó y dio cero" que "nadie lo tocó" —
          * forzar un cero aquí fue la causa de que "Total" y el pedido sugerido
          * contradijeran a las tres áreas operativas para los productos que se
@@ -232,7 +234,8 @@
             var noContados = 0;
             (cierre.productos || []).forEach(function(p) {
                 if (!p || !p.id) return;
-                if (p.contado === false) { noContados++; return; }
+                // v5.40 — regla de Eduardo (6-nov-2026): lo que nadie contó entra en 0, nunca vacío.
+                if (p.contado === false) { noContados++; p = { id: p.id, total: 0, precio: p.precio }; }
                 var t = Number(p.total);
                 if (!isFinite(t)) t = 0;
                 // Se redondea a 3 decimales, igual que el conteo: si no, sumar
@@ -285,7 +288,8 @@
             var noContados = 0;
             (cierre.productos || []).forEach(function(p) {
                 if (!p || !p.id) return;
-                if (p.contado === false) { noContados++; return; }
+                // v5.40 — regla de Eduardo (6-nov-2026): lo que nadie contó entra en 0, nunca vacío.
+                if (p.contado === false) { noContados++; p = { id: p.id, total: 0, precio: p.precio }; }
                 var t = Number(p.total);
                 if (!isFinite(t)) t = 0;
                 saldos[p.id] = Math.round(t * 1000) / 1000;

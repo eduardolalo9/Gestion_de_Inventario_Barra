@@ -464,8 +464,17 @@
             var ent = (cacheEntradas || existenciaEntradas())[product.id] || 0;
             var ven = (cacheVentas   || existenciaVentas())[product.id]   || 0;
             var ancla = _existenciaInicial.ancla || null;
-            var hay = (_existenciaInicial.estado === 'ok' && _existenciaInicial.saldos &&
-                       typeof _existenciaInicial.saldos[product.id] === 'number');
+            var hayAncla = (_existenciaInicial.estado === 'ok' && !!_existenciaInicial.saldos);
+            var hay = (hayAncla && typeof _existenciaInicial.saldos[product.id] === 'number');
+            // v5.40 — REGLA DE EDUARDO (6-nov-2026): "en existencia siempre va
+            // sumar compras, menos ventas" y "nunca se pone vacío". Si hay un
+            // corte vigente y el producto no aparece en él (no se contó, o se dio
+            // de alta después), su inicial es 0: Total = 0 + compras − ventas.
+            // Solo sin NINGÚN corte se sigue usando el respaldo operativo.
+            if (hayAncla && !hay) {
+                return { valor: _existenciaRedondear(ent - ven), origen: 'oficial', inicial: 0, inicialCero: true,
+                         entradas: ent, ventas: ven, operativa: operativa, hayInicial: true, ancla: ancla };
+            }
             if (!hay) {
                 return { valor: operativa, origen: 'operativo_no_reconciliado', inicial: undefined,
                          entradas: ent, ventas: ven, operativa: operativa, hayInicial: false, ancla: ancla };

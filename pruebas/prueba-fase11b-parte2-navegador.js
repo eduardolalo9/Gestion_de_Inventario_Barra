@@ -56,7 +56,9 @@ const PUERTO = process.env.PUERTO || '8080';
       { id: 'T', name: 'PRODUCTO ADVERTENCIA', group: 'PRUEBA', unit: 'PZA', stockMinimo: 12,
         stockByArea: { almacen: 7, barra1: 0, barra2: 0 } }
     ];
-    _existenciaInicial = { semana: sem, estado: 'ok', saldos: { P: 10 }, origen: 'prueba' };
+    // v5.40 — regla de ceros: lo que no está en el corte arranca en 0. Q y R siguen en 0
+    // (ahora por estar fuera del corte); S y T traen su saldo en el corte (9 y 7).
+    _existenciaInicial = { semana: sem, estado: 'ok', saldos: { P: 10, S: 9, T: 7 }, origen: 'prueba' };
     movimientos = [{ tipo: 'compra', productoId: 'P', cantidad: 3, semanaId: sem }];
     compras = []; costosUltimos = {}; cart = []; orders = []; _inventarioActivo = null;
     activeTab = 'inicio'; selectedGroup = 'Todos'; renderTab();

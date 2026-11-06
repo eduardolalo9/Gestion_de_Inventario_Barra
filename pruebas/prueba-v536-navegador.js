@@ -90,11 +90,12 @@ const num = (t) => { const m = /^([+-]?)([\d,]+\.\d+)/.exec(t.replace(/\s/g, '')
   await p.click('#fvsDifDescBtn'); await p.waitForTimeout(250);
   let f = await filasTabla(p);
   let difs = f.map(x => num(x.celdas[5]));
-  chk('★ «Diferencias ↓»: +3, +2, 0, −2, −4 y lo sin contar al final', JSON.stringify(difs) === JSON.stringify([3, 2, 0, -2, -4, null]), JSON.stringify(difs));
+  // v5.40 — regla de ceros: el sin contar cuenta 0 → diferencia −5, ordena como las demás.
+  chk('★ «Diferencias ↓»: +3, +2, 0, −2, −4, −5 (sin contar = 0)', JSON.stringify(difs) === JSON.stringify([3, 2, 0, -2, -4, -5]), JSON.stringify(difs));
   chk('Los 6 productos siguen ahí y el botón queda marcado', f.length === 6 && await p.evaluate(() => document.getElementById('fvsDifDescBtn').getAttribute('aria-pressed') === 'true'));
   await p.click('#fvsDifAscBtn'); await p.waitForTimeout(250);
   difs = (await filasTabla(p)).map(x => num(x.celdas[5]));
-  chk('★ Tocar ↑ apaga ↓ (excluyentes) y ordena de menor a mayor', JSON.stringify(difs) === JSON.stringify([-4, -2, 0, 2, 3, null]) && await p.evaluate(() => document.getElementById('fvsDifDescBtn').getAttribute('aria-pressed') === 'false'), JSON.stringify(difs));
+  chk('★ Tocar ↑ apaga ↓ (excluyentes) y ordena de menor a mayor', JSON.stringify(difs) === JSON.stringify([-5, -4, -2, 0, 2, 3]) && await p.evaluate(() => document.getElementById('fvsDifDescBtn').getAttribute('aria-pressed') === 'false'), JSON.stringify(difs));
   await p.click('#fvsDifDescBtn'); await p.waitForTimeout(250);
   chk('★ Tocar ↓ apaga ↑', await p.evaluate(() => document.getElementById('fvsDifAscBtn').getAttribute('aria-pressed') === 'false' && document.getElementById('fvsDifDescBtn').getAttribute('aria-pressed') === 'true'));
   await p.selectOption('#fvsGrupoSel', 'TEQUILA'); await p.waitForTimeout(250);

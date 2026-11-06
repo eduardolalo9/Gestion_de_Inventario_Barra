@@ -29,7 +29,7 @@
         //      por día, así que no se deja procesar (se pide dividirlo);
         //    · sin ningún corte contabilizado: el Total es el respaldo
         //      operativo (suma de áreas), que no resta ventas.
-        //    · un insumo que no entró al último corte usa el respaldo operativo
+        //    · un insumo que no entró al último corte usa el respaldo operativo (v5.40: ya no — con corte vigente arranca en 0; enRespaldo queda en 0)
         //      y tampoco baja (se marca en su fila).
         //
         //  "TURNO" = el periodo que cubre el reporte: un día (inicio = fin) o

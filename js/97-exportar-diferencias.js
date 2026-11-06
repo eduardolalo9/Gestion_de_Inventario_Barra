@@ -15,9 +15,9 @@
         //    Precio total de diferencia = Diferencia × Precio, a 2 decimales
         //                                (la misma cuenta que el «Neto» de la app)
         //
-        //  NUNCA un cero inventado:
-        //    · producto sin contar → Cantidad contada, Diferencia y Precio total
-        //      VACÍOS (no 0). La fila sí sale: no se excluye en silencio.
+        //  v5.40 — REGLA DE EDUARDO (6-nov-2026): lo que nadie contó en ninguna
+        //  área cuenta como 0 (nunca vacío), igual que al contabilizar. La hoja
+        //  «Información» dice cuántos son. Lo único que sigue vacío:
         //    · producto sin precio válido en el catálogo → Precio y Precio total
         //      VACÍOS. (La pantalla, como siempre, suma 0 a su Neto; el Excel no
         //      inventa un precio.) Se cuenta en la hoja «Información».
@@ -76,7 +76,8 @@
                     diferencia:  dif,
                     precio:      precio,
                     total:       total,
-                    estado:      contado ? 'contado' : 'pendiente'
+                    estado:      contado ? 'contado' : 'pendiente',
+                    sinContar:   f.estado === 'sin_contar'   // v5.40: cuenta como 0
                 };
             });
         }
@@ -118,13 +119,13 @@
                 ['Alcance', info.alcance || ''],
                 ['Orden', info.orden || ''],
                 ['Productos exportados', filas.length],
-                ['Contados', contados],
-                ['Sin contar', filas.length - contados],
+                ['Contados', filas.filter(function(f) { return f.estado === 'contado' && !f.sinContar; }).length],
+                ['Sin contar (cuentan como 0)', filas.filter(function(f) { return f.sinContar; }).length],
                 ['Sin precio válido', sinPrecio],
                 ['Diferencia', 'Cantidad contada − Cantidad en sistema. Negativo = faltante; positivo = sobrante.'],
                 ['Precio total de diferencia', 'Diferencia × Precio, redondeado a 2 decimales (igual que el Neto de la app).'],
-                ['Celdas vacías', 'Cantidad contada, Diferencia y Precio total vacíos = producto sin contar (no es cero). '
-                                + 'Precio y Precio total vacíos = el producto no tiene precio válido en el catálogo (no se inventa).'],
+                ['Sin contar', 'v5.40 — un producto que no se contó en ninguna área cuenta como 0 (Cantidad contada = 0): es lo que se contabiliza al cerrar. '],
+                ['Celdas vacías', 'Precio y Precio total vacíos = el producto no tiene precio válido en el catálogo (no se inventa).'],
                 ['Cantidad en sistema', 'La misma cifra «Sistema» de la pantalla Físico vs Sistema.'
                                       + (info.sinInicial ? ' ' + info.sinInicial + ' producto(s) comparan contra el stock operativo: no hay inicial contabilizado para ellos esta semana.' : '')]];
             var wsI = X.utils.aoa_to_sheet(inf);
@@ -233,7 +234,7 @@
                 // Fila de encabezados fija: el mismo mecanismo probado de js/97.
                 var fijo = (typeof existenciasExportCongelar === 'function') ? existenciasExportCongelar(XLSX, bytes, 1) : null;
                 _fvsDescargar(fijo || bytes, nombre);
-                var sinContar = filas.filter(function(f) { return f.estado === 'pendiente'; }).length;
+                var sinContar = filas.filter(function(f) { return f.sinContar; }).length;
                 var sinPrecio = filas.filter(function(f) { return f.precio === null; }).length;
                 showNotification('✅ ' + nombre + ' — ' + filas.length + ' producto(s)'
                     + (sinContar ? ' · ' + sinContar + ' sin contar' : '') + (sinPrecio ? ' · ' + sinPrecio + ' sin precio' : ''));

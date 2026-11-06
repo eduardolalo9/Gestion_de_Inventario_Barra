@@ -445,7 +445,7 @@
             var tol = (typeof EXISTENCIA_TOLERANCIA === 'number') ? EXISTENCIA_TOLERANCIA : 0.001;
             return _motorFvs.buscar(datos.filas, _fvsSearchTerm, {
                 filtro: soloDif
-                    ? function(f) { return f.estado === 'contado' && Math.abs(f.diferencia) > tol; }
+                    ? function(f) { return f.estado !== 'pendiente' && typeof f.diferencia === 'number' && Math.abs(f.diferencia) > tol; }
                     : null
             });
         }
@@ -539,6 +539,8 @@
             var pendiente = f.estado === 'pendiente';
             var tono = _fvsTono(f, tol);
             var etiqueta = { pendiente: 'Sin contar', faltante: 'Faltante', sobrante: 'Sobrante', coincide: 'Coincide' }[tono];
+            // v5.40 — sin contar = 0 (regla de Eduardo): la cifra se calcula, y se dice que no se contó.
+            if (f.estado === 'sin_contar') etiqueta += ' · sin contar';
             var h = '<tr class="fvs-t__fila fvs-t__fila--' + tono + '" data-sbx-item>';
             h += '<th scope="row" class="fvs-t__prod"><span class="fvs-t__nom">' + resaltarBusqueda(f.nombre, _fvsSearchTerm) + '</span>'
                + '<span class="fvs-t__sub">' + escapeHtml(String(f.id)) + (f.unidad ? ' · ' + escapeHtml(f.unidad) : '')
@@ -590,7 +592,7 @@
 
             html += '<dl class="if-datos" style="margin-bottom:10px;">';
             html += '<div class="if-dato"><dt>Comparación</dt><dd>' + datos.contados + ' contados · '
-                 +  datos.pendientes + ' pendientes de ' + datos.totalProductos + '</dd></div>';
+                 +  datos.pendientes + ' sin contar (cuentan 0) de ' + datos.totalProductos + '</dd></div>';   // v5.40: regla de ceros
             var netoColor = datos.totalNeto < 0 ? 'var(--danger)' : (datos.totalNeto > 0 ? 'var(--ok)' : 'var(--txt-primary)');
             html += '<div class="if-dato"><dt>Neto en dinero</dt><dd class="num" style="font-family:var(--f-num);font-variant-numeric:tabular-nums;color:' + netoColor + ';font-weight:700;">'
                  +  _fvsMoneda(datos.totalNeto) + '</dd></div>';

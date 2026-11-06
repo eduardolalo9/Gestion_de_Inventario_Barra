@@ -83,8 +83,9 @@ if (M) {
     chk('Administración calcula su Total como siempre (3 + 2 − 10×0.06 = 4.4)', r.valor === 4.4 && r.origen === 'oficial' && r.fuente !== 'publicado', JSON.stringify(r));
     chk('Administración puede publicar y NO usa el publicado', M.A.puede() && !M.A.debeUsar());
     const prep = M.A.preparar();
-    chk('★ El documento lleva por producto [Total, saldo, entradas, consumo] solo de los productos con Total oficial',
-        prep.doc && JSON.stringify(prep.doc.valores.TEQ) === JSON.stringify([4.4, 3, 2, 0.6]) && prep.doc.valores.LIM[0] === 2 && !('NEW' in prep.doc.valores),
+    // v5.40 — con corte vigente, un producto sin línea (NEW) también tiene Total oficial: 0 + compras − consumo.
+    chk('★ El documento lleva por producto [Total, saldo, entradas, consumo] (v5.40: NEW entra en 0)',
+        prep.doc && JSON.stringify(prep.doc.valores.TEQ) === JSON.stringify([4.4, 3, 2, 0.6]) && prep.doc.valores.LIM[0] === 2 && JSON.stringify(prep.doc.valores.NEW) === JSON.stringify([0, 0, 0, 0]),
         JSON.stringify(prep.doc && prep.doc.valores));
     const txt = JSON.stringify(prep.doc || {});
     chk('★ Sin dinero: el documento no trae precio, costo, importe ni venta neta', !/precio|costo|importe|ventaNeta|350|38\b/.test(txt), txt.slice(0, 200));
@@ -106,7 +107,7 @@ if (M) {
     B.A.setPub({ estado: 'ok', datos: Object.assign({}, prep.doc, { publicadoEn: { seconds: 1791200000 } }), unsub: null });
     const conPub = B.A.oficial(prods[0]);
     chk('★ Con publicado vigente, el bartender ve EL MISMO Total que administración (4.4)', conPub.valor === 4.4 && conPub.fuente === 'publicado' && conPub.entradas === 2 && conPub.ventas === 0.6, JSON.stringify(conPub));
-    chk('Un producto fuera del publicado sigue con su respaldo operativo', B.A.oficial(prods[2]).valor === 4 && B.A.oficial(prods[2]).origen === 'operativo_no_reconciliado');
+    chk('v5.40 · El producto que no estaba en el corte también llega publicado (en 0)', B.A.oficial(prods[2]).valor === 0 && B.A.oficial(prods[2]).fuente === 'publicado', JSON.stringify(B.A.oficial(prods[2])));
     const res = B.A.resumen();
     chk('El resumen de la tarjeta viene del publicado (sin avisos de "no se pudo leer")', res && res.publicado && !res.comprasNoDisponibles && !res.ventasNoDisponibles, JSON.stringify(res && Object.keys(res)));
     // Corte más nuevo en este teléfono → publicado viejo

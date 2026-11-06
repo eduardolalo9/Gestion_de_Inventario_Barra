@@ -180,8 +180,10 @@ chk('Conserva su guarda original (D-1 sigue sin desglose por área)',
     /function inicialDesdeCierre\(cierre\) \{[\s\S]{0,200}?if \(!cierre \|\| !cierre\.fecha\) return null;/.test(ciclo) &&
     !/saldosPorArea/.test(ciclo),
     'D-1 hizo innecesario el desglose por área que se había propuesto');
-chk('★ Único cambio permitido: un producto con contado===false no entra a saldos (corrección 4-oct-2026)',
-    /if \(p\.contado === false\) \{ noContados\+\+; return; \}/.test(ciclo),
+// v5.40 — REGLA NUEVA DE EDUARDO (6-nov-2026): lo que nadie contó entra en 0 («nunca se pone vacío»),
+// y un producto sin línea en el corte vigente vale 0 + compras − ventas. Reemplaza la del 4-oct-2026.
+chk('★ v5.40 · Un producto con contado===false entra a saldos en 0 (regla de Eduardo, 6-nov-2026)',
+    /if \(p\.contado === false\) \{ noContados\+\+; p = \{ id: p\.id, total: 0, precio: p\.precio \}; \}/.test(ciclo),
     'antes entraba siempre con cero explícito (F12/R11) — Eduardo pidió que el pedido sugerido no se infle con productos sin contar');
 chk('Sus pruebas siguen existiendo',
     /inicialDesdeCierre/.test(leer('pruebas/prueba-r4.js')));

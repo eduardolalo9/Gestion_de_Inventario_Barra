@@ -18,7 +18,8 @@ const m = r(`inicialDesdeCierreMensual({ fecha: '2026-10-31', inventoryId: 'INV-
   productos: [{ id: 'A', total: 4.00049 }, { id: 'B', total: 0 }, { id: 'C', total: 9, contado: false }] })`);
 chk('★ Mensual del sábado 31-oct → inicial de la semana 2026-11-02 con fechaAncla 2026-10-31', m && m.semanaId === '2026-11-02' && m.fechaAncla === '2026-10-31', JSON.stringify(m));
 chk('Origen trazable: tipo cierre_mensual, inventario, número, semana cerrada', m.origen.tipo === 'cierre_mensual' && m.origen.inventoryId === 'INV-M' && m.origen.numero === 50 && m.origen.semanaCerrada === '2026-10-26');
-chk('★ Mismo criterio que el domingo: «nadie lo contó» NO entra (no es cero); cero contado sí; 3 decimales', m.saldos.A === 4 && m.saldos.B === 0 && !('C' in m.saldos) && m.productosNoContados === 1, JSON.stringify(m.saldos));
+// v5.40 — regla de Eduardo: lo que nadie contó entra en 0.
+chk('★ Mismo criterio que el domingo: «nadie lo contó» entra en 0 (v5.40); cero contado también; 3 decimales', m.saldos.A === 4 && m.saldos.B === 0 && m.saldos.C === 0 && m.productosNoContados === 1, JSON.stringify(m.saldos));
 chk('Un domingo-fin-de-mes NO usa esta vía (lo resuelve inicialDesdeCierre)', r(`inicialDesdeCierreMensual({ fecha: '2026-05-31', productos: [] })`) === null);
 chk('Un día que no es fin de mes NO cierra la semana', r(`inicialDesdeCierreMensual({ fecha: '2026-10-28', productos: [] })`) === null);
 chk('inicialDesdeCierre (domingo) no cambió: un fin de mes entre semana sigue sin arrastrar por esa vía', r(`inicialDesdeCierre({ fecha: '2026-10-31', productos: [] })`) === null);

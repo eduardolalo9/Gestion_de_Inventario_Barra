@@ -76,8 +76,9 @@ if (A) {
 
     const anc = A.anclaDesdeCierre({ fecha: '2026-10-01', inventoryId: 'inv9', numero: 1009,
         productos: [{ id: 'A', total: 2.0004 }, { id: 'B', total: 0, contado: true }, { id: 'C', total: 0, contado: false }] }, 'mitad_de_semana');
-    chk('★ anclaDesdeCierre: lo contado entra (también el cero contado); lo NO contado no entra',
-        anc && anc.saldos.A === 2 && anc.saldos.B === 0 && !('C' in anc.saldos) && anc.productosNoContados === 1, JSON.stringify(anc));
+    // v5.40 — regla de Eduardo (6-nov-2026): lo NO contado entra en 0.
+    chk('★ anclaDesdeCierre: lo contado entra (también el cero contado); lo NO contado entra en 0 (v5.40)',
+        anc && anc.saldos.A === 2 && anc.saldos.B === 0 && anc.saldos.C === 0 && anc.productosNoContados === 1, JSON.stringify(anc));
     chk('anclaDesdeCierre deja trazabilidad (inventario, número, fecha) y su semana',
         anc.origen.inventoryId === 'inv9' && anc.origen.numero === 1009 && anc.fecha === '2026-10-01' && anc.semanaId === '2026-09-28');
     chk('anclaDesdeCierre rechaza un tipo que no es ancla', A.anclaDesdeCierre({ fecha: '2026-10-01', productos: [] }, 'semanal') === null);
@@ -137,7 +138,7 @@ if (A) {
     const lim = A.oficial(ctx.products[1]);
     chk('Un insumo sin compras solo resta su consumo (1 − 10×0.03 = 0.7)', lim.valor === 0.7, JSON.stringify(lim));
     const nue = A.oficial(ctx.products[2]);
-    chk('★ Un producto que no entró al corte usa el respaldo operativo, nunca cero', nue.valor === 4 && nue.origen === 'operativo_no_reconciliado');
+    chk('★ v5.40 · Un producto que no entró al corte vale 0 + compras − consumo (no el respaldo operativo)', nue.valor === 0 && nue.origen === 'oficial' && nue.inicialCero === true, JSON.stringify(nue));
     const res = A.resumen();
     chk('El resumen dice el ancla y los días de ventas que faltan',
         res && res.ancla.fecha === fechaCorte && res.diasEsperados === 2 && res.diasFaltantes.length === 1, JSON.stringify(res));

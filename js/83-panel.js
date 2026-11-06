@@ -324,6 +324,8 @@
                 h += '<div class="pm-card__sub">Cifras publicadas por administración' + (ofic.publicadoEn ? ' ' + escapeHtml(_panelHace(ofic.publicadoEn)) : '') + '.</div>';
             }
             h += '<div class="pm-card__fila"><span>' + (_anc ? 'Saldo del corte' : 'Inicial contabilizado') + '</span><b>' + (ini === undefined ? '—' : _panelNum(ini)) + '</b></div>';
+            // v5.40 — regla de ceros: no estaba en el corte → arranca en 0 (nunca el respaldo operativo).
+            if (ofic.inicialCero) h += '<div class="pm-card__sub">No entró al último corte (nadie lo contó o se dio de alta después): arranca en 0 y su Total es 0 + compras − ventas.</div>';
             h += '<div class="pm-card__fila"><span>Entradas por compras</span><b>' + _panelNum(ent) + '</b></div>';
             h += '<div class="pm-card__fila"><span>Consumo teórico (ventas × receta)</span><b>' + (ofic.ventas ? '−' + _panelNum(ofic.ventas) : '0') + '</b></div>';
             if (ini !== undefined) {

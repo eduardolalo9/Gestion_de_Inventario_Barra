@@ -178,15 +178,17 @@ chk('★ Diferencia positiva = sobrante',
     filaB.diferencia === 3 && filaB.fisico === 5 && filaB.sistema === 2);
 chk('★ Neto en dinero = diferencia × precio del producto',
     filaA.neto === -400 && filaB.neto === 150, filaA.neto + ' / ' + filaB.neto);
-chk('★ Pendiente: fisico/diferencia/neto en null, nunca 0 ni inventado',
-    filaC.estado === 'pendiente' && filaC.fisico === null && filaC.diferencia === null && filaC.neto === null);
+// v5.40 — REGLA NUEVA DE EDUARDO (6-nov-2026): lo que nadie contó cuenta como 0 («nunca vacío»),
+// marcado 'sin_contar' para que la pantalla lo diga.
+chk('★ v5.40 · Sin contar: físico 0, diferencia = −sistema y neto calculado (marcado sin_contar)',
+    filaC.estado === 'sin_contar' && filaC.fisico === 0 && filaC.diferencia === -5 && typeof filaC.neto === 'number', JSON.stringify(filaC));
 chk('Pendiente también reporta su "sistema" (para que se vea cuánto se espera encontrar)',
     filaC.sistema === 5);
 chk('★ Totales: neto global, faltante y sobrante agregados por separado',
-    r1.totalNeto === -250 && r1.totalFaltante === -4 && r1.totalSobrante === 3,
+    r1.totalNeto === -350 && r1.totalFaltante === -9 && r1.totalSobrante === 3,   // v5.40: C entra en 0 (−5 × $20)
     JSON.stringify({ n: r1.totalNeto, f: r1.totalFaltante, s: r1.totalSobrante }));
-chk('★ Orden: mayor diferencia absoluta primero (A con -4 antes que B con +3), pendiente al final',
-    r1.filas[0].id === 'A' && r1.filas[1].id === 'B' && r1.filas[2].id === 'C');
+chk('★ Orden: mayor diferencia absoluta primero (v5.40: C −5, A −4, B +3)',
+    r1.filas[0].id === 'C' && r1.filas[1].id === 'A' && r1.filas[2].id === 'B');
 chk('sinInicial cuenta los productos sin arrastre (los 3, en este escenario)',
     r1.sinInicial === 3);
 
@@ -199,10 +201,10 @@ chk('★ Con inicial: oficial = inicial + compras (aún sin ventas, FASE 10/11A 
     filaA2.sistema === 10 && filaA2.origenSistema === 'oficial', JSON.stringify(filaA2));
 chk('Físico contra la cifra oficial: sigue siendo físico − sistema',
     filaA2.diferencia === -4, String(filaA2.diferencia));
-chk('Un producto sin inicial propio sigue cayendo al respaldo operativo, aunque otros sí tengan',
-    r2.filas.find(function(f) { return f.id === 'B'; }).origenSistema === 'operativo_no_reconciliado');
-chk('sinInicial ahora cuenta 2 (B y C), no los 3',
-    r2.sinInicial === 2);
+chk('v5.40 · Con corte vigente, un producto sin línea propia vale 0 + compras − consumo (origen oficial)',
+    r2.filas.find(function(f) { return f.id === 'B'; }).origenSistema === 'oficial');
+chk('v5.40 · sinInicial cuenta 0 cuando hay corte vigente',
+    r2.sinInicial === 0);
 
 // ═══ 5 · Cableado en la app ═════════════════════════════════════════════
 chk('★ El botón solo aparece con inventory.viewAll y el inventario abierto',

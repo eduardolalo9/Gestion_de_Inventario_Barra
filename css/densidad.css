@@ -500,3 +500,52 @@ th.ped-tabla__n, th.ped-tabla__c { color: var(--txt-muted); }
 .ped-card__nota { margin-top: 4px; padding: 4px 8px; border-radius: var(--d-radio-sm); background: var(--accent-dim); font-size: var(--d-fs-sm); color: var(--txt-primary); }
 .ui-icono-btn { width: 44px; height: 44px; border-radius: var(--d-radio-sm) !important; }
 .ped-card .ped-tabla th, .ped-card .ped-tabla td { padding: 4px 6px !important; line-height: 1.3; }
+
+/* ── v5.40 · Recetario: menú de tres puntos y coincidencia de insumo ─────── */
+.rec-card__cab { align-items: center; }
+.rec-card__nom { flex: 1; min-width: 0; }
+.rec-menu { position: relative; flex-shrink: 0; align-self: center; margin: -12px -10px -12px 0; }
+.rec-menu__btn { width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; border: 0; background: transparent; color: var(--txt-secondary); border-radius: var(--d-radio-sm); cursor: pointer; }
+.rec-menu__btn:hover, .rec-menu__btn[aria-expanded="true"] { background: var(--card-high); color: var(--txt-primary); }
+.rec-menu__btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.rec-menu__lista { position: absolute; right: 4px; top: 40px; z-index: 60; min-width: 168px; padding: 4px; background: var(--card-high); border: 1px solid var(--border-strong); border-radius: var(--d-radio); box-shadow: var(--shadow-elev2); display: flex; flex-direction: column; }
+.rec-menu__lista[hidden] { display: none; }
+.rec-menu__item { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 10px; border: 0; background: transparent; color: var(--txt-primary); font-family: var(--f-body); font-size: var(--d-fs); font-weight: 600; text-align: left; border-radius: var(--d-radio-sm); cursor: pointer; }
+.rec-menu__item:hover, .rec-menu__item:focus-visible { background: var(--accent-dim); outline: none; }
+.rec-menu__item i { width: 16px; color: var(--txt-secondary); }
+.rec-menu__item--peligro, .rec-menu__item--peligro i { color: var(--danger); }
+.rec-card__insumo { margin-top: 2px; font-size: var(--d-fs-sm); color: var(--accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rec-card__insumo i { font-size: .7rem; }
+
+/* ── v5.40 · Control de negativos (Ventas) ──────────────────────────────── */
+.cn-acceso { margin: 4px 0 6px; min-height: 44px; border-radius: var(--d-radio); font-size: var(--d-fs); }
+.cn-acceso--neg { border-color: var(--danger); background: var(--danger-dim); color: var(--danger); }
+.cn-acceso__n { min-width: 22px; padding: 0 6px; border-radius: 4px; background: var(--danger); color: var(--bg); font-size: 11px; line-height: 18px; text-align: center; }
+.cn-corte { margin: 2px 0 6px; padding: 6px 8px; border-radius: var(--d-radio-sm); background: var(--card); border: 1px solid var(--border); font-size: var(--d-fs-sm); color: var(--txt-secondary); line-height: 1.4; }
+.cn-corte b { color: var(--txt-primary); }
+.kpi--neg .kpi__n { color: var(--danger); }
+.cn-lista { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.cn-fila { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; align-items: center; padding: 6px 4px 6px 8px; background: var(--card); border: 1px solid var(--border); border-left: 3px solid transparent; border-radius: var(--d-radio); }
+.cn-fila--neg { border-left-color: var(--danger); }
+.cn-fila--warn { border-left-color: var(--warn); }
+.cn-fila__nom { font-size: var(--d-fs); font-weight: 700; color: var(--txt-primary); line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cn-fila__meta { font-size: var(--d-fs-etq); color: var(--txt-muted); margin-top: 1px; }
+.cn-fila__det { font-size: var(--d-fs-etq); color: var(--txt-secondary); margin-top: 1px; }
+.cn-fila__det b { color: var(--txt-primary); font-weight: 600; }
+.cn-estado { font-size: 9px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.cn-estado--neg { color: var(--danger); }
+.cn-estado--warn { color: var(--warn); }
+.cn-estado--ok { color: var(--ok); }
+.cn-fila__cifra { display: flex; flex-direction: column; align-items: flex-end; min-width: 64px; }
+.cn-fila__etq { font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--txt-muted); }
+.cn-fila__cifra b { font-family: var(--f-num); font-size: 15px; font-weight: 600; color: var(--txt-primary); }
+.cn-total--neg { color: var(--danger) !important; }
+.cn-total--warn { color: var(--warn) !important; }
+.cn-fila__val { font-family: var(--f-num); font-size: var(--d-fs-etq); color: var(--danger); }
+.cn-fila__acc { display: flex; gap: 2px; }
+.cn-btn { width: 40px; height: 44px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: var(--d-radio-sm); background: transparent; color: var(--txt-secondary); cursor: pointer; }
+.cn-btn:hover { background: var(--card-high); color: var(--accent); }
+.cn-reglas { margin-top: 8px; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--d-radio); background: var(--card); font-size: var(--d-fs-sm); color: var(--txt-secondary); }
+.cn-reglas summary { min-height: 32px; display: flex; align-items: center; font-weight: 700; color: var(--txt-primary); cursor: pointer; }
+.cn-reglas ul { margin: 2px 0 4px; padding-left: 16px; line-height: 1.45; }
+.cn-pantalla { padding-bottom: 4px; }
