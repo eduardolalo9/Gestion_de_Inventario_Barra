@@ -100,13 +100,42 @@ const PUERTO = process.env.PUERTO || '8080';
     return {
       icoAncho: ico ? ico.getBoundingClientRect().width : 0,
       fondo: d ? getComputedStyle(d).backgroundColor : null,
-      sinConfirmar: ![...cont.querySelectorAll('button')].some(b => /Confirmar e importar/.test(b.textContent))
+      sinConfirmar: ![...cont.querySelectorAll('button')].some(b => /Confirmar e importar/.test(b.textContent)),
+      btnDisabled: (function() { const b = [...cont.querySelectorAll('button')].find(x => /Confirmar e importar/.test(x.textContent)); return b ? b.disabled : null; })(),
+      motivo: /(Elige la fecha de ingreso|No queda ninguna entrada nueva|Sin verificación de duplicados)/.test(cont.innerText)
     };
   });
   chk('★ Fecha inválida: aviso con fa-circle-exclamation de ancho real y fondo rojo real',
       fechaInv.icoAncho >= 6 && fechaInv.fondo && fechaInv.fondo !== 'rgba(0, 0, 0, 0)', JSON.stringify(fechaInv));
-  chk('Sin entradas guardables (todas con fecha inválida), no se ofrece "Confirmar e importar"',
-      fechaInv.sinConfirmar, '');
+  // Sin nada importable, "Confirmar e importar" aparece DESHABILITADO y la
+  // pantalla dice por qué (diseño actual de la vista previa). No se puede pulsar.
+  chk('Sin entradas guardables (todas con fecha inválida): Confirmar queda deshabilitado y explica por qué',
+      fechaInv.btnDisabled === true && fechaInv.motivo === true, JSON.stringify({ d: fechaInv.btnDisabled, m: fechaInv.motivo }));
+
+  // Caso mixto: un grupo válido y uno inválido. El válido se puede importar y el
+  // inválido se identifica para corregirlo, sin bloquear al válido.
+  await p.evaluate(() => {
+    const base = _comprasImportPendiente.grupos[0];
+    const valido = Object.assign({}, base, { compraId: 'c2', folio: '3647', fechaInvalida: false, fecha: '2026-10-02', semanaId: '2026-09-28' });
+    _comprasImportPendiente.grupos = [valido, base];
+    // Estado que deja la verificación real de duplicados (ver prueba-importacion-mixta-integracion.js):
+    // sin verificación completa el botón queda bloqueado a propósito.
+    _comprasImportPendiente.fechaIngreso = '2026-10-05';
+    _comprasImportPendiente.verificando = false;
+    _comprasImportPendiente.verificacionCompleta = true;
+    renderTab();
+  });
+  await p.waitForTimeout(150);
+  const mixta = await p.evaluate(() => {
+    const cont = document.getElementById('tabContent');
+    const b = [...cont.querySelectorAll('button')].find(x => /Confirmar e importar/.test(x.textContent));
+    return { texto: b ? b.textContent.trim() : null, disabled: b ? b.disabled : null,
+             identificaInvalido: /sin fecha válida/.test(cont.innerText) };
+  });
+  chk('Mezcla válido + inválido: se ofrece importar 1 entrada (no se bloquea por el inválido)',
+      mixta.disabled === false && /\(1\)/.test(mixta.texto || ''), JSON.stringify(mixta));
+  chk('Mezcla válido + inválido: el grupo inválido queda identificado como "sin fecha válida"',
+      mixta.identificaInvalido === true, JSON.stringify(mixta));
 
   // ══ D · RESULTADO CON FALLIDAS — aviso rojo real ═════════════════════════
   await p.evaluate(() => {
