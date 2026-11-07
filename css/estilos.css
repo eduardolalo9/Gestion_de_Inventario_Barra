@@ -1102,6 +1102,28 @@ html[data-theme="light"] .inv-card__expand-btn:hover { background: var(--accent-
 
 html[data-theme="light"] .inv-card__group-badge { background: #f8fafc; border-color: #e2e8f0; }
 
+/* ETAPA 0/4 (auditoría UX) — en PC/pantallas grandes la lista de conteo
+   era una sola columna angosta con mucho aire muerto a los lados (la
+   tarjeta usa max-width del layout general, pensado para una columna en
+   teléfono). A partir de tablet horizontal se reparte en 2 columnas y en
+   escritorio ancho en 3, sin tocar el HTML de cada tarjeta ni el orden en
+   que se generan — el único cambio es cómo se acomodan. Scope exclusivo
+   vía .inv-card-list para no afectar ninguna otra lista que reuse las
+   utilidades "flex flex-col gap-3" (p.ej. Productos, Compras). */
+@media (min-width: 900px) {
+    .inv-card-list {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        align-items: start;
+    }
+}
+@media (min-width: 1400px) {
+    .inv-card-list {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
 /* ===========================================================
    AUDITORÍA FÍSICA CIEGA — Área de selección y conteo
    =========================================================== */
@@ -2074,12 +2096,17 @@ html[data-theme="light"] .grp-pill--active {
     position: absolute;
     top: 0; right: 0;
     width: 28px; height: 100%;
-    background: linear-gradient(to right, transparent, var(--surface));
+    /* ETAPA 0/4 (auditoría UX) — el rail de grupos vive directo sobre el
+       fondo de la pantalla (--bg), no dentro de una tarjeta (--surface).
+       Con --surface el degradado terminaba en un tono más claro que el
+       fondo real y el corte de la última pill (p.ej. "JUGOS") se seguía
+       viendo abrupto en vez de desvanecerse. */
+    background: linear-gradient(to right, transparent, var(--bg));
     pointer-events: none;
     border-radius: 0 var(--r-md) var(--r-md) 0;
 }
 html[data-theme="light"] .grp-rail-wrap::after {
-    background: linear-gradient(to right, transparent, #f8fafc);
+    background: linear-gradient(to right, transparent, var(--bg));
 }
 
 /* Barra de búsqueda e inputs en inicio */
@@ -2725,8 +2752,13 @@ tbody td { padding: 12px !important; color: var(--txt-primary) !important; }
 #syncDot[data-state="offline"] { background: var(--txt-muted); box-shadow: 0 0 0 3px var(--border-mid); }
 
 /* M3 grp-rail fade */
+/* ETAPA 0/4 (auditoría UX) — esta capa (con !important) es la que de verdad
+   manda en cascada; la definición de arriba quedaba anulada por esta. El
+   tema claro ya usaba --bg (el fondo real de la pantalla); el oscuro seguía
+   en --surface, por eso el degradado terminaba en un tono visiblemente más
+   claro que el fondo y el corte de la última pill no se veía desvanecido. */
 .grp-rail-wrap::after {
-    background: linear-gradient(to right, transparent, var(--surface)) !important;
+    background: linear-gradient(to right, transparent, var(--bg)) !important;
 }
 html[data-theme="light"] .grp-rail-wrap::after {
     background: linear-gradient(to right, transparent, var(--bg)) !important;
