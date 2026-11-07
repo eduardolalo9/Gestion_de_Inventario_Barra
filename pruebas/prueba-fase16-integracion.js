@@ -65,6 +65,7 @@ function montarTotal(db, uid, permisos, productos, recetasLista) {
     deps.window = deps;
     const cuerpo = leer('js/15-ciclo-semanal.js') + '\n' + leer('js/46-arrastre.js') + '\n' +
                    extraerFuncion('js/88-compras.js', '_asientosDesdeCompra') + '\n' +
+                   extraerFuncion('js/88-compras.js', 'compraCancelada') + '\n' +
                    extraerFuncion('js/93-ventas.js', '_ventasPeriodoDeDoc') + '\n' +
                    leer('js/48-consumo-teorico.js') + '\n' + leer('js/47-existencia.js') + '\n' + leer('js/51-total-publicado.js');
     return new Function('deps', 'with (deps) {\n' + cuerpo + '\n; return { cargar: existenciaCargarInicial, estado: existenciaInicialEstado, ' +
