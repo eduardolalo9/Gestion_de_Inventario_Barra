@@ -15,7 +15,7 @@
 @font-face{font-family:'IBM Plex Mono';font-weight:600;font-display:swap;src:url(../fonts/ibm-plex-mono-600.woff2) format('woff2');}
 
 :root {
-    /* ══════════════════════════════════════════════════════
+    /* ====================
        BI DESIGN SYSTEM — "CARBÓN & LATÓN" (R1, v5.0) → "VERDE ESMERALDA" (v5.25)
        Tokens por roles (superficies por elevación, on-colors, sombras,
        motion, shape): cambian los VALORES, nunca los nombres, y toda la
@@ -25,7 +25,7 @@
        Los nombres viejos (--accent, --green, --red, --amber, --sky) siguen
        porque miles de reglas y estilos en línea los usan; --brass, --ok,
        --warn, --info, --danger, --book son alias semánticos nuevos.
-       ══════════════════════════════════════════════════════ */
+       ==================== */
 
     /* ── Superficies (carbón azulado, nunca negro plano) ── */
     /* v5.38 — Ultra Pro Emerald (oscuro primero) */
@@ -122,7 +122,7 @@
     --shadow-mid:  var(--shadow-card);
     --modal-bg:    #121915;
 
-    /* ═══ v5.25 — "VERDE ESMERALDA BOSQUE" ═══════════════════════════════
+    /* ═══ v5.25 — "VERDE ESMERALDA BOSQUE" ====================
        Valores en hex = el oklch del diseño (primario oklch(.455 .09 165), barra oklch(.22 .024 165), perla oklch(.975 .003 160)); se guardan en hex porque
         así los devuelve getComputedStyle a las pruebas y a cualquier navegador viejo.
         Marca nueva (pedido de Eduardo, 10-oct-2026): primario verde esmeralda,
@@ -240,7 +240,7 @@ html[data-theme="light"] {
     --cat-lic-bg:     #CEF3FC;  --cat-lic-fg:     #005262;
 }
 
-/* ─── Reset & Base ───────────────────────────────────────── */
+/* ─── Reset & Base ==================== */
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 
@@ -313,7 +313,7 @@ body {
 #tabContent { animation: tabContentIn 0.18s var(--ease-out) both; }
 .hidden { display: none !important; }
 
-/* ─── Hamburger ──────────────────────────────────────────── */
+/* ─── Hamburger ==================== */
 #hamburgerBtn {
     display: flex; align-items: center; justify-content: center;
     width: 30px; height: 30px;
@@ -328,7 +328,7 @@ body {
 /* Tab bar oculto */
 .bg-white.shadow-sm.sticky { display: none !important; }
 
-/* ─── SIDEBAR ────────────────────────────────────────────── */
+/* ─── SIDEBAR ==================== */
 #sbOverlay {
     position: fixed; inset: 0;
     background: rgba(0,0,0,0.58);
@@ -471,10 +471,10 @@ html[data-theme="light"] #sbFoot p { color: var(--txt-muted); }
 html[data-theme="light"] .sb-item { color: var(--txt-secondary); }
 html[data-theme="light"] .sb-item:hover::after { opacity: 0.06; }
 
-/* ─── Layout ─────────────────────────────────────────────── */
+/* ─── Layout ==================== */
 .max-w-7xl.mx-auto.px-3 { padding-top: 0.35rem !important; padding-bottom: 0.35rem !important; }
 
-/* ─── Tailwind color overrides ───────────────────────────── */
+/* ─── Tailwind color overrides ==================== */
 .bg-white       { background-color: var(--card)    !important; }
 .bg-gray-50     { background-color: var(--surface); }
 .bg-gray-100    { background-color: var(--surface) !important; }
@@ -486,7 +486,7 @@ html[data-theme="light"] .sb-item:hover::after { opacity: 0.06; }
 .border-gray-200{ border-color: var(--border)     !important; }
 .divide-gray-200 > * + * { border-color: var(--border) !important; }
 
-/* ─── Cards ──────────────────────────────────────────────── */
+/* ─── Cards ==================== */
 .bg-white.rounded-xl, .bg-white.rounded-2xl,
 .bg-white.rounded-xl.shadow-md, .bg-white.rounded-2xl.shadow-md {
     background-color: var(--card) !important;
@@ -503,13 +503,13 @@ html[data-theme="light"] .sb-item:hover::after { opacity: 0.06; }
     transform: none !important;
 }
 
-/* ─── Sombras ────────────────────────────────────────────── */
+/* ─── Sombras ==================== */
 .shadow-md  { box-shadow: var(--shadow-card) !important; }
 .shadow-sm  { box-shadow: var(--shadow-xs); }
 .shadow-2xl { box-shadow: var(--shadow-modal)!important; }
 .shadow-lg  { box-shadow: var(--shadow-modal); }
 
-/* ─── Tablas ─────────────────────────────────────────────── */
+/* ─── Tablas ==================== */
 table { font-family: var(--f-body) !important; font-size: 12.5px !important; }
 thead th {
     font-family: var(--f-body) !important;
@@ -541,7 +541,7 @@ tbody td { padding: 6px 12px !important; }
     th, td { padding: 5px 8px !important; }
 }
 
-/* ─── Botones ────────────────────────────────────────────── */
+/* ─── Botones ==================== */
 button {
     font-family: var(--f-body) !important;
     font-weight: 500 !important;
@@ -652,7 +652,7 @@ button[class*="from-blue-5"][class*="to-purple"] {
     color: var(--brass) !important;
 }
 
-/* ─── Inputs / Select / Textarea ─────────────────────────── */
+/* ─── Inputs / Select / Textarea ==================== */
 input, select, textarea {
     font-family: var(--f-body) !important;
     font-size: 16px !important;   /* M1: <16px hace que iOS haga zoom al enfocar */
@@ -679,7 +679,7 @@ label.block { color: var(--txt-secondary); font-size: 11.5px; font-weight: 500; 
 html[data-theme="light"] select { color-scheme: light; }
 html[data-theme="light"] input:disabled { background-color: var(--surface) !important; }
 
-/* ─── Colores utilitarios ────────────────────────────────── */
+/* ─── Colores utilitarios ==================== */
 .text-purple-600, .text-purple-700 { color: var(--accent); }
 .text-orange-500, .text-orange-600 { color: var(--amber)  !important; }
 
@@ -695,7 +695,7 @@ html[data-theme="light"] input:disabled { background-color: var(--surface) !impo
 }
 .bg-gray-50.rounded-xl.overflow-hidden { background-color: var(--surface); }
 
-/* ─── MODALES ────────────────────────────────────────────── */
+/* ─── MODALES ==================== */
 /* REDISEÑO R4 — este bloque viene de la época del tema claro Material, y sus
    !important pisaban al sistema: el velo era un negro fijo al 38% (sobre una app
    ya oscura apenas despegaba el modal del fondo) y no cambiaba con el tema.
@@ -764,7 +764,7 @@ html[data-theme="light"] #inventarioModal h2 {
     color: var(--txt-primary);
 }
 
-/* ─── M3 Snackbar ────────────────────────────────────────── */
+/* ─── M3 Snackbar ==================== */
 #toast { animation: toastPop 0.28s var(--ease-out) both !important; }
 #toast > div {
     /* M3 Snackbar: Inverse Surface = var(--txt-primary) en oscuro */
@@ -787,7 +787,7 @@ html[data-theme="light"] #toast > div {
     color: var(--txt-primary);
 }
 
-/* ─── M3 Top App Bar ─────────────────────────────────────── */
+/* ─── M3 Top App Bar ==================== */
 .sticky.top-0 {
     background: var(--surface);                /* Surface Container */
     border-bottom: none;
@@ -835,7 +835,7 @@ html[data-theme="light"] #hamburgerBtn { color: var(--txt-primary) !important; }
 #themeToggleBtn:hover  { background: var(--border-mid) !important; }
 #themeToggleBtn:active { background: var(--border-mid) !important; transform: none !important; }
 
-/* ─── M3 Encabezados ─────────────────────────────────────── */
+/* ─── M3 Encabezados ==================== */
 h3.text-xl.font-bold, h3.text-lg.font-bold, .text-xl.font-bold,
 .text-2xl.font-bold, .text-lg.font-semibold {
     font-family: var(--f-body);
@@ -843,7 +843,7 @@ h3.text-xl.font-bold, h3.text-lg.font-bold, .text-xl.font-bold,
     color: var(--txt-primary);
 }
 
-/* ─── Badges ─────────────────────────────────────────────── */
+/* ─── Badges ==================== */
 span.text-sm.font-medium.text-purple-600.bg-purple-50 {
     background: var(--accent-dim);
     color: var(--accent);
@@ -856,7 +856,7 @@ span.text-xs.px-2.py-1.bg-purple-100 {
     border-radius: var(--r-xs) !important;
 }
 
-/* ─── Bordes misc ────────────────────────────────────────── */
+/* ─── Bordes misc ==================== */
 .text-gray-400 svg, svg.text-gray-400 { color: var(--txt-muted); }
 .border-t.border-gray-200 { border-color: var(--border); }
 .border-b.border-gray-200 { border-color: var(--border) !important; }
@@ -866,7 +866,7 @@ span.text-xs.px-2.py-1.bg-purple-100 {
 
 /* ─── Network bar: ahora es la clase .net-aviso (R7d, v5.14) ─────── */
 
-/* ─── Responsive ─────────────────────────────────────────── */
+/* ─── Responsive ==================== */
 @media (min-width: 640px) { .px-6 { padding-left: 1.5rem; padding-right: 1.5rem; } }
 @media (max-width: 640px) { .px-6 { padding-left: 0.75rem; padding-right: 0.75rem; } }
 @media (max-width: 768px) {
@@ -875,10 +875,10 @@ span.text-xs.px-2.py-1.bg-purple-100 {
     input, select, textarea { font-size: 16px !important; }  /* M1: nunca por debajo de 16 */
 }
 
-/* ══════════════════════════════════════════════════════════════════════════
+/* ====================
    M1 — CIMIENTOS MOVILES
    Comportamiento tactil y de lectura. No toca ninguna logica de negocio.
-   ══════════════════════════════════════════════════════════════════════════ */
+   ==================== */
 
 /* El navegador deja de rebotar al final de una lista y deja de disparar el
    recargar-pagina al tirar desde arriba. Son las dos señales que mas delatan
@@ -921,7 +921,7 @@ input, textarea, select { -webkit-user-select: text; user-select: text; }
 ::selection { background: var(--accent-dim2); color: #fff; }
 .area-btn.disabled { opacity: 0.38; pointer-events: none; }
 
-/* ─── Modo claro misc ────────────────────────────────────── */
+/* ─── Modo claro misc ==================== */
 html[data-theme="light"] body { background-image: none; }
 html[data-theme="light"] .bg-gray-100 { background-color: #f1f5f9 !important; }
 html[data-theme="light"] thead.bg-gradient-to-r { background: #1e293b !important; background-image: none !important; }
@@ -936,7 +936,7 @@ html[data-theme="light"] body > .sticky.top-0 h1 { -webkit-text-fill-color: #fff
 html[data-theme="light"] .bg-white.rounded-xl:hover,
 html[data-theme="light"] .bg-white.rounded-2xl:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.10) !important; }
 
-/* ─── Botón tema ─────────────────────────────────────────── */
+/* ─── Botón tema ==================== */
 #themeToggleBtn:active { transform: none !important; }
 
 /* ===========================================================
@@ -1101,6 +1101,10 @@ html[data-theme="light"] .inv-chip.abierta .inv-chip__val { color: #b45309; }
 html[data-theme="light"] .inv-card__expand-btn:hover { background: var(--accent-dim); }
 
 html[data-theme="light"] .inv-card__group-badge { background: #f8fafc; border-color: #e2e8f0; }
+/* Lista de conteo: 2 columnas desde 900px y 3 desde 1400px (PC/tablet).
+   Móvil sin cambios: la regla no aplica por debajo de 900px. */
+@media (min-width: 900px) { .inv-card-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; } }
+@media (min-width: 1400px) { .inv-card-list { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 
 /* ===========================================================
    AUDITORÍA FÍSICA CIEGA — Área de selección y conteo
@@ -1290,7 +1294,7 @@ html[data-theme="light"] .audit-area-card.completada .audit-area-icon { backgrou
 html[data-theme="light"] .audit-count-header { background: #f0f4f8; }
 html[data-theme="light"] .audit-count-area-badge { background: var(--accent-dim); border-color: var(--accent-dim2); }
 
-/* ── PANEL ADMIN TIEMPO REAL ─────────────────────────────── */
+/* ── PANEL ADMIN TIEMPO REAL ==================== */
 @keyframes livePulse {
     0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 0 var(--ok-dim); }
     50%       { opacity: 0.7; transform: scale(1.18); box-shadow: 0 0 0 5px rgba(34,197,94,0); }
@@ -1402,10 +1406,10 @@ html[data-theme="light"] .audit-user-row.live { border-color: rgba(22,163,74,0.2
 }
 html[data-theme="light"] #syncDot::after { background: #1e293b; }
 
-/* ══════════════════════════════════════════════════════════
+/* ====================
    M3 NAVIGATION BAR — Material You 3 spec
    Height: 80dp | Active indicator: pill 64×32dp | Label-below
-   ══════════════════════════════════════════════════════════ */
+   ==================== */
 #bottomTabBar {
     position: fixed; bottom: 0; left: 0; right: 0;
     /* Surface Container tinted with primary at elevation 2 */
@@ -1504,9 +1508,9 @@ html[data-theme="light"] .btab-item.btab-active svg { stroke: var(--accent); }
 }
 html[data-theme="light"] .btab-item.btab-active span { color: var(--accent); }
 
-/* ══════════════════════════════════════════════════════════
+/* ====================
    MODALES — Centrado universal + botones siempre visibles
-   ══════════════════════════════════════════════════════════ */
+   ==================== */
 
 /* En modo oscuro, la caja del modal usa colores del tema */
 html[data-theme="dark"] #productModal  > div,
@@ -1577,8 +1581,8 @@ html[data-theme="dark"] #inventarioModal .hover\:bg-gray-50:hover { background: 
 /* Bloqueo de scroll del fondo cuando un modal está abierto */
 body.modal-open { overflow: hidden; position: fixed; width: 100%; }
 
-/* ── BUSCADOR EN CONTEO DE INVENTARIO ─────────────────────── */
-/* ── Smart Search Bar ────────────────────────────────────────────────────── */
+/* ── BUSCADOR EN CONTEO DE INVENTARIO ==================== */
+/* ── Smart Search Bar ==================== */
 
 /* Estado activo (hay texto): borde + glow accent */
 
@@ -1595,12 +1599,12 @@ body.modal-open { overflow: hidden; position: fixed; width: 100%; }
 
 /* Highlight de coincidencias en las tarjetas */
 
-/* ══════════════════════════════════════════════════════════════════════
+/* ====================
    FASE 6 — BARRA DE BÚSQUEDA UNIFICADA (.sbx)
    Reemplaza visualmente a .csb-* en las cinco vistas con buscador. Usa
    los mismos tokens del tema (Material 3, IBM Plex) para que claro y
    oscuro salgan solos.
-   ══════════════════════════════════════════════════════════════════════ */
+   ==================== */
 .sbx-sr {
     position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px;
     overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
@@ -1796,9 +1800,9 @@ html[data-theme="light"] .sbx--sticky { background: var(--bg); }
    sigue siendo exactamente 96px. */
 #mainContent { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)) !important; }
 
-/* ══════════════════════════════════════════════════════════
+/* ====================
    INICIO TAB — Tarjetas de stats y product cards rediseñadas
-   ══════════════════════════════════════════════════════════ */
+   ==================== */
 
 /* M3 Filled Card: no border, tonal elevation, shape Large 16dp */
 
@@ -1809,9 +1813,9 @@ html[data-theme="light"] .sbx--sticky { background: var(--bg); }
 /* M3 Label Small: 11sp / +0.5 tracking / uppercase */
 
 /* Product card estilo screenshot */
-/* ══════════════════════════════════════════════════════════
+/* ====================
    REDISEÑO R3 — TARJETA DE PRODUCTO
-   ────────────────────────────────────────────────────────
+   ====================
    Tres cambios de forma, todos para que una lista de 431
    productos se pueda leer de pie y con prisa:
      · el monograma ancla la fila a la izquierda y da al
@@ -1821,7 +1825,7 @@ html[data-theme="light"] .sbx--sticky { background: var(--bg); }
      · las acciones bajan al pie, de modo que el nombre se
        queda con todo el ancho (los nombres reales son largos:
        "ACEITUNA SIN HUESO", "LIMON CON SEMILLA").
-   ══════════════════════════════════════════════════════════ */
+   ==================== */
 .prd-card {
     background: var(--surface);
     border: 1px solid var(--border-mid);
@@ -1935,9 +1939,9 @@ html[data-theme="light"] .sbx--sticky { background: var(--bg); }
     margin-top: 10px; padding-top: 9px;
     border-top: 1px solid var(--border);
 }
-/* ═════════════════════════════════════════════════════════════════════════
+/* ====================
    Los tres botones del pie de la tarjeta: carrito, editar, eliminar.
-   ─────────────────────────────────────────────────────────────────────────
+   ====================
    REGRESIÓN DE R3, CORREGIDA AQUÍ. Al rehacer la tarjeta borré estas reglas
    sin darme cuenta: los botones se quedaron con el fondo gris por defecto
    del navegador y de 16px de ancho (el SVG sin tamaño no los empujaba), y
@@ -1949,7 +1953,7 @@ html[data-theme="light"] .sbx--sticky { background: var(--bg); }
    Re-tematizadas al sistema: el carrito es la acción que se quiere, y se
    gana el latón; editar es secundaria y va neutra; eliminar es destructiva
    y va en rojo apagado — visible, pero sin gritar desde la lista.
-   ═════════════════════════════════════════════════════════════════════════ */
+   ==================== */
 .prd-action-btn {
     position: relative;
     width: 40px; height: 40px;
@@ -2172,9 +2176,9 @@ html[data-theme="light"] .grp-rail-wrap::after {
 .sync-pause-btn:hover { background: var(--accent-dim); }
 .sync-pause-btn:hover { opacity: 0.82; }
 
-/* ══════════════════════════════════════════════════════════
+/* ====================
    AUTH — Pantalla de inicio de sesión
-   ══════════════════════════════════════════════════════════ */
+   ==================== */
 #loginScreen {
     position: fixed; inset: 0;
     background: var(--bg);
@@ -2199,7 +2203,7 @@ html[data-theme="light"] .login-card {
     box-shadow: 0 4px 24px rgba(0,0,0,0.10), 0 1px 4px rgba(0,0,0,0.06);
 }
 
-/* ── Brand header con gradiente azul ──────────────────────── */
+/* ── Brand header con gradiente azul ==================== */
 .login-brand-header {
     background: linear-gradient(145deg,
         rgba(10,132,255,0.13) 0%,
@@ -2233,7 +2237,7 @@ html[data-theme="light"] .login-brand-header {
     font-size: 0.71rem; color: var(--txt-muted);
     font-weight: 400; margin-top: 3px;
 }
-/* ── Pill de estado del sistema ───────────────────────────── */
+/* ── Pill de estado del sistema ==================== */
 .login-status-pill {
     display: inline-flex; align-items: center; gap: 6px;
     padding: 4px 10px 4px 8px; margin-top: 14px; align-self: flex-start;
@@ -2254,7 +2258,7 @@ html[data-theme="light"] .login-status-pill {
 }
 @keyframes statusPulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
 
-/* ── Cuerpo del formulario ────────────────────────────────── */
+/* ── Cuerpo del formulario ==================== */
 .login-body { padding: 22px 26px 24px; }
 .login-subtitle-text {
     font-size: 0.8rem; color: var(--txt-secondary);
@@ -2288,7 +2292,7 @@ html[data-theme="light"] .login-input:focus {
     border-color: #0A84FF; box-shadow: 0 0 0 3px rgba(10,132,255,0.11);
 }
 
-/* ── Botón de login ───────────────────────────────────────── */
+/* ── Botón de login ==================== */
 .login-btn {
     width: 100%; height: 48px; padding: 0 24px;
     border-radius: var(--r-full);
@@ -2328,7 +2332,7 @@ html[data-theme="light"] .login-input:focus {
     color: var(--txt-muted); line-height: 1.5;
 }
 
-/* ── Spinner del botón ────────────────────────────────────── */
+/* ── Spinner del botón ==================== */
 @keyframes spin { to { transform: rotate(360deg); } }
 .login-spinner {
     width: 15px; height: 15px;
@@ -2389,11 +2393,11 @@ html[data-theme="light"] .sb-logout-btn:hover { background: rgba(186,26,26,0.14)
     white-space: nowrap; display: block;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
+/* ====================
    MÓDULOS NUEVOS: ROLES · SYNC TOGGLE · ADMIN · AJUSTES · NOTIFICACIONES
-   ═══════════════════════════════════════════════════════════════════════════ */
+   ==================== */
 
-/* ── Badges de rol ────────────────────────────────────────── */
+/* ── Badges de rol ==================== */
 .role-badge {
     display:inline-flex;align-items:center;gap:3px;padding:2px 7px;
     border-radius:var(--r-sm);font-size:0.58rem;font-weight:700;
@@ -2402,7 +2406,7 @@ html[data-theme="light"] .sb-logout-btn:hover { background: rgba(186,26,26,0.14)
 .role-badge.admin{background:var(--warn-dim);color:var(--warn);border:1px solid var(--warn);}
 .role-badge.user {background:var(--accent-dim);color:var(--accent);border:1px solid var(--accent-dim2);}
 
-/* ── Toggle sync ──────────────────────────────────────────── */
+/* ── Toggle sync ==================== */
 .sync-toggle-row{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-radius:var(--r-md);border:1px solid var(--border-mid);background:var(--surface);margin-bottom:4px;}
 .sync-toggle-label{font-size:.8rem;color:var(--txt-secondary);}
 .sync-pill{position:relative;width:34px;height:18px;border-radius:9px;background:var(--border-strong);border:none;cursor:pointer;transition:background .2s;flex-shrink:0;}
@@ -2410,7 +2414,7 @@ html[data-theme="light"] .sb-logout-btn:hover { background: rgba(186,26,26,0.14)
 .sync-pill::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.25);}
 .sync-pill.on::after{transform:translateX(16px);}
 
-/* ── Panel Admin ──────────────────────────────────────────── */
+/* ── Panel Admin ==================== */
 .adm-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px 16px;margin-bottom:10px;box-shadow:var(--shadow-card);}
 .adm-card h3{font-size:.95rem;font-weight:700;color:var(--txt-primary);margin-bottom:10px;display:flex;align-items:center;gap:8px;}
 .adm-stat{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:.88rem;color:var(--txt-secondary);}
@@ -2423,7 +2427,7 @@ html[data-theme="light"] .sb-logout-btn:hover { background: rgba(186,26,26,0.14)
 .adm-btn.success{background:var(--ok-dim);color:var(--ok);border:1px solid var(--ok-dim);}
 .adm-btn.warn   {background:var(--danger-dim);color:var(--danger);border:1px solid var(--danger);}
 
-/* ── Ajustes (solicitudes) ────────────────────────────────── */
+/* ── Ajustes (solicitudes) ==================== */
 .ajuste-card{background:var(--card);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:var(--r-md);padding:10px 13px;margin-bottom:8px;}
 .ajuste-card.pendiente{border-left-color:var(--warn);}
 .ajuste-card.aprobado {border-left-color:var(--ok);}
@@ -2435,7 +2439,7 @@ html[data-theme="light"] .sb-logout-btn:hover { background: rgba(186,26,26,0.14)
 .ajuste-btn.ok {background:var(--ok-dim);color:var(--ok);border:1px solid var(--ok);}
 .ajuste-btn.nok{background:var(--danger-dim);color:var(--danger);border:1px solid var(--danger);}
 
-/* ── Notificaciones ───────────────────────────────────────── */
+/* ── Notificaciones ==================== */
 .notif-wrap{background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;box-shadow:var(--shadow-card);}
 .notif-item{display:flex;align-items:flex-start;gap:10px;padding:10px 13px;border-bottom:1px solid var(--border);transition:background .1s;}
 .notif-item.unread{background:var(--accent-dim);}
@@ -2448,17 +2452,17 @@ html[data-theme="light"] .sb-logout-btn:hover { background: rgba(186,26,26,0.14)
 .notif-time{font-size:.78rem;color:var(--txt-muted);margin-top:2px;}
 #sbNotifBadge{margin-left:auto;background:var(--red);color:#fff;font-size:.58rem;font-weight:700;padding:1px 5px;border-radius:7px;display:none;}
 
-/* ── Reportes publicados ──────────────────────────────────── */
+/* ── Reportes publicados ==================== */
 .rep-card{background:var(--card);border:1px solid var(--ok-dim);border-radius:var(--r-lg);padding:13px 16px;margin-bottom:10px;}
 .rep-card-title{font-weight:600;font-size:.86rem;color:var(--txt-primary);margin-bottom:3px;}
 .rep-card-meta {font-size:.72rem;color:var(--txt-muted);margin-bottom:9px;}
 
-/* ═══════════════════════════════════════════════════════════════════════════
+/* ====================
    AUDITORÍA MULTIUSUARIO — Design System
    Panel identidad · comparación · trail de conteo · status pills
-   ═══════════════════════════════════════════════════════════════════════════ */
+   ==================== */
 
-/* ── Panel identidad de dispositivo ─────────────────────────────────────── */
+/* ── Panel identidad de dispositivo ==================== */
 .audit-user-panel {
     background: var(--card);
     border: 1px solid var(--border-mid);
@@ -2506,7 +2510,7 @@ html[data-theme="light"] .sb-logout-btn:hover { background: rgba(186,26,26,0.14)
 }
 .audit-rename-btn:hover { background: var(--accent-dim2); }
 
-/* ── Formulario inline para renombrar ──────────────────────────────────── */
+/* ── Formulario inline para renombrar ==================== */
 .audit-rename-inline {
     display: none;
     flex-direction: column;
@@ -2532,7 +2536,7 @@ html[data-theme="light"] .sb-logout-btn:hover { background: rgba(186,26,26,0.14)
 }
 .audit-rename-input:focus { outline: none; border-color: var(--accent); }
 
-/* ── Panel comparación multi-dispositivo ───────────────────────────────── */
+/* ── Panel comparación multi-dispositivo ==================== */
 .audit-compare-panel {
     background: var(--card);
     border: 1px solid var(--border-mid);
@@ -2574,7 +2578,7 @@ html[data-theme="light"] .sb-logout-btn:hover { background: rgba(186,26,26,0.14)
     border: 1px solid var(--border-mid);
 }
 
-/* ── Trail de conteo por producto ──────────────────────────────────────── */
+/* ── Trail de conteo por producto ==================== */
 .audit-trail {
     margin-top: 7px;
     border-top: 1px solid var(--border);
@@ -2623,7 +2627,7 @@ html[data-theme="light"] .sb-logout-btn:hover { background: rgba(186,26,26,0.14)
     border-radius: 3px;
 }
 
-/* ── Status bar en pantalla de conteo ──────────────────────────────────── */
+/* ── Status bar en pantalla de conteo ==================== */
 .audit-counting-status-bar {
     display: flex; gap: 7px; flex-wrap: wrap;
     margin-bottom: 10px;
@@ -2649,9 +2653,9 @@ html[data-theme="light"] .sb-logout-btn:hover { background: rgba(186,26,26,0.14)
     border-color: var(--accent-dim2);
 }
 
-/* ══════════════════════════════════════════════════════════
+/* ====================
    M3 EXTRA OVERRIDES — Cards, Tables, Badges, Misc
-   ══════════════════════════════════════════════════════════ */
+   ==================== */
 
 /* M3 Filled Cards (Tailwind bg-white → var(--card)) */
 .bg-white.rounded-xl, .bg-white.rounded-2xl,
@@ -2790,23 +2794,23 @@ html[data-theme="light"] thead.bg-gradient-to-r th { color: var(--txt-secondary)
     background: var(--accent-on);
 }
 
-/* ══════════════════════════════════════════════════════════════════════
+/* ====================
    R5 — Columnas secundarias del catálogo
-   ────────────────────────────────────────────────────────────────────
+   ====================
    Sustituyen a "hidden md:table-cell". Ese par de clases venía de Tailwind,
    pero aquí .hidden está definida arriba con display:none !important y los
    breakpoints md: no existen en esta hoja: el resultado era que la columna
    quedaba oculta SIEMPRE, tambien en escritorio. La columna Grupo del
    catalogo llevaba asi desde que se escribio.
-   ══════════════════════════════════════════════════════════════════════ */
+   ==================== */
 .cat-col-sec { display: table-cell; }
 @media (max-width: 767px) {
     .cat-col-sec { display: none; }
 }
 
-/* ══════════════════════════════════════════════════════════════════════
+/* ====================
    RECONTEO (js/87-reconteo.js) — tokens del tema, claro/oscuro
-   ══════════════════════════════════════════════════════════════════════ */
+   ==================== */
 .rc-screen { padding-bottom: 24px; }
 .rc-cab { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
 .rc-titulo { font-size: 1rem; font-weight: 800; color: var(--txt-primary); }
@@ -2869,10 +2873,10 @@ html[data-theme="light"] .rc-area--corregida { background: #fffbeb; border-color
 html[data-theme="light"] .rc-pie { box-shadow: 0 -2px 10px rgba(0,0,0,.08); }
 @media (prefers-reduced-motion: reduce) { .rc-card, .rc-hist { transition: none; } }
 
-/* ══════════════════════════════════════════════════════════════════════
+/* ====================
    PREMIUM (js/83-panel.js) — panel, gráficas, ficha y acciones
    Solo tokens del tema: claro/oscuro salen solos.
-   ══════════════════════════════════════════════════════════════════════ */
+   ==================== */
 .pm-panel { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; }
 .pm-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 @media (min-width: 640px) { .pm-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
@@ -2970,7 +2974,7 @@ button.pm-tile:active { transform: scale(.98); }
 .pm-card__fila b.pm-dif { color: var(--warn); }
 @media (prefers-reduced-motion: reduce) { .pm-progreso__barra, button.pm-tile { transition: none; } .pm-ficha { animation: none; } }
 
-/* ═════════════════════════════════════════════════════════════════════════
+/* ====================
    FASE 10B (30/09/2026) — BOTONES PARA EL PULGAR
    Pedido del propietario: botones grandes, fáciles de presionar con el
    pulgar, bien separados y con alto contraste.
@@ -2983,7 +2987,7 @@ button.pm-tile:active { transform: scale(.98); }
        secundario oscuro 12.9:1 · claro 17.1:1
    El texto de peligro en oscuro es #690005 (On-Error de Material): el
    blanco sobre var(--danger) que usaba .pm-btn--peligro daba 1.7:1, ilegible.
-   ═════════════════════════════════════════════════════════════════════════ */
+   ==================== */
 .bt-pila { display: flex; flex-direction: column; gap: 12px; }
 .bt { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 52px; padding: 14px 18px; border-radius: 14px; border: 2px solid transparent; font-family: inherit; font-size: 1rem; font-weight: 700; line-height: 1.25; text-align: center; cursor: pointer; white-space: normal; -webkit-tap-highlight-color: transparent; touch-action: manipulation; transition: transform .08s ease, filter .12s ease; }
 .bt:active { transform: scale(.98); }
@@ -3000,7 +3004,7 @@ html[data-theme="light"] .bt--peligro { color: #fff; }
 /* La acción que no se deshace va sola, al final y separada del resto. */
 .bt-zona-peligro { margin-top: 22px; padding-top: 18px; border-top: 2px dashed var(--border-mid); display: flex; flex-direction: column; gap: 10px; }
 
-/* ── Ventas: periodo de la importación ─────────────────────────────────── */
+/* ── Ventas: periodo de la importación ==================== */
 .vt-periodo { padding: 16px; margin-bottom: 16px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border-mid); display: flex; flex-direction: column; gap: 12px; }
 .vt-periodo__titulo { font-weight: 700; font-size: 1.05rem; color: var(--txt-primary); }
 .vt-ayuda { color: var(--txt-secondary); font-size: .9rem; line-height: 1.5; }
@@ -3017,7 +3021,7 @@ html[data-theme="light"] .bt--peligro { color: #fff; }
 .vt-dia--ok { background: var(--ok-dim); color: var(--ok); border-color: var(--ok); }
 .vt-dia i { font-size: .7rem; }
 
-/* ── R7c (v5.13) · Ventas al kit Carbón & Latón ────────────────────────────
+/* ── R7c (v5.13) · Ventas al kit Carbón & Latón ====================
    Todo lo que 93-ventas.js pintaba con style="…" y colores a mano vive aquí,
    sobre tokens. Cifras en IBM Plex Mono y alineadas a la derecha; el color
    nunca va solo (cada aviso lleva icono y texto). */
@@ -3244,7 +3248,7 @@ textarea.ui-campo { resize: vertical; min-height: 88px; }
     clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
 }
 
-/* ── Cifras ─────────────────────────────────────────────────────── */
+/* ── Cifras ==================== */
 .bi-cifra {
     font-family: var(--f-num);
     font-variant-numeric: tabular-nums;
@@ -3265,7 +3269,7 @@ textarea.ui-campo { resize: vertical; min-height: 88px; }
     color: var(--txt-muted); margin-left: 3px;
 }
 
-/* ── Badge de estado ────────────────────────────────────────────── */
+/* ── Badge de estado ==================== */
 .bi-badge {
     display: inline-flex; align-items: center; gap: 5px;
     padding: 5px 9px;
@@ -3302,7 +3306,7 @@ textarea.ui-campo { resize: vertical; min-height: 88px; }
 .bi-mono--ok     { background: var(--ok-dim);     color: var(--ok); }
 .bi-mono--book   { background: var(--book-dim);   color: var(--book); }
 
-/* ── Medidor segmentado ─────────────────────────────────────────── */
+/* ── Medidor segmentado ==================== */
 .bi-meter { display: flex; gap: 2px; }
 .bi-meter__seg {
     flex-grow: 1; height: 7px;
@@ -3314,7 +3318,7 @@ textarea.ui-campo { resize: vertical; min-height: 88px; }
 .bi-meter--ok   .bi-meter__seg.is-on { background: var(--ok); }
 .bi-meter--info .bi-meter__seg.is-on { background: var(--info); }
 
-/* ── Tarjeta ────────────────────────────────────────────────────── */
+/* ── Tarjeta ==================== */
 .bi-card {
     background: var(--surface);
     border: 1px solid var(--border-mid);
@@ -3348,7 +3352,7 @@ textarea.ui-campo { resize: vertical; min-height: 88px; }
     border-top: 1px solid var(--border);
 }
 
-/* ── Fila de producto ───────────────────────────────────────────── */
+/* ── Fila de producto ==================== */
 .bi-row {
     display: flex; align-items: center; gap: 10px;
     width: 100%;
@@ -3378,7 +3382,7 @@ textarea.ui-campo { resize: vertical; min-height: 88px; }
 }
 .bi-row__der .bi-cifra { font-size: 1.06rem; }
 
-/* ── KPI ────────────────────────────────────────────────────────── */
+/* ── KPI ==================== */
 .bi-kpi { display: flex; flex-direction: column; }
 .bi-kpi__val {
     font-family: var(--f-num);
@@ -3397,7 +3401,7 @@ textarea.ui-campo { resize: vertical; min-height: 88px; }
     color: var(--txt-muted); margin-top: 5px;
 }
 
-/* ── Botones ────────────────────────────────────────────────────── */
+/* ── Botones ==================== */
 .bi-btn {
     display: inline-flex; align-items: center; justify-content: center; gap: 7px;
     min-height: 44px;              /* regla 4: 44 px para el pulgar */
@@ -3418,7 +3422,7 @@ textarea.ui-campo { resize: vertical; min-height: 88px; }
 .bi-btn--book       { background: var(--book); color: var(--book-on); }
 .bi-btn[disabled] { opacity: 0.45; cursor: not-allowed; }
 
-/* ── Campo de formulario ───────────────────────────────────────── */
+/* ── Campo de formulario ==================== */
 .bi-field { display: flex; flex-direction: column; }
 .bi-field__etq {
     font-size: 0.65rem; font-weight: 700;
@@ -3457,7 +3461,7 @@ textarea.ui-campo { resize: vertical; min-height: 88px; }
 }
 .bi-field__ayuda { font-size: 0.68rem; color: var(--txt-muted); margin: 6px 0 0; }
 
-/* ── Stepper de cantidad ───────────────────────────────────────── */
+/* ── Stepper de cantidad ==================== */
 .bi-stepper { display: flex; align-items: center; gap: 6px; }
 .bi-stepper__btn {
     width: 44px; height: 44px; flex-shrink: 0;
@@ -3480,7 +3484,7 @@ textarea.ui-campo { resize: vertical; min-height: 88px; }
 }
 .bi-stepper__val:focus { border-color: var(--brass); }
 
-/* ── Encabezado de sección ─────────────────────────────────────── */
+/* ── Encabezado de sección ==================== */
 .bi-seccion {
     display: flex; align-items: center; justify-content: space-between;
     gap: 10px; margin: 2px 0 9px;
@@ -3492,15 +3496,15 @@ textarea.ui-campo { resize: vertical; min-height: 88px; }
 }
 .bi-seccion__der { font-size: 0.72rem; font-weight: 600; color: var(--brass); }
 
-/* ═════════════════════════════════════════════════════════════════════════
+/* ====================
    REDISEÑO R3 — estados vacíos de Inicio
-   ─────────────────────────────────────────────────────────────────────────
+   ====================
    Antes eran un emoji a 2.5rem metido en un style= en línea. El emoji lo
    dibujaba cada teléfono a su manera y no se podía apagar con el tema: en
    una pantalla vacía era lo único que había y se veía como un error.
    Ahora es un icono local, grande pero apagado, que no compite con el
    texto que de verdad dice qué hacer.
-   ═════════════════════════════════════════════════════════════════════════ */
+   ==================== */
 .inicio-vacio {
     text-align: center;
     padding: 40px 20px;
@@ -3515,9 +3519,9 @@ textarea.ui-campo { resize: vertical; min-height: 88px; }
 }
 .inicio-vacio__txt { font-size: 0.88rem; }
 
-/* ═════════════════════════════════════════════════════════════════════════
+/* ====================
    REDISEÑO R4 — MODAL DE CAPTURA DEL CONTEO
-   ─────────────────────────────────────────────────────────────────────────
+   ====================
    Es la pantalla más usada de la app: un bartender la abre y la cierra
    cientos de veces en un turno, de pie, con el teléfono en una mano. Todo
    lo de aquí se juzga por eso.
@@ -3530,7 +3534,7 @@ textarea.ui-campo { resize: vertical; min-height: 88px; }
    `input, select, textarea { ... !important }` (línea ~625) que si no gana
    siempre. Es la misma deuda que ya se documentó en .bi-field__input. Se
    limpian las dos juntas cuando se quite la regla global.
-   ═════════════════════════════════════════════════════════════════════════ */
+   ==================== */
 .inv-modal {
     background: var(--card);
     border: 1px solid var(--border);
@@ -3607,7 +3611,7 @@ textarea.ui-campo { resize: vertical; min-height: 88px; }
     background: var(--accent-dim);
 }
 
-/* ── Una botella abierta ───────────────────────────────────────────────── */
+/* ── Una botella abierta ==================== */
 .inv-abierta { display: flex; align-items: center; gap: 8px; }
 .inv-abierta__etq {
     width: 88px; flex-shrink: 0;
@@ -3633,7 +3637,7 @@ textarea.ui-campo { resize: vertical; min-height: 88px; }
     color: var(--danger);
 }
 
-/* ── Acciones ──────────────────────────────────────────────────────────── */
+/* ── Acciones ==================== */
 .inv-modal__acciones {
     display: flex; gap: 10px;
     position: sticky; bottom: 0;
@@ -3662,7 +3666,7 @@ textarea.ui-campo { resize: vertical; min-height: 88px; }
    utilidades repetidos en cada botón), la fila de acciones que ya no desborda
    en 390 px, y objetivos táctiles de 44 px. Los toggles pequeños (.sync-pill)
    conservan su dibujo y amplían solo el área sensible.
-   ══════════════════════════════════════════════════════════════════════════ */
+   ==================== */
 .hd-fila-cab { flex-wrap: wrap; row-gap: 8px; }
 .hd-acciones { display: flex; gap: 8px; flex-shrink: 0; }
 .hd-acciones:empty { display: none; }
@@ -3766,7 +3770,7 @@ textarea.ui-campo { resize: vertical; min-height: 88px; }
 .cd-tag { display: inline-block; font-size: .68rem; font-weight: 700; padding: 1px 6px; border-radius: var(--r-full); vertical-align: middle; }
 .cd-tag--warn { background: var(--warn-dim); color: var(--warn); }
 
-/* ══ v5.18 · Módulo Importar desde Excel ═════════════════════════════════════ */
+/* ══ v5.18 · Módulo Importar desde Excel ==================== */
 .imp-wrap { padding: 4px 0 16px; }
 .imp-cab { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 14px; }
 .imp-cab__tit { font-size: 1.1rem; font-weight: 700; color: var(--txt-primary); }
@@ -3827,7 +3831,7 @@ textarea.ui-campo { resize: vertical; min-height: 88px; }
 .imp-sec__acc .bt[data-imp-subir] { flex: 1 1 100%; }
 .imp-sec__acc .bt[data-imp-plantilla] { flex: 1 1 0; min-width: 0; white-space: nowrap; padding: 0 10px; font-size: .86rem; gap: 6px; }
 
-/* ══ v5.19 · Cortesías y promos 2x1 · Papelera ═══════════════════════════════ */
+/* ══ v5.19 · Cortesías y promos 2x1 · Papelera ==================== */
 .vt-regalo { display: inline-block; margin-left: 4px; padding: 1px 6px; border-radius: var(--r-full); background: var(--accent-dim); color: var(--txt-primary); font-size: .7rem; font-weight: 600; white-space: nowrap; }
 .vt-cz { margin-top: 12px; }
 .pap-wrap { padding: 4px 0 16px; }
@@ -3849,22 +3853,22 @@ textarea.ui-campo { resize: vertical; min-height: 88px; }
 .pap-item__acc .bt, .pap-acc .bt { width: auto; min-height: 44px; flex: 1 1 auto; }
 .pap-vacio { text-align: center; padding: 40px 20px; color: var(--txt-secondary); }
 
-/* ══ v5.23 · Diseño "Carbón & Latón" — Inicio y Conteo ═══════════════════════
+/* ══ v5.23 · Diseño "Carbón & Latón" — Inicio y Conteo ====================
    Solo presentación. Todo en tokens del sistema (nada de colores a mano) y
    objetivos táctiles de 44 px o más.
-   ══════════════════════════════════════════════════════════════════════════ */
+   ==================== */
 
 /* ── Píldora de estado (la del kit: "Conteo ciego", "Completada"…) ─────── */
 .it-pill { display: inline-flex; align-items: center; min-height: 28px; padding: 0 12px; border-radius: var(--r-full); font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; border: 1px solid transparent; }
 .it-pill--info   { background: var(--info-dim); color: var(--txt-primary); border-color: var(--info-dim); }
 .it-pill--neutro { background: var(--card-high); color: var(--txt-secondary); border-color: var(--border); }
 
-/* ── Medidor segmentado (12 tramos) ──────────────────────────────────────── */
+/* ── Medidor segmentado (12 tramos) ==================== */
 .it-medidor { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 3px; height: 6px; margin-top: 10px; }
 .it-medidor__seg { border-radius: 3px; background: var(--border-mid); }
 .it-medidor__seg--on { background: var(--accent); }
 
-/* ── Inicio: el tablero ──────────────────────────────────────────────────── */
+/* ── Inicio: el tablero ==================== */
 .it-tablero { display: flex; flex-direction: column; gap: 16px; margin-bottom: 18px; }
 .it-saludo { padding: 4px 2px 0; }
 .it-saludo__titulo { font-size: 1.5rem; font-weight: 700; letter-spacing: -.01em; color: var(--txt-primary); line-height: 1.2; margin: 0; }
@@ -3918,7 +3922,7 @@ textarea.ui-campo { resize: vertical; min-height: 88px; }
 .it-modulo__t { font-size: .95rem; font-weight: 700; }
 .it-modulo__s { font-size: .76rem; color: var(--txt-secondary); }
 
-/* ── Conteo: encabezado del área ─────────────────────────────────────────── */
+/* ── Conteo: encabezado del área ==================== */
 /* v5.24 — con el medidor y el subtítulo el encabezado mide ~145 px: pegado arriba (top:0) quedaba medio escondido bajo el encabezado de la app y comía el 17 % de la pantalla. Ahora se desplaza con la lista. */
 .audit-count-header { position: static; padding: 12px 16px 12px; background: var(--surface); border-bottom: 1px solid var(--accent-dim2); border-radius: 0 0 var(--r-lg) var(--r-lg); }
 .cnt-cab__fila { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
@@ -3937,7 +3941,7 @@ textarea.ui-campo { resize: vertical; min-height: 88px; }
 .cnt-cab__u { display: block; font-size: .64rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--txt-secondary); }
 .audit-count-header .it-medidor { margin-top: 12px; }
 
-/* ── Conteo: la tarjeta de producto ──────────────────────────────────────── */
+/* ── Conteo: la tarjeta de producto ==================== */
 .inv-card { border: 1px solid var(--border); }
 .inv-card.has-data { border-left: 3px solid var(--accent); }
 .inv-card__valor { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0; }
@@ -3946,7 +3950,7 @@ textarea.ui-campo { resize: vertical; min-height: 88px; }
 .inv-card__estado { font-size: .64rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--txt-secondary); }
 .inv-card__estado--ok { color: var(--ok); }
 
-/* ── Conteo: hoja de captura ─────────────────────────────────────────────── */
+/* ── Conteo: hoja de captura ==================== */
 #inventarioModal .inv-modal__titulo { font-size: 1.1rem; font-weight: 700; letter-spacing: 0; line-height: 1.25; }
 .inv-modal__cab { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
 .inv-modal__mono .bi-mono { width: 42px; height: 42px; font-size: .72rem; }
@@ -3974,7 +3978,7 @@ html[data-theme="light"] .inv-modal__acciones { background: var(--bg); }
    tarjeta de producto, sin perder datos ni acciones. Solo tokens; los
    objetivos táctiles siguen en 44 px. */
 
-/* ── Encabezado: una sola fila de 48 px ─────────────────────────────────── */
+/* ── Encabezado: una sola fila de 48 px ==================== */
 html body .sticky.top-0 > .max-w-7xl.mx-auto.px-3 { padding-top: 2px !important; padding-bottom: 2px !important; }
 .hd-fila-cab { column-gap: 8px; row-gap: 0; flex-wrap: nowrap; }
 .hd-logo { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; flex-shrink: 0; border-radius: var(--r-sm); background: var(--accent); color: var(--accent-on); }
@@ -4004,11 +4008,11 @@ html body .sticky.top-0 h1 { font-size: 1rem !important; font-weight: 700 !impor
 .prd-area-chip__label { font-size: .5rem; line-height: 1.15; }
 .prd-area-chip__val { font-size: .78rem; line-height: 1.15; }
 
-/* ═══════════════════════════════════════════════════════════════════════════
+/* ====================
    v5.25 — VERDE ESMERALDA BOSQUE · piel final
    Todo lo de abajo usa tokens (nada de colores a mano salvo el blanco de la
    tarjeta principal). Va al final a propósito: gana sobre los bloques viejos.
-   ═══════════════════════════════════════════════════════════════════════════ */
+   ==================== */
 
 /* ── Tipografía: Manrope en títulos y cifras, DM Sans en el resto ───────── */
 .ui-titulo, .ui-cab h2, .ui-cab h3, .it-saludo__titulo, .it-inv__grande, .it-inv__de, .it-inv__num,
@@ -4098,24 +4102,24 @@ html[data-theme="light"] #sidebar .sb-item { color: var(--sidebar-fg); }
 .it-inv .it-btn--primario:hover { background: var(--hero-btn-hover); }
 .it-inv .it-btn:focus-visible { outline-color: var(--blanco); }
 
-/* ── Tarjetas: esquinas 18 px y sombra suave ────────────────────────────── */
+/* ── Tarjetas: esquinas 18 px y sombra suave ==================== */
 .it-alerta, .it-pedido, .it-modulo, .prd-card, .inv-total { border-radius: 18px; }
 .it-alerta, .it-pedido, .it-modulo, .prd-card { box-shadow: var(--shadow-card); }
 .it-pedido { background: var(--card); }
 
-/* ── Monogramas de categoría (pasteles) ─────────────────────────────────── */
+/* ── Monogramas de categoría (pasteles) ==================== */
 .bi-mono { font-family: var(--f-head); font-weight: 800; }
 .bi-mono--whisky { background: var(--cat-whisky-bg); color: var(--cat-whisky-fg); }
 .bi-mono--gin    { background: var(--cat-gin-bg);    color: var(--cat-gin-fg); }
 .bi-mono--dest   { background: var(--cat-dest-bg);   color: var(--cat-dest-fg); }
 .bi-mono--lic    { background: var(--cat-lic-bg);    color: var(--cat-lic-fg); }
 
-/* ── Barra inferior: tarjeta blanca con sombra suave ────────────────────── */
+/* ── Barra inferior: tarjeta blanca con sombra suave ==================== */
 #bottomTabBar, html[data-theme="light"] #bottomTabBar {
     background: var(--card); box-shadow: var(--sombra-barra);
 }
 
-/* ── Tablet / escritorio: barra lateral persistente ─────────────────────── */
+/* ── Tablet / escritorio: barra lateral persistente ==================== */
 @media (min-width: 1024px) {
     #appWrapper { padding-left: 264px; }
     #sidebar { transform: none !important; width: 264px; border-radius: 0; z-index: 150; transition: none; }

@@ -1244,7 +1244,7 @@
             const lim = BusquedaUI.limite('conteo');
             let html = '';
             html += BusquedaUI.resumen('conteo', r.coincidencias, r.total, 'producto', 'productos');
-            html += '<div class="flex flex-col gap-3">';
+            html += '<div class="flex flex-col gap-3 inv-card-list">';
 
             if (filteredProducts.length === 0) {
                 html += BusquedaUI.vacio('conteo', 'productos');
