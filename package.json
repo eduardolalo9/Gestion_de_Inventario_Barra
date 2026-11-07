@@ -77,6 +77,7 @@
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5",
     "acorn": "^8.19.0",
+    "firebase-admin": "^14.5.0",
     "firebase-tools": "^15",
     "playwright": "^1.63.0"
   }
