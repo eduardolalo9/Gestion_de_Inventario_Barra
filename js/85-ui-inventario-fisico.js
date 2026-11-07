@@ -1244,13 +1244,7 @@
             const lim = BusquedaUI.limite('conteo');
             let html = '';
             html += BusquedaUI.resumen('conteo', r.coincidencias, r.total, 'producto', 'productos');
-            // ETAPA 0/4 (auditoría UX) — "inv-card-list" es una clase propia,
-            // además de las utilitarias que ya traía ("flex flex-col gap-3"),
-            // exclusiva de esta lista. Permite un ajuste de CSS en pantallas
-            // grandes (ver estilos.css) sin tocar ninguna otra pantalla que
-            // reuse "flex flex-col gap-3". Cero cambio de lógica: mismas
-            // tarjetas, mismo onclick, mismo orden.
-            html += '<div class="flex flex-col gap-3 inv-card-list">';
+            html += '<div class="flex flex-col gap-3">';
 
             if (filteredProducts.length === 0) {
                 html += BusquedaUI.vacio('conteo', 'productos');
