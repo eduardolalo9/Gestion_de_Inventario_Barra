@@ -1109,9 +1109,9 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
     </div>
 
     <div id="productModal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[300] animate-fadeIn hidden" style="padding:12px;" role="dialog" aria-modal="true" aria-labelledby="productModalTitle">
-        <div class="modal-box bg-white shadow-2xl max-w-md w-full p-5 animate-slideUp" style="border-radius:18px;max-height:calc(100dvh - 56px - 24px);overflow-y:auto;">
-            <div class="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-6"></div>
-            <h2 class="text-2xl font-bold text-gray-900 mb-6" id="productModalTitle">Agregar Producto</h2>
+        <div class="modal-box inv-modal max-w-md w-full animate-slideUp" style="max-height:calc(100dvh - 56px - 24px);overflow-y:auto;">
+            <div class="inv-modal__grabber" aria-hidden="true"></div>
+            <div class="inv-modal__cab"><div class="inv-modal__ident"><h2 class="inv-modal__titulo" id="productModalTitle">Agregar Producto</h2><p class="inv-modal__sub">Datos del producto en el catálogo. Los campos con * son obligatorios.</p></div><button type="button" onclick="closeProductModal()" class="inv-modal__cerrar" aria-label="Cerrar sin guardar"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></div>
             <div class="space-y-4">
                 <div>
                     <label for="productId" class="block text-sm font-medium text-gray-600 mb-2">ID <span class="text-xs text-gray-500">(Obligatorio - Se genera automáticamente si está vacío)</span></label>
@@ -1230,9 +1230,9 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
                         placeholder="Ej: PVA1001169">
                     <p id="productPVAviso" class="text-xs mt-2" style="color:var(--txt-muted)">Déjalo vacío si el producto no se vende tal cual en el punto de venta.</p>
                 </div>
-                <div class="flex gap-3 mt-6 pt-4" style="position:sticky;bottom:0;background:var(--modal-bg);padding-bottom:4px;z-index:1;">
-                    <button type="button" onclick="closeProductModal()" style="flex:1;height:44px;border-radius:9999px;border:none;background:transparent;color:var(--txt-secondary);font-family:var(--f-body);font-size:.875rem;font-weight:500;cursor:pointer;transition:background .18s ease;" onmouseover="this.style.background='var(--border-mid)'" onmouseout="this.style.background='transparent'">Cancelar</button>
-                    <button type="button" onclick="saveProduct()" style="flex:1;height:44px;border-radius:9999px;border:none;background:var(--accent);color:var(--accent-on);font-family:var(--f-body);font-size:.875rem;font-weight:500;cursor:pointer;box-shadow:var(--shadow-card);" >Guardar</button>
+                <div class="inv-modal__acciones">
+                    <button type="button" onclick="closeProductModal()" class="inv-modal__btn">Cancelar</button>
+                    <button type="button" onclick="saveProduct()" class="inv-modal__btn inv-modal__btn--primario">Guardar</button>
                 </div>
             </div>
         </div>
@@ -1240,9 +1240,9 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
 
     <!-- Modal Receta (RECETARIO-1, 2026-09-27) -->
     <div id="recetaModal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[300] animate-fadeIn hidden" style="padding:12px;" role="dialog" aria-modal="true" aria-labelledby="recetaModalTitle">
-        <div class="modal-box bg-white shadow-2xl max-w-lg w-full p-5 animate-slideUp" style="border-radius:18px;max-height:calc(100dvh - 56px - 24px);overflow-y:auto;">
-            <div class="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-6"></div>
-            <h2 class="text-2xl font-bold text-gray-900 mb-6" id="recetaModalTitle">Nueva receta</h2>
+        <div class="modal-box inv-modal max-w-lg w-full animate-slideUp" style="max-height:calc(100dvh - 56px - 24px);overflow-y:auto;">
+            <div class="inv-modal__grabber" aria-hidden="true"></div>
+            <div class="inv-modal__cab"><div class="inv-modal__ident"><h2 class="inv-modal__titulo" id="recetaModalTitle">Nueva receta</h2><p class="inv-modal__sub">Receta con sus insumos. Los campos con * son obligatorios.</p></div><button type="button" onclick="closeRecetaModal()" class="inv-modal__cerrar" aria-label="Cerrar sin guardar"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></div>
             <div class="space-y-4">
                 <div>
                     <label for="recetaNombre" class="block text-sm font-medium text-gray-600 mb-2">Nombre de la receta *</label>
@@ -1289,9 +1289,9 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
                     </div>
                 </div>
 
-                <div class="flex gap-3 mt-6 pt-4" style="position:sticky;bottom:0;background:var(--modal-bg);padding-bottom:4px;z-index:1;">
-                    <button type="button" onclick="closeRecetaModal()" style="flex:1;height:44px;border-radius:9999px;border:none;background:transparent;color:var(--txt-secondary);font-family:var(--f-body);font-size:.875rem;font-weight:500;cursor:pointer;">Cancelar</button>
-                    <button type="button" onclick="saveRecetaModal()" style="flex:1;height:44px;border-radius:9999px;border:none;background:var(--accent);color:var(--accent-on);font-family:var(--f-body);font-size:.875rem;font-weight:500;cursor:pointer;box-shadow:var(--shadow-card);">Guardar</button>
+                <div class="inv-modal__acciones">
+                    <button type="button" onclick="closeRecetaModal()" class="inv-modal__btn">Cancelar</button>
+                    <button type="button" onclick="saveRecetaModal()" class="inv-modal__btn inv-modal__btn--primario">Guardar</button>
                 </div>
             </div>
         </div>
@@ -1303,9 +1303,9 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
          ajeno al tema oscuro/Verde Esmeralda del resto de la app. Reescrito
          con los mismos tokens var(--...) que usa cada otro modal. -->
     <div id="orderModal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[300] animate-fadeIn hidden" style="padding:12px;" role="dialog" aria-modal="true" aria-labelledby="orderModalTitle">
-        <div class="modal-box animate-slideUp" style="background:var(--modal-bg);box-shadow:var(--shadow-modal);max-width:56rem;width:100%;padding:20px;border-radius:18px;max-height:calc(100dvh - 56px - 24px);overflow-y:auto;">
-            <div style="width:48px;height:5px;background:var(--border-mid);border-radius:999px;margin:0 auto 24px;"></div>
-            <h2 style="font-size:1.4rem;font-weight:700;color:var(--txt-primary);margin-bottom:20px;" id="orderModalTitle">Generar Pedido</h2>
+        <div class="modal-box inv-modal animate-slideUp" style="max-width:56rem;width:100%;max-height:calc(100dvh - 56px - 24px);overflow-y:auto;">
+            <div class="inv-modal__grabber" aria-hidden="true"></div>
+            <div class="inv-modal__cab"><div class="inv-modal__ident"><h2 class="inv-modal__titulo" id="orderModalTitle">Generar Pedido</h2><p class="inv-modal__sub">Revisa lo que hay en el carrito y compártelo.</p></div><button type="button" onclick="closeOrderModal()" class="inv-modal__cerrar" aria-label="Cerrar sin guardar"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <div>
                     <label for="orderSupplier" style="display:block;font-size:.82rem;font-weight:600;color:var(--txt-secondary);margin-bottom:6px;">Proveedor *</label>
@@ -1349,7 +1349,7 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
                 </div>
             </div>
 
-            <div class="flex gap-3" style="position:sticky;bottom:0;background:var(--modal-bg);padding-top:12px;padding-bottom:4px;z-index:1;">
+            <div class="inv-modal__acciones">
                 <button type="button" onclick="closeOrderModal()" style="flex:1;height:44px;border-radius:9999px;border:none;background:transparent;color:var(--txt-secondary);font-family:var(--f-body);font-size:.875rem;font-weight:500;cursor:pointer;transition:background .18s ease;" onmouseover="this.style.background='var(--border-mid)'" onmouseout="this.style.background='transparent'">Cancelar</button>
                 <button type="button" onclick="createOrder()" style="flex:1;height:44px;border-radius:9999px;border:none;background:var(--ok-dim);color:var(--green);font-family:var(--f-body);font-size:.875rem;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1376,10 +1376,9 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
          lleven el mismo.
          ══════════════════════════════════════════════════════════════════ -->
     <div id="nuevoInventarioModal" class="modal-hoja fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[300] hidden" style="padding:12px;" role="dialog" aria-modal="true" aria-labelledby="nuevoInvTitulo">
-        <div class="modal-box" style="background:var(--modal-bg);border-radius:18px;max-width:28rem;width:100%;padding:18px 18px 22px;max-height:calc(100dvh - 80px);overflow-y:auto;">
-            <div style="width:48px;height:5px;background:var(--border-mid);border-radius:999px;margin:0 auto 16px;"></div>
-            <h2 id="nuevoInvTitulo" style="font-size:1.3rem;font-weight:800;color:var(--txt-primary);margin-bottom:4px;">Nuevo Inventario Físico</h2>
-            <p class="ni-ayuda" style="margin-bottom:18px;">El número se asigna solo al crearlo.</p>
+        <div class="modal-box inv-modal" style="max-width:28rem;width:100%;max-height:calc(100dvh - 80px);overflow-y:auto;">
+            <div class="inv-modal__grabber" aria-hidden="true"></div>
+            <div class="inv-modal__cab"><div class="inv-modal__ident"><h2 class="inv-modal__titulo" id="nuevoInvTitulo">Nuevo Inventario Físico</h2><p class="inv-modal__sub">El número se asigna solo al crearlo.</p></div><button type="button" onclick="cerrarModalNuevoInventario()" class="inv-modal__cerrar" aria-label="Cerrar sin guardar"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></div>
 
             <!-- FASE 10B — una sola columna, campos de 52 px y botones apilados
                  a lo ancho, separados 12 px: nada que se toque por error. -->
@@ -1416,9 +1415,9 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
                     <textarea id="nuevoInvComentario" rows="3" maxlength="300" placeholder="Ej: cierre de la semana 7-13 de septiembre"></textarea>
                 </div>
 
-                <div class="bt-pila" style="margin-top:4px;">
-                    <button type="button" id="nuevoInvBtnCrear" class="bt bt--primario" onclick="confirmarNuevoInventario()"><i class="fa-solid fa-plus" aria-hidden="true"></i> Crear inventario</button>
-                    <button type="button" class="bt bt--secundario" onclick="cerrarModalNuevoInventario()">Cancelar</button>
+                <div class="inv-modal__acciones">
+                    <button type="button" class="inv-modal__btn" onclick="cerrarModalNuevoInventario()">Cancelar</button>
+                    <button type="button" id="nuevoInvBtnCrear" class="inv-modal__btn inv-modal__btn--primario" onclick="confirmarNuevoInventario()"><i class="fa-solid fa-plus" aria-hidden="true"></i> Crear inventario</button>
                 </div>
             </div>
         </div>
@@ -1430,10 +1429,9 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
          una vez guardada, este modal ya no se ofrece para ese inventario.
          ══════════════════════════════════════════════════════════════════ -->
     <div id="regFechaRecuentoModal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[300] hidden" style="padding:12px;" role="dialog" aria-modal="true" aria-labelledby="regFechaRecuentoTitulo">
-        <div class="modal-box" style="background:var(--modal-bg);border-radius:18px;max-width:24rem;width:100%;padding:18px;">
-            <div style="width:48px;height:5px;background:var(--border-mid);border-radius:999px;margin:0 auto 14px;"></div>
-            <h2 id="regFechaRecuentoTitulo" style="font-size:1.1rem;font-weight:700;color:var(--txt-primary);margin-bottom:2px;">Registrar fecha de recuento</h2>
-            <p style="font-size:.76rem;color:var(--txt-muted);margin-bottom:14px;">Este inventario se creó antes de que se guardara esta fecha. Sin ella no se va a poder contabilizar cuando lo cierres. Se registra una sola vez.</p>
+        <div class="modal-box inv-modal" style="max-width:24rem;width:100%;">
+            <div class="inv-modal__grabber" aria-hidden="true"></div>
+            <div class="inv-modal__cab"><div class="inv-modal__ident"><h2 class="inv-modal__titulo" id="regFechaRecuentoTitulo">Registrar fecha de recuento</h2><p class="inv-modal__sub">Este inventario se creó antes de que se guardara esta fecha. Sin ella no se va a poder contabilizar cuando lo cierres. Se registra una sola vez.</p></div><button type="button" onclick="cerrarModalRegistrarFechaRecuento()" class="inv-modal__cerrar" aria-label="Cerrar sin guardar"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></div>
 
             <label for="regFechaRecuentoInput" style="display:block;font-size:.78rem;font-weight:600;color:var(--txt-secondary);margin-bottom:5px;">Fecha del recuento</label>
             <input type="date" id="regFechaRecuentoInput" onchange="_pintarAvisoFechaRegistrar()"
@@ -1443,9 +1441,9 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
             <p style="font-size:.7rem;color:var(--txt-muted);margin:5px 0 0;">Cualquier fecha: domingo o fin de mes cierran la semana; otra se contabiliza como ancla del Total.</p>
             <p id="regFechaRecuentoAviso" style="font-size:.72rem;margin:6px 0 16px;line-height:1.5;font-weight:600;"></p>
 
-            <div style="display:flex;gap:10px;">
-                <button type="button" onclick="cerrarModalRegistrarFechaRecuento()" style="flex:1;min-height:44px;border-radius:9999px;border:1px solid var(--border-mid);background:transparent;color:var(--txt-secondary);font-family:inherit;font-size:.86rem;font-weight:500;cursor:pointer;">Cancelar</button>
-                <button type="button" id="regFechaRecuentoBtnGuardar" onclick="confirmarRegistrarFechaRecuento()" style="flex:1;min-height:44px;border-radius:9999px;border:none;background:var(--accent);color:var(--accent-on);font-family:inherit;font-size:.86rem;font-weight:600;cursor:pointer;">Guardar</button>
+            <div class="inv-modal__acciones">
+                <button type="button" onclick="cerrarModalRegistrarFechaRecuento()" class="inv-modal__btn">Cancelar</button>
+                <button type="button" id="regFechaRecuentoBtnGuardar" onclick="confirmarRegistrarFechaRecuento()" class="inv-modal__btn inv-modal__btn--primario">Guardar fecha</button>
             </div>
         </div>
     </div>

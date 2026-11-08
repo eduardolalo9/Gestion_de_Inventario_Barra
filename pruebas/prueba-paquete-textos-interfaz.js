@@ -108,8 +108,10 @@ chk('Los botones de la tarjeta de pedido llevan aria-label (compartir y eliminar
     const bloqueModal = html.slice(start, k);
     chk('★ #orderModal ("Generar Pedido") ya no tiene clases Tailwind fijas de color',
         !TAILWIND_FIJO.test(bloqueModal));
-    chk('#orderModal usa var(--modal-bg)/var(--shadow-modal) para la caja del modal',
-        /var\(--modal-bg\)/.test(bloqueModal) && /var\(--shadow-modal\)/.test(bloqueModal));
+    // Rediseño de ventanas (nov-2026): la caja ya no lleva colores en línea; usa el patrón común .inv-modal,
+    // cuyo fondo y sombra salen de tokens en estilos.css.
+    chk('#orderModal usa el patrón común .inv-modal (fondo y sombra por token) y no trae colores a mano',
+        /class="modal-box inv-modal/.test(bloqueModal) && !/(#[0-9a-f]{3,6}\b|rgba?\()/i.test(bloqueModal.replace(/<svg[\s\S]*?<\/svg>/g, '')));
 })();
 
 const fnActualizarCantidad = (function () {

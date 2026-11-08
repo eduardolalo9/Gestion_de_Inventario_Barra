@@ -122,9 +122,11 @@ chk('Sin valores de reserva muertos en los tokens ya definidos (var(--x,#hex))',
     !/var\(--border-mid,#e5e7eb\)/.test(modal) &&
     !/var\(--modal-bg,#fff\)/.test(modal) &&
     !/var\(--accent-on,#003063\)/.test(modal));
-chk('El hover de "Cancelar" usa --border-mid, no el gris rgba(202,196,208,…) suelto',
-    /this\.style\.background='var\(--border-mid\)'/.test(modal) &&
-    !/rgba\(202,\s*196,\s*208/.test(modal));
+// Rediseño de ventanas (nov-2026): «Cancelar» es un botón de clase (.inv-modal__btn) sin hover en línea;
+// lo que se garantiza es que sigue sin gris suelto.
+chk('«Cancelar» del modal de producto usa la clase común (sin hover ni gris rgba(202,196,208,…) en línea)',
+    /class="inv-modal__btn">Cancelar</.test(modal) &&
+    !/rgba\(202,\s*196,\s*208/.test(modal) && !/onmouseover=/.test(modal));
 chk('★ _avisarPVDuplicado ya no escribe colores a mano (#dc2626 / #9ca3af)',
     !/#dc2626/.test(fAvisarPV) && !/#9ca3af/.test(fAvisarPV) &&
     /var\(--danger\)/.test(fAvisarPV) && /var\(--txt-muted\)/.test(fAvisarPV));

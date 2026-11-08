@@ -551,8 +551,6 @@ th.ped-tabla__n, th.ped-tabla__c { color: var(--txt-muted); }
 .cn-pantalla { padding-bottom: 4px; }
 
 /* ── v5.41 · Compras: Importar Excel, rango de fechas de ingreso y resumen ── */
-.cp-acciones { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 8px; }
-.cp-acciones .bt { min-height: 44px; }
 .cp-rango { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; margin: 0 0 8px; }
 .cp-rango__campo { display: flex; flex-direction: column; gap: 2px; flex: 1 1 140px; min-width: 130px; }
 .cp-rango__etq { font-size: var(--d-fs-sm); font-weight: 700; color: var(--txt-secondary); text-transform: uppercase; letter-spacing: .04em; }

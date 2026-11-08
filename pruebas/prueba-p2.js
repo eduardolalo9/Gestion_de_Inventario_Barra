@@ -241,9 +241,12 @@ chk('ALCANCE · no se tocó pv, sku ni pvParrot',
     !/\bpvParrot\b/.test(comprasCodigo) && !/\bsku\b/.test(comprasCodigo));
 chk('ALCANCE · los identificadores de área siguen intactos',
     /const AREAS_SISTEMA = \['almacen', 'barra1', 'barra2'\]/.test(leer('js/18-areas-config.js')));
-chk('ALCANCE · la captura manual (4C) sigue sin implementarse — es la siguiente etapa, no esta',
-    /comprasNuevaManual/.test(compras) &&
-    /todavía no está disponible/.test(extraer(compras, 'comprasNuevaManual') || ''));
+// Nov-2026 (pedido de Eduardo): la captura manual (4C) YA existe. La garantía de alcance pasa a ser que
+// NO escribe por su cuenta: reutiliza el folio transaccional y guardarCompra(), sin batch ni set propios.
+const _gm = (extraer(compras, 'comprasGuardarManual') || '').replace(/\/\/.*$/gm, '');
+chk('ALCANCE · la captura manual (4C) existe y reutiliza guardarCompra() y el folio transaccional, sin escribir por su cuenta',
+    /guardarCompra\(/.test(_gm) && /_obtenerSiguienteFolioCompra\(/.test(_gm) && !/\.set\(|\.update\(|\.add\(|batch\(/.test(_gm) &&
+    !/todavía no está disponible/.test(extraer(compras, 'comprasNuevaManual') || ''));
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  CACHÉ

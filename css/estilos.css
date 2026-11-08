@@ -3640,15 +3640,16 @@ textarea.ui-campo { resize: vertical; min-height: 88px; }
 /* ── Acciones ==================== */
 .inv-modal__acciones {
     display: flex; gap: 10px;
-    position: sticky; bottom: 0;
-    padding-top: 10px; padding-bottom: 2px;
+    position: sticky; bottom: -16px; margin-bottom: -16px;  /* cubre el relleno del modal: nada asoma bajo el pie */
+    padding: 10px 0 16px;
     background: var(--card);
     z-index: 1;
 }
 .inv-modal__btn {
     flex: 1; min-height: 48px;
     border-radius: var(--r-full);
-    border: 1px solid transparent;
+    border: 1px solid var(--border-mid);
+    background: transparent; color: var(--txt-secondary);   /* «fantasma»: Cancelar y acciones secundarias */
     font-family: var(--f-body);
     font-size: 0.9rem; font-weight: 600;
     cursor: pointer;
@@ -3656,7 +3657,7 @@ textarea.ui-campo { resize: vertical; min-height: 88px; }
 }
 /* El único latón del modal. Guardar es lo que se quiere que pase. */
 .inv-modal__btn--primario {
-    background: var(--accent); color: var(--accent-on);
+    background: var(--accent); color: var(--accent-on); border-color: var(--accent);
     box-shadow: var(--shadow-card);
 }
 .inv-modal__btn--primario:hover { background: var(--accent-hover); }
@@ -3773,7 +3774,7 @@ textarea.ui-campo { resize: vertical; min-height: 88px; }
 /* ══ v5.18 · Módulo Importar desde Excel ==================== */
 .imp-wrap { padding: 4px 0 16px; }
 .imp-cab { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 14px; }
-.imp-cab__tit { font-size: 1.1rem; font-weight: 700; color: var(--txt-primary); }
+.imp-cab__tit { font-size: 1.25rem; font-weight: 700; letter-spacing: -.01em; color: var(--txt-primary); }
 .imp-cab__sub { font-size: .84rem; color: var(--txt-secondary); line-height: 1.5; margin-top: 2px; }
 .imp-volver { flex-shrink: 0; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
     border-radius: var(--r-full); border: 1px solid var(--border-mid); background: var(--surface); color: var(--txt-primary); cursor: pointer; }
@@ -3836,7 +3837,7 @@ textarea.ui-campo { resize: vertical; min-height: 88px; }
 .vt-cz { margin-top: 12px; }
 .pap-wrap { padding: 4px 0 16px; }
 .pap-cab { margin-bottom: 14px; }
-.pap-cab__tit { font-size: 1.1rem; font-weight: 700; color: var(--txt-primary); }
+.pap-cab__tit { font-size: 1.25rem; font-weight: 700; letter-spacing: -.01em; color: var(--txt-primary); }
 .pap-cab__sub { font-size: .84rem; color: var(--txt-secondary); line-height: 1.5; margin-top: 2px; }
 .pap-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .pap-item { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: var(--r-lg); background: var(--surface); border: 1px solid var(--border-mid); }
@@ -4127,3 +4128,40 @@ html[data-theme="light"] #sidebar .sb-item { color: var(--sidebar-fg); }
     #sbOverlay, #sbCloseBtn, #hamburgerBtn, #bottomTabBar { display: none !important; }
     #mainContent { padding-bottom: 32px !important; }
 }
+
+/* ═══ Lenguaje de ventanas (pg-*) ═══ Encabezado, zona de acciones, formulario y barra fija.
+   Solo tokens: sirve igual en claro y oscuro. Lo usan Compras y la captura manual. */
+.pg-cab { display: flex; align-items: flex-start; gap: 6px; margin: 2px 0 12px; }
+.pg-cab .mc-cab__volver { margin: -4px 0 0 -10px; flex-shrink: 0; }
+.pg-cab__txt { flex: 1; min-width: 0; }
+.pg-cab__tit { margin: 0; font-size: 1.25rem; font-weight: 700; letter-spacing: -.01em; line-height: 1.25; color: var(--txt-primary); }
+.pg-cab__desc { margin: 3px 0 0; max-width: 62ch; font-size: .86rem; line-height: 1.45; color: var(--txt-secondary); }
+.pg-acc, .cp-acciones { display: flex; gap: 8px; margin: 0 0 14px; }
+.pg-acc .bt { flex: 1; width: auto; min-height: 48px; padding: 0 10px; gap: 8px; font-size: .92rem; white-space: nowrap; border-width: 1px; }
+.pg-acc .bt--primario:not(:only-child) { flex: 1.1; }
+@media (min-width: 768px) { .pg-acc { max-width: 520px; } }
+.pg-form { display: flex; flex-direction: column; gap: 14px; max-width: 720px; }
+.pg-sec { display: flex; flex-direction: column; gap: 12px; padding: 14px; background: var(--surface); border: 1px solid var(--border-mid); border-radius: var(--r-lg); }
+.pg-sec__tit { margin: 0; font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--txt-muted); }
+.pg-fila { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+@media (min-width: 640px) { .pg-fila--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.pg-campo { display: flex; flex-direction: column; gap: 6px; font-size: .82rem; font-weight: 600; color: var(--txt-secondary); }
+.pg-campo input, .pg-campo select { width: 100%; box-sizing: border-box; min-height: 46px; padding: 0 12px; font: inherit; font-size: 1rem; font-weight: 500; color: var(--txt-primary); background: var(--bg); border: 1px solid var(--border-strong); border-radius: var(--r-md); }
+.pg-campo input:focus, .pg-campo select:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
+.pg-campo--err input, .pg-campo--err select { border-color: var(--danger); }
+.pg-ayuda { margin: 0; font-size: .78rem; font-weight: 400; color: var(--txt-muted); }
+.pg-err { margin: 0; font-size: .8rem; font-weight: 500; color: var(--danger); }
+.pg-aviso { margin: 0; padding: 10px 12px; font-size: .86rem; line-height: 1.45; color: var(--txt-primary); background: var(--danger-dim); border: 1px solid var(--danger); border-radius: var(--r-md); }
+.cm-linea { display: grid; gap: 10px; padding: 12px; background: var(--card); border: 1px solid var(--border-mid); border-radius: var(--r-md); }
+.cm-linea__cab { display: flex; align-items: center; justify-content: space-between; font-size: .74rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--txt-muted); }
+.cm-linea__quitar { width: 44px; height: 44px; margin: -8px -8px -8px 0; display: inline-flex; align-items: center; justify-content: center; color: var(--txt-secondary); background: transparent; border: 0; border-radius: 50%; cursor: pointer; }
+.cm-linea__quitar:hover { color: var(--danger); background: var(--danger-dim); }
+.cm-linea__nums { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.cm-linea__imp { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: baseline; font-size: .82rem; color: var(--txt-secondary); }
+.pg-resumen { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 12px 14px; font-size: .9rem; color: var(--txt-secondary); background: var(--surface); border: 1px solid var(--border-mid); border-radius: var(--r-lg); }
+.pg-resumen b { font-family: 'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; font-size: 1.15rem; color: var(--txt-primary); }
+.pg-fija { position: sticky; bottom: calc(56px + env(safe-area-inset-bottom, 0px) + 8px); /* 56px = alto de #bottomTabBar */ z-index: 5; padding: 10px 0 2px; background: linear-gradient(to top, var(--bg) 70%, transparent); }
+.pg-barra { display: flex; gap: 8px; max-width: 720px; }
+.pg-barra .bt { flex: 1; width: auto; min-height: 48px; font-size: .95rem; border-width: 1px; }
+.pg-barra .bt--primario { flex: 1.6; }
+@media (min-width: 768px) { .pg-fija { bottom: 0; } }

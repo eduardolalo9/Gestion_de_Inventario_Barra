@@ -835,7 +835,7 @@
 
         function renderProductosTab() {
             const admin = isAdmin();
-            let html = '';
+            let html = UI.cabecera('Productos', 'Catálogo del bar: existencias, precios y datos de cada producto.');
 
             // v5.28 — barra de acciones arriba, sin necesidad de hacer scroll.
             if (admin) html += _productosBarraAcciones();
@@ -1027,7 +1027,7 @@
             // dispositivo" era falso: 'orders' se sincroniza a Firestore vía
             // ordersChunks (ver eliminarPedido más abajo), igual que compras
             // o inventarios. "Sincronizado" es lo que realmente pasa.
-            let headerHtml = '<div style="margin-bottom:14px;"><h2 style="font-size:1.05rem;font-weight:700;color:var(--txt-primary);">Pedidos WhatsApp</h2><p style="font-size:.75rem;color:var(--txt-muted);">Sincronizado entre dispositivos</p></div>';
+            let headerHtml = UI.cabecera('Pedidos', 'Pedidos para compartir por WhatsApp. Sincronizado entre dispositivos.');
             // v5.28 — acceso directo a la pantalla Pedido Sugerido (js/73).
             headerHtml += '<button type="button" class="ps-acceso" onclick="abrirPedidoSugerido()">'
                         + '<i class="fa-solid fa-cart-shopping" aria-hidden="true"></i><span>Pedido sugerido</span><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button>';

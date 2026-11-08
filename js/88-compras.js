@@ -1345,8 +1345,9 @@
             var importables = _comprasGruposImportables(parsed);
             var bloqueadas = parsed.grupos.filter(function(g) { return g.duplicado && g.duplicado.bloquea; }).length;
 
-            var html = '<div style="margin-bottom:14px">'
-                      + '<div style="font-weight:700;font-size:1.05rem;margin-bottom:4px">Vista previa de la importación</div>'
+            var html = UI.cabecera('Importar archivo', 'Paso 2 de 3: revisa las entradas. No se guarda nada hasta que confirmes.',
+                                   { volver: 'cancelarImportacionCompras()', volverEtiqueta: 'Cancelar y volver a Compras' })
+                      + '<div style="margin-bottom:14px">'
                       + '<div style="color:var(--txt-secondary);font-size:.86rem;line-height:1.5">'
                       + parsed.grupos.length + ' entrada(s) para la barra'
                       + (parsed.fueraDeAlcance ? ' · ' + parsed.fueraDeAlcance + ' fila(s) de otro almacén (descartadas)' : '')
@@ -1446,17 +1447,20 @@
                          : parsed.verificacionCompleta === false ? 'Sin verificación de duplicados no se importa.'
                          : !importables.length ? 'No queda ninguna entrada nueva que importar.' : '';
             var puede = !motivoNo;
-            html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;align-items:center">';
+            // Acciones fijas abajo (siempre a la vista, aunque la lista sea larga) y en el mismo
+            // orden que en toda la app: Cancelar a la izquierda, la acción principal a la derecha.
+            html += '<div class="pg-fija" style="margin-top:16px">';
+            if (motivoNo) html += '<p style="margin:0 0 8px;font-size:.8rem;color:var(--txt-secondary)">' + escapeHtml(motivoNo) + '</p>';
+            html += '<div style="display:flex;gap:8px">';
+            html += '<button type="button" onclick="cancelarImportacionCompras()" '
+                  + 'style="flex:1;padding:0 15px;min-height:48px;border-radius:var(--r-md);background:var(--surface);'
+                  + 'border:1px solid var(--border-mid);color:var(--txt-primary);cursor:pointer">Cancelar</button>';
             html += '<button type="button" onclick="confirmarImportacionCompras()"' + (puede ? '' : ' disabled aria-disabled="true"')
-                  + ' style="padding:0 15px;min-height:44px;border-radius:var(--r-md);background:var(--ok-dim);'
+                  + ' style="flex:1.6;padding:0 15px;min-height:48px;border-radius:var(--r-md);background:var(--ok-dim);'
                   + 'border:1px solid var(--ok-dim);color:var(--ok);font-weight:600;cursor:' + (puede ? 'pointer' : 'not-allowed') + ';'
                   + (puede ? '' : 'opacity:.5;') + '">'
                   + 'Confirmar e importar' + (importables.length ? ' (' + importables.length + ')' : '') + '</button>';
-            html += '<button type="button" onclick="cancelarImportacionCompras()" '
-                  + 'style="padding:0 15px;min-height:44px;border-radius:var(--r-md);background:var(--surface);'
-                  + 'border:1px solid var(--border-mid);color:var(--txt-primary);cursor:pointer">Cancelar</button>';
-            if (motivoNo) html += '<span style="font-size:.8rem;color:var(--txt-secondary)">' + escapeHtml(motivoNo) + '</span>';
-            html += '</div>';
+            html += '</div></div>';
             return html;
         }
 
@@ -1584,6 +1588,7 @@
             event.target.value = '';
         }
 
+        var _comprasManual = null;         // estado del formulario de captura manual
         var _comprasConfirmando = false;   // evita doble toque en "Confirmar e importar"
 
         async function confirmarImportacionCompras() {
@@ -1686,8 +1691,299 @@
 
         // ── Captura a mano: todavía no implementada en esta fase (ver §9/4C
         //    del diseño — queda para después de la importación por Excel).
+        // ══════════════════════════════════════════════════════════════
+        //  CAPTURA MANUAL — validación pura y guardado
+        //  Reutiliza sin cambios: _obtenerSiguienteFolioCompra() (folio
+        //  transaccional, js/40), guardarCompra() (el único que escribe) y la
+        //  forma del documento del importador, con origen 'manual'.
+        // ══════════════════════════════════════════════════════════════
+
+        /** Número de un campo de captura. La coma es DECIMAL ("3,5" = 3.5), igual que en
+         *  el conteo (hotfix de decimales). No usar _numeroExcel: ahí la coma es de miles. */
+        function _numeroManual(v) {
+            var s = String(v == null ? '' : v).trim().replace(',', '.');
+            if (!/^-?(\d+\.?\d*|\.\d+)$/.test(s)) return null;
+            var n = parseFloat(s);
+            return isFinite(n) ? n : null;
+        }
+
+        /**
+         * comprasValidarManual(datos, hoyISO, catalogo) — capa pura, no escribe.
+         * datos: { proveedorNombre, proveedorCodigo, fechaIngreso, lineas:[{productoId,cantidad,costo}] }
+         * → { ok:true, grupo } | { ok:false, errores:{ campo: msg, lineasDetalle:{ i:{campo:msg} } } }
+         */
+        function comprasValidarManual(datos, hoyISO, catalogo) {
+            datos = datos || {};
+            var errores = {}, detalle = {}, lineas = [], vistos = {};
+            var cat = Array.isArray(catalogo) ? catalogo : (typeof products !== 'undefined' && Array.isArray(products) ? products : []);
+            var prov = String(datos.proveedorNombre || '').trim();
+            if (!prov) errores.proveedorNombre = 'Escribe el nombre del proveedor.';
+            else if (prov.length > 120) errores.proveedorNombre = 'El nombre es demasiado largo (máximo 120 caracteres).';
+            var vf = comprasValidarFechaIngreso(datos.fechaIngreso, hoyISO);
+            if (!vf.ok) errores.fechaIngreso = vf.error;
+            var entrada = Array.isArray(datos.lineas) ? datos.lineas : [];
+            if (!entrada.length) errores.lineas = 'Agrega al menos un producto.';
+            entrada.forEach(function(l, i) {
+                var e = {}, id = String((l && l.productoId) || '').trim();
+                var p = id ? cat.find(function(x) { return String(x.id) === id; }) : null;
+                if (!id) e.productoId = 'Elige un producto.';
+                else if (!p) e.productoId = 'Ese producto no está en el catálogo.';
+                else if (vistos[id]) e.productoId = 'Este producto ya está en otra línea: suma las cantidades en una sola.';
+                else vistos[id] = true;
+                var cant = _numeroManual(l && l.cantidad);
+                if (cant === null || cant <= 0) e.cantidad = 'Escribe una cantidad mayor que 0.';
+                else if (cant > 99999) e.cantidad = 'La cantidad es demasiado grande.';
+                var costo = _numeroManual(l && l.costo);
+                if (costo === null || costo < 0) e.costo = 'Escribe el costo unitario (0 si no tuvo costo).';
+                if (Object.keys(e).length) { detalle[i] = e; return; }
+                lineas.push({
+                    productoId: id, descripcionSap: p.name || id, cantidadDocumento: cant,
+                    unidadDocumento: p.unit || '', factorConversion: 1, cantidadInventario: cant,
+                    costoUnitario: costo, importe: Math.round(cant * costo * 100) / 100, enCatalogo: true
+                });
+            });
+            if (Object.keys(detalle).length) errores.lineasDetalle = detalle;
+            if (Object.keys(errores).length) return { ok: false, errores: errores };
+            var importe = lineas.reduce(function(a, l) { return a + l.importe; }, 0);
+            var fecha = String(datos.fechaIngreso).trim();
+            return { ok: true, grupo: {
+                compraId: null, folio: null, docSap: null,
+                fecha: fecha, semanaId: semanaId(fecha), fechaIngreso: fecha,
+                proveedorCodigo: String(datos.proveedorCodigo || '').trim(), proveedorNombre: prov,
+                importe: Math.round(importe * 100) / 100,
+                lineas: lineas, totalLineas: lineas.length, origen: 'manual'
+            }};
+        }
+
+        /** Valida, toma el siguiente folio manual (M-0001…) y guarda con guardarCompra(). */
+        async function comprasGuardarManual(datos) {
+            var v = comprasValidarManual(datos, _comprasHoyISO());
+            if (!v.ok) return { ok: false, motivo: 'datos_invalidos', errores: v.errores };
+            // Antes de gastar un folio: permiso y conexión (un folio quemado no se recupera).
+            if (!hasPermission('purchases.create')) return { ok: false, motivo: 'sin_permiso' };
+            if (!_db)              return { ok: false, motivo: 'sin_firestore' };
+            if (!navigator.onLine) return { ok: false, motivo: 'sin_conexion' };
+            var numero;
+            try { numero = await _obtenerSiguienteFolioCompra(); }
+            catch (e) { console.error('[Compras] Folio manual no disponible:', e); return { ok: false, motivo: 'folio_no_disponible' }; }
+            var folio = 'M-' + String(numero).padStart(4, '0');
+            var compra = Object.assign({}, v.grupo, {
+                compraId: _compraId(null, folio), folio: folio,
+                creadoPor: (typeof currentUserUid !== 'undefined' ? currentUserUid : null) || null, creadoEn: Date.now()
+            });
+            return guardarCompra(compra);
+        }
+
+        /** Abre la captura manual (la ventana se pinta en renderComprasTab). */
         function comprasNuevaManual() {
-            showNotification('La captura a mano todavía no está disponible — próximamente.');
+            if (!hasPermission('purchases.create')) { showNotification('No tienes permiso para capturar compras.'); return; }
+            comprasImportView = 'manual';
+            _comprasManual = { proveedorNombre: '', proveedorCodigo: '', fechaIngreso: _comprasHoyISO(),
+                               lineas: [{ productoId: '', texto: '', cantidad: '', costo: '' }], errores: {}, guardando: false };
+            renderTab();
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        //  CAPTURA MANUAL — la ventana
+        // ══════════════════════════════════════════════════════════════
+
+        function _cmCampo(id, etiqueta, valor, error, attrs, ayuda) {
+            return '<label class="pg-campo' + (error ? ' pg-campo--err' : '') + '" for="' + id + '"><span>' + etiqueta + '</span>'
+                 + '<input id="' + id + '" value="' + escapeHtml(valor || '') + '" ' + attrs
+                 + (error ? ' aria-invalid="true" aria-describedby="' + id + '-e"' : '') + '>'
+                 + (error ? '<p class="pg-err" id="' + id + '-e">' + escapeHtml(error) + '</p>' : (ayuda ? '<p class="pg-ayuda">' + ayuda + '</p>' : ''))
+                 + '</label>';
+        }
+
+        /** Importe de una línea, o null si todavía no se puede calcular. */
+        function _cmImporte(l) {
+            var c = _numeroManual(l.cantidad), k = _numeroManual(l.costo);
+            return (c !== null && c > 0 && k !== null && k >= 0) ? Math.round(c * k * 100) / 100 : null;
+        }
+        function _cmTotal(m) {
+            return m.lineas.reduce(function(a, l) { var i = _cmImporte(l); return a + (i === null ? 0 : i); }, 0);
+        }
+        function _cmEtiquetaProducto(p) { return (p.name || p.id) + ' · ' + p.id; }
+
+        function renderCompraManual() {
+            var m = _comprasManual, er = m.errores || {}, det = er.lineasDetalle || {};
+            var cat = (typeof products !== 'undefined' && Array.isArray(products)) ? products : [];
+            var h = '<div style="padding:4px 0 8px">';
+            h += UI.cabecera('Captura manual', 'Registra una entrada de mercancía a mano. El folio se asigna solo al guardar.',
+                             { volver: 'comprasManualCancelar()', volverEtiqueta: 'Volver a Compras' });
+            if (er.general) h += '<p class="pg-aviso" role="alert" style="margin-bottom:12px">' + escapeHtml(er.general) + '</p>';
+            h += '<form class="pg-form" id="cm-form" onsubmit="return false" novalidate>';
+
+            h += '<section class="pg-sec" aria-labelledby="cm-t1"><h2 class="pg-sec__tit" id="cm-t1">Proveedor y fecha</h2>';
+            h += _cmCampo('cm-prov', 'Proveedor *', m.proveedorNombre, er.proveedorNombre,
+                          'type="text" maxlength="120" autocomplete="off" oninput="comprasManualCampo(\'proveedorNombre\', this.value)"');
+            h += '<div class="pg-fila pg-fila--2">';
+            h += _cmCampo('cm-cod', 'Código del proveedor (opcional)', m.proveedorCodigo, null,
+                          'type="text" maxlength="30" autocomplete="off" oninput="comprasManualCampo(\'proveedorCodigo\', this.value)"');
+            h += _cmCampo('cm-fecha', 'Fecha de ingreso *', m.fechaIngreso, er.fechaIngreso,
+                          'type="date" max="' + _comprasHoyISO() + '" oninput="comprasManualCampo(\'fechaIngreso\', this.value)"',
+                          'Cuándo entró la mercancía; define la semana.');
+            h += '</div></section>';
+
+            h += '<section class="pg-sec" aria-labelledby="cm-t2"><h2 class="pg-sec__tit" id="cm-t2">Mercancía</h2>';
+            h += '<datalist id="cm-productos">' + cat.map(function(p) { return '<option value="' + escapeHtml(_cmEtiquetaProducto(p)) + '"></option>'; }).join('') + '</datalist>';
+            if (er.lineas) h += '<p class="pg-err" role="alert">' + escapeHtml(er.lineas) + '</p>';
+            m.lineas.forEach(function(l, i) {
+                var e = det[i] || {}, imp = _cmImporte(l);
+                h += '<div class="cm-linea"><div class="cm-linea__cab"><span>Producto ' + (i + 1) + '</span>';
+                if (m.lineas.length > 1) {
+                    h += '<button type="button" class="cm-linea__quitar" onclick="comprasManualQuitarLinea(' + i + ')" aria-label="Quitar el producto ' + (i + 1) + '">'
+                       + '<i class="fa-solid fa-trash" aria-hidden="true"></i></button>';
+                }
+                h += '</div>';
+                h += _cmCampo('cm-p-' + i, 'Producto *', l.texto, e.productoId,
+                              'type="text" list="cm-productos" autocomplete="off" placeholder="Busca por nombre o código" oninput="comprasManualProducto(' + i + ', this.value)"');
+                h += '<div class="cm-linea__nums">';
+                h += _cmCampo('cm-c-' + i, 'Cantidad *', l.cantidad, e.cantidad,
+                              'type="text" inputmode="decimal" autocomplete="off" placeholder="0" oninput="comprasManualLinea(' + i + ', \'cantidad\', this.value)"');
+                h += _cmCampo('cm-k-' + i, 'Costo unitario ($) *', l.costo, e.costo,
+                              'type="text" inputmode="decimal" autocomplete="off" placeholder="0.00" oninput="comprasManualLinea(' + i + ', \'costo\', this.value)"');
+                h += '<div class="cm-linea__imp"><span>Importe</span><b id="cm-i-' + i + '">' + (imp === null ? '—' : _dineroMX(imp)) + '</b></div>';
+                h += '</div></div>';
+            });
+            h += '<button type="button" class="bt bt--secundario" onclick="comprasManualAgregarLinea()" style="min-height:46px;border-width:1px">'
+               + '<i class="fa-solid fa-plus" aria-hidden="true"></i> Agregar otro producto</button>';
+            h += '</section>';
+
+            h += '<div class="pg-resumen"><span id="cm-n">' + m.lineas.length + ' producto' + (m.lineas.length === 1 ? '' : 's') + '</span>'
+               + '<span>Total <b id="cm-total">' + _dineroMX(_cmTotal(m)) + '</b></span></div>';
+            h += '</form>';
+            h += '<div class="pg-barra pg-fija"><button type="button" class="bt bt--secundario" onclick="comprasManualCancelar()">Cancelar</button>'
+               + '<button type="button" class="bt bt--primario" id="cm-guardar" onclick="comprasManualGuardar()"' + (m.guardando ? ' disabled' : '') + '>'
+               + '<i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Guardar entrada</button></div>';
+            return h + '</div>';
+        }
+
+        /** El error de un campo desaparece en cuanto se corrige (estado y pantalla). */
+        function _cmLimpiarError(id, borrar) {
+            var m = _comprasManual; if (!m || !m.errores) return;
+            borrar(m.errores);
+            var el = document.getElementById(id), lab = el && el.closest ? el.closest('.pg-campo') : null;
+            if (lab && lab.classList.contains('pg-campo--err')) {
+                lab.classList.remove('pg-campo--err');
+                el.removeAttribute('aria-invalid'); el.removeAttribute('aria-describedby');
+                var msg = document.getElementById(id + '-e'); if (msg) msg.remove();
+            }
+        }
+        /** Repinta y pone el foco donde se pide. Se quita el foco antes: renderTab() restauraría el anterior en el siguiente frame. */
+        function _cmRepintar(idFoco) {
+            var a = document.activeElement; if (a && a !== document.body && a.blur) a.blur();
+            renderTab();
+            if (idFoco) setTimeout(function() { var el = document.getElementById(idFoco); if (el) el.focus(); }, 0);
+        }
+
+        function comprasManualCampo(k, v) {
+            if (!_comprasManual) return;
+            _comprasManual[k] = v;
+            var ids = { proveedorNombre: 'cm-prov', fechaIngreso: 'cm-fecha', proveedorCodigo: 'cm-cod' };
+            if (ids[k]) _cmLimpiarError(ids[k], function(e) { delete e[k]; });
+        }
+
+        /** Actualiza importes y total sin repintar (así no se pierde el foco al escribir). */
+        function _cmRefrescarTotales() {
+            var m = _comprasManual; if (!m) return;
+            m.lineas.forEach(function(l, i) {
+                var el = document.getElementById('cm-i-' + i), imp = _cmImporte(l);
+                if (el) el.textContent = imp === null ? '—' : _dineroMX(imp);
+            });
+            var t = document.getElementById('cm-total'); if (t) t.textContent = _dineroMX(_cmTotal(m));
+        }
+
+        function comprasManualLinea(i, k, v) {
+            if (!_comprasManual || !_comprasManual.lineas[i]) return;
+            _comprasManual.lineas[i][k] = v;
+            _cmLimpiarError((k === 'cantidad' ? 'cm-c-' : 'cm-k-') + i, function(e) { if (e.lineasDetalle && e.lineasDetalle[i]) delete e.lineasDetalle[i][k]; });
+            _cmRefrescarTotales();
+        }
+
+        /** Lo escrito en «Producto» se resuelve a un id del catálogo (nombre · id, solo id, o solo nombre). */
+        function comprasManualProducto(i, texto) {
+            var m = _comprasManual; if (!m || !m.lineas[i]) return;
+            var l = m.lineas[i], t = String(texto || '').trim().toLowerCase();
+            var cat = (typeof products !== 'undefined' && Array.isArray(products)) ? products : [];
+            var hit = t ? cat.filter(function(p) {
+                return _cmEtiquetaProducto(p).toLowerCase() === t || String(p.id).toLowerCase() === t || String(p.name || '').toLowerCase() === t;
+            }) : [];
+            l.texto = texto;
+            l.productoId = hit.length === 1 ? String(hit[0].id) : '';
+            _cmLimpiarError('cm-p-' + i, function(e) { if (e.lineasDetalle && e.lineasDetalle[i]) delete e.lineasDetalle[i].productoId; });
+            if (l.productoId && String(l.costo || '').trim() === '' && hit[0].precio > 0) {
+                l.costo = String(hit[0].precio);
+                var k = document.getElementById('cm-k-' + i); if (k) k.value = l.costo;
+            }
+            _cmRefrescarTotales();
+        }
+
+        function comprasManualAgregarLinea() {
+            if (!_comprasManual) return;
+            if (_comprasManual.lineas.length >= 100) { showNotification('Máximo 100 productos por entrada.'); return; }
+            _comprasManual.lineas.push({ productoId: '', texto: '', cantidad: '', costo: '' });
+            _cmRepintar('cm-p-' + (_comprasManual.lineas.length - 1));
+        }
+
+        function comprasManualQuitarLinea(i) {
+            if (!_comprasManual || _comprasManual.lineas.length < 2) return;
+            _comprasManual.lineas.splice(i, 1);
+            _comprasManual.errores = {};
+            _cmRepintar();
+        }
+
+        function _cmHayCaptura(m) {
+            return !!(m && (String(m.proveedorNombre || '').trim() || String(m.proveedorCodigo || '').trim() ||
+                m.lineas.some(function(l) { return String(l.texto || '').trim() || String(l.cantidad || '').trim() || String(l.costo || '').trim(); })));
+        }
+
+        function _cmSalir() { _comprasManual = null; comprasImportView = 'lista'; renderTab(); }
+
+        function comprasManualCancelar() {
+            if (_cmHayCaptura(_comprasManual) && typeof showConfirm === 'function') {
+                showConfirm('¿Descartar esta captura? Se perderá lo que escribiste.', _cmSalir);
+            } else { _cmSalir(); }
+        }
+
+        function _cmMensaje(motivo) {
+            switch (motivo) {
+                case 'sin_conexion':        return 'Sin conexión: la entrada no se guardó. Revisa tu internet e inténtalo de nuevo.';
+                case 'sin_firestore':       return 'Esta versión no está conectada a la nube (modo local o de pruebas): la entrada no se puede guardar aquí.';
+                case 'sin_permiso':         return 'No tienes permiso para capturar compras.';
+                case 'folio_no_disponible': return 'No se pudo obtener el folio. Inténtalo de nuevo en unos segundos.';
+                default:                    return 'No se pudo guardar la entrada (' + motivo + '). Inténtalo de nuevo.';
+            }
+        }
+
+        async function comprasManualGuardar() {
+            var m = _comprasManual; if (!m || m.guardando) return;
+            // Las líneas totalmente vacías no cuentan (si queda al menos una con datos).
+            var vacia = function(l) { return !String(l.texto || '').trim() && !String(l.cantidad || '').trim() && !String(l.costo || '').trim(); };
+            if (m.lineas.length > 1 && m.lineas.some(function(l) { return !vacia(l); })) m.lineas = m.lineas.filter(function(l) { return !vacia(l); });
+            m.guardando = true;
+            var btn = document.getElementById('cm-guardar'); if (btn) btn.disabled = true;
+            var res;
+            try {
+                res = await comprasGuardarManual({ proveedorNombre: m.proveedorNombre, proveedorCodigo: m.proveedorCodigo, fechaIngreso: m.fechaIngreso,
+                    lineas: m.lineas.map(function(l) { return { productoId: l.productoId, cantidad: l.cantidad, costo: l.costo }; }) });
+            } catch (e) { console.error('[Compras] Captura manual:', e); res = { ok: false, motivo: 'error' }; }
+            m.guardando = false;
+            if (res && res.ok) {
+                showNotification('✅ Entrada ' + ((res.compra && res.compra.folio) || '') + ' guardada');
+                _cmSalir();
+                return;
+            }
+            m.errores = (res && res.motivo === 'datos_invalidos') ? Object.assign({ general: 'Revisa los campos marcados.' }, res.errores)
+                      : { general: _cmMensaje(res && res.motivo) };
+            if (m.errores.lineasDetalle) {   // «escribió algo pero no es de la lista» merece su propio mensaje
+                Object.keys(m.errores.lineasDetalle).forEach(function(i) {
+                    var l = m.lineas[i], e = m.errores.lineasDetalle[i];
+                    if (e.productoId && l && String(l.texto || '').trim() && !l.productoId) e.productoId = 'Elige un producto de la lista.';
+                });
+            }
+            _cmRepintar();
+            setTimeout(function() { var el = document.querySelector('#cm-form .pg-campo--err input'); if (el) el.focus(); }, 0);
         }
 
         // ══════════════════════════════════════════════════════════════════════
@@ -1709,22 +2005,27 @@
                 var html = '<div style="padding:4px 0 8px">' + renderIncidenciasImportacion(_comprasImportResultado) + '</div>';
                 return html;
             }
+            if (comprasImportView === 'manual' && _comprasManual) {
+                return renderCompraManual();
+            }
 
             var html = '<div style="padding:4px 0 8px">';
+            html += UI.cabecera('Compras', 'Entradas de mercancía del bar: captura una a mano o importa el archivo de SAP.');
 
             // ── Acciones ──────────────────────────────────────────────────────
-            // v5.41 — «Importar Excel» vuelve a Compras (pedido de Eduardo,
-            // 6-nov-2026; revierte lo decidido en v5.18). Es el MISMO flujo de
-            // siempre — comprasImportarExcel() → vista previa → fecha de ingreso
-            // → verificación de duplicados → confirmar — con el mismo permiso
-            // (purchases.import). «Importar desde Excel» (menú Más) sigue ahí.
-            html += '<div class="cp-acciones">';
-            if (hasPermission('purchases.import')) {
-                html += '<button type="button" class="bt bt--primario bt--auto" onclick="comprasImportarExcel()">'
-                      + '<i class="fa-solid fa-file-excel" aria-hidden="true"></i> Importar Excel</button>';
-            }
+            // «Captura manual» es la acción principal y «Importar archivo» la
+            // secundaria (pedido de Eduardo, nov-2026). Importar es el MISMO flujo
+            // de siempre — comprasImportarExcel() → vista previa → fecha de
+            // ingreso → verificación de duplicados → confirmar — con el mismo
+            // permiso (purchases.import). La captura manual usa purchases.create.
+            html += '<div class="pg-acc cp-acciones" role="group" aria-label="Registrar una entrada">';
             if (hasPermission('purchases.create')) {
-                html += '<button type="button" class="bt bt--secundario bt--auto" onclick="comprasNuevaManual()">Capturar a mano</button>';
+                html += '<button type="button" class="bt bt--primario" onclick="comprasNuevaManual()">'
+                      + '<i class="fa-solid fa-pen-to-square" aria-hidden="true"></i> Captura manual</button>';
+            }
+            if (hasPermission('purchases.import')) {
+                html += '<button type="button" class="bt bt--secundario" onclick="comprasImportarExcel()">'
+                      + '<i class="fa-solid fa-file-excel" aria-hidden="true"></i> Importar archivo</button>';
             }
             html += '</div>';
 
@@ -1741,7 +2042,7 @@
                       + '<div style="font-weight:600;margin-bottom:6px">Todavía no hay compras registradas</div>'
                       + '<div style="color:var(--txt-secondary);font-size:.88rem;max-width:420px;'
                       + 'margin:0 auto;line-height:1.55">'
-                      + 'Importa el Excel de entrada de mercancía de SAP con el botón Importar Excel, o captura una a mano. '
+                      + 'Usa Captura manual para registrar una entrada, o Importar archivo para cargar el Excel de entrada de mercancía de SAP. '
                       + 'Antes de guardar nada verás un resumen por proveedor y fecha para revisarlo. '
                       + 'Para ver entradas más antiguas, elige un rango de fechas.'
                       + '</div></div>';

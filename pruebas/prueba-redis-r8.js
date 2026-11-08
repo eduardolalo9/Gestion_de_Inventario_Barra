@@ -92,7 +92,9 @@ chk('.sb-item conserva su alto en todos los anchos (flex-shrink:0 fuera de media
 const pisos = [['.sbx-chip', /\.sbx-chip\s*\{\s*min-height:\s*44px/], ['.grp-pill', /\.grp-pill\s*\{\s*height:\s*44px/], ['.prd-card__pedido-btn', /\.prd-card__pedido-btn\s*\{\s*min-height:\s*44px/], ['.prd-action-btn', /\.prd-action-btn\s*\{\s*width:\s*44px;\s*height:\s*44px/], ['.sync-pause-btn', /\.sync-pause-btn\s*\{\s*min-height:\s*44px/], ['.audit-rename-btn', /\.audit-rename-btn\s*\{\s*min-height:\s*44px/], ['.pm-btn', /\.pm-btn\s*\{\s*min-height:\s*44px/], ['.sbx__limpiar', /\.sbx__limpiar\s*\{\s*width:\s*44px;\s*height:\s*44px/]];
 pisos.forEach(([n, re]) => chk('Objetivo táctil de 44 px: ' + n, re.test(css)));
 chk('.sync-pill conserva su dibujo y amplía solo el área sensible (::before)', /\.sync-pill::before\s*\{[^}]*inset:\s*-13px/.test(css));
-chk('Botones Guardar/Cancelar de los modales miden 44 px', (html.match(/flex:1;height:44px/g) || []).length >= 6 && !/flex:1;height:40px/.test(html));
+// Rediseño de ventanas (nov-2026): Guardar/Cancelar de los modales son .inv-modal__btn (≥ 48 px, 52 en el pie).
+chk('Botones Guardar/Cancelar de los modales miden ≥ 44 px (clase común .inv-modal__btn)',
+    (html.match(/class="inv-modal__btn/g) || []).length >= 9 && /\.inv-modal__btn\s*\{\s*flex:\s*1;\s*min-height:\s*48px/.test(css) && !/flex:1;height:40px/.test(html));
 chk('Botones de compras e importador de recetas con min-height:44px', !/padding:9px 15px/.test(leer('js/88-compras.js') + j92));
 chk('showConfirm: botones Cancelar/Confirmar de 44 px', (j70.match(/padding:0 18px;min-height:44px;/g) || []).length === 2);
 chk('Importador de recetas sin colores a mano (hex/rgba) en estilos en línea', !/(#[0-9a-f]{6}|rgba\()/i.test(j92.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')));

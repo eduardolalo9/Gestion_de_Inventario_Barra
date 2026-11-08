@@ -36,8 +36,8 @@ const C=[]; const chk=(n,ok,d)=>C.push({n,ok,d});
   // v5.41 — Eduardo (6-nov-2026) pidió «Importar Excel» de vuelta en Compras (había salido en v5.18).
   // Con 0 compras la pestaña ofrece importar y capturar a mano, y el texto lo explica; el rango
   // de fechas sigue disponible (se puede consultar entradas que aún no están cargadas).
-  chk('Ofrece «Importar Excel» y «Capturar a mano», y el texto dice cómo empezar',
-      vacio.botones.some(b=>b === 'Importar Excel') && vacio.botones.some(b=>b.includes('a mano')) && vacio.txt.includes('botón Importar Excel'),
+  chk('Ofrece «Captura manual» (principal) e «Importar archivo» (secundaria), y el texto dice cómo empezar',
+      vacio.botones.some(b=>b === 'Importar archivo') && vacio.botones.some(b=>b === 'Captura manual') && vacio.txt.includes('Importar archivo'),
       JSON.stringify(vacio.botones));
 
   // ── Con compras: totaliza bien ──

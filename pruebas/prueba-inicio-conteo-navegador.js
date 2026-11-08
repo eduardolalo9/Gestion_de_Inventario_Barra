@@ -179,7 +179,7 @@ const PUERTO = process.env.PUERTO || '8080';
   await p.evaluate(() => openInventarioModal('DJ7')); await p.waitForTimeout(350);
   const m0 = await p.evaluate(() => ({ titulo: document.getElementById('inventarioModalTitle').textContent, mono: document.getElementById('inventarioModalMono').textContent.trim(),
     total: document.getElementById('inv_totalValor').textContent, det: document.getElementById('inv_totalDetalle').textContent, uni: document.getElementById('inv_totalUnidad').textContent,
-    cerrar: __m.alto(document.querySelector('.inv-modal__cerrar')), mas: __m.alto(document.querySelector('.inv-paso__btn--mas')), menos: __m.alto(document.querySelector('.inv-paso__btn')),
+    cerrar: __m.alto(document.querySelector('#inventarioModal .inv-modal__cerrar')), mas: __m.alto(document.querySelector('.inv-paso__btn--mas')), menos: __m.alto(document.querySelector('.inv-paso__btn')),
     guardar: __m.alto(document.getElementById('inv_guardarBtn')), guardarTxt: document.getElementById('inv_guardarBtn').textContent.trim() }));
   chk('★ La hoja abre con monograma, producto y total en 0.00 botellas', m0.titulo === 'DON JULIO 70' && m0.mono === 'DJ7' && m0.total === '0.00' && /botellas/i.test(m0.uni) && /0 enteras/.test(m0.det), JSON.stringify(m0));
   chk('★ Objetivos de la hoja: cerrar >= 44, − / + >= 52, guardar >= 50', m0.cerrar >= 44 && m0.mas >= 52 && m0.menos >= 52 && m0.guardar >= 50, JSON.stringify(m0));
@@ -203,7 +203,7 @@ const PUERTO = process.env.PUERTO || '8080';
 
   // Cerrar con la X no guarda
   const previo = await p.evaluate(() => JSON.stringify(myAuditoriaConteo.DJ7 || null));
-  await p.click('.inv-modal__cerrar'); await p.waitForTimeout(200);
+  await p.click('#inventarioModal .inv-modal__cerrar'); await p.waitForTimeout(200);
   const cerrado = await p.evaluate(() => ({ oculto: document.getElementById('inventarioModal').classList.contains('hidden'), igual: JSON.stringify(myAuditoriaConteo.DJ7 || null) }));
   chk('★ La X cierra SIN guardar y SIN saltar al siguiente', cerrado.oculto && cerrado.igual === previo, JSON.stringify(cerrado));
 
