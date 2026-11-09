@@ -158,6 +158,65 @@
         // que existían ESE día, no con las de hoy. Sin ese parámetro el
         // comportamiento es exactamente el de siempre: todos los demás
         // llamadores siguen usando AREAS_CONTEO.
+        /**
+         * v5.44 — Hoja «Inventario» de la Auditoría consolidada: el conteo
+         * valorizado. Por producto: Grupo, ID, Nombre, Unidad, Precio, Total
+         * General (lo contado en las áreas, en unidades) y Precio total
+         * (= Precio × Total General). Subtotal por grupo y gran total del valor.
+         * Sin precio en el catálogo, Precio y Precio total quedan vacíos (nunca 0:
+         * un 0 diría que el producto no vale nada). Pura respecto a la app:
+         * recibe [{ p, total }] en el orden de la hoja de auditoría.
+         */
+        function inventarioValorizadoFilas(filas) {
+            var r2 = function(n) { return Math.round(n * 100) / 100; };
+            var out = [['Grupo', 'ID', 'Nombre', 'Unidad', 'Precio', 'Total General', 'Precio total']];
+            var tipos = ['cab'], grupo = null, subVal = 0, subUni = 0, granVal = 0, granUni = 0;
+            var cerrar = function() {
+                if (grupo === null) return;
+                out.push(['', '', 'Subtotal – ' + grupo, '', '', r2(subUni), r2(subVal)]); tipos.push('subtotal');
+            };
+            (filas || []).forEach(function(f) {
+                var g = f.p.group || 'General';
+                if (g !== grupo) { cerrar(); grupo = g; subVal = 0; subUni = 0; }
+                var precio = (typeof f.p.precio === 'number' && isFinite(f.p.precio)) ? f.p.precio : '';
+                var total = r2(Number(f.total) || 0);
+                var valor = precio === '' ? '' : r2(precio * total);
+                out.push([g, f.p.id, f.p.name || '', f.p.unit || '', precio, total, valor]); tipos.push('dato');
+                subUni += total; granUni += total;
+                if (valor !== '') { subVal += valor; granVal += valor; }
+            });
+            cerrar();
+            out.push(['', '', 'GRAN TOTAL', '', '', r2(granUni), r2(granVal)]); tipos.push('grantotal');
+            return { filas: out, tipos: tipos };
+        }
+
+        function hojaInventarioValorizado(filas) {
+            var d = inventarioValorizadoFilas(filas);
+            var ws = XLSX.utils.aoa_to_sheet(d.filas);
+            ws['!cols'] = [{ wch: 16 }, { wch: 11 }, { wch: 34 }, { wch: 10 }, { wch: 12 }, { wch: 14 }, { wch: 15 }];
+            var borde = { style: 'hair', color: { rgb: 'E5E7EB' } };
+            d.filas.forEach(function(fila, r) {
+                var tipo = d.tipos[r];
+                for (var c = 0; c < 7; c++) {
+                    var ref = XLSX.utils.encode_cell({ r: r, c: c });
+                    if (!ws[ref]) ws[ref] = { t: 's', v: '' };
+                    var cel = ws[ref];
+                    if (tipo === 'cab') {
+                        cel.s = { font: { bold: true, color: { rgb: 'FFFFFF' }, sz: 11 }, fill: { fgColor: { rgb: c >= 5 ? '065F46' : '374151' } },
+                                  alignment: { horizontal: 'center', vertical: 'center', wrapText: true } };
+                        continue;
+                    }
+                    var fuerte = tipo !== 'dato';
+                    cel.s = { font: { bold: fuerte, sz: tipo === 'grantotal' ? 12 : 10, color: { rgb: tipo === 'grantotal' ? 'FFFFFF' : '111827' } },
+                              fill: { fgColor: { rgb: tipo === 'grantotal' ? '065F46' : (tipo === 'subtotal' ? 'D1FAE5' : (r % 2 ? 'FFFFFF' : 'F9FAFB')) } },
+                              alignment: { horizontal: c >= 4 ? 'right' : 'left', vertical: 'center' },
+                              border: { top: borde, bottom: borde, left: borde, right: borde } };
+                    if (typeof fila[c] === 'number') { cel.t = 'n'; cel.z = (c === 4 || c === 6) ? '"$"#,##0.00' : '0.00'; }
+                }
+            });
+            return ws;
+        }
+
         function exportToExcel(modo, fileNameOverride, areasOverride) { // FIX: parámetro fileNameOverride para soporte de nombres personalizados
             // FASE 2A — el Excel lleva el conteo consolidado del inventario:
             // exige inventory.export, igual que el resto de las salidas de
@@ -198,8 +257,17 @@
             // F1 — se construye a partir de las áreas reales de esta exportación;
             // antes eran las tres fijas y una cuarta área daba comparaciones
             // contra undefined.
+            // v5.44 — la Auditoría consolidada lleva un formato fijo pedido por el
+            // dueño (11-nov-2026): solo identificación, conteo por área y Total
+            // General. Las columnas técnicas, de compras y «Estado» quedan para el
+            // resto de las exportaciones (inventario cerrado y respaldo de ciclo),
+            // que siguen igual. Mínimo de columnas de abiertas: Almacén 1, Barra
+            // Restaurante 1, Barra Bar 2; si un producto tiene más botellas
+            // abiertas en un área, se agregan columnas (nunca se pierde un dato).
+            const consolidada = modo === 'AUDITORIA';
+            const MIN_ABIERTAS = consolidada ? { almacen: 1, barra1: 1, barra2: 2 } : {};
             const maxAbiertas = {};
-            areaKeys.forEach(function(a) { maxAbiertas[a] = 1; });
+            areaKeys.forEach(function(a) { maxAbiertas[a] = MIN_ABIERTAS[a] || 1; });
             products.forEach(p => {
                 areaKeys.forEach(area => {
                     const d = inventarioConteo[p.id] && inventarioConteo[p.id][area];
@@ -221,6 +289,7 @@
             ['ID', 'Nombre', 'Unidad', 'Grupo'].forEach(h => {
                 headerRow.push(h); colMeta.push({ tipo: 'fixed' });
             });
+            if (!consolidada) {
             // — Datos técnicos de conversión (pueden estar vacíos) —
             headerRow.push('CapacidadML');    colMeta.push({ tipo: 'tecnico' });
             headerRow.push('PesoBotellaOz');  colMeta.push({ tipo: 'tecnico' });
@@ -237,8 +306,9 @@
             // perderia el modo de conteo de cada producto.
             headerRow.push('ConteoOz');                 colMeta.push({ tipo: 'compras' });
             headerRow.push('PV');                       colMeta.push({ tipo: 'compras' });  // R2
+            }
 
-            const FIXED_COLS = headerRow.length; // 12 (6 + 4 de P0 + ConteoOz de R1 + PV de R2)
+            const FIXED_COLS = headerRow.length; // 12 (6 + 4 de P0 + ConteoOz de R1 + PV de R2); 4 en la consolidada
 
             // — Columnas por área: Enteras | Abierta N (oz) | Total —
             areaKeys.forEach(area => {
@@ -253,8 +323,8 @@
             // — Total general y Estado —
             const TOTAL_GENERAL_COL = headerRow.length;
             headerRow.push('Total General'); colMeta.push({ tipo: 'total_general' });
-            const ESTADO_COL = headerRow.length;
-            headerRow.push('Estado');        colMeta.push({ tipo: 'estado' });
+            const ESTADO_COL = consolidada ? -1 : headerRow.length;
+            if (!consolidada) { headerRow.push('Estado'); colMeta.push({ tipo: 'estado' }); }
             const totalCols = headerRow.length;
 
             // ══════════════════════════════════════════════════════════════════
@@ -273,6 +343,7 @@
                 cells.push(p.name);
                 cells.push(p.unit || '');
                 cells.push(p.group || 'General');
+                if (!consolidada) {
                 // Técnicos: vacío ('') si no existen — NO poner 0
                 cells.push((p.capacidadMl != null && p.capacidadMl !== undefined) ? p.capacidadMl : '');
                 cells.push((p.pesoBotellaLlenaOz != null && p.pesoBotellaLlenaOz !== undefined) ? p.pesoBotellaLlenaOz : '');
@@ -286,6 +357,7 @@
                 // tiene la casilla y se cuenta en oz si tiene los datos.
                 cells.push(usaConv ? 'SI' : 'NO');
                 cells.push(p.pv || '');   // R2 — el PV de Parrot
+                }
 
                 let totalGeneral = 0;
 
@@ -322,7 +394,7 @@
                 cells.push(totalGeneral);
 
                 // Estado
-                cells.push(usaConv ? 'Conversión realizada' : 'Falta capacidadMl o pesoBotellaLlenaOz');
+                if (!consolidada) cells.push(usaConv ? 'Conversión realizada' : 'Falta capacidadMl o pesoBotellaLlenaOz');
 
                 return { cells, totalGeneral };
             }
@@ -333,6 +405,7 @@
             const sorted = [...products].sort((a, b) => (a.group || '').localeCompare(b.group || ''));
             const groups = [...new Set(sorted.map(p => p.group || 'General'))];
             const wsRows = [];
+            const filasInventario = [];   // v5.44 — hoja «Inventario» de la consolidada
 
             // Acumuladores numéricos (columnas FIXED_COLS .. TOTAL_GENERAL_COL-1)
             const NUM_COLS = TOTAL_GENERAL_COL - FIXED_COLS;
@@ -348,6 +421,7 @@
                 gProds.forEach(p => {
                     const { cells, totalGeneral } = buildRow(p);
                     wsRows.push({ type: 'data', even: even % 2 === 0, data: cells });
+                    filasInventario.push({ p: p, total: totalGeneral });
                     // Acumular numéricos (excluye fixed y estado)
                     // Bug #8 fix: redondeo intermedio a 4 decimales para cortar propagación IEEE-754
                     for (let ci = FIXED_COLS; ci < TOTAL_GENERAL_COL; ci++) {
@@ -393,8 +467,7 @@
                 if (i === 1) return { wch: 34 };                        // Nombre
                 if (i === 2) return { wch: 12 };                        // Unidad
                 if (i === 3) return { wch: 16 };                        // Grupo
-                if (i === 4) return { wch: 14 };                        // CapacidadML
-                if (i === 5) return { wch: 16 };                        // PesoBotellaOz
+                if (m.tipo === 'tecnico') return { wch: 15 };           // CapacidadML / PesoBotellaOz
                 if (m.tipo === 'total_general') return { wch: 14 };
                 if (m.tipo === 'total_area')    return { wch: 13 };
                 if (m.tipo === 'estado')        return { wch: 34 };
@@ -490,6 +563,7 @@
             ws['!ref']  = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: wsRows.length, c: totalCols - 1 } });
             const sheetName = modo === 'AUDITORIA' ? 'Auditoría' : 'Inventario';
             XLSX.utils.book_append_sheet(wb, ws, sheetName);
+            if (consolidada) XLSX.utils.book_append_sheet(wb, hojaInventarioValorizado(filasInventario), 'Inventario');
 
             const prefix = modo === 'AUDITORIA' ? 'auditoria_consolidada_' : 'inventario_';
             const fileName = fileNameOverride || (prefix + new Date().toISOString().split('T')[0] + '.xlsx'); // FIX: respetar nombre personalizado

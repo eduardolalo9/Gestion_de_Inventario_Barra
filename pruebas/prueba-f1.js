@@ -288,7 +288,9 @@ chk('exportToExcelConDatos lo pasa a través',
     /function exportToExcelConDatos\(modo, conteoData, productsList, fileName, areasOverride\)/.test(roles) &&
     /exportToExcel\(modo, fileName, areasOverride\);/.test(roles));
 chk('El máximo de abiertas se calcula sobre las áreas reales',
-    /const maxAbiertas = \{\};\s*\n\s*areaKeys\.forEach\(function\(a\) \{ maxAbiertas\[a\] = 1; \}\);/.test(expor),
+    // v5.44 — la consolidada fija un mínimo por área (Almacén 1, Barra Restaurante 1, Barra Bar 2);
+    // cualquier otra área sigue arrancando en 1: se recorre areaKeys, nunca las tres fijas.
+    /const maxAbiertas = \{\};\s*\n\s*areaKeys\.forEach\(function\(a\) \{ maxAbiertas\[a\] = (?:1|MIN_ABIERTAS\[a\] \|\| 1); \}\);/.test(expor),
     'antes eran las tres fijas: una cuarta área comparaba contra undefined');
 chk('Un área fuera de las tres de sistema recibe nombre y color',
     /if \(!areaNames\[a\]\)/.test(expor) && /if \(!areaColor\[a\]\) areaColor\[a\] = '64748B';/.test(expor));
