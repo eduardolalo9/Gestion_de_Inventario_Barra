@@ -161,9 +161,10 @@
                  + ' title="Descargar Grupo, ID, Descripción, Unidad, Cantidad en sistema, Cantidad contada, Diferencia, Precio y Precio total de diferencia">'
                  + '<i class="fa-solid ' + (oc ? 'fa-arrows-rotate fa-spin' : 'fa-file-excel') + '" aria-hidden="true"></i>'
                  + '<span>' + (oc ? 'Generando Excel…' : 'Exportar diferencias a Excel') + '</span></button>'
-                 + '<p class="fvs-ctl__alcance" id="fvsExportAlcance">Excel: ' + n + ' producto' + (n === 1 ? '' : 's') + ' · '
-                 + escapeHtml(_fvsTextoAlcance(op)) + ' · en el orden de la tabla. Incluye los que coinciden y los sin contar; '
-                 + 'no lo recortan la búsqueda ni «Solo con diferencias».</p>';
+                 // v5.45 — el alcance en una insignia corta; el detalle, en su título.
+                 + '<span class="fvs-ctl__alcance" id="fvsExportAlcance" title="En el orden de la tabla. Incluye los que coinciden y los sin contar; '
+                 + 'no lo recortan la búsqueda ni «Solo con diferencias».">Excel: ' + n + ' producto' + (n === 1 ? '' : 's') + ' · '
+                 + escapeHtml(_fvsTextoAlcance(op)) + '</span>';
         }
 
         function _fvsPintarBoton(ocupado) {

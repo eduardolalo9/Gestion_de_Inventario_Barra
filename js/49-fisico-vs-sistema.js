@@ -111,6 +111,9 @@
             var filas = [];
             var pendientes = 0, sinInicial = 0;
             var totalNeto = 0, totalFaltante = 0, totalSobrante = 0;
+            // v5.45 — resumen ejecutivo: el neto separado en faltante y sobrante
+            // (en dinero) y cuántos productos tienen diferencia.
+            var netoFaltante = 0, netoSobrante = 0, conDiferencia = 0;
 
             (typeof products !== 'undefined' && Array.isArray(products) ? products : []).forEach(function(p) {
                 var porArea = fvsConteoPorArea(p.id);
@@ -133,8 +136,8 @@
                 var dif  = redondear(fisico - sistema);
                 var neto = Math.round(dif * precio * 100) / 100;
                 totalNeto += neto;
-                if (dif < -tol) totalFaltante += dif;
-                if (dif >  tol) totalSobrante += dif;
+                if (dif < -tol) { totalFaltante += dif; netoFaltante += neto; conDiferencia++; }
+                if (dif >  tol) { totalSobrante += dif; netoSobrante += neto; conDiferencia++; }
 
                 filas.push({
                     id: p.id, nombre: p.name || p.id, estado: sinContar ? 'sin_contar' : 'contado',
@@ -161,8 +164,46 @@
                 totalNeto:     Math.round(totalNeto * 100) / 100,
                 totalFaltante: redondear(totalFaltante),
                 totalSobrante: redondear(totalSobrante),
+                netoFaltante:  Math.round(netoFaltante * 100) / 100,
+                netoSobrante:  Math.round(netoSobrante * 100) / 100,
+                conDiferencia: conDiferencia,
                 filas:         filas
             };
+        }
+
+        /**
+         * v5.45 — fvsValidarCantidad(texto) — capa pura. La edición rápida en la
+         * celda (productos que se cuentan por cantidad) valida IGUAL que el modal
+         * de conteo: coma o punto decimal, sin notación científica, ≥ 0, tope
+         * 9999 y 3 decimales. Más estricta en una cosa: "5abc" no se acepta.
+         * → { ok:true, valor } | { ok:false, error }
+         */
+        function fvsValidarCantidad(texto) {
+            var raw = String(texto == null ? '' : texto).trim().replace(/,/g, '.');
+            if (/e/i.test(raw)) return { ok: false, error: 'Cantidad no válida. Escribe el número completo, por ejemplo 1.245' };
+            if (!/^(\d+\.?\d*|\.\d+)$/.test(raw)) return { ok: false, error: 'La cantidad debe ser un número mayor o igual a 0' };
+            var n = parseFloat(raw);
+            if (!isFinite(n) || n < 0) return { ok: false, error: 'La cantidad debe ser un número mayor o igual a 0' };
+            if (n > 9999) return { ok: false, error: 'Cantidad muy alta (' + n + '). Verifica el valor antes de guardar.' };
+            return { ok: true, valor: Math.round(n * 1000) / 1000 };
+        }
+
+        /**
+         * v5.45 — fvsMuestraAleatoria(filas, n, excluir, azar) — capa pura.
+         * Elige hasta n productos al azar para el muestreo, sin repetir los que
+         * ya están en la lista. `azar` (0..1) es inyectable para las pruebas.
+         * @returns [id]
+         */
+        function fvsMuestraAleatoria(filas, n, excluir, azar) {
+            var fuera = {};
+            (excluir || []).forEach(function(id) { fuera[id] = true; });
+            var pool = (filas || []).map(function(f) { return f.id; }).filter(function(id) { return !fuera[id]; });
+            var r = typeof azar === 'function' ? azar : Math.random;
+            for (var i = pool.length - 1; i > 0; i--) {       // Fisher–Yates
+                var j = Math.floor(r() * (i + 1));
+                var t = pool[i]; pool[i] = pool[j]; pool[j] = t;
+            }
+            return pool.slice(0, Math.max(0, n | 0));
         }
 
         /**

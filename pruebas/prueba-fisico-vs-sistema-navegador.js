@@ -58,7 +58,8 @@ const PUERTO = process.env.PUERTO || '8080';
   const t1 = await p.evaluate(() => document.getElementById('tabContent').innerText);
   chk('Abre la pantalla con el título correcto', /Físico vs Sistema/.test(t1), t1.slice(0, 80));
   // v5.40 — regla de ceros: lo no contado cuenta 0 (sale como «sin contar», con su faltante).
-  chk('★ Muestra 2 contados y 1 sin contar (cuenta 0)', /2 contados/.test(t1) && /1 sin contar \(cuentan 0\)/.test(t1), t1.slice(0, 300));
+  // v5.45 — el resumen ahora son tarjetas KPI (Contados X / total · Sin contar N «cuentan como 0»).
+  chk('★ Muestra 2 contados y 1 sin contar (cuenta 0)', /contados\s*2\s*\/\s*3/i.test(t1) && /sin contar\s*1\s*cuentan como 0/i.test(t1), t1.slice(0, 300));
   chk('★ El faltante de A se ve (físico 6 contra sistema 10)', /TEQUILA FALTANTE/.test(t1) && /Faltante/.test(t1), '');
   chk('★ El sobrante de B se ve', /RON SOBRANTE/.test(t1) && /Sobrante/.test(t1), '');
   chk('★ El pendiente dice "sin contar", nunca una diferencia inventada',

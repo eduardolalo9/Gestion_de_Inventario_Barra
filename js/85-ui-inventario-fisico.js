@@ -504,9 +504,11 @@
         //  con la columna del producto fija.
         //  El estado de la vista (grupo elegido, orden) vive SOLO en memoria:
         //  no se guarda, no se sincroniza y se reinicia al salir con Volver.
-        var _fvsVista = { grupo: null, difAsc: false, difDesc: false };
+        // v5.45 — también: pestaña (comparativo | muestreo), grupos plegados y
+        // selección múltiple. Todo en memoria, como el resto de la vista.
+        var _fvsVista = { grupo: null, difAsc: false, difDesc: false, tab: 'comparativo', colapsados: {}, sel: {} };
 
-        function fvsReiniciarVista() { _fvsVista.grupo = null; _fvsVista.difAsc = false; _fvsVista.difDesc = false; }
+        function fvsReiniciarVista() { _fvsVista.grupo = null; _fvsVista.difAsc = false; _fvsVista.difDesc = false; _fvsVista.tab = 'comparativo'; _fvsVista.colapsados = {}; _fvsVista.sel = {}; }
 
         /** «Grupo»: '' = todos los grupos. Solo cambia lo que se ve. */
         function fvsElegirGrupo(valor) {
@@ -545,10 +547,16 @@
             var etiqueta = { pendiente: 'Sin contar', faltante: 'Faltante', sobrante: 'Sobrante', coincide: 'Coincide' }[tono];
             // v5.40 — sin contar = 0 (regla de Eduardo): la cifra se calcula, y se dice que no se contó.
             if (f.estado === 'sin_contar') etiqueta += ' · sin contar';
-            var h = '<tr class="fvs-t__fila fvs-t__fila--' + tono + '" data-sbx-item>';
-            h += '<th scope="row" class="fvs-t__prod"><span class="fvs-t__nom">' + resaltarBusqueda(f.nombre, _fvsSearchTerm) + '</span>'
+            var marcado = !!_fvsVista.sel[f.id];
+            var h = '<tr class="fvs-t__fila fvs-t__fila--' + tono + (marcado ? ' fvs-t__fila--sel' : '') + '" data-sbx-item>';
+            // v5.45 — la casilla va DENTRO de la celda fija del producto: no agrega
+            // columna (la tabla y su desplazamiento no cambian).
+            h += '<th scope="row" class="fvs-t__prod"><span class="fvs-t__prodin">'
+               + '<label class="fvs-t__selw"><input type="checkbox" class="fvs-t__chk" data-fvs-sel="' + escapeHtml(String(f.id)) + '"'
+               + (marcado ? ' checked' : '') + ' aria-label="Seleccionar ' + escapeHtml(f.nombre) + '"></label>'
+               + '<span class="fvs-t__protxt"><span class="fvs-t__nom">' + resaltarBusqueda(f.nombre, _fvsSearchTerm) + '</span>'
                + '<span class="fvs-t__sub">' + escapeHtml(String(f.id)) + (f.unidad ? ' · ' + escapeHtml(f.unidad) : '')
-               + (conGrupo ? ' · ' + escapeHtml(f.grupo || 'General') : '') + '</span></th>';
+               + (conGrupo ? ' · ' + escapeHtml(f.grupo || 'General') : '') + '</span></span></span></th>';
             areasL.forEach(function(area) {
                 var reg = f.areas ? f.areas[area] : null;
                 var cuerpo = '<span class="fvs-t__val num">' + (reg ? _fvsFmtCant(p, reg.total) : '—') + '</span>'
@@ -572,7 +580,9 @@
         }
 
         function _fvsCabeceraTabla(areasL) {
-            var h = '<thead><tr><th scope="col" class="fvs-t__prod">Producto</th>';
+            var h = '<thead><tr><th scope="col" class="fvs-t__prod"><span class="fvs-t__prodin">'
+                  + '<label class="fvs-t__selw"><input type="checkbox" class="fvs-t__chk" id="fvsSelTodos" data-fvs-sel-todos aria-label="Seleccionar todos los visibles"></label>'
+                  + '<span class="fvs-t__protxt">Producto</span></span></th>';
             areasL.forEach(function(a) { h += '<th scope="col" class="fvs-t__area">' + escapeHtml(_fvsEtiquetaArea(a)) + '</th>'; });
             return h + '<th scope="col" class="fvs-t__n">Físico</th><th scope="col" class="fvs-t__n">Sistema</th>'
                      + '<th scope="col" class="fvs-t__dif"><abbr title="Diferencia = físico − sistema">Dif.</abbr></th>'
@@ -594,24 +604,8 @@
             var editable = _fvsPuedeCorregir();
             var html = '';
 
-            html += '<dl class="if-datos" style="margin-bottom:10px;">';
-            html += '<div class="if-dato"><dt>Comparación</dt><dd>' + datos.contados + ' contados · '
-                 +  datos.pendientes + ' sin contar (cuentan 0) de ' + datos.totalProductos + '</dd></div>';   // v5.40: regla de ceros
-            var netoColor = datos.totalNeto < 0 ? 'var(--danger)' : (datos.totalNeto > 0 ? 'var(--ok)' : 'var(--txt-primary)');
-            html += '<div class="if-dato"><dt>Neto en dinero</dt><dd class="num" style="font-family:var(--f-num);font-variant-numeric:tabular-nums;color:' + netoColor + ';font-weight:700;">'
-                 +  _fvsMoneda(datos.totalNeto) + '</dd></div>';
-            html += '</dl>';
-
-            if (datos.sinInicial > 0) {
-                html += '<div class="pm-paso pm-paso--aviso" role="status" style="margin-bottom:10px;">'
-                     +  '<div class="pm-paso__txt"><i class="fa-solid fa-circle-info" aria-hidden="true"></i> ' + datos.sinInicial + ' producto(s) todavía comparan contra el '
-                     +  'stock operativo: no hay inicial contabilizado para ellos esta semana. Al cerrar y contabilizar '
-                     +  'este inventario, "Sistema" pasa a ser inicial + compras − consumo teórico para ellos.</div></div>';
-            }
-
-            html += '<p class="fvs-ayuda">' + (editable
-                ? '<i class="fa-solid fa-hand-pointer" aria-hidden="true"></i> Toca un área para corregir lo contado: se guarda al instante como conteo del administrador.'
-                : '<i class="fa-solid fa-eye" aria-hidden="true"></i> Solo lectura: las correcciones las hace administración con el inventario abierto.') + '</p>';
+            // v5.45 — el resumen (KPIs), el aviso de stock operativo y la ayuda de
+            // edición viven arriba, fuera de la región de búsqueda (_fvsKpisHtml).
 
             // v5.35 — el grupo elegido se aplica DESPUÉS de búsqueda y chips.
             var vista = fisicoVsSistemaOrdenVisible(r.items, _fvsOpcionesVista());
@@ -623,10 +617,10 @@
             }
 
             html += BusquedaUI.resumen('fvs', coinc, total, 'producto', 'productos');
-            html += '<div class="fvs-orden">' + (_fvsVista.grupo ? 'Grupo ' + escapeHtml(_fvsVista.grupo) + ' · ' : '')
+            html += '<div class="fvs-orden"><i class="fa-solid fa-sort" aria-hidden="true"></i> ' + (_fvsVista.grupo ? 'Grupo ' + escapeHtml(_fvsVista.grupo) + ' · ' : '')
                  + (vista.modo === 'plano'
                     ? (_fvsVista.difDesc && !_fvsVista.difAsc ? 'Diferencias de mayor a menor (sin agrupar)' : 'Diferencias de menor a mayor (sin agrupar)')
-                    : 'Por grupo · diferencia ' + (orden === 'mayor_menor' ? 'mayor → menor' : 'menor → mayor')) + '</div>';
+                    : 'Por grupo · ' + (orden === 'mayor_menor' ? 'mayor → menor' : 'menor → mayor')) + '</div>';
 
             var areasL = _fvsAreasLista();
             var pintadas = 0;
@@ -645,12 +639,17 @@
                 vista.grupos.forEach(function(g) {
                     if (pintadas >= lim) return;
                     var netoG = g.neto < 0 ? 'var(--danger)' : (g.neto > 0 ? 'var(--ok)' : 'var(--txt-secondary)');
-                    html += '<tbody class="fvs-grupo" aria-label="Grupo ' + escapeHtml(g.grupo) + '">';
-                    html += '<tr class="fvs-t__grupo"><th scope="colgroup" colspan="' + columnas + '"><span class="fvs-t__gcab">'
+                    // v5.45 — la cabecera del grupo lo pliega/despliega (solo la vista).
+                    var plegado = !!_fvsVista.colapsados[g.grupo];
+                    html += '<tbody class="fvs-grupo' + (plegado ? ' fvs-grupo--plegado' : '') + '" aria-label="Grupo ' + escapeHtml(g.grupo) + '">';
+                    html += '<tr class="fvs-t__grupo"><th scope="colgroup" colspan="' + columnas + '"><button type="button" class="fvs-t__gcab"'
+                         +  ' data-fvs-accion="plegar" data-fvs-grupo="' + escapeHtml(g.grupo) + '" aria-expanded="' + (plegado ? 'false' : 'true') + '">'
+                         +  '<i class="fa-solid ' + (plegado ? 'fa-chevron-right' : 'fa-chevron-down') + ' fvs-grupo__ico" aria-hidden="true"></i>'
                          +  '<span class="fvs-grupo__nom">' + escapeHtml(g.grupo) + '</span>'
                          +  '<span class="fvs-grupo__dat">' + g.contados + ' contado' + (g.contados === 1 ? '' : 's')
                          +  (g.pendientes ? ' · ' + g.pendientes + ' sin contar' : '')
-                         +  ' · <b class="num" style="color:' + netoG + ';">' + _fvsMoneda(g.neto) + '</b></span></span></th></tr>';
+                         +  ' · <b class="num" style="color:' + netoG + ';">' + _fvsMoneda(g.neto) + '</b></span></button></th></tr>';
+                    if (plegado) { html += '</tbody>'; return; }
                     g.filas.forEach(function(f) {
                         if (pintadas >= lim) return;
                         html += _fvsFilaHtml(f, tol, editable, areasL, false);
@@ -694,6 +693,271 @@
                + ' title="' + (_fvsVista.difDesc ? 'Volver al orden por grupo' : 'Ordenar todas las diferencias de mayor a menor') + '">'
                + '<i class="fa-solid fa-sort" aria-hidden="true"></i><span>Diferencias ↓</span></button>';
             if (typeof fvsExportBotonHtml === 'function') h += fvsExportBotonHtml(datos, _fvsOpcionesVista());
+            return h + '</div>';
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        //  v5.45 — FÍSICO VS SISTEMA: resumen ejecutivo, pestañas, selección
+        //  múltiple, edición rápida en la celda y lista de muestreo.
+        //  · La edición rápida usa la MISMA vía que la corrección por área de
+        //    siempre (fvsAplicarCorreccion: conteo del administrador + sync), con
+        //    las mismas validaciones del modal (fvsValidarCantidad, js/49). Solo
+        //    se corrige el FÍSICO: «Sistema» es un cálculo y no se edita.
+        //  · Productos de botella (onzas por botella) siguen en el modal.
+        //  · La lista de muestreo es una lista de trabajo de ESTE dispositivo
+        //    (localStorage, por inventario): no crea datos en Firebase.
+        // ══════════════════════════════════════════════════════════════════
+
+        /** Insignia con explicación al tocarla (details/summary: sin JS, accesible). */
+        function _fvsInsignia(tono, icono, texto, ayuda) {
+            return '<details class="fvs-tipd"><summary class="fvs-badge fvs-badge--' + tono + '">'
+                 + '<i class="fa-solid ' + icono + '" aria-hidden="true"></i> ' + texto + '</summary>'
+                 + '<div class="fvs-tip" role="note">' + ayuda + '</div></details>';
+        }
+
+        function _fvsKpisHtml(datos) {
+            var pct = datos.totalProductos ? Math.round(datos.contados / datos.totalProductos * 100) : 0;
+            var tonoNeto = datos.totalNeto < 0 ? 'faltante' : (datos.totalNeto > 0 ? 'sobrante' : 'coincide');
+            var h = '<div class="fvs-kpis" role="list" aria-label="Resumen">';
+            h += '<div class="fvs-kpi" role="listitem"><span class="fvs-kpi__etq">Contados</span>'
+               + '<b class="fvs-kpi__val num">' + datos.contados + '<small> / ' + datos.totalProductos + '</small></b>'
+               + '<span class="fvs-kpi__barra" role="progressbar" aria-label="Avance del conteo" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pct + '">'
+               + '<span style="width:' + pct + '%"></span></span></div>';
+            h += '<div class="fvs-kpi" role="listitem"><span class="fvs-kpi__etq">Sin contar</span>'
+               + '<b class="fvs-kpi__val num">' + datos.pendientes + '</b><span class="fvs-kpi__sub">cuentan como 0</span></div>';
+            h += '<div class="fvs-kpi fvs-kpi--' + tonoNeto + '" role="listitem"><span class="fvs-kpi__etq">Neto</span>'
+               + '<b class="fvs-kpi__val num">' + _fvsMoneda(datos.totalNeto) + '</b>'
+               + '<span class="fvs-kpi__sub">' + datos.conDiferencia + ' con diferencia</span></div>';
+            h += '<div class="fvs-kpi" role="listitem"><span class="fvs-kpi__etq">Variaciones</span>'
+               + '<span class="fvs-kpi__var"><b class="num fvs-kpi__f">' + _fvsMoneda(datos.netoFaltante) + '</b>'
+               + '<b class="num fvs-kpi__s">+' + _fvsMoneda(datos.netoSobrante).replace(/^-/, '') + '</b></span>'
+               + '<span class="fvs-kpi__sub">faltante · sobrante</span></div>';
+            h += '</div>';
+            var b = '';
+            b += _fvsPuedeCorregir()
+                ? _fvsInsignia('ok', 'fa-pen', 'Editable', 'Toca un área para corregir lo contado. Se guarda al instante como conteo del administrador (requiere conexión). «Sistema» no se edita: es inicial + compras − consumo teórico.')
+                : _fvsInsignia('neutro', 'fa-eye', 'Solo lectura', 'Las correcciones las hace administración con el Inventario Físico abierto.');
+            if (datos.sinInicial > 0) {
+                b += _fvsInsignia('aviso', 'fa-circle-info', datos.sinInicial + ' sin inicial',
+                     datos.sinInicial + ' producto(s) comparan contra el stock operativo: no hay inicial contabilizado para ellos esta semana. '
+                     + 'Al cerrar y contabilizar este inventario, «Sistema» pasa a ser inicial + compras − consumo teórico.');
+            }
+            return h + '<div class="fvs-badges">' + b + '</div>';
+        }
+
+        function _fvsTabsHtml(nMuestreo) {
+            var t = _fvsVista.tab;
+            var tab = function(id, icono, texto, extra) {
+                var on = t === id;
+                return '<button type="button" role="tab" id="fvsTab-' + id + '" class="fvs-tab' + (on ? ' fvs-tab--on' : '') + '"'
+                     + ' aria-selected="' + (on ? 'true' : 'false') + '" aria-controls="fvsPanel" onclick="fvsCambiarTab(\'' + id + '\')">'
+                     + '<i class="fa-solid ' + icono + '" aria-hidden="true"></i><span>' + texto + '</span>' + (extra || '') + '</button>';
+            };
+            return '<div class="fvs-tabs" role="tablist" aria-label="Vistas de Físico vs Sistema">'
+                 + tab('comparativo', 'fa-list-check', 'Comparativo')
+                 + tab('muestreo', 'fa-clipboard-list', 'Muestreo', '<span class="fvs-tab__n num">' + nMuestreo + '</span>')
+                 + '</div>';
+        }
+
+        function fvsCambiarTab(t) {
+            _fvsVista.tab = t === 'muestreo' ? 'muestreo' : 'comparativo';
+            renderTab();
+        }
+
+        // ── Lista de muestreo (por inventario, en este dispositivo) ──────────
+        var FVS_MUESTREO_LS = 'inventarioApp_fvsMuestreo';
+        var FVS_MUESTREO_MAX = 300;
+        var _fvsMuestreoCache = null;
+
+        function _fvsMuestreo() {
+            var inv = (typeof _auditoriaSessionId !== 'undefined' && _auditoriaSessionId) ? _auditoriaSessionId : null;
+            if (_fvsMuestreoCache && _fvsMuestreoCache.inventoryId === inv) return _fvsMuestreoCache;
+            var d = null;
+            try { d = JSON.parse(localStorage.getItem(FVS_MUESTREO_LS) || 'null'); } catch (_) { d = null; }
+            if (!d || d.inventoryId !== inv || !Array.isArray(d.ids)) d = { inventoryId: inv, ids: [], revisados: {} };
+            if (!d.revisados || typeof d.revisados !== 'object') d.revisados = {};
+            _fvsMuestreoCache = d;
+            return d;
+        }
+        function _fvsMuestreoGuardar() {
+            try { localStorage.setItem(FVS_MUESTREO_LS, JSON.stringify(_fvsMuestreoCache)); } catch (_) {}
+        }
+
+        /** Agrega ids a la lista (sin repetir, solo productos del catálogo). → cuántos entraron. */
+        function fvsMuestreoAgregar(ids) {
+            var m = _fvsMuestreo(), n = 0;
+            (ids || []).forEach(function(id) {
+                id = String(id);
+                if (m.ids.length >= FVS_MUESTREO_MAX || m.ids.indexOf(id) !== -1) return;
+                if (!products.some(function(p) { return String(p.id) === id; })) return;
+                m.ids.push(id); n++;
+            });
+            if (n) _fvsMuestreoGuardar();
+            return n;
+        }
+        function fvsMuestreoQuitar(id) {
+            var m = _fvsMuestreo();
+            m.ids = m.ids.filter(function(x) { return x !== id; });
+            delete m.revisados[id];
+            _fvsMuestreoGuardar();
+            renderTab();
+        }
+        function fvsMuestreoRevisado(id) {
+            var m = _fvsMuestreo();
+            if (m.revisados[id]) delete m.revisados[id]; else m.revisados[id] = Date.now();
+            _fvsMuestreoGuardar();
+            renderTab();
+        }
+        function fvsMuestreoVaciar() {
+            var vaciar = function() { var m = _fvsMuestreo(); m.ids = []; m.revisados = {}; _fvsMuestreoGuardar(); renderTab(); };
+            if (typeof showConfirm === 'function') showConfirm('¿Vaciar la lista de muestreo?\n\nSolo se quita la lista; los conteos no cambian.', vaciar);
+            else vaciar();
+        }
+        function fvsMuestreoAleatoria(n) {
+            var datos = fisicoVsSistemaCalcular(); if (!datos) return;
+            var ids = fvsMuestraAleatoria(datos.filas, n || 5, _fvsMuestreo().ids);
+            var k = fvsMuestreoAgregar(ids);
+            showNotification(k ? 'Muestra aleatoria: ' + k + ' producto' + (k === 1 ? '' : 's') + ' agregado' + (k === 1 ? '' : 's') : 'No quedan productos por agregar');
+            _fvsVista.tab = 'muestreo';
+            renderTab();
+        }
+
+        // ── Selección múltiple y barra flotante ──────────────────────────────
+        function _fvsSeleccionados() { return Object.keys(_fvsVista.sel).filter(function(k) { return _fvsVista.sel[k]; }); }
+
+        function _fvsBarraSelHtml() {
+            return '<div id="fvsSelBarra" class="fvs-selbar" role="region" aria-label="Acciones de la selección"' + (_fvsSeleccionados().length ? '' : ' hidden') + '>'
+                 + '<span class="fvs-selbar__n"><b class="num" id="fvsSelN">' + _fvsSeleccionados().length + '</b> seleccionados</span>'
+                 + '<button type="button" class="fvs-selbar__btn fvs-selbar__btn--prim" data-fvs-accion="sel-muestreo"><i class="fa-solid fa-clipboard-list" aria-hidden="true"></i> Agregar a muestreo</button>'
+                 + '<button type="button" class="fvs-selbar__btn" data-fvs-accion="sel-limpiar" aria-label="Quitar la selección"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>'
+                 + '</div>';
+        }
+
+        function _fvsPintarSel() {
+            var n = _fvsSeleccionados().length;
+            var bar = document.getElementById('fvsSelBarra');
+            if (bar) { bar.hidden = !n; var b = document.getElementById('fvsSelN'); if (b) b.textContent = n; }
+            var cajas = Array.prototype.slice.call(document.querySelectorAll('#sbx-res-fvs input[data-fvs-sel]'));
+            cajas.forEach(function(c) {
+                var tr = c.closest('tr'); if (tr) tr.classList.toggle('fvs-t__fila--sel', c.checked);
+            });
+            var todos = document.getElementById('fvsSelTodos');
+            if (todos) {
+                var marcadas = cajas.filter(function(c) { return c.checked; }).length;
+                todos.checked = cajas.length > 0 && marcadas === cajas.length;
+                todos.indeterminate = marcadas > 0 && marcadas < cajas.length;
+            }
+        }
+
+        function fvsSelAMuestreo() {
+            var ids = _fvsSeleccionados();
+            if (!ids.length) return;
+            var k = fvsMuestreoAgregar(ids);
+            _fvsVista.sel = {};
+            showNotification(k ? k + ' producto' + (k === 1 ? '' : 's') + ' en la lista de muestreo' : 'Ya estaban en la lista de muestreo');
+            _fvsVista.tab = 'muestreo';
+            renderTab();
+        }
+
+        // ── Edición rápida en la celda ───────────────────────────────────────
+        var _fvsInl = null;   // { el, html, pid, area } — un solo editor abierto a la vez
+
+        function _fvsInlCerrar() {
+            if (!_fvsInl) return;
+            var e = _fvsInl; _fvsInl = null;
+            if (e.el && e.el.parentNode) e.el.outerHTML = e.html;
+        }
+
+        /** Tocar un área: cantidad → editor en la celda; botella → el modal de siempre. */
+        function fvsEditarRapido(btn) {
+            var pid = btn.getAttribute('data-fvs-pid'), area = btn.getAttribute('data-fvs-area');
+            var p = products.find(function(x) { return x.id === pid; });
+            if (!p || _fvsUsaBotella(p) || !_fvsPuedeCorregir()) { fvsEditarArea(pid, area); return; }
+            _fvsInlCerrar();
+            var d = (typeof auditoriaConteo !== 'undefined' && auditoriaConteo[pid]) ? auditoriaConteo[pid][area] : null;
+            var actual = d ? String(d.enteras || 0) : '';
+            var html = btn.outerHTML;
+            var span = document.createElement('span');
+            span.className = 'fvs-inl';
+            span.innerHTML = '<input type="text" inputmode="decimal" autocomplete="off" class="fvs-inl__in" value="' + escapeHtml(actual) + '"'
+                + ' placeholder="0" aria-label="Cantidad de ' + escapeHtml(p.name || pid) + ' en ' + escapeHtml(_fvsEtiquetaArea(area)) + '">'
+                + '<button type="button" class="fvs-inl__b fvs-inl__b--ok" data-fvs-accion="inl-ok" aria-label="Guardar"><i class="fa-solid fa-check" aria-hidden="true"></i></button>'
+                + '<button type="button" class="fvs-inl__b" data-fvs-accion="inl-no" aria-label="Cancelar"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>';
+            btn.parentNode.replaceChild(span, btn);
+            _fvsInl = { el: span, html: html, pid: pid, area: area };
+            var inp = span.querySelector('input');
+            inp.focus(); inp.select();
+        }
+
+        function fvsInlGuardar() {
+            if (!_fvsInl) return;
+            var e = _fvsInl, inp = e.el.querySelector('input');
+            var v = fvsValidarCantidad(inp ? inp.value : '');
+            if (!v.ok) {
+                showNotification('⚠️ ' + v.error);
+                if (inp) { inp.setAttribute('aria-invalid', 'true'); inp.focus(); }
+                return;
+            }
+            // Mismo candado que el modal de conteo (saveInventarioModal).
+            if (typeof isCicloBloqueado === 'function' && isCicloBloqueado()) {
+                showNotification('🔒 La captura está bloqueada en ESTE dispositivo (candado local).');
+                _fvsInlCerrar();
+                return;
+            }
+            // La celda vuelve a su estado (también si no hubo cambios); al guardar,
+            // fvsAplicarCorreccion repinta la pantalla con el valor nuevo.
+            _fvsInlCerrar();
+            fvsAplicarCorreccion(e.pid, e.area, v.valor, []);
+        }
+
+        // ── Pestaña Muestreo ─────────────────────────────────────────────────
+        function _fvsMuestreoHtml(datos) {
+            var m = _fvsMuestreo();
+            var tol = (typeof EXISTENCIA_TOLERANCIA === 'number') ? EXISTENCIA_TOLERANCIA : 0.001;
+            var editable = _fvsPuedeCorregir();
+            var areasL = _fvsAreasLista();
+            var porId = {};
+            datos.filas.forEach(function(f) { porId[f.id] = f; });
+            var ids = m.ids.filter(function(id) { return porId[id]; });
+            var rev = ids.filter(function(id) { return m.revisados[id]; }).length;
+            var h = '<div class="fvs-mu" id="fvsPanel" role="tabpanel" aria-labelledby="fvsTab-muestreo">';
+            h += '<div class="fvs-mu__barra"><span class="fvs-mu__prog"><b class="num">' + rev + '</b> de <b class="num">' + ids.length + '</b> revisados</span>'
+               + '<button type="button" class="fvs-ctl__btn" onclick="fvsMuestreoAleatoria(5)"><i class="fa-solid fa-plus" aria-hidden="true"></i><span>Muestra aleatoria (5)</span></button>'
+               + (ids.length ? '<button type="button" class="fvs-ctl__btn fvs-ctl__btn--ghost" onclick="fvsMuestreoVaciar()"><i class="fa-solid fa-trash" aria-hidden="true"></i><span>Vaciar</span></button>' : '')
+               + '</div>';
+            if (!ids.length) {
+                return h + '<p class="fvs-mu__vacio">Lista vacía. En <b>Comparativo</b> marca productos y toca «Agregar a muestreo», o pide una muestra aleatoria.</p></div>';
+            }
+            ids.forEach(function(id) {
+                var f = porId[id];
+                var p = products.find(function(x) { return x.id === id; });
+                var tono = _fvsTono(f, tol);
+                var hecho = !!m.revisados[id];
+                h += '<article class="fvs-mu__item fvs-mu__item--' + tono + (hecho ? ' fvs-mu__item--hecho' : '') + '">';
+                h += '<div class="fvs-mu__cab"><div class="fvs-mu__nomw"><span class="fvs-mu__nom">' + escapeHtml(f.nombre) + '</span>'
+                   + '<span class="fvs-mu__sub">' + escapeHtml(String(f.id)) + (f.unidad ? ' · ' + escapeHtml(f.unidad) : '') + ' · ' + escapeHtml(f.grupo || 'General') + '</span></div>'
+                   + '<span class="fvs-mu__dif fvs-t__dif--' + tono + ' num">' + (f.diferencia > 0 ? '+' : '') + _fvsNum(f.diferencia) + '</span></div>';
+                h += '<div class="fvs-mu__areas">';
+                areasL.forEach(function(area) {
+                    var reg = f.areas ? f.areas[area] : null;
+                    var cuerpo = '<span class="fvs-t__val num">' + (reg ? _fvsFmtCant(p, reg.total) : '—') + '</span>'
+                               + '<span class="fvs-t__det">' + escapeHtml(_fvsDesglose(p, reg)) + '</span>';
+                    h += '<div class="fvs-mu__area"><span class="fvs-mu__aetq">' + escapeHtml(_fvsEtiquetaArea(area)) + '</span>';
+                    h += (editable && p)
+                        ? '<button type="button" class="fvs-t__celda" data-fvs-accion="editar" data-fvs-pid="' + escapeHtml(String(f.id)) + '" data-fvs-area="' + escapeHtml(area) + '"'
+                          + ' aria-label="Corregir ' + escapeHtml(f.nombre) + ' en ' + escapeHtml(_fvsEtiquetaArea(area)) + '">' + cuerpo + '<i class="fa-solid fa-pen fvs-t__lapiz" aria-hidden="true"></i></button>'
+                        : '<span class="fvs-t__celda">' + cuerpo + '</span>';
+                    h += '</div>';
+                });
+                h += '</div>';
+                h += '<div class="fvs-mu__pie"><span class="fvs-mu__cif">Físico <b class="num">' + _fvsNum(f.fisico) + '</b> · Sistema <b class="num">' + _fvsNum(f.sistema)
+                   + '</b> · <b class="num fvs-t__dif--' + tono + '">' + _fvsMoneda(f.neto) + '</b></span>'
+                   + '<span class="fvs-mu__acc"><button type="button" class="fvs-mu__btn' + (hecho ? ' fvs-mu__btn--on' : '') + '" data-fvs-accion="mu-revisado" data-fvs-pid="' + escapeHtml(String(f.id)) + '"'
+                   + ' aria-pressed="' + (hecho ? 'true' : 'false') + '"><i class="fa-solid fa-check" aria-hidden="true"></i> ' + (hecho ? 'Revisado' : 'Marcar revisado') + '</button>'
+                   + '<button type="button" class="fvs-mu__btn fvs-mu__btn--ico" data-fvs-accion="mu-quitar" data-fvs-pid="' + escapeHtml(String(f.id)) + '"'
+                   + ' aria-label="Quitar ' + escapeHtml(f.nombre) + ' de la lista"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></span></div>';
+                h += '</article>';
+            });
             return h + '</div>';
         }
 
@@ -778,9 +1042,39 @@
             document.addEventListener('click', function(e) {
                 var el = e.target && e.target.closest ? e.target.closest('[data-fvs-accion]') : null;
                 if (!el || el.disabled) return;
-                if (el.getAttribute('data-fvs-accion') === 'editar') {
-                    fvsEditarArea(el.getAttribute('data-fvs-pid'), el.getAttribute('data-fvs-area'));
+                var acc = el.getAttribute('data-fvs-accion');
+                var pid = el.getAttribute('data-fvs-pid');
+                // v5.45 — tocar un área: edición rápida en la celda (cantidad) o el modal (botella).
+                if (acc === 'editar') fvsEditarRapido(el);
+                else if (acc === 'inl-ok') fvsInlGuardar();
+                else if (acc === 'inl-no') _fvsInlCerrar();
+                else if (acc === 'plegar') {
+                    var g = el.getAttribute('data-fvs-grupo');
+                    _fvsVista.colapsados[g] = !_fvsVista.colapsados[g];
+                    BusquedaUI.refrescar('fvs');
                 }
+                else if (acc === 'sel-muestreo') fvsSelAMuestreo();
+                else if (acc === 'sel-limpiar') { _fvsVista.sel = {}; document.querySelectorAll('#sbx-res-fvs input[data-fvs-sel]').forEach(function(c) { c.checked = false; }); _fvsPintarSel(); }
+                else if (acc === 'mu-revisado') fvsMuestreoRevisado(pid);
+                else if (acc === 'mu-quitar') fvsMuestreoQuitar(pid);
+            });
+            document.addEventListener('change', function(e) {
+                var t = e.target;
+                if (!t || !t.matches) return;
+                if (t.matches('input[data-fvs-sel]')) {
+                    _fvsVista.sel[t.getAttribute('data-fvs-sel')] = t.checked;
+                    _fvsPintarSel();
+                } else if (t.matches('input[data-fvs-sel-todos]')) {
+                    document.querySelectorAll('#sbx-res-fvs input[data-fvs-sel]').forEach(function(c) {
+                        c.checked = t.checked; _fvsVista.sel[c.getAttribute('data-fvs-sel')] = t.checked;
+                    });
+                    _fvsPintarSel();
+                }
+            });
+            document.addEventListener('keydown', function(e) {
+                if (!_fvsInl || !e.target || !e.target.classList || !e.target.classList.contains('fvs-inl__in')) return;
+                if (e.key === 'Enter') { e.preventDefault(); fvsInlGuardar(); }
+                else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); _fvsInlCerrar(); }
             });
         }
 
@@ -794,6 +1088,15 @@
                      + UI.cabecera('Físico vs Sistema', 'Lo contado contra la existencia del sistema, producto por producto.',
                                    { volver: 'auditoriaView=\'selection\'; _fvsSearchTerm=\'\'; fvsReiniciarVista(); renderTab();', volverEtiqueta: 'Volver a Conteo' })
                      + '<div class="if-card">';
+            // v5.45 — resumen ejecutivo (KPIs + insignias) y pestañas arriba.
+            _fvsInl = null;
+            var datosFvs = fisicoVsSistemaCalcular();
+            if (datosFvs) {
+                html += _fvsTabsHtml(_fvsMuestreo().ids.filter(function(id) { return datosFvs.filas.some(function(f) { return f.id === id; }); }).length);
+                html += _fvsKpisHtml(datosFvs);
+                if (_fvsVista.tab === 'muestreo') return html + _fvsMuestreoHtml(datosFvs) + '</div></div>';
+            }
+            if (datosFvs) html += '<div id="fvsPanel" role="tabpanel" aria-labelledby="fvsTab-comparativo">';
             // v5.38 (densidad) — se retiró el párrafo descriptivo de la cabecera: la
             // tabla y sus controles ya dicen qué es y cómo está ordenada.
             html += BusquedaUI.barra('fvs', {
@@ -804,9 +1107,10 @@
             // v5.35 — con «Diferencias ↑» el orden lo decide ese botón: el chip de
             // invertir el orden por grupo se oculta para no dar dos órdenes a la vez.
             html += BusquedaUI.chips('fvs', _chipsFvs().filter(function(c) { return !((_fvsVista.difAsc || _fvsVista.difDesc) && c.id === 'orden_desc'); }));
-            html += _fvsControlesHtml(fisicoVsSistemaCalcular());
+            html += _fvsControlesHtml(datosFvs);
             html += BusquedaUI.region('fvs', _renderFvsResultados().html);
-            html += '</div></div>';
+            if (datosFvs) html += '</div>';
+            html += '</div>' + (datosFvs ? _fvsBarraSelHtml() : '') + '</div>';
             return html;
         }
 

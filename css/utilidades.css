@@ -898,3 +898,104 @@ button.fvs-t__celda:hover, button.fvs-t__celda:focus-visible { border-color: var
 .fvs-t__grupo .fvs-grupo__nom { font-size: .8rem; margin-right: 10px; }
 .fvs-t__grupo .fvs-grupo__dat { font-size: .7rem; font-weight: 400; }
 .fvs-t__grupo .num { font-family: var(--f-num); }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v5.45 — FÍSICO VS SISTEMA: resumen ejecutivo (KPIs), insignias con ayuda,
+   pestañas Comparativo / Muestreo, selección múltiple con barra flotante,
+   grupos plegables y edición rápida en la celda. Solo tokens.
+   ══════════════════════════════════════════════════════════════════════════ */
+.fvs-tabs { display: flex; gap: 4px; padding: 3px; margin: 0 0 10px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border-mid); }
+.fvs-tab { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 0 10px; border: 0; border-radius: 9px; background: transparent; color: var(--txt-secondary); font-family: var(--f-head); font-size: .82rem; font-weight: 700; cursor: pointer; }
+.fvs-tab--on { background: var(--card); color: var(--txt-primary); box-shadow: 0 0 0 1px var(--border-mid); }
+.fvs-tab:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; }
+.fvs-tab__n { min-width: 22px; padding: 1px 7px; border-radius: 999px; background: var(--accent-dim); color: var(--accent); font-size: .72rem; }
+
+.fvs-kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0 0 8px; }
+@media (min-width: 900px) { .fvs-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.fvs-kpi { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border-mid); background: var(--surface); }
+.fvs-kpi__etq { font-size: .64rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--txt-secondary); }
+.fvs-kpi__val { font-family: var(--f-num); font-size: 1.15rem; font-weight: 800; line-height: 1.15; color: var(--txt-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fvs-kpi__val small { font-size: .72rem; font-weight: 600; color: var(--txt-muted); }
+.fvs-kpi__sub { font-size: .66rem; color: var(--txt-muted); }
+.fvs-kpi__barra { display: block; height: 4px; margin-top: 3px; border-radius: 999px; background: var(--border-mid); overflow: hidden; }
+.fvs-kpi__barra > span { display: block; height: 100%; background: var(--accent); border-radius: inherit; }
+.fvs-kpi--faltante .fvs-kpi__val { color: var(--danger); }
+.fvs-kpi--sobrante .fvs-kpi__val { color: var(--ok); }
+.fvs-kpi__var { display: flex; flex-wrap: wrap; gap: 2px 10px; font-family: var(--f-num); font-size: .86rem; font-weight: 800; }
+.fvs-kpi__f { color: var(--danger); }
+.fvs-kpi__s { color: var(--ok); }
+
+.fvs-badges { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px; margin: 0 0 10px; }
+.fvs-tipd { position: relative; }
+.fvs-tipd > summary { list-style: none; }
+.fvs-tipd > summary::-webkit-details-marker { display: none; }
+.fvs-badge { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--border-mid); background: var(--surface); color: var(--txt-secondary); font-size: .72rem; font-weight: 700; cursor: pointer; }
+.fvs-badge:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.fvs-badge--ok { color: var(--ok); border-color: var(--ok); background: var(--ok-dim); }
+.fvs-badge--aviso { color: var(--warn); border-color: var(--warn); background: var(--warn-dim); }
+.fvs-tip { position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; width: min(300px, calc(100vw - 48px)); padding: 9px 11px; border-radius: 10px; border: 1px solid var(--border-mid); background: var(--card-high); color: var(--txt-primary); font-size: .76rem; line-height: 1.45; box-shadow: 0 8px 24px color-mix(in srgb, var(--bg) 60%, transparent); }
+
+.fvs-orden { display: inline-flex; align-items: center; gap: 6px; margin: 2px 0 8px; padding: 3px 9px; border-radius: 999px; background: var(--surface); }
+.fvs-ctl__alcance { flex-basis: auto; padding: 3px 9px; border-radius: 999px; background: var(--surface); cursor: help; }
+.fvs-ctl__btn--ghost { color: var(--txt-secondary); }
+
+/* Selección: la casilla vive dentro de la celda fija del producto */
+.fvs-t__prodin { display: flex; align-items: flex-start; gap: 4px; }
+.fvs-t__protxt { min-width: 0; }
+.fvs-t__selw { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 28px; min-height: 28px; margin: -4px 0 -4px -4px; cursor: pointer; }
+.fvs-t__chk { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.fvs-t__fila--sel .fvs-t__prod, .fvs-t__fila--sel td { background: var(--accent-dim); }
+
+/* Grupos plegables */
+.fvs-t__gcab { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 6px; margin: -6px 0; border: 0; border-radius: 8px; background: transparent; color: var(--txt-primary); font: inherit; font-weight: 700; cursor: pointer; }
+.fvs-t__gcab:hover { background: var(--card); }
+.fvs-t__gcab:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; }
+.fvs-grupo__ico { font-size: .65rem; color: var(--txt-muted); width: 12px; }
+
+/* Barra flotante de la selección (sobre la barra inferior del teléfono) */
+.fvs-selbar { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(56px + env(safe-area-inset-bottom, 0px) + 10px); z-index: 30; display: flex; align-items: center; gap: 8px; width: min(520px, calc(100vw - 24px)); padding: 6px 6px 6px 14px; border-radius: 14px; border: 1px solid var(--border-mid); background: var(--card-high); box-shadow: 0 10px 30px color-mix(in srgb, var(--bg) 70%, transparent); }
+.fvs-selbar[hidden] { display: none; }
+@media (min-width: 768px) { .fvs-selbar { bottom: 16px; } }
+.fvs-selbar__n { flex: 1; font-size: .82rem; color: var(--txt-secondary); }
+.fvs-selbar__n b { color: var(--txt-primary); }
+.fvs-selbar__btn { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; min-width: 44px; justify-content: center; padding: 0 12px; border-radius: 10px; border: 1px solid var(--border-mid); background: var(--card); color: var(--txt-primary); font-family: var(--f-head); font-size: .8rem; font-weight: 700; cursor: pointer; }
+.fvs-selbar__btn--prim { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+.fvs-selbar__btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* Edición rápida en la celda */
+.fvs-inl { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; min-width: 76px; }
+.fvs-inl__in { flex: 1 0 100%; width: 100%; min-width: 0; min-height: 40px; padding: 0 6px; border-radius: 8px; border: 2px solid var(--accent); background: var(--bg); color: var(--txt-primary); font-family: var(--f-num); font-size: 16px; font-weight: 700; text-align: center; }
+.fvs-inl__in[aria-invalid="true"] { border-color: var(--danger); }
+.fvs-inl__in:focus { outline: none; }
+.fvs-inl__b { flex: 1 1 0; display: inline-flex; align-items: center; justify-content: center; min-width: 36px; height: 36px; border-radius: 8px; border: 1px solid var(--border-mid); background: var(--surface); color: var(--txt-secondary); cursor: pointer; }
+.fvs-inl__b--ok { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+
+/* Pestaña Muestreo */
+.fvs-mu { display: flex; flex-direction: column; gap: 8px; padding-bottom: 8px; }
+.fvs-mu__barra { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.fvs-mu__prog { flex: 1 1 auto; font-size: .8rem; color: var(--txt-secondary); }
+.fvs-mu__prog b { color: var(--txt-primary); }
+.fvs-mu__vacio { margin: 4px 0; padding: 14px; border-radius: 10px; border: 1px dashed var(--border-mid); font-size: .82rem; line-height: 1.45; color: var(--txt-secondary); text-align: center; }
+.fvs-mu__item { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 12px; border: 1px solid var(--border-mid); background: var(--surface); box-shadow: inset 3px 0 0 var(--border-mid); }
+.fvs-mu__item--faltante { box-shadow: inset 3px 0 0 var(--danger); }
+.fvs-mu__item--sobrante { box-shadow: inset 3px 0 0 var(--ok); }
+.fvs-mu__item--hecho { opacity: .72; }
+.fvs-mu__cab { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.fvs-mu__nomw { min-width: 0; }
+.fvs-mu__nom { display: block; font-size: .86rem; font-weight: 700; color: var(--txt-primary); overflow-wrap: anywhere; }
+.fvs-mu__sub { display: block; font-size: .68rem; color: var(--txt-muted); overflow-wrap: anywhere; }
+.fvs-mu__dif { font-family: var(--f-num); font-weight: 800; font-size: .95rem; white-space: nowrap; }
+.fvs-mu__areas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.fvs-mu__area { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.fvs-mu__aetq { font-size: .62rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--txt-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fvs-mu__area .fvs-inl__in { width: 100%; }
+.fvs-mu__pie { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; }
+.fvs-mu__cif { font-size: .74rem; color: var(--txt-secondary); }
+.fvs-mu__cif b { font-family: var(--f-num); color: var(--txt-primary); }
+.fvs-mu__cif .fvs-t__dif--faltante { color: var(--danger); }
+.fvs-mu__cif .fvs-t__dif--sobrante { color: var(--ok); }
+.fvs-mu__acc { display: inline-flex; gap: 6px; }
+.fvs-mu__btn { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 44px; min-width: 44px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--border-mid); background: var(--card); color: var(--txt-secondary); font-family: var(--f-head); font-size: .76rem; font-weight: 700; cursor: pointer; }
+.fvs-mu__btn--on { border-color: var(--ok); background: var(--ok-dim); color: var(--ok); }
+.fvs-mu__btn--ico { padding: 0; }
+.fvs-mu__btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
