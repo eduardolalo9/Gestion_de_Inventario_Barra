@@ -63,7 +63,8 @@ const PUERTO = process.env.PUERTO || '8080';
     await p.waitForTimeout(150);
     const nt = await p.evaluate(() => {
       const c = document.getElementById('tabContent'); const M = window.__m;
-      const botones = [...c.querySelectorAll('button.ui-link')];
+      // v5.43 — «Marcar todas leídas» pasó de enlace a botón secundario (.pg-acc .bt); «Leído» sigue como ui-link.
+      const botones = [...c.querySelectorAll('button.ui-link, .pg-acc button.bt')];
       const item = c.querySelector('.notif-item.unread .notif-text');
       return {
         emoji: M.emoji(c.innerText), estilos: c.querySelectorAll('[style]').length,

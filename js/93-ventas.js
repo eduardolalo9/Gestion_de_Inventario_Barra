@@ -1263,15 +1263,17 @@
             var estadoSync = (typeof _syncEnabled !== 'undefined' && !_syncEnabled) ? 'pendiente' : 'ok';
 
             var html = '<div class="vt-wrap vs-pantalla">';
-            html += moduloCabecera('Ventas Semanales', "switchTab('inicio')", estadoSync);
-            html += _vsPeriodoPills();
-            html += BusquedaUI.barra('ventas', { placeholder: 'Buscar por producto o SKU', etiqueta: 'Buscar en las ventas' });
+            html += moduloCabecera('Ventas', "switchTab('inicio')", estadoSync, 'Ventas del POS por semana: impórtalas y revisa el consumo de insumos.');
+            // v5.43 — como Compras: encabezado, luego las acciones (Importar primero),
+            // luego periodo y búsqueda.
             html += '<div class="vs-acciones">'
                   + (puedeImportar ? '<button type="button" class="vs-btn vs-btn--primario" onclick="ventasImportarDesdeModulo()">'
                                    + '<span class="vs-btn__circulo"><i class="fa-solid fa-file-arrow-up" aria-hidden="true"></i></span> Importar Ventas</button>' : '')
                   + '<button type="button" class="vs-btn vs-btn--secundario" onclick="ventasExportarExcel()"' + (hayDatos ? '' : ' disabled') + '>'
                   + '<i class="fa-solid fa-download" aria-hidden="true"></i> Exportar</button>'
                   + '</div>';
+            html += _vsPeriodoPills();
+            html += BusquedaUI.barra('ventas', { placeholder: 'Buscar por producto o SKU', etiqueta: 'Buscar en las ventas' });
             // v5.40 — acceso al Control de negativos, con cuántos insumos están por debajo de cero.
             if (typeof controlNegativosAbrir === 'function' && hasPermission('purchases.read')) {
                 var nNeg = (typeof controlNegativosConteo === 'function') ? controlNegativosConteo() : null;

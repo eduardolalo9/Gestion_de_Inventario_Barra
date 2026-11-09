@@ -28,16 +28,24 @@
             busqueda:    ''
         };
 
-        /** Cabecera de módulo: volver + título centrado + punto de estado. Compartida (Ventas, Equipo). */
-        function moduloCabecera(titulo, onVolver, estado) {
+        /**
+         * Cabecera de módulo (Ventas, Pedido sugerido, Control de negativos, Equipo).
+         * v5.43 — mismo lenguaje que UI.cabecera (js/03): título a la izquierda,
+         * descripción breve debajo y Volver con la clase mc-cab__volver (la que
+         * pulsa Atrás de Android, js/98). El punto de sincronización se conserva
+         * a la derecha, con su texto accesible.
+         */
+        function moduloCabecera(titulo, onVolver, estado, descripcion) {
             var tono = estado === 'pendiente' ? 'warn' : 'ok';
-            return '<div class="mc-cab">'
+            return '<header class="pg-cab">'
                  + '<button type="button" class="mc-cab__volver" onclick="' + onVolver + '" aria-label="Volver">'
                  + '<i class="fa-solid fa-chevron-left" aria-hidden="true"></i></button>'
-                 + '<h2 class="mc-cab__titulo">' + escapeHtml(titulo) + '</h2>'
+                 + '<div class="pg-cab__txt"><h1 class="pg-cab__tit">' + escapeHtml(titulo) + '</h1>'
+                 + (descripcion ? '<p class="pg-cab__desc">' + escapeHtml(descripcion) + '</p>' : '') + '</div>'
                  + '<span class="mc-cab__punto mc-cab__punto--' + tono + '" role="img" aria-label="'
+                 + (tono === 'ok' ? 'Sincronizado' : 'Sincronización pendiente') + '" title="'
                  + (tono === 'ok' ? 'Sincronizado' : 'Sincronización pendiente') + '"></span>'
-                 + '</div>';
+                 + '</header>';
         }
 
         function _psRed(n, d) { var f = Math.pow(10, d === undefined ? 3 : d); var x = Number(n); return isFinite(x) ? Math.round(x * f) / f : 0; }
@@ -228,7 +236,8 @@
             });
             grupos.sort(function(a, b) { return a.localeCompare(b, 'es'); });
             var h = '<div class="ps-pantalla">';
-            h += moduloCabecera('Pedido Sugerido', "switchTab('inicio')", (typeof _syncEnabled !== 'undefined' && !_syncEnabled) ? 'pendiente' : 'ok');
+            h += moduloCabecera('Pedido sugerido', "switchTab('inicio')", (typeof _syncEnabled !== 'undefined' && !_syncEnabled) ? 'pendiente' : 'ok',
+                           'Productos bajo su mínimo y cuánto pedir para reponerlos.');
             h += '<div class="ps-filtros" role="group" aria-label="Filtros">'
                + '<button type="button" class="mc-pill' + (_ps.soloBajo ? ' mc-pill--on' : '') + '" aria-pressed="' + _ps.soloBajo + '" data-ps-accion="bajo">Bajo stock</button>'
                + '<label class="mc-pill mc-pill--select' + (_ps.grupo ? ' mc-pill--on' : '') + '"><span class="sbx-sr">Grupo</span>'

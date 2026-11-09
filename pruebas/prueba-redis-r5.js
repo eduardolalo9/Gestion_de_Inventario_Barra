@@ -69,7 +69,8 @@ const fTrail      = funcion(multi, 'renderAuditTrailForProduct');
 
 // ═══ 1 · LAS TRES PANTALLAS GRANDES USAN LA TARJETA DEL KIT ════════════════
 chk('★ Historial ya no usa el envoltorio Tailwind crudo de antes de R1',
-    !/bg-white rounded-xl p-4/.test(fHistorial) && /<div class="audit-screen"><div class="if-card">/.test(fHistorial));
+    // v5.43 — el encabezado común (UI.cabecera) va entre audit-screen y la tarjeta.
+    !/bg-white rounded-xl p-4/.test(fHistorial) && /'<div class="audit-screen">'\s*\+ UI\.cabecera\([\s\S]{0,300}?\+ '<div class="if-card">'/.test(fHistorial));
 chk('★ Físico vs Sistema usa if-card (ya lo usaba desde FASE 11B, R5 solo re-pinta el interior)',
     /<div class="audit-screen"><div class="if-card">/.test(fFvsPant));
 chk('★ El detalle de un inventario cerrado ya no usa el envoltorio Tailwind crudo',
@@ -109,8 +110,10 @@ chk('★ .audit-back-btn protege su icono de encogerse a 0 px (flex-shrink)',
 // ═══ 3 · "← VOLVER" CON EL BOTÓN DEL KIT ═══════════════════════════════════
 ['fHistorial', 'fFvsPant', 'fDetalle'].forEach(function (nombreVar) {
     const src = { fHistorial, fFvsPant, fDetalle }[nombreVar];
-    chk('★ ' + nombreVar.replace('f', '') + ' usa .audit-back-btn, no un botón con estilo en línea',
-        /class="audit-back-btn"/.test(src) && !/background:var\(--bg-soft\);font-size:0\.7rem/.test(src));
+    // v5.43 — Volver ahora sale del encabezado común: UI.cabecera(…, { volver }) pinta
+    // .mc-cab__volver (el mismo que pulsa Atrás de Android, js/98).
+    chk('★ ' + nombreVar.replace('f', '') + ' usa el Volver del encabezado común (UI.cabecera), no un botón con estilo en línea',
+        /UI\.cabecera\([\s\S]{0,400}?\{ volver: /.test(src) && !/class="audit-back-btn"/.test(src) && !/background:var\(--bg-soft\);font-size:0\.7rem/.test(src));
 });
 
 // ═══ 4 · YA NO QUEDA EMOJI COMO ICONOGRAFÍA EN LAS ZONAS DE R5 ═════════════

@@ -517,9 +517,8 @@
                 _papelera.estado = 'cargando';   // antes de pedir: un repintado no vuelve a pedir
                 papeleraCargar().then(function() { if (activeTab === 'papelera') renderTab(); });
             }
-            var h = '<div class="pap-wrap"><div class="pap-cab"><div class="pap-cab__tit">Papelera</div>'
-                  // v5.39 (densidad) — una línea con la regla que importa (antes un párrafo de 4).
-                  + '<div class="pap-cab__sub">Restaurar o descargar. Se vacía a mano lo de más de ' + PAPELERA_DIAS_PURGA + ' días.</div></div>';
+            // v5.39 (densidad) — una línea con la regla que importa. v5.43 — encabezado común (UI.cabecera).
+            var h = '<div class="pap-wrap">' + UI.cabecera('Papelera', 'Restaurar o descargar. Se vacía a mano lo de más de ' + PAPELERA_DIAS_PURGA + ' días.');
             if (_papelera.estado === 'cargando' || _papelera.estado === 'sin_cargar') {
                 return h + '<div class="pap-vacio">Cargando…</div></div>';
             }

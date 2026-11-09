@@ -64,7 +64,8 @@ const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
     const rx = new RegExp(grisRe, 'i');
     const re = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
     const cont = document.getElementById('tabContent');
-    const volver = cont.querySelector('.audit-back-btn');
+    // v5.43 — Volver del encabezado común (UI.cabecera → .pg-cab .mc-cab__volver).
+    const volver = cont.querySelector('.pg-cab .mc-cab__volver');
     const filas = [...cont.querySelectorAll('.rc-hist')];
     const badges = [...cont.querySelectorAll('.bi-badge')].map(b => ({
       texto: b.textContent.trim(), bg: getComputedStyle(b).backgroundColor
@@ -75,7 +76,7 @@ const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
       .filter(e => getComputedStyle(e).backgroundColor === 'rgb(255, 255, 255)').map(e => e.className || e.tagName);
     const volverIcono = volver ? volver.querySelector('.fa-chevron-left') : null;
     return {
-      volverExiste: !!volver, volverTexto: volver ? volver.textContent.trim() : null,
+      volverExiste: !!volver, volverTexto: volver ? (volver.getAttribute('aria-label') || volver.textContent).trim() : null,
       volverTieneIcono: !!volverIcono,
       volverIconoAncho: volverIcono ? volverIcono.getBoundingClientRect().width : 0,
       filas: filas.length, badges: badges,
@@ -84,7 +85,7 @@ const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
     };
   }, GRIS_DE_FABRICA.source);
 
-  chk('★ El Historial usa el botón "Volver" del kit, con su icono',
+  chk('★ El Historial usa el botón "Volver" del encabezado común, con su icono y nombre accesible',
       historialReal.volverExiste && /Volver/.test(historialReal.volverTexto) && historialReal.volverTieneIcono,
       JSON.stringify(historialReal.volverTexto));
   /**
@@ -131,7 +132,8 @@ const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
     const rx = new RegExp(grisRe, 'i');
     const re = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
     const cont = document.getElementById('tabContent');
-    const volver = cont.querySelector('.audit-back-btn');
+    // v5.43 — Volver del encabezado común (UI.cabecera → .pg-cab .mc-cab__volver).
+    const volver = cont.querySelector('.pg-cab .mc-cab__volver');
     const exportar = [...cont.querySelectorAll('button')].find(b => /Exportar Excel/.test(b.textContent));
     const pasoHecho = cont.querySelector('.pm-paso--hecho');
     const blancos = [...cont.querySelectorAll('*')]
@@ -149,7 +151,7 @@ const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
     };
   }, GRIS_DE_FABRICA.source);
 
-  chk('★ El detalle cerrado usa el botón "Volver" del kit, con su icono', detalle.volverExiste && detalle.volverTieneIcono);
+  chk('★ El detalle cerrado usa el botón "Volver" del encabezado común, con su icono', detalle.volverExiste && detalle.volverTieneIcono);
   chk('★ "Exportar Excel" existe con su icono (no el emoji 📥 de antes)',
       detalle.exportarExiste && detalle.exportarIcono);
   chk('★ Un inventario CONTABILIZADO muestra el paso "Contabilizado" con sus dos destinos',

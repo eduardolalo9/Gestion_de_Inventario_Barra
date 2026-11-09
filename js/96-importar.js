@@ -890,11 +890,12 @@
             return h + '</ul>';
         }
 
+        /** v5.43 — encabezado común (UI.cabecera) con Volver al hub. `sub` es HTML
+         *  propio (p. ej. el nombre del archivo ya escapado en <b>), por eso se
+         *  inserta aparte y no pasa por el escape de UI.cabecera. */
         function _impCabSeccion(titulo, sub) {
-            return '<div class="imp-cab"><button type="button" class="imp-volver" onclick="importarVolver()" aria-label="Volver a Importar desde Excel">'
-                 + '<i class="fa-solid fa-chevron-left" aria-hidden="true"></i></button>'
-                 + '<div><div class="imp-cab__tit">' + escapeHtml(titulo) + '</div>'
-                 + (sub ? '<div class="imp-cab__sub">' + sub + '</div>' : '') + '</div></div>';
+            var h = UI.cabecera(titulo, null, { volver: 'importarVolver()', volverEtiqueta: 'Volver a Importar desde Excel' });
+            return sub ? h.replace('</h1>', '</h1><p class="pg-cab__desc">' + sub + '</p>') : h;
         }
 
         function _renderImpCatalogo(p) {
@@ -993,8 +994,7 @@
         }
 
         function _renderImpHub() {
-            var h = '<div class="imp-cab"><div><div class="imp-cab__tit">Importar desde Excel</div>'
-                  + '<div class="imp-cab__sub">Nada se aplica hasta que la vista previa esté sin errores.</div></div></div>';
+            var h = UI.cabecera('Importar desde Excel', 'Nada se aplica hasta que la vista previa esté sin errores.');
             h += '<div class="imp-grid">';
             IMPORTAR_SECCIONES.forEach(function(s) {
                 var puede = hasPermission(s.permiso);

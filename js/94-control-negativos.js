@@ -208,7 +208,8 @@
 
         function renderControlNegativos() {
             var estadoSync = (typeof _syncEnabled !== 'undefined' && !_syncEnabled) ? 'pendiente' : 'ok';
-            var h = '<div class="vt-wrap cn-pantalla">' + moduloCabecera('Control de negativos', 'controlNegativosCerrar()', estadoSync);
+            var h = '<div class="vt-wrap cn-pantalla">' + moduloCabecera('Control de negativos', 'controlNegativosCerrar()', estadoSync,
+                'Insumos cuya existencia teórica quedó por debajo de cero.');
             if (!_cnPuede()) {
                 return h + '<div class="vs-vacio"><div class="vs-vacio__t">Sin permiso</div><div class="vs-vacio__s">Hace falta ver compras y ventas para calcular los negativos.</div></div></div>';
             }
