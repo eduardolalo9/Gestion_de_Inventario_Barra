@@ -66,7 +66,8 @@ const PUERTO = process.env.PUERTO || '8080';
 
   await p.evaluate(() => { activeTab = 'inventario'; auditoriaView = 'selection'; renderTab(); });
   const c = await p.evaluate(() => ({ txt: document.getElementById('tabContent').innerText,
-    crear: !!document.querySelector('[onclick="abrirModalNuevoInventario()"]'), hist: /Historial de inventarios/.test(document.getElementById('tabContent').innerText) }));
+    crear: !!document.querySelector('[onclick="abrirModalNuevoInventario()"]'), // v5.43 — a media anchura el botón dice «Historial»; el nombre completo va en aria-label.
+    hist: !!document.querySelector('#tabContent button[aria-label="Historial de inventarios"]') && /Historial/.test(document.getElementById('tabContent').innerText) }));
   chk('★ Conteo sin inventario: ya no aparece el cuadro "Sin Inventario Físico abierto" ni el glosario',
       !/Sin Inventario Físico abierto/.test(c.txt) && !/Qué significa cada estado/i.test(c.txt), '');
   chk('★ Sin inventario abierto se puede crear uno y consultar el historial', c.crear && c.hist, JSON.stringify(c));

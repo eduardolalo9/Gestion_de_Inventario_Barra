@@ -58,10 +58,10 @@ const CONTRASTE = (sel) => {
     chk(T + 'Admin: filas de dato ≤ 36 px y botones de 44 px', adm.stats.every(h => h <= 36) && adm.bts.length > 0 && adm.bts.every(h => h >= 44 && h <= 46), JSON.stringify(adm));
     // Importar y Papelera
     await ir('importar');
-    const imp = await p.evaluate(() => ({ sub: (document.querySelector('.imp-cab__sub') || {}).textContent || '', pad: parseFloat(getComputedStyle(document.querySelector('.imp-sec')).paddingTop) }));
+    const imp = await p.evaluate(() => ({ sub: (document.querySelector('#tabContent .pg-cab__desc') || {}).textContent || ''   /* v5.43 — encabezado común */, pad: parseFloat(getComputedStyle(document.querySelector('.imp-sec')).paddingTop) }));
     chk(T + 'Importar: subtítulo de una línea y secciones con padding de 10 px', imp.sub.length < 70 && imp.pad === 10, JSON.stringify(imp));
     await ir('papelera');
-    chk(T + 'Papelera: la regla de 30 días en una línea', await p.evaluate(() => { const s = document.querySelector('.pap-cab__sub'); return !!s && s.textContent.length < 70 && /30 días/.test(s.textContent); }));
+    chk(T + 'Papelera: la regla de 30 días en una línea', await p.evaluate(() => { const s = document.querySelector('#tabContent .pg-cab__desc');   /* v5.43 — encabezado común */ return !!s && s.textContent.length < 70 && /30 días/.test(s.textContent); }));
     // Contraste y desborde en todas
     let peor = [];
     for (const t of ['pedidos', 'recetario', 'ventas', 'ajustes', 'admin', 'importar', 'papelera', 'historia']) {

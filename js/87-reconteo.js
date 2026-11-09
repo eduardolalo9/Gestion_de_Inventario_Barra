@@ -883,11 +883,10 @@
         function renderReconteoHistorial() {
             if (!_rcPuede()) { auditoriaView = 'selection'; return renderAuditoriaSeleccion(); }
             if (_reconteoLista === null && !_reconteoListaCargando) setTimeout(_rcCargarLista, 0);
+            // v5.43 — encabezado común (UI.cabecera); Volver sigue usando data-rc-accion.
             var h = '<div class="rc-screen">';
-            h += '<div class="rc-cab">';
-            h += '<button type="button" class="audit-back-btn" data-rc-accion="salir"><i class="fa-solid fa-chevron-left"></i> Inventario</button>';
-            h += '<div style="min-width:0;flex:1;"><div class="rc-titulo"><i class="fa-solid fa-clipboard-list" aria-hidden="true"></i> Histórico de reconteos</div></div>';
-            h += '</div>';
+            h += UI.cabecera('Reconteos', 'Reconteos registrados y cuántas correcciones dejó cada uno.',
+                             { volverAtributos: 'data-rc-accion="salir"', volverEtiqueta: 'Volver a Conteo' });
             if (_reconteoLista === null) {
                 h += '<div class="rc-vacio">Cargando…</div>';
             } else if (!_reconteoLista.length) {
@@ -913,12 +912,11 @@
         function renderReconteoDetalle() {
             if (!_rcPuede()) { auditoriaView = 'selection'; return renderAuditoriaSeleccion(); }
             var r = _reconteoDetalle;
+            // v5.43 — encabezado común (UI.cabecera); Volver sigue usando data-rc-accion.
             var h = '<div class="rc-screen">';
-            h += '<div class="rc-cab">';
-            h += '<button type="button" class="audit-back-btn" data-rc-accion="historial"><i class="fa-solid fa-chevron-left"></i> Histórico</button>';
-            h += '<div style="min-width:0;flex:1;"><div class="rc-titulo">Reconteo · Inventario #' + escapeHtml(String((r && r.inventarioNumero) || '—'))
-               + (r && r.ronda > 1 ? ' <span class="rc-badge">Ronda ' + r.ronda + '</span>' : '') + '</div></div>';
-            h += '</div>';
+            h += UI.cabecera('Reconteo · Inventario #' + String((r && r.inventarioNumero) || '—'),
+                             (r && r.ronda > 1 ? 'Ronda ' + r.ronda + '. ' : '') + 'Productos recontados y sus correcciones.',
+                             { volverAtributos: 'data-rc-accion="historial"', volverEtiqueta: 'Volver a Reconteos' });
             if (!r) {
                 h += '<div class="rc-vacio">Cargando…</div></div>';
                 return h;

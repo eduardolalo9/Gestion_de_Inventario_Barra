@@ -1935,12 +1935,13 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
         }
         function renderNotificacionesTab() {
             let html = '<div class="max-w-2xl mx-auto">';
-            html += '<div class="ui-cab">';
-            html += '<h2 class="ui-titulo"><i class="fa-solid fa-bell" aria-hidden="true"></i> Notificaciones</h2>';
+            // v5.43 — encabezado común (UI.cabecera); «Marcar todas leídas» como
+            // acción secundaria, solo si hay algo sin leer.
+            html += UI.cabecera('Notificaciones', 'Avisos del inventario y de tu equipo.');
             if (_notificaciones.some(function(n) { return !n.leido; })) {
-                html += '<button type="button" class="ui-link" onclick="marcarTodasLeidas()">Marcar todas leídas</button>';
+                html += '<div class="pg-acc"><button type="button" class="bt bt--secundario" onclick="marcarTodasLeidas()">'
+                      + '<i class="fa-solid fa-check" aria-hidden="true"></i> Marcar todas leídas</button></div>';
             }
-            html += '</div>';
             if (_notificaciones.length === 0) {
                 html += '<div class="ui-vacio ui-vacio--caja"><i class="fa-solid fa-bell" aria-hidden="true"></i>Sin notificaciones nuevas</div>';
             } else {
@@ -2543,7 +2544,8 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
             let html = '<div class="max-w-2xl mx-auto eq-pantalla">';
             var enDetalle = !!(_permUidSel && _permEdicion);
             html += (typeof moduloCabecera === 'function')
-                ? moduloCabecera('Gestión de equipo', enDetalle ? 'permVolverALista()' : 'cerrarUsuariosPermisos()', 'ok')
+                ? moduloCabecera('Gestión de equipo', enDetalle ? 'permVolverALista()' : 'cerrarUsuariosPermisos()', 'ok',
+                    enDetalle ? 'Rol y permisos de esta persona.' : 'Personas con acceso, su rol y sus permisos.')
                 : '<button type="button" class="adm-btn" onclick="cerrarUsuariosPermisos()">Volver al panel</button>';
 
             if (_permCargando && !_permUsuarios) {

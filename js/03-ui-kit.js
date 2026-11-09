@@ -353,12 +353,15 @@
              * El encabezado de toda ventana: título, descripción breve y, si es una
              * pantalla interior, el botón Volver (clase mc-cab__volver: es el que
              * pulsa Atrás de Android, ver js/98). `volver` es código de onclick.
+             * v5.43 — `volverAtributos`: atributos crudos en lugar de onclick, para
+             * las pantallas que escuchan por delegación (Reconteo: data-rc-accion).
              */
             function cabecera(titulo, descripcion, opciones) {
                 opciones = opciones || {};
                 var h = '<header class="pg-cab">';
-                if (opciones.volver) {
-                    h += '<button type="button" class="mc-cab__volver" onclick="' + opciones.volver + '" aria-label="'
+                if (opciones.volver || opciones.volverAtributos) {
+                    h += '<button type="button" class="mc-cab__volver" '
+                       + (opciones.volverAtributos || ('onclick="' + opciones.volver + '"')) + ' aria-label="'
                        + esc(opciones.volverEtiqueta || 'Volver') + '"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i></button>';
                 }
                 h += '<div class="pg-cab__txt"><h1 class="pg-cab__tit">' + esc(titulo) + '</h1>';

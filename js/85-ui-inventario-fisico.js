@@ -82,12 +82,16 @@
                 if (!isAdmin()) {
                     hAcc += '<p class="pm-nota" style="margin:0;font-size:.95rem;">El administrador todavía no ha abierto el inventario de esta semana.</p>';
                 }
-                hAcc += '<div class="bt-pila">';
+                // v5.43 — jerarquía como en Compras: Crear (la acción principal) a lo
+                // ancho; Historial y Reconteos (consulta) lado a lado, secundarios.
                 if (isAdmin() && hasPermission('inventory.create')) {
-                    hAcc += _ifBtn('bt--primario', '<i class="fa-solid fa-plus" aria-hidden="true"></i> Crear Inventario Físico', 'onclick="abrirModalNuevoInventario()"');
+                    hAcc += '<div class="bt-pila">' + _ifBtn('bt--primario', '<i class="fa-solid fa-plus" aria-hidden="true"></i> Crear Inventario Físico', 'onclick="abrirModalNuevoInventario()"') + '</div>';
                 }
+                hAcc += '<div class="bt-pila bt-pila--rejilla">';
                 if (hasPermission('inventory.history')) {
-                    hAcc += _ifBtn('bt--secundario', '<i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i> Historial de inventarios', _IF_ABRIR_HISTORIAL);
+                    // A media anchura «Historial de inventarios» se partía en dos líneas:
+                    // se ve «Historial» y el nombre completo queda en aria-label.
+                    hAcc += _ifBtn('bt--secundario', '<i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i> Historial', 'aria-label="Historial de inventarios" ' + _IF_ABRIR_HISTORIAL);
                 }
                 if (isAdmin()) {
                     hAcc += _ifBtn('bt--secundario', '<i class="fa-solid fa-clipboard-list" aria-hidden="true"></i> Reconteos', 'data-rc-accion="historial"');
@@ -344,11 +348,11 @@
         // participó (filtrado por participantesUids, ya viene en el doc — sin
         // leer snapshots para armar la lista).
         function renderHistorialInventarios() {
-            let html = '<div class="audit-screen"><div class="if-card">';
-            html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">';
-            html += '<p class="if-card__titulo" style="margin:0;"><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i> Historial de Inventarios Físicos</p>';
-            html += '<button type="button" class="audit-back-btn" onclick="auditoriaView=\'selection\'; renderTab();"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i> Volver</button>';
-            html += '</div>';
+            // v5.43 — encabezado común (UI.cabecera) con Volver a la izquierda, fuera de la tarjeta.
+            let html = '<div class="audit-screen">'
+                     + UI.cabecera('Historial de inventarios', 'Inventarios físicos cerrados y contabilizados.',
+                                   { volver: 'auditoriaView=\'selection\'; renderTab();', volverEtiqueta: 'Volver a Conteo' })
+                     + '<div class="if-card">';
 
             if (_historialInventarios === null) {
                 html += '<p class="pm-nota" style="margin:0;"><i class="fa-solid fa-hourglass" aria-hidden="true"></i> Cargando historial…</p></div></div>';
@@ -785,12 +789,11 @@
                 return '<div class="audit-screen"><div class="if-card"><p class="pm-nota" style="margin:0;">'
                      +  'No tienes permiso para ver esta comparación.</p></div></div>';
             }
-            var html = '<div class="audit-screen"><div class="if-card">';
-            html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">';
-            html += '<p class="if-card__titulo" style="margin:0;"><i class="fa-solid fa-file-chart-column" aria-hidden="true"></i> Físico vs Sistema</p>';
-            html += '<button type="button" class="audit-back-btn" onclick="auditoriaView=\'selection\'; _fvsSearchTerm=\'\'; fvsReiniciarVista(); renderTab();">'
-                 +  '<i class="fa-solid fa-chevron-left" aria-hidden="true"></i> Volver</button>';
-            html += '</div>';
+            // v5.43 — encabezado común (UI.cabecera) con Volver a la izquierda, fuera de la tarjeta.
+            var html = '<div class="audit-screen">'
+                     + UI.cabecera('Físico vs Sistema', 'Lo contado contra la existencia del sistema, producto por producto.',
+                                   { volver: 'auditoriaView=\'selection\'; _fvsSearchTerm=\'\'; fvsReiniciarVista(); renderTab();', volverEtiqueta: 'Volver a Conteo' })
+                     + '<div class="if-card">';
             // v5.38 (densidad) — se retiró el párrafo descriptivo de la cabecera: la
             // tabla y sus controles ya dicen qué es y cómo está ordenada.
             html += BusquedaUI.barra('fvs', {
@@ -810,12 +813,11 @@
         // Detalle de un inventario cerrado — SOLO LECTURA. Carga su snapshot
         // (bajo demanda, la primera vez que se abre) y ofrece exportar.
         function renderDetalleInventarioCerrado() {
+            // v5.43 — encabezado común (UI.cabecera) con Volver al historial.
             let html = '<div class="audit-screen">';
+            html += UI.cabecera('Inventario físico', 'Solo lectura: lo que quedó registrado al cerrarlo.',
+                                { volver: 'auditoriaView=\'historial\'; renderTab();', volverEtiqueta: 'Volver al historial' });
             html += '<div class="if-card">';
-            html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">';
-            html += '<p class="if-card__titulo" style="margin:0;"><i class="fa-solid fa-lock" aria-hidden="true"></i> Inventario Físico (solo lectura)</p>';
-            html += '<button type="button" class="audit-back-btn" onclick="auditoriaView=\'historial\'; renderTab();"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i> Volver al historial</button>';
-            html += '</div>';
 
             if (_detalleInventarioCerradoData === null) {
                 html += '<p class="pm-nota" style="margin:0;"><i class="fa-solid fa-hourglass" aria-hidden="true"></i> Cargando snapshot…</p></div></div>';
@@ -913,6 +915,10 @@
             // if-pantalla--compacta reduce márgenes y tipografía y oculta lo que
             // repite información (css/utilidades.css). No cambia ninguna acción.
             let html = '<div class="audit-screen if-pantalla if-pantalla--compacta">';
+            // v5.43 — encabezado común de ventana (UI.cabecera, js/03).
+            html += UI.cabecera('Conteo', isAdmin()
+                ? 'Inventario físico por áreas: crea, cuenta, cierra y revisa.'
+                : 'Cuenta los productos de tu área y finaliza.');
 
             // ── 1-3. Estado, datos y acciones del Inventario Físico ─────────
             html += _renderInventarioFisicoHeader();

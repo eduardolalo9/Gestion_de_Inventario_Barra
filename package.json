@@ -129,7 +129,7 @@
     "test:staging": "node pruebas/prueba-staging-aislado-navegador.js",
     "staging:construir": "node herramientas/construir-staging.js staging-build",
     "test:compras-manual": "firebase emulators:exec --only firestore --project demo-barinventory \"node pruebas/prueba-compra-manual-integracion.js\"",
-    "test:rediseno": "node pruebas/prueba-compras-rediseno-navegador.js"
+    "test:rediseno": "node pruebas/prueba-compras-rediseno-navegador.js && node pruebas/prueba-rediseno-ventanas-navegador.js"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5",
