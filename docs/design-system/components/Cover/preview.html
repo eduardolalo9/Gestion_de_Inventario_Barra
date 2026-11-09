@@ -1,0 +1,32 @@
+<!-- @dsCard height=320 -->
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&display=swap">
+<style>
+html,body{margin:0;background:var(--bg)}
+.cv{position:relative;width:960px;height:320px;background:var(--bg);overflow:hidden}
+svg{position:absolute;left:0;top:0}
+.brass{fill:var(--accent)} .book{fill:var(--book)} .ok{fill:var(--ok)} .info{fill:var(--info)} .danger{fill:var(--danger)}
+.seg{fill:var(--accent-on)} .seg-off{fill:var(--accent-on);opacity:.28}
+.blk{rx:var(--r-lg)} .sm{rx:var(--r-md)} .s{rx:2px}
+.txt{position:absolute;left:32px;top:150px;max-width:880px}
+.nombre{font-family:var(--font-sans);font-weight:700;font-size:64px;line-height:.95;letter-spacing:-0.02em;color:var(--txt-primary);margin:0}
+.lema{font-family:var(--font-sans);font-size:14px;color:var(--txt-muted);margin:16px 0 0}
+</style></head>
+<body><div class="cv">
+<svg width="960" height="140" viewBox="0 0 960 140" aria-hidden="true">
+<!-- blocks: accent 496×100, book 176×100, ok 96×100, info 64×100, danger 32×100 (r-lg / r-md), gaps space-12
+     arrangement: top-band skeleton (name too wide for the 440px zone), one strip of unequal bands, latón dominant
+     pattern: the segmented meter (UI.meter, 412/431: 11 de 12 encendidos) cut into the brass block — the app's own instrument motif
+     scales: space-12 gaps, space-2 segment gap, r-lg blocks, r-md small blocks, 2px segment radius -->
+<rect class="brass blk" x="32" y="24" width="496" height="100"/>
+<rect class="book blk" x="540" y="24" width="176" height="100"/>
+<rect class="ok sm" x="728" y="24" width="96" height="100"/>
+<rect class="info sm" x="836" y="24" width="60" height="100"/>
+<rect class="danger sm" x="908" y="24" width="20" height="100"/>
+<g>
+<rect class="seg s" x="52" y="94" width="36" height="12"/><rect class="seg s" x="90" y="94" width="36" height="12"/><rect class="seg s" x="128" y="94" width="36" height="12"/><rect class="seg s" x="166" y="94" width="36" height="12"/><rect class="seg s" x="204" y="94" width="36" height="12"/><rect class="seg s" x="242" y="94" width="36" height="12"/><rect class="seg s" x="280" y="94" width="36" height="12"/><rect class="seg s" x="318" y="94" width="36" height="12"/><rect class="seg s" x="356" y="94" width="36" height="12"/><rect class="seg s" x="394" y="94" width="36" height="12"/><rect class="seg s" x="432" y="94" width="36" height="12"/><rect class="seg-off s" x="470" y="94" width="36" height="12"/>
+</g>
+</svg>
+<div class="txt"><h1 class="nombre">BarInventory —<br>Carbón &amp; Latón</h1><p class="lema">Un instrumento de medición, no un panel de administración.</p></div>
+</div></body></html>
