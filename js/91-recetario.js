@@ -547,7 +547,7 @@
             if (recetarioView === 'ficha' && recetarioFichaId) {
                 return _renderRecetaFicha(recetarioFichaId);
             }
-            return _renderRecetarioLista();
+            return UI.cabecera('Recetario', 'Recetas con sus insumos y su costo.') + _renderRecetarioLista();
         }
         window.renderRecetarioTab = renderRecetarioTab;
 

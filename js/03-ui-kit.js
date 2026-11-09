@@ -348,6 +348,23 @@
             }
 
             /** UI.seccion('Existencias en alerta', derechaHtml) → encabezado de sección. */
+            /**
+             * UI.cabecera(titulo, descripcion, { volver, volverEtiqueta })
+             * El encabezado de toda ventana: título, descripción breve y, si es una
+             * pantalla interior, el botón Volver (clase mc-cab__volver: es el que
+             * pulsa Atrás de Android, ver js/98). `volver` es código de onclick.
+             */
+            function cabecera(titulo, descripcion, opciones) {
+                opciones = opciones || {};
+                var h = '<header class="pg-cab">';
+                if (opciones.volver) {
+                    h += '<button type="button" class="mc-cab__volver" onclick="' + opciones.volver + '" aria-label="'
+                       + esc(opciones.volverEtiqueta || 'Volver') + '"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i></button>';
+                }
+                h += '<div class="pg-cab__txt"><h1 class="pg-cab__tit">' + esc(titulo) + '</h1>';
+                if (descripcion) h += '<p class="pg-cab__desc">' + esc(descripcion) + '</p>';
+                return h + '</div></header>';
+            }
             function seccion(titulo, derecha) {
                 var h = '<div class="bi-seccion">';
                 h += '<span class="bi-seccion__titulo">' + esc(titulo) + '</span>';
@@ -368,7 +385,8 @@
                 kpi: kpi,
                 field: field,
                 stepper: stepper,
-                seccion: seccion
+                seccion: seccion,
+                cabecera: cabecera
             };
         })();
 

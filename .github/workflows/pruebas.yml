@@ -103,8 +103,13 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - name: Descargar el código
+      # Historial completo: prueba-v533-blindaje-navegador.js extrae la copia real
+      # de v5.32 con `git archive <commit>`. Con el checkout superficial por defecto
+      # ese commit no existe en el runner y la prueba queda NO VERIFICADA (sale con 3).
+      - name: Descargar el código (historial completo)
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Preparar Node
         uses: actions/setup-node@v4

@@ -224,9 +224,9 @@ const PUERTO = process.env.PUERTO || '8080';
   chk('★ Productos, Recetario, Ventas e Inicio ya no tienen botones de importar',
       Object.values(sinBotones).every(x => x === ''), JSON.stringify(sinBotones).slice(0, 300));
   await p.evaluate(() => __ir('compras')); await p.waitForTimeout(200);
-  chk('★ v5.41 · Compras SÍ tiene «Importar Excel» (≥ 44 px) y es el único botón de importar de la pestaña',
+  chk('★ v5.41 · Compras SÍ tiene «Importar archivo» (≥ 44 px) y es el único botón de importar de la pestaña',
       await p.evaluate(() => { const bs = [...document.querySelectorAll('#tabContent button')].filter(b => b.offsetParent && /Importar/.test(b.innerText));
-        return bs.length === 1 && /Importar Excel/.test(bs[0].innerText) && bs[0].getBoundingClientRect().height >= 44; }));
+        return bs.length === 1 && /Importar archivo/.test(bs[0].innerText) && bs[0].getBoundingClientRect().height >= 44; }));
 
   // ═══ 6 · Compras: la tarjeta abre los productos del proveedor ═════════════
   await p.evaluate(() => {

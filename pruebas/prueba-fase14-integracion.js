@@ -184,6 +184,7 @@ function montarExistencia(db, productos, recetasLista) {
     deps.window = deps;
     const cuerpo = leer('js/15-ciclo-semanal.js') + '\n' + leer('js/46-arrastre.js') + '\n' +
                    extraerFuncion('js/88-compras.js', '_asientosDesdeCompra') + '\n' +
+                   extraerFuncion('js/88-compras.js', 'compraCancelada') + '\n' +
                    extraerFuncion('js/93-ventas.js', '_ventasPeriodoDeDoc') + '\n' +
                    leer('js/48-consumo-teorico.js') + '\n' + leer('js/47-existencia.js');
     return new Function('deps', 'with (deps) {\n' + cuerpo + '\n; return { cargar: existenciaCargarInicial, ' +
@@ -452,7 +453,12 @@ async function main() {
         teq.valor === 4.1 && teq.entradas === 2 && teq.ventas === 0.9 && teq.origen === 'oficial', JSON.stringify(teq));
     const lim = E.oficial(prods[1]);
     chk('Z6 · otro insumo de la misma receta (2 − 15×0.02 = 1.7)', lim.valor === 1.7, JSON.stringify(lim));
-    chk('Z6 · un producto fuera del corte usa el respaldo operativo', E.oficial(prods[2]).valor === 6 && E.oficial(prods[2]).origen === 'operativo_no_reconciliado');
+    // v5.40 (REGLA DE EDUARDO, 6-nov-2026): con un corte vigente, un producto que no está en él
+    // tiene inicial 0 y Total = compras − ventas (origen 'oficial'). El respaldo operativo ya no aplica.
+    // Esta aserción seguía esperando el comportamiento anterior a v5.40.
+    chk('Z6 · producto fuera del corte: inicial 0 y Total = compras − ventas (regla v5.40)',
+        E.oficial(prods[2]).origen === 'oficial' && E.oficial(prods[2]).valor === 0 && E.oficial(prods[2]).inicialCero === true,
+        JSON.stringify(E.oficial(prods[2])));
     const res = E.resumen();
     chk('Z6 · el resumen reporta los días de ventas que faltan desde el corte',
         res && res.diasEsperados === 8 && res.diasFaltantes.length === 6 && res.periodosIncluidos === 2, JSON.stringify(res));

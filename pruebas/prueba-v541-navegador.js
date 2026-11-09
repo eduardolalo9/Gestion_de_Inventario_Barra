@@ -55,14 +55,14 @@ const listo = (p) => p.waitForFunction(() => _comprasRangoCache.estado !== 'carg
   await p.evaluate(MONTAJE, ['*']); await p.waitForTimeout(300);
 
   // ═══ 1 · Importar Excel ═══
-  const btn = await p.evaluate(() => { const b = [...document.querySelectorAll('.cp-acciones button')].find(x => /Importar Excel/.test(x.textContent)); const r = b && b.getBoundingClientRect();
+  const btn = await p.evaluate(() => { const b = [...document.querySelectorAll('.cp-acciones button')].find(x => /Importar archivo/.test(x.textContent)); const r = b && b.getBoundingClientRect();
     return b ? { alto: Math.round(r.height), der: r.right, ico: !!b.querySelector('.fa-file-excel'), ancho: Math.round(getComputedStyle(b.querySelector('i'), '::before').width.replace('px', '')) || 1 } : null; });
-  chk('★ Compras muestra «Importar Excel» con su icono, ≥ 44 px y dentro de la pantalla', btn && btn.alto >= 44 && btn.der <= 390 && btn.ico, JSON.stringify(btn));
+  chk('★ Compras muestra «Importar archivo» con su icono, ≥ 44 px y dentro de la pantalla', btn && btn.alto >= 44 && btn.der <= 390 && btn.ico, JSON.stringify(btn));
   const disparo = await p.evaluate(() => { let id = null; const o = HTMLInputElement.prototype.click; HTMLInputElement.prototype.click = function() { id = this.id; };
-    try { [...document.querySelectorAll('.cp-acciones button')].find(x => /Importar Excel/.test(x.textContent)).click(); } finally { HTMLInputElement.prototype.click = o; } return id; });
+    try { [...document.querySelectorAll('.cp-acciones button')].find(x => /Importar archivo/.test(x.textContent)).click(); } finally { HTMLInputElement.prototype.click = o; } return id; });
   chk('★ El botón abre el selector de archivos de COMPRAS (#fileInputCompras), el mismo flujo de siempre', disparo === 'fileInputCompras', String(disparo));
   await p.evaluate(MONTAJE, ['purchases.read', 'purchases.create']); await p.waitForTimeout(200);
-  chk('★ Sin purchases.import el botón no aparece (pero «Capturar a mano» sí, con su permiso)', await p.evaluate(() => !/Importar Excel/.test(document.querySelector('.cp-acciones').innerText) && /Capturar a mano/.test(document.querySelector('.cp-acciones').innerText)));
+  chk('★ Sin purchases.import el botón no aparece (pero «Captura manual» sí, con su permiso)', await p.evaluate(() => !/Importar archivo/.test(document.querySelector('.cp-acciones').innerText) && /Captura manual/.test(document.querySelector('.cp-acciones').innerText)));
   await p.evaluate(MONTAJE, ['*']); await p.waitForTimeout(200);
 
   // ═══ 2 · Resumen sin rango ═══

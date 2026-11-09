@@ -186,8 +186,8 @@ chk('★ El encabezado ya no importa: sin "Importar Excel" (catálogo/recetario)
 chk('★ Inicio ya no tiene el botón "Excel" que importaba sin validar', !/onclick="document\.getElementById\(\\'fileInput\\'\)\.click\(\)"/.test(r70));
 // v5.41 — Eduardo (6-nov-2026) pidió el botón de vuelta en Compras: ahora con la etiqueta corta «Importar Excel»,
 // solo con purchases.import, y el módulo Importar desde Excel (menú Más) sigue siendo la otra entrada al mismo flujo.
-chk('★ v5.41 · Compras tiene «Importar Excel» (solo con purchases.import) y NO la etiqueta vieja «Importar entrada de mercancía»',
-    !/Importar entrada de mercancía<\/button>/.test(comp) && /hasPermission\('purchases\.import'\)\) \{\s*html \+= '<button[^']*onclick="comprasImportarExcel\(\)"/.test(comp) && />\s*Importar Excel<\/button>/.test(comp));
+chk('★ v5.41 · Compras tiene «Importar archivo» (solo con purchases.import, secundaria) y NO la etiqueta vieja «Importar entrada de mercancía»',
+    !/Importar entrada de mercancía<\/button>/.test(comp) && /hasPermission\('purchases\.import'\)\) \{\s*html \+= '<button[^']*onclick="comprasImportarExcel\(\)"/.test(comp) && />\s*Importar archivo<\/button>/.test(comp));
 chk('El menú tiene "Importar desde Excel" y renderTab conoce la pestaña', /data-sb-tab="importar"[\s\S]{0,400}Importar desde Excel/.test(html) && /case 'importar':/.test(r70));
 chk('index.html declara el input #impArchivo (xlsx, xls, csv)', /id="impArchivo" accept="\.xlsx,\.xls,\.csv"/.test(html));
 

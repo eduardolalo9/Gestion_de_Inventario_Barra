@@ -155,13 +155,15 @@ const PUERTO = process.env.PUERTO || '8080';
     const crear = q('#nuevoInvBtnCrear'), cancelar = [...document.querySelectorAll('#nuevoInventarioModal button')].find(b => /Cancelar/.test(b.innerText)).getBoundingClientRect();
     return {
       crear: [crear.height, crear.width], cancelar: [cancelar.height, cancelar.width],
-      apilados: cancelar.top >= crear.bottom, hueco: Math.round(cancelar.top - crear.bottom),
+      lado: cancelar.right <= crear.left + 2 && Math.abs(cancelar.top - crear.top) < 4, hueco: Math.round(crear.left - cancelar.right),
       campos: [...document.querySelectorAll('#nuevoInventarioModal .ni-campo input[type="text"], #nuevoInventarioModal .ni-campo input[type="date"]')].map(i => Math.round(i.getBoundingClientRect().height)),
       areas: [...document.querySelectorAll('#nuevoInventarioModal .ni-area')].map(a => Math.round(a.getBoundingClientRect().height)),
       fsCampo: parseFloat(getComputedStyle(document.getElementById('nuevoInvNombre')).fontSize)
     };
   });
-  chk('★ Modal: "Crear" y "Cancelar" apilados, a lo ancho, con separación', modal.apilados && modal.hueco >= 8 && modal.crear[1] > 280 && modal.cancelar[1] > 280, JSON.stringify(modal));
+  // Rediseño de ventanas (nov-2026): en todos los modales el pie es «Cancelar | acción principal», lado a lado
+  // y fijo abajo (antes: apilados). El pulgar encuentra siempre la acción principal en el mismo sitio.
+  chk('★ Modal: «Cancelar» a la izquierda y «Crear» a la derecha, en la misma fila y con separación', modal.lado && modal.hueco >= 8 && modal.crear[1] >= 120 && modal.cancelar[1] >= 100, JSON.stringify(modal));
   chk('Modal: botones de al menos 44 px', modal.crear[0] >= 44 && modal.cancelar[0] >= 44, JSON.stringify(modal));
   chk('Modal: campos de al menos 44 px con texto ≥ 16 px (el teclado del celular no hace zoom)', modal.campos.every(h => h >= 44) && modal.fsCampo >= 16, JSON.stringify(modal));
   chk('Modal: cada área es una fila de al menos 56 px que se marca tocándola completa', modal.areas.length === 3 && modal.areas.every(h => h >= 56), JSON.stringify(modal.areas));

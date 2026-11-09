@@ -1971,6 +1971,7 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
         // ── RENDER: AJUSTES ────────────────────────────────────────────────
         function renderAjustesTab() {
             let html = '<div class="max-w-2xl mx-auto">';
+            html += UI.cabecera('Ajustes', isAdmin() ? 'Áreas de conteo y ajustes de producto.' : 'Solicita ajustes de producto y consulta su estado.');
 
             // R6: la administracion de areas de conteo vive aqui, y solo para
             // el admin. La funcion devuelve cadena vacia si no lo es.
@@ -2678,6 +2679,7 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
             if (_adminSubvista === 'permisos') return renderUsuariosPermisosTab();
             const pendAjustes = _ajustes.filter(function(a) { return a.estado === 'pendiente'; }).length;
             let html = '<div class="max-w-2xl mx-auto">';
+            html += UI.cabecera('Administración', 'Usuarios, permisos y publicación de datos.');
             html += '<div class="adm-card">';
             html += '<h3><i class="fa-solid fa-user-shield" aria-hidden="true"></i> Panel de Administración</h3>';
             html += '<div class="adm-stat"><span>Productos en catálogo</span><b>' + products.length + '</b></div>';

@@ -55,7 +55,10 @@ const PRUEBAS = [
     'prueba-redis-r6-navegador.js',     // REDISEÑO R6 — la ficha de producto (#productModal) en pantalla
     'prueba-redis-r7-navegador.js',     // REDISEÑO R7 — Recetario y los modales pendientes, en pantalla
     'prueba-recetario-buscador-unificado-navegador.js', // Recetario — mismo buscador que Inicio: typos, tildes, PV, paginación, teclado
-    'prueba-redis-r7b-navegador.js',    // REDISEÑO R7b — Compras (y Pedidos, revisado), en pantalla
+    'prueba-redis-r7b-navegador.js',
+    'prueba-inicio-operacion-navegador.js', // Inicio · tarjetas de Operación compactas 2×2 (6 anchos × 2 temas)
+    'prueba-compras-rediseno-navegador.js', // REDISEÑO DE VENTANAS — Compras y captura manual (4 anchos × 2 temas)
+    'prueba-staging-aislado-navegador.js', // STAGING — build de pruebas en modo local, sin Firebase    // REDISEÑO R7b — Compras (y Pedidos, revisado), en pantalla
     'prueba-redis-r7c-navegador.js',    // REDISEÑO R7c — Ventas, en pantalla (oscuro y claro)
     'prueba-redis-r7d-navegador.js',    // REDISEÑO R7d — Historia, Notificaciones, Ajustes, Admin y Roles (oscuro y claro)
     'prueba-redis-r8-navegador.js',     // REDISEÑO R8 — desborde, contraste, nombres, táctil y rendimiento (3 anchos × 2 temas)

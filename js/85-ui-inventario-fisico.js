@@ -1244,7 +1244,7 @@
             const lim = BusquedaUI.limite('conteo');
             let html = '';
             html += BusquedaUI.resumen('conteo', r.coincidencias, r.total, 'producto', 'productos');
-            html += '<div class="flex flex-col gap-3">';
+            html += '<div class="flex flex-col gap-3 inv-card-list">';
 
             if (filteredProducts.length === 0) {
                 html += BusquedaUI.vacio('conteo', 'productos');
@@ -1611,7 +1611,7 @@
         }
 
         function renderHistoriaTab() {
-            let html = '';
+            let html = UI.cabecera('Historial', 'Reportes publicados y conteos anteriores.');
 
             // ── Sección: Reportes publicados por admin (visible para todos) ──
             html += '<div id="historiaReportesWrap" class="hs-seccion">';
@@ -1899,7 +1899,7 @@
             modal.classList.remove('hidden');
             document.body.classList.add('modal-open');
             setTimeout(() => {
-                const firstInput = modal.querySelector('input, select, button');
+                const firstInput = modal.querySelector('input, select') || modal.querySelector('button');
                 if (firstInput) firstInput.focus();
             }, 50);
             // Focus trap
@@ -2276,7 +2276,7 @@
             document.body.classList.add('modal-open');
             renderOrderTable();
             setTimeout(() => {
-                const firstInput = modal.querySelector('input, select, textarea, button');
+                const firstInput = modal.querySelector('input, select, textarea') || modal.querySelector('button');
                 if (firstInput) firstInput.focus();
             }, 50);
             modal._trapHandler = function(e) {

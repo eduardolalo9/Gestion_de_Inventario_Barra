@@ -139,9 +139,9 @@ html[data-theme="light"] .bt { border-radius: var(--d-radio-sm); }
 .bi-badge__punto { width: 5px; height: 5px; }
 
 /* ── Tarjetas en general: borde fino, sin sombra, radio 10 ──────────────── */
-.prd-card, .inv-card, .ps-card, .it-alerta, .it-pedido, .it-modulo, .pm-tile, .if-card, .adm-card, .eq-card, .vs-kpi, .vs-top, .vs-dias,
+.prd-card, .inv-card, .ps-card, .it-alerta, .it-pedido, .pm-tile, .if-card, .adm-card, .eq-card, .vs-kpi, .vs-top, .vs-dias,
 .bi-card, .imp-sec, .rc-card, .sync-card, .inv-total, .audit-area-card,
-html[data-theme] :is(.it-alerta, .it-pedido, .it-modulo, .pm-tile, .prd-card, .if-card, .adm-card, .eq-card, .ps-card, .vs-kpi, .vs-top, .vs-dias, .bi-card, .imp-sec, .rc-card, .sync-card) {
+html[data-theme] :is(.it-alerta, .it-pedido, .pm-tile, .prd-card, .if-card, .adm-card, .eq-card, .ps-card, .vs-kpi, .vs-top, .vs-dias, .bi-card, .imp-sec, .rc-card, .sync-card) {
     border-radius: var(--d-radio); box-shadow: none !important; border: 1px solid var(--border);
 }
 .inv-card:active, .prd-card:active { transform: none; }
@@ -242,7 +242,6 @@ html[data-theme] :is(.it-alerta, .it-pedido, .it-modulo, .pm-tile, .prd-card, .i
 .it-alerta__t { font-size: var(--d-fs-etq); text-transform: uppercase; letter-spacing: .06em; }
 .it-pedido { padding: 8px 10px; gap: 8px; }
 .it-pedido__t { font-size: var(--d-fs); }
-.it-modulo { min-height: 64px; padding: 10px; gap: 2px; }
 .pm-tiles { gap: 6px; }
 .pm-tile { padding: 8px 10px; }
 .pm-tile__val { font-size: 1.125rem; font-weight: 600; margin-top: 2px; }
@@ -339,11 +338,6 @@ input:not([type="checkbox"]):not([type="radio"]):not(.sbx__input):not(.ps-input)
 
 /* Títulos que otras capas inflaron */
 html body .if-card__titulo { font-size: var(--d-fs-tit) !important; line-height: 1.25; }
-html body .it-modulo { min-height: 56px; padding: 8px 10px; }
-html body .it-modulo__t { font-size: var(--d-fs); font-weight: 700; }
-html body .it-modulo__s, html body .it-modulo__sub { font-size: var(--d-fs-etq); }
-.it-modulos { gap: 6px !important; }
-html body .it-modulo__ico { font-size: .875rem; margin-bottom: 2px; }
 .bt--auto { width: auto; display: inline-flex; }
 .kpi__t { letter-spacing: .02em; }
 
@@ -551,8 +545,6 @@ th.ped-tabla__n, th.ped-tabla__c { color: var(--txt-muted); }
 .cn-pantalla { padding-bottom: 4px; }
 
 /* ── v5.41 · Compras: Importar Excel, rango de fechas de ingreso y resumen ── */
-.cp-acciones { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 8px; }
-.cp-acciones .bt { min-height: 44px; }
 .cp-rango { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; margin: 0 0 8px; }
 .cp-rango__campo { display: flex; flex-direction: column; gap: 2px; flex: 1 1 140px; min-width: 130px; }
 .cp-rango__etq { font-size: var(--d-fs-sm); font-weight: 700; color: var(--txt-secondary); text-transform: uppercase; letter-spacing: .04em; }

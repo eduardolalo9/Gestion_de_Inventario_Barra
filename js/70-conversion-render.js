@@ -835,7 +835,7 @@
 
         function renderProductosTab() {
             const admin = isAdmin();
-            let html = '';
+            let html = UI.cabecera('Productos', 'Catálogo del bar: existencias, precios y datos de cada producto.');
 
             // v5.28 — barra de acciones arriba, sin necesidad de hacer scroll.
             if (admin) html += _productosBarraAcciones();
@@ -1027,7 +1027,7 @@
             // dispositivo" era falso: 'orders' se sincroniza a Firestore vía
             // ordersChunks (ver eliminarPedido más abajo), igual que compras
             // o inventarios. "Sincronizado" es lo que realmente pasa.
-            let headerHtml = '<div style="margin-bottom:14px;"><h2 style="font-size:1.05rem;font-weight:700;color:var(--txt-primary);">Pedidos WhatsApp</h2><p style="font-size:.75rem;color:var(--txt-muted);">Sincronizado entre dispositivos</p></div>';
+            let headerHtml = UI.cabecera('Pedidos', 'Pedidos para compartir por WhatsApp. Sincronizado entre dispositivos.');
             // v5.28 — acceso directo a la pantalla Pedido Sugerido (js/73).
             headerHtml += '<button type="button" class="ps-acceso" onclick="abrirPedidoSugerido()">'
                         + '<i class="fa-solid fa-cart-shopping" aria-hidden="true"></i><span>Pedido sugerido</span><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button>';
@@ -1288,7 +1288,18 @@ document.body.appendChild(overlay);
             modal.classList.remove('hidden');
             document.body.classList.add('modal-open');
             setTimeout(() => {
-                const firstInput = modal.querySelector('input, button');
+                // ETAPA 0/4 (auditoría UX) — "modal.querySelector('input, button')"
+                // encontraba SIEMPRE el primer <input> del DOM (inv_enteras),
+                // aunque esté dentro de #inv_bloqueBotella con display:none
+                // cuando el producto es modo CANTIDAD (usaBotella=false).
+                // .focus() sobre un elemento oculto no hace nada: en modo
+                // cantidad el campo visible (inv_cantidadTotal) se quedaba
+                // sin foco y sin el autoselect de abajo. usaBotella ya se
+                // calculó arriba en esta misma función — se usa para apuntar
+                // directo al campo que SÍ está visible.
+                const firstInput = usaBotella
+                    ? document.getElementById('inv_enteras')
+                    : document.getElementById('inv_cantidadTotal');
                 if (firstInput) firstInput.focus();
             }, 50);
             modal._trapHandler = function(e) {
@@ -1299,6 +1310,20 @@ document.body.appendChild(overlay);
                 else { if (document.activeElement === last) { e.preventDefault(); first.focus(); } }
             };
             modal.addEventListener('keydown', modal._trapHandler);
+
+            // ETAPA 0/4 (auditoría UX) — los campos de cantidad siempre abren
+            // en "0": sin esto, cada toque empezaba borrando el cero a mano
+            // antes de poder escribir. Delegado en el modal (no en cada
+            // input) para cubrir también las "abiertas" que se agregan
+            // dinámicamente con addAbiertaInModal(). Solo selecciona texto:
+            // no toca el valor, el saneo (_sanearEntradaEntero/Decimal) ni
+            // nada de lo que guarda saveInventarioModal().
+            modal._selectOnFocusHandler = function(e) {
+                if (e.target && e.target.classList && e.target.classList.contains('inv-modal__num')) {
+                    e.target.select();
+                }
+            };
+            modal.addEventListener('focusin', modal._selectOnFocusHandler);
         }
 
         function renderAbiertaInput(val, idx, usaOz) {
@@ -1427,6 +1452,7 @@ document.body.appendChild(overlay);
         function closeInventarioModal() {
             const modal = document.getElementById('inventarioModal');
             if (modal._trapHandler) { modal.removeEventListener('keydown', modal._trapHandler); modal._trapHandler = null; }
+            if (modal._selectOnFocusHandler) { modal.removeEventListener('focusin', modal._selectOnFocusHandler); modal._selectOnFocusHandler = null; }
             modal.classList.add('hidden');
             document.body.classList.remove('modal-open');
             inventarioModalProductId = null;
