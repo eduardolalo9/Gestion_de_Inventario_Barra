@@ -16,6 +16,8 @@
             if (auditoriaView === 'reconteo_detalle')   return renderReconteoDetalle();
             // FASE 11B — FÍSICO VS SISTEMA (js/49-fisico-vs-sistema.js)
             if (auditoriaView === 'fisico_vs_sistema')  return renderFisicoVsSistema();
+            // v5.46 — lista de reconteo que armó administración (todos los que cuentan)
+            if (auditoriaView === 'muestreo_conteo')    return renderMuestreoConteo();
             // ── PANTALLA DE SELECCIÓN DE ÁREAS (default) ───────────────────────
             return renderAuditoriaSeleccion();
         }
@@ -764,12 +766,28 @@
             renderTab();
         }
 
-        // ── Lista de muestreo (por inventario, en este dispositivo) ──────────
+        // ── Lista de muestreo ────────────────────────────────────────────────
+        //  v5.46 — la lista vive en el DOCUMENTO del Inventario Físico abierto
+        //  (inventories/{id}, campo `muestreo`): la escucha de siempre
+        //  (_suscribirInventarioActivo, js/45) la lleva al instante a todos los
+        //  aparatos —la PC del administrador, su teléfono y los de los usuarios—.
+        //  Las reglas ya permiten que administración actualice ese documento
+        //  mientras está abierto y que cualquier cuenta activa lo lea: no hubo que
+        //  cambiar firestore.rules. Sin Firebase (modo local / staging) la lista
+        //  se queda en este dispositivo, como en v5.45.
+        //  Escrituras granulares (arrayUnion / arrayRemove / un campo por
+        //  producto): dos administradores editando a la vez no se pisan.
         var FVS_MUESTREO_LS = 'inventarioApp_fvsMuestreo';
         var FVS_MUESTREO_MAX = 300;
         var _fvsMuestreoCache = null;
+        var _fvsMuestreoMigrado = false;
 
-        function _fvsMuestreo() {
+        function _fvsMuestreoEnNube() {
+            return !!(typeof _db !== 'undefined' && _db && typeof _inventarioActivo !== 'undefined' && _inventarioActivo
+                && typeof _inventarioActivoId !== 'undefined' && _inventarioActivoId);
+        }
+
+        function _fvsMuestreoLocalLeer() {
             var inv = (typeof _auditoriaSessionId !== 'undefined' && _auditoriaSessionId) ? _auditoriaSessionId : null;
             if (_fvsMuestreoCache && _fvsMuestreoCache.inventoryId === inv) return _fvsMuestreoCache;
             var d = null;
@@ -779,37 +797,107 @@
             _fvsMuestreoCache = d;
             return d;
         }
-        function _fvsMuestreoGuardar() {
-            try { localStorage.setItem(FVS_MUESTREO_LS, JSON.stringify(_fvsMuestreoCache)); } catch (_) {}
+
+        /** La lista vigente: { inventoryId, ids, revisados, nube }. */
+        function _fvsMuestreo() {
+            if (_fvsMuestreoEnNube()) {
+                var m = _inventarioActivo.muestreo || {};
+                _fvsMuestreoMigrarLocal(m);
+                return {
+                    inventoryId: _inventarioActivoId,
+                    ids: Array.isArray(m.ids) ? m.ids.map(String) : [],
+                    revisados: (m.revisados && typeof m.revisados === 'object') ? m.revisados : {},
+                    nube: true
+                };
+            }
+            return _fvsMuestreoLocalLeer();
+        }
+
+        /** Lista armada en v5.45 (solo en este aparato) → se sube una vez al inventario. */
+        function _fvsMuestreoMigrarLocal(m) {
+            if (_fvsMuestreoMigrado || !_fvsMuestreoPuedeEditar()) return;
+            _fvsMuestreoMigrado = true;
+            var local = null;
+            try { local = JSON.parse(localStorage.getItem(FVS_MUESTREO_LS) || 'null'); } catch (_) {}
+            if (!local || local.inventoryId !== _inventarioActivoId || !Array.isArray(local.ids) || !local.ids.length) return;
+            var ya = Array.isArray(m.ids) ? m.ids.map(String) : [];
+            var faltan = local.ids.map(String).filter(function(id) { return ya.indexOf(id) === -1; });
+            try { localStorage.removeItem(FVS_MUESTREO_LS); } catch (_) {}
+            if (faltan.length) setTimeout(function() { fvsMuestreoAgregar(faltan, true); }, 0);
+        }
+
+        /** Solo administración arma la lista (las reglas solo le dejan actualizar el inventario). */
+        function _fvsMuestreoPuedeEditar() {
+            return typeof isAdmin === 'function' && isAdmin()
+                && typeof _inventarioActivo !== 'undefined' && !!_inventarioActivo
+                && typeof inventarioAbierto === 'function' && inventarioAbierto(_inventarioActivo);
+        }
+
+        function _fvsMuestreoRef() {
+            return _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID).collection('inventories').doc(String(_inventarioActivoId));
+        }
+
+        /**
+         * Aplica un cambio a la lista. `cambio(m)` modifica la copia en memoria
+         * (se ve al instante en este aparato); `campos` son los pares de
+         * update() para Firestore. Sin nube: localStorage.
+         */
+        function _fvsMuestreoCambiar(cambio, campos) {
+            if (_fvsMuestreoEnNube()) {
+                if (!_fvsMuestreoPuedeEditar()) { showNotification('⚠️ Solo administración arma la lista, con el Inventario Físico abierto'); return false; }
+                var m = _fvsMuestreo();
+                var copia = { ids: m.ids.slice(), revisados: Object.assign({}, m.revisados) };
+                cambio(copia);
+                _inventarioActivo.muestreo = Object.assign({}, _inventarioActivo.muestreo || {}, copia);
+                var FV = firebase.firestore.FieldValue;
+                var args = campos(FV, firebase.firestore.FieldPath).concat(['muestreo.actualizadoEn', Date.now(), 'muestreo.actualizadoPor', String(currentUserUid || '')]);
+                var ref = _fvsMuestreoRef();
+                ref.update.apply(ref, args).catch(function(e) {
+                    console.warn('[Muestreo] No se pudo guardar la lista:', e);
+                    showNotification('⚠️ La lista de muestreo no se pudo guardar en la nube (' + ((e && e.code) || 'error') + ')');
+                });
+                return true;
+            }
+            var l = _fvsMuestreoLocalLeer();
+            cambio(l);
+            try { localStorage.setItem(FVS_MUESTREO_LS, JSON.stringify(l)); } catch (_) {}
+            return true;
         }
 
         /** Agrega ids a la lista (sin repetir, solo productos del catálogo). → cuántos entraron. */
-        function fvsMuestreoAgregar(ids) {
-            var m = _fvsMuestreo(), n = 0;
+        function fvsMuestreoAgregar(ids, silencioso) {
+            var m = _fvsMuestreo(), nuevos = [];
             (ids || []).forEach(function(id) {
                 id = String(id);
-                if (m.ids.length >= FVS_MUESTREO_MAX || m.ids.indexOf(id) !== -1) return;
+                if (m.ids.length + nuevos.length >= FVS_MUESTREO_MAX || m.ids.indexOf(id) !== -1 || nuevos.indexOf(id) !== -1) return;
                 if (!products.some(function(p) { return String(p.id) === id; })) return;
-                m.ids.push(id); n++;
+                nuevos.push(id);
             });
-            if (n) _fvsMuestreoGuardar();
-            return n;
+            if (!nuevos.length) return 0;
+            var ok = _fvsMuestreoCambiar(function(x) { x.ids = x.ids.concat(nuevos); },
+                function(FV) { return ['muestreo.ids', FV.arrayUnion.apply(FV, nuevos)]; });
+            if (ok && silencioso && typeof renderTab === 'function') renderTab();
+            return ok ? nuevos.length : 0;
         }
         function fvsMuestreoQuitar(id) {
-            var m = _fvsMuestreo();
-            m.ids = m.ids.filter(function(x) { return x !== id; });
-            delete m.revisados[id];
-            _fvsMuestreoGuardar();
+            id = String(id);
+            _fvsMuestreoCambiar(function(x) { x.ids = x.ids.filter(function(k) { return k !== id; }); delete x.revisados[id]; },
+                function(FV, FP) { return ['muestreo.ids', FV.arrayRemove(id), new FP('muestreo', 'revisados', id), FV.delete()]; });
             renderTab();
         }
         function fvsMuestreoRevisado(id) {
-            var m = _fvsMuestreo();
-            if (m.revisados[id]) delete m.revisados[id]; else m.revisados[id] = Date.now();
-            _fvsMuestreoGuardar();
+            id = String(id);
+            var marcar = !_fvsMuestreo().revisados[id], ts = Date.now();
+            _fvsMuestreoCambiar(function(x) { if (marcar) x.revisados[id] = ts; else delete x.revisados[id]; },
+                function(FV, FP) { return [new FP('muestreo', 'revisados', id), marcar ? ts : FV.delete()]; });
             renderTab();
         }
         function fvsMuestreoVaciar() {
-            var vaciar = function() { var m = _fvsMuestreo(); m.ids = []; m.revisados = {}; _fvsMuestreoGuardar(); renderTab(); };
+            var vaciar = function() {
+                _fvsMuestreoCambiar(function(x) { x.ids = []; x.revisados = {}; },
+                    function() { return ['muestreo.ids', [], 'muestreo.revisados', {}]; });
+                renderTab();
+            };
             if (typeof showConfirm === 'function') showConfirm('¿Vaciar la lista de muestreo?\n\nSolo se quita la lista; los conteos no cambian.', vaciar);
             else vaciar();
         }
@@ -820,6 +908,122 @@
             showNotification(k ? 'Muestra aleatoria: ' + k + ' producto' + (k === 1 ? '' : 's') + ' agregado' + (k === 1 ? '' : 's') : 'No quedan productos por agregar');
             _fvsVista.tab = 'muestreo';
             renderTab();
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        //  v5.46 — LISTA DE RECONTEO PARA EL EQUIPO
+        //  Lo que administración agrega al muestreo aparece a TODOS los que
+        //  cuentan (Conteo → «Lista de reconteo»), y cada quien puede volver a
+        //  contar esos productos aunque ya haya finalizado su área: la lista es
+        //  la autorización. Se respeta el conteo ciego: cada persona ve solo SU
+        //  conteo (ni lo de otros ni el «Sistema»). La corrección se guarda como
+        //  su conteo de siempre (myAuditoriaConteo + sync) con la marca
+        //  _muestreo. En la consolidación manda la regla de siempre: el conteo
+        //  de administración gana; si no hay, el más reciente.
+        // ══════════════════════════════════════════════════════════════════
+
+        function _muestreoConteoIds() {
+            if (typeof _inventarioActivo === 'undefined' || !_inventarioActivo || typeof inventarioAbierto !== 'function' || !inventarioAbierto(_inventarioActivo)) return [];
+            var m = _fvsMuestreo();
+            return m.ids.filter(function(id) { return products.some(function(p) { return String(p.id) === id; }); });
+        }
+        function _muestreoConteoPuede() {
+            return typeof hasPermission === 'function' && hasPermission('inventory.count');
+        }
+
+        function _muestreoConteoTarjetaHtml() {
+            var ids = _muestreoConteoIds();
+            if (!ids.length || !_muestreoConteoPuede()) return '';
+            return '<button type="button" class="mc-tarjeta" onclick="auditoriaView=\'muestreo_conteo\'; renderTab();">'
+                 + '<span class="mc-tarjeta__ico"><i class="fa-solid fa-clipboard-list" aria-hidden="true"></i></span>'
+                 + '<span class="mc-tarjeta__txt"><b>Lista de reconteo</b><span>' + ids.length + ' producto' + (ids.length === 1 ? '' : 's')
+                 + ' por volver a contar</span></span><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button>';
+        }
+
+        /** Lo que ESTA persona contó de un producto en un área (o null). */
+        function _muestreoMiRegistro(pid, area) {
+            var d = (typeof myAuditoriaConteo !== 'undefined' && myAuditoriaConteo[pid]) ? myAuditoriaConteo[pid][area] : null;
+            return d || null;
+        }
+        function _muestreoTotal(p, reg) {
+            if (!reg) return null;
+            var t = reg.enteras || 0, botella = _fvsUsaBotella(p);
+            (reg.abiertas || []).forEach(function(v) { t += botella ? convertirOzAPuntos(v, p.capacidadMl, p.pesoBotellaLlenaOz) : (v || 0); });
+            return Math.round(t * 1000) / 1000;
+        }
+
+        function renderMuestreoConteo() {
+            var ids = _muestreoConteoIds();
+            var areasL = _fvsAreasLista();
+            var m = _fvsMuestreo();
+            var h = '<div class="audit-screen">'
+                  + UI.cabecera('Lista de reconteo', 'Administración pidió volver a contar estos productos. Tu corrección se guarda como tu conteo.',
+                                { volver: 'auditoriaView=\'selection\'; renderTab();', volverEtiqueta: 'Volver a Conteo' });
+            if (!_muestreoConteoPuede()) return h + '<p class="fvs-mu__vacio">No tienes permiso para contar.</p></div>';
+            if (!ids.length) return h + '<p class="fvs-mu__vacio">No hay productos por volver a contar.</p></div>';
+            h += '<div class="fvs-mu">';
+            ids.forEach(function(id) {
+                var p = products.find(function(x) { return String(x.id) === id; });
+                var hecho = !!m.revisados[id];
+                h += '<article class="fvs-mu__item' + (hecho ? ' fvs-mu__item--hecho' : '') + '">';
+                h += '<div class="fvs-mu__cab"><div class="fvs-mu__nomw"><span class="fvs-mu__nom">' + escapeHtml(p.name || id) + '</span>'
+                   + '<span class="fvs-mu__sub">' + escapeHtml(id) + (p.unit ? ' · ' + escapeHtml(p.unit) : '') + ' · ' + escapeHtml(p.group || 'General') + '</span></div>'
+                   + (hecho ? '<span class="fvs-badge fvs-badge--ok"><i class="fa-solid fa-check" aria-hidden="true"></i> Revisado</span>' : '') + '</div>';
+                h += '<div class="fvs-mu__areas">';
+                areasL.forEach(function(area) {
+                    var reg = _muestreoMiRegistro(id, area), tot = _muestreoTotal(p, reg);
+                    h += '<div class="fvs-mu__area"><span class="fvs-mu__aetq">' + escapeHtml(_fvsEtiquetaArea(area)) + '</span>'
+                       + '<button type="button" class="fvs-t__celda" data-mc-accion="contar" data-mc-pid="' + escapeHtml(id) + '" data-mc-area="' + escapeHtml(area) + '"'
+                       + ' aria-label="Volver a contar ' + escapeHtml(p.name || id) + ' en ' + escapeHtml(_fvsEtiquetaArea(area)) + '">'
+                       + '<span class="fvs-t__val num">' + (tot === null ? '—' : _fvsFmtCant(p, tot)) + '</span>'
+                       + '<span class="fvs-t__det">' + (reg ? escapeHtml(_fvsDesglose(p, reg)) : 'sin contar') + '</span>'
+                       + '<i class="fa-solid fa-pen fvs-t__lapiz" aria-hidden="true"></i></button></div>';
+                });
+                h += '</div></article>';
+            });
+            return h + '</div></div>';
+        }
+
+        /** Abre el modal de conteo de siempre para volver a contar un producto de la lista. */
+        function muestreoContar(pid, area) {
+            if (_muestreoConteoIds().indexOf(String(pid)) === -1) { showNotification('⚠️ Ese producto ya no está en la lista de reconteo'); return; }
+            if (!_muestreoConteoPuede()) { showNotification('⚠️ No tienes permiso para contar'); return; }
+            var reg = _muestreoMiRegistro(pid, area);
+            var valor = reg ? { enteras: reg.enteras || 0, abiertas: (reg.abiertas || []).slice() } : { enteras: 0, abiertas: [] };
+            openInventarioModal(pid, { fvs: { area: area, valor: valor, usuario: true } });
+        }
+
+        /** Lo llama saveInventarioModal (valores ya validados igual que un conteo normal). */
+        function muestreoAplicarConteoUsuario(pid, area, enteras, abiertas) {
+            if (_muestreoConteoIds().indexOf(String(pid)) === -1) { showNotification('⚠️ El inventario ya no está abierto o el producto salió de la lista: no se guardó'); return; }
+            var antes = _muestreoMiRegistro(pid, area);
+            var nuevo = { enteras: enteras, abiertas: (abiertas || []).slice() };
+            if (antes && _fvsMismoConteo(antes, nuevo)) { showNotification('Sin cambios: coincide con lo que contaste'); return; }
+            var ts = Date.now();
+            if (!myAuditoriaConteo[pid]) myAuditoriaConteo[pid] = {};
+            myAuditoriaConteo[pid][area] = { enteras: nuevo.enteras, abiertas: nuevo.abiertas, _ts: ts, _muestreo: true };
+            // Estructura multiusuario, igual que el guardado normal del conteo.
+            var cu = (typeof auditCurrentUser !== 'undefined' && auditCurrentUser) ? auditCurrentUser : { userId: currentUserUid || 'local', userName: 'Local' };
+            if (typeof auditoriaConteoPorUsuario !== 'undefined') {
+                if (!auditoriaConteoPorUsuario[pid]) auditoriaConteoPorUsuario[pid] = {};
+                if (!auditoriaConteoPorUsuario[pid][area]) auditoriaConteoPorUsuario[pid][area] = {};
+                auditoriaConteoPorUsuario[pid][area][cu.userId] = { userId: cu.userId, userName: cu.userName, enteras: nuevo.enteras, abiertas: nuevo.abiertas.slice(), ts: ts };
+            }
+            saveToLocalStorage();
+            var p = products.find(function(x) { return String(x.id) === String(pid); });
+            showNotification('✅ Reconteo guardado: ' + ((p && p.name) || pid) + ' en ' + _fvsEtiquetaArea(area));
+            if (typeof _db !== 'undefined' && _db && navigator.onLine && typeof syncMyAuditoriaToFirestore === 'function') {
+                syncMyAuditoriaToFirestore().catch(function(e) { console.warn('[Muestreo] Sync del reconteo:', e); });
+            }
+            renderTab();
+        }
+
+        if (typeof document !== 'undefined' && document.addEventListener) {
+            document.addEventListener('click', function(e) {
+                var el = e.target && e.target.closest ? e.target.closest('[data-mc-accion="contar"]') : null;
+                if (!el || el.disabled) return;
+                muestreoContar(el.getAttribute('data-mc-pid'), el.getAttribute('data-mc-area'));
+            });
         }
 
         // ── Selección múltiple y barra flotante ──────────────────────────────
@@ -920,10 +1124,13 @@
             datos.filas.forEach(function(f) { porId[f.id] = f; });
             var ids = m.ids.filter(function(id) { return porId[id]; });
             var rev = ids.filter(function(id) { return m.revisados[id]; }).length;
+            // v5.46 — con la lista en la nube solo administración la modifica.
+            var gestiona = !m.nube || _fvsMuestreoPuedeEditar();
             var h = '<div class="fvs-mu" id="fvsPanel" role="tabpanel" aria-labelledby="fvsTab-muestreo">';
-            h += '<div class="fvs-mu__barra"><span class="fvs-mu__prog"><b class="num">' + rev + '</b> de <b class="num">' + ids.length + '</b> revisados</span>'
-               + '<button type="button" class="fvs-ctl__btn" onclick="fvsMuestreoAleatoria(5)"><i class="fa-solid fa-plus" aria-hidden="true"></i><span>Muestra aleatoria (5)</span></button>'
-               + (ids.length ? '<button type="button" class="fvs-ctl__btn fvs-ctl__btn--ghost" onclick="fvsMuestreoVaciar()"><i class="fa-solid fa-trash" aria-hidden="true"></i><span>Vaciar</span></button>' : '')
+            h += '<div class="fvs-mu__barra"><span class="fvs-mu__prog"><b class="num">' + rev + '</b> de <b class="num">' + ids.length + '</b> revisados'
+               + (m.nube ? ' · <i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i> compartida con el equipo' : '') + '</span>'
+               + (gestiona ? '<button type="button" class="fvs-ctl__btn" onclick="fvsMuestreoAleatoria(5)"><i class="fa-solid fa-plus" aria-hidden="true"></i><span>Muestra aleatoria (5)</span></button>' : '')
+               + (gestiona && ids.length ? '<button type="button" class="fvs-ctl__btn fvs-ctl__btn--ghost" onclick="fvsMuestreoVaciar()"><i class="fa-solid fa-trash" aria-hidden="true"></i><span>Vaciar</span></button>' : '')
                + '</div>';
             if (!ids.length) {
                 return h + '<p class="fvs-mu__vacio">Lista vacía. En <b>Comparativo</b> marca productos y toca «Agregar a muestreo», o pide una muestra aleatoria.</p></div>';
@@ -952,10 +1159,13 @@
                 h += '</div>';
                 h += '<div class="fvs-mu__pie"><span class="fvs-mu__cif">Físico <b class="num">' + _fvsNum(f.fisico) + '</b> · Sistema <b class="num">' + _fvsNum(f.sistema)
                    + '</b> · <b class="num fvs-t__dif--' + tono + '">' + _fvsMoneda(f.neto) + '</b></span>'
-                   + '<span class="fvs-mu__acc"><button type="button" class="fvs-mu__btn' + (hecho ? ' fvs-mu__btn--on' : '') + '" data-fvs-accion="mu-revisado" data-fvs-pid="' + escapeHtml(String(f.id)) + '"'
-                   + ' aria-pressed="' + (hecho ? 'true' : 'false') + '"><i class="fa-solid fa-check" aria-hidden="true"></i> ' + (hecho ? 'Revisado' : 'Marcar revisado') + '</button>'
-                   + '<button type="button" class="fvs-mu__btn fvs-mu__btn--ico" data-fvs-accion="mu-quitar" data-fvs-pid="' + escapeHtml(String(f.id)) + '"'
-                   + ' aria-label="Quitar ' + escapeHtml(f.nombre) + ' de la lista"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></span></div>';
+                   + (gestiona
+                      ? '<span class="fvs-mu__acc"><button type="button" class="fvs-mu__btn' + (hecho ? ' fvs-mu__btn--on' : '') + '" data-fvs-accion="mu-revisado" data-fvs-pid="' + escapeHtml(String(f.id)) + '"'
+                        + ' aria-pressed="' + (hecho ? 'true' : 'false') + '"><i class="fa-solid fa-check" aria-hidden="true"></i> ' + (hecho ? 'Revisado' : 'Marcar revisado') + '</button>'
+                        + '<button type="button" class="fvs-mu__btn fvs-mu__btn--ico" data-fvs-accion="mu-quitar" data-fvs-pid="' + escapeHtml(String(f.id)) + '"'
+                        + ' aria-label="Quitar ' + escapeHtml(f.nombre) + ' de la lista"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></span>'
+                      : (hecho ? '<span class="fvs-mu__btn fvs-mu__btn--on"><i class="fa-solid fa-check" aria-hidden="true"></i> Revisado</span>' : ''))
+                   + '</div>';
                 h += '</article>';
             });
             return h + '</div>';
@@ -1226,6 +1436,7 @@
 
             // ── 1-3. Estado, datos y acciones del Inventario Físico ─────────
             html += _renderInventarioFisicoHeader();
+            html += _muestreoConteoTarjetaHtml();
 
             // ── Avance de las áreas ─────────────────────────────────────────
             // FASE 10B: aquí había un segundo "Nuevo Inventario Físico" (o un

@@ -100,7 +100,9 @@ function rutaXlsxLocal() {
 
   // ── utilidades ───────────────────────────────────────────────────────────
   const foto = () => p.evaluate(() => JSON.stringify({ products, compras, movimientos, inventarioConteo,
-    ls: Object.keys(localStorage).filter(k => !/theme|ultima|_ts$|Sync|sesion/i.test(k)).sort().map(k => [k, localStorage.getItem(k)]) }));
+    // v5.46 — se excluye también el diagnóstico de rendimiento (diagReanudar): lo escribe la app
+    // sola 15 s después de abrir o volver, no es un dato del negocio ni lo toca exportar.
+    ls: Object.keys(localStorage).filter(k => !/theme|ultima|_ts$|Sync|sesion|diagReanudar/i.test(k)).sort().map(k => [k, localStorage.getItem(k)]) }));
   const leerXlsx = async (dl) => {
     const b64 = fs.readFileSync(await dl.path()).toString('base64');
     return p.evaluate((b64) => {

@@ -2742,6 +2742,8 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
             html += '<h3><i class="fa-solid fa-file-chart-column" aria-hidden="true"></i> Reportes publicados</h3>';
             html += '<div id="adminReportesList"><p class="ui-nota"><i class="fa-solid fa-hourglass" aria-hidden="true"></i> Cargando reportes…</p></div>';
             html += '</div>';
+            // v5.46 — diagnóstico de «se congela al volver a la app» (js/99).
+            if (typeof diagnosticoReanudarHtml === 'function') html += diagnosticoReanudarHtml();
             html += '</div>';
 
             // Cargar reportes de Firestore

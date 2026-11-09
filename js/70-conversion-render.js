@@ -1189,7 +1189,8 @@ document.body.appendChild(overlay);
             // v5.27 — Físico vs Sistema: mismo modal, corrección DIRECTA de un
             // almacén (ver fvsAplicarCorreccion en js/85).
             const _fv = (!_rc && opciones && opciones.fvs) ? opciones.fvs : null;
-            _fvsEdicion = _fv ? { prodId: productId, area: _fv.area } : null;
+            // v5.46 — usuario: true = reconteo desde la lista de muestreo (su propio conteo).
+            _fvsEdicion = _fv ? { prodId: productId, area: _fv.area, usuario: !!_fv.usuario } : null;
 
             // ── Seleccionar fuente de datos (auditoría o conteo regular) ──
             let areaKey, areaLabel, conteoSource;
@@ -1200,7 +1201,7 @@ document.body.appendChild(overlay);
                                  abiertas: (_rc.valor && Array.isArray(_rc.valor.abiertas)) ? _rc.valor.abiertas.slice() : [] };
             } else if (_fv) {
                 areaKey      = _fv.area;
-                areaLabel    = ((typeof areasAuditoria !== 'undefined' && areasAuditoria[areaKey]) || areas[areaKey] || areaKey) + ' · Corrección';
+                areaLabel    = ((typeof areasAuditoria !== 'undefined' && areasAuditoria[areaKey]) || areas[areaKey] || areaKey) + (_fv.usuario ? ' · Reconteo' : ' · Corrección');
                 conteoSource = { enteras: (_fv.valor && _fv.valor.enteras) || 0,
                                  abiertas: (_fv.valor && Array.isArray(_fv.valor.abiertas)) ? _fv.valor.abiertas.slice() : [] };
             } else if (isAuditoriaMode && auditoriaAreaActiva) {
@@ -1578,7 +1579,8 @@ document.body.appendChild(overlay);
             if (_fvsEdicion) {
                 const _ctxFv = _fvsEdicion;
                 closeInventarioModal();
-                fvsAplicarCorreccion(_ctxFv.prodId, _ctxFv.area, enteras, abiertas);
+                if (_ctxFv.usuario) muestreoAplicarConteoUsuario(_ctxFv.prodId, _ctxFv.area, enteras, abiertas);
+                else fvsAplicarCorreccion(_ctxFv.prodId, _ctxFv.area, enteras, abiertas);
                 return;
             }
 
