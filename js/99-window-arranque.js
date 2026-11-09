@@ -163,8 +163,23 @@
             // syncToCloud ya NO se llama aquí directamente.
             // saveToLocalStorage() calcula el hash y solo sincroniza si algo cambió.
             let lastSave = 0;
+            // v5.46 — reporte del dueño: al desbloquear el teléfono la pantalla no
+            // respondía unos segundos. El intervalo de 30 s se disparaba justo al
+            // volver y serializaba TODO (catálogo, compras, ventas, conteos) en el
+            // hilo principal. Ahora: no corre con la app oculta, guarda al ocultarse
+            // (el momento seguro: el usuario se va) y al volver espera 20 s.
+            const AUTOSAVE_ESPERA_AL_VOLVER_MS = 20000;
+            document.addEventListener('visibilitychange', function() {
+                if (document.visibilityState === 'hidden') {
+                    lastSave = Date.now();
+                    if (window.saveToLocalStorage) { try { saveToLocalStorage(); } catch (e) { console.warn('Error guardando al ocultar'); } }
+                } else {
+                    lastSave = Date.now() - 30000 + AUTOSAVE_ESPERA_AL_VOLVER_MS;
+                }
+            });
             function smartAutoSave() {
                 const now = Date.now();
+                if (document.visibilityState === 'hidden') return; // ya se guardó al ocultarse
                 if (now - lastSave < 30000) return; // 30s mínimo entre autoguardados
                 lastSave = now;
                 if (window.saveToLocalStorage) {
@@ -175,3 +190,69 @@
             window._autoSaveInterval = setInterval(smartAutoSave, 30000);
         });
     
+
+// ══════════════════════════════════════════════════════════════════════════
+//  v5.46 — DIAGNÓSTICO AL VOLVER A LA APP
+//  Reporte del dueño: al desbloquear el teléfono la pantalla no respondía
+//  unos 7 segundos. En el laboratorio (CPU de teléfono simulada, 4.7 MB de
+//  datos) el arranque local bloquea ~0.3 s, así que la causa real se mide en
+//  el aparato: cada vez que la app vuelve (o Android la recargó porque la
+//  había cerrado en segundo plano) se anota cuánto tiempo estuvo ocupado el
+//  hilo principal en los 15 s siguientes. Se guarda SOLO en este dispositivo
+//  (últimos 10) y se ve en Administración. No sube nada a ningún lado.
+// ══════════════════════════════════════════════════════════════════════════
+(function diagnosticoReanudar() {
+    var CLAVE = 'inventarioApp_diagReanudar', VENTANA_MS = 15000, MAX = 10;
+    var activo = null, tareas = [];
+    try {
+        if (typeof PerformanceObserver === 'undefined' || !(PerformanceObserver.supportedEntryTypes || []).includes('longtask')) return;
+        new PerformanceObserver(function(lista) {
+            lista.getEntries().forEach(function(e) { tareas.push({ t: performance.timeOrigin + e.startTime, d: e.duration }); });
+        }).observe({ type: 'longtask', buffered: true });
+    } catch (_) { return; }
+
+    function empezar(tipo) {
+        var inicio = Date.now();
+        activo = { tipo: tipo, inicio: inicio };
+        setTimeout(function() {
+            if (!activo || activo.inicio !== inicio) return;
+            var mias = tareas.filter(function(x) { return x.t >= inicio - 50 && x.t <= inicio + VENTANA_MS; });
+            var reg = { ts: inicio, tipo: tipo, bloqueoMs: Math.round(mias.reduce(function(a, x) { return a + x.d; }, 0)),
+                        tareas: mias.length, maxMs: Math.round(mias.reduce(function(a, x) { return Math.max(a, x.d); }, 0)) };
+            tareas = tareas.filter(function(x) { return x.t > inicio + VENTANA_MS; });
+            try {
+                var l = JSON.parse(localStorage.getItem(CLAVE) || '[]');
+                if (!Array.isArray(l)) l = [];
+                l.unshift(reg);
+                localStorage.setItem(CLAVE, JSON.stringify(l.slice(0, MAX)));
+            } catch (_) {}
+            activo = null;
+        }, VENTANA_MS + 200);
+    }
+
+    var nav = (performance.getEntriesByType && performance.getEntriesByType('navigation')[0]) || {};
+    empezar(document.wasDiscarded ? 'recarga: Android cerró la app' : (nav.type === 'reload' ? 'recarga' : 'apertura'));
+    document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'visible') empezar('volvió a la app');
+    });
+
+    window.diagnosticoReanudarLeer = function() {
+        try { var l = JSON.parse(localStorage.getItem(CLAVE) || '[]'); return Array.isArray(l) ? l : []; } catch (_) { return []; }
+    };
+})();
+
+/** Tarjeta de Administración con los últimos regresos a la app (este dispositivo). */
+function diagnosticoReanudarHtml() {
+    var l = (typeof window.diagnosticoReanudarLeer === 'function') ? window.diagnosticoReanudarLeer() : [];
+    var esc = (typeof escapeHtml === 'function') ? escapeHtml : function(x) { return String(x); };
+    var h = '<div class="adm-card"><h3><i class="fa-solid fa-hourglass" aria-hidden="true"></i> Rendimiento al volver a la app</h3>';
+    if (!l.length) return h + '<p class="ui-nota">Sin registros todavía en este dispositivo. Bloquea y desbloquea el teléfono con la app abierta y vuelve aquí.</p></div>';
+    h += '<p class="ui-nota">Tiempo que la pantalla estuvo ocupada en los 15 s siguientes (solo este dispositivo). «Android cerró la app» = el sistema la recargó.</p>';
+    l.slice(0, 6).forEach(function(r) {
+        var f = new Date(r.ts).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' });
+        h += '<div class="adm-stat"><span>' + esc(f) + ' · ' + esc(r.tipo) + '</span><b class="' + (r.bloqueoMs > 1500 ? 'ui-aviso-estado' : '') + '">'
+           + (r.bloqueoMs / 1000).toFixed(1) + ' s</b></div>';
+    });
+    return h + '</div>';
+}
+if (typeof window !== 'undefined') window.diagnosticoReanudarHtml = diagnosticoReanudarHtml;
