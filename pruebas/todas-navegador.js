@@ -57,6 +57,7 @@ const PRUEBAS = [
     'prueba-recetario-buscador-unificado-navegador.js', // Recetario — mismo buscador que Inicio: typos, tildes, PV, paginación, teclado
     'prueba-redis-r7b-navegador.js',
     'prueba-inicio-operacion-navegador.js', // Inicio · tarjetas de Operación compactas 2×2 (6 anchos × 2 temas)
+    'prueba-v545-fvs-navegador.js', // v5.45 — Físico vs Sistema: KPIs, insignias, selección múltiple, edición rápida, grupos plegables y muestreo
     'prueba-v544-auditoria-consolidada-navegador.js', // v5.44 — Auditoría consolidada: 15 columnas + hoja Inventario valorizada (descarga real)
     'prueba-rediseno-ventanas-navegador.js', // v5.43 — encabezado común en las ventanas pendientes (móvil/PC × claro/oscuro)
     'prueba-compras-rediseno-navegador.js', // REDISEÑO DE VENTANAS — Compras y captura manual (4 anchos × 2 temas)

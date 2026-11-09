@@ -161,12 +161,15 @@ const num = (t) => { const m = /^([+-]?)([\d,]+\.\d+)/.exec(t.replace(/\s/g, '')
   chk('★ Grupo, orden, chips y búsqueda: cero guardados, cero sync, cero escrituras de conteo', /"guardar":0,"sync":0,"syncMy":0/.test(esp1), esp1);
   chk('★ products, auditoriaConteo y myAuditoriaConteo IDÉNTICOS (orden incluido) tras filtrar y ordenar', (await estadoDatos(p)) === antes);
 
-  // ── Corrección por área: sigue abriendo el modal de siempre ──
+  // ── Corrección por área ──
+  // v5.45 — un producto que se cuenta por CANTIDAD se corrige en la misma celda
+  // (edición rápida); los de botella siguen en el modal (prueba-v545-fvs-navegador).
   await p.click('button[data-fvs-accion="editar"][data-fvs-pid="A"][data-fvs-area="almacen"]'); await p.waitForTimeout(250);
-  const modal = await p.evaluate(() => !document.getElementById('inventarioModal').classList.contains('hidden'));
-  chk('Admin: tocar un área de la fila abre el modal de corrección de siempre', modal);
-  await p.evaluate(() => closeInventarioModal()); await p.waitForTimeout(150);
-  chk('Cerrar el modal sin guardar no cambia nada', (await estadoDatos(p)) === antes);
+  const inl = await p.evaluate(() => { const i = document.querySelector('.fvs-inl__in'); return !!i && document.activeElement === i && i.value === '6'
+    && document.getElementById('inventarioModal').classList.contains('hidden'); });
+  chk('Admin: tocar un área de la fila abre la edición rápida en la celda (con lo contado y el foco)', inl);
+  await p.keyboard.press('Escape'); await p.waitForTimeout(150);
+  chk('Cancelar (Esc) no cambia nada y devuelve la celda', (await estadoDatos(p)) === antes && await p.evaluate(() => !document.querySelector('.fvs-inl') && !!document.querySelector('button[data-fvs-accion="editar"][data-fvs-pid="A"][data-fvs-area="almacen"]')));
 
   // ── Exportar (descarga real) ──
   const hayXlsx = await p.evaluate(async () => { for (let i = 0; i < 30 && typeof XLSX === 'undefined'; i++) await new Promise(r => setTimeout(r, 200)); return typeof XLSX !== 'undefined' ? XLSX.version : null; });
