@@ -344,8 +344,8 @@ html body .if-card__titulo { font-size: var(--d-fs-tit) !important; line-height:
 /* ═══ INVENTARIO FÍSICO (vista compacta de v5.28): botones de 44 px, 13 px ══ */
 .if-pantalla.if-pantalla--compacta { gap: 8px; }
 .if-pantalla.if-pantalla--compacta .if-card { padding: 10px; gap: 8px; }
-.if-pantalla.if-pantalla--compacta > .if-card:first-child > .if-card__titulo { font-size: var(--d-fs-tit); }
-.if-pantalla.if-pantalla--compacta > .if-card:first-child > .pm-estado--cab { font-size: 9px; padding: 1px 6px; }
+.if-pantalla.if-pantalla--compacta > .if-card:first-of-type > .if-card__titulo { font-size: var(--d-fs-tit); }
+.if-pantalla.if-pantalla--compacta > .if-card:first-of-type > .pm-estado--cab { font-size: 9px; padding: 1px 6px; }
 .if-pantalla.if-pantalla--compacta .if-avance .pm-progreso, .if-pantalla.if-pantalla--compacta .if-avance .audit-progress-bar { height: 4px; }
 .if-pantalla.if-pantalla--compacta .if-datos { gap: 4px 10px; padding: 6px 8px; border-radius: var(--d-radio-sm); }
 .if-pantalla.if-pantalla--compacta .if-dato dd { font-size: var(--d-fs); }

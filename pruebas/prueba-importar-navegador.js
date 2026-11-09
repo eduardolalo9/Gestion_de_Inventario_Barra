@@ -91,7 +91,7 @@ const PUERTO = process.env.PUERTO || '8080';
     await tema(t); await p.waitForTimeout(120);
     const c = await p.evaluate(() => {
       const q = s => document.querySelector(s);
-      return { tit: __m.contraste(q('.imp-sec__tit')), desc: __m.contraste(q('.imp-sec__desc')), cab: __m.contraste(q('.imp-cab__tit')),
+      return { tit: __m.contraste(q('.imp-sec__tit')), desc: __m.contraste(q('.imp-sec__desc')), cab: __m.contraste(q('#tabContent .pg-cab__tit')),   // v5.43 — encabezado común
                subir: __m.contraste(q('[data-imp-subir]')), plantilla: __m.contraste(q('[data-imp-plantilla]')) };
     });
     chk('[' + t + '] Contraste: títulos y descripciones ≥ 4.5, botones ≥ 4.5', Object.values(c).every(x => x >= 4.5), JSON.stringify(c));

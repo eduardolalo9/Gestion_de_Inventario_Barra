@@ -652,10 +652,10 @@ table { border-collapse: collapse; }
 .if-pantalla.if-pantalla--compacta .if-seccion { font-size: .6875rem; margin: 4px 2px -4px; }
 
 /* Encabezado: título y estado en un renglón; datos en rejilla de 2. */
-.if-pantalla.if-pantalla--compacta > .if-card:first-child { flex-direction: row; flex-wrap: wrap; align-items: center; column-gap: 10px; }
-.if-pantalla.if-pantalla--compacta > .if-card:first-child > * { flex-basis: 100%; }
-.if-pantalla.if-pantalla--compacta > .if-card:first-child > .if-card__titulo { flex: 1 1 auto; flex-basis: auto; font-size: 1.05rem; }
-.if-pantalla.if-pantalla--compacta > .if-card:first-child > .pm-estado--cab { flex: 0 0 auto; flex-basis: auto; font-size: .6875rem; padding: 4px 10px; align-self: center; }
+.if-pantalla.if-pantalla--compacta > .if-card:first-of-type { flex-direction: row; flex-wrap: wrap; align-items: center; column-gap: 10px; }
+.if-pantalla.if-pantalla--compacta > .if-card:first-of-type > * { flex-basis: 100%; }
+.if-pantalla.if-pantalla--compacta > .if-card:first-of-type > .if-card__titulo { flex: 1 1 auto; flex-basis: auto; font-size: 1.05rem; }
+.if-pantalla.if-pantalla--compacta > .if-card:first-of-type > .pm-estado--cab { flex: 0 0 auto; flex-basis: auto; font-size: .6875rem; padding: 4px 10px; align-self: center; }
 .if-pantalla.if-pantalla--compacta .if-badge-pre { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .if-pantalla.if-pantalla--compacta .if-avance { gap: 4px; }
 .if-pantalla.if-pantalla--compacta .if-avance__txt { font-size: .8125rem; }
