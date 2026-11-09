@@ -58,9 +58,9 @@ chk('El tablero usa solo iconos del kit (fa-solid fa-…)',
     [...new Set(mod.match(/fa-[a-z-]+/g))].join(' '));
 const bloque = css.slice(css.indexOf('v5.23 · Diseño'));
 chk('★ El CSS de v5.23 usa solo tokens (cero colores hex)', !/#[0-9a-fA-F]{3,8}\b/.test(bloque) && !/rgba?\(/.test(bloque));
-chk('★ Objetivos táctiles de v5.23 >= 44 px (botón 48, enlace 44, cerrar 44, módulo 96, paso 52)',
+chk('★ Objetivos táctiles de v5.23 >= 44 px (botón 48, enlace 44, cerrar 44, módulo 52 compacto, paso 52)',
     /\.it-btn \{[^}]*min-height: 48px/.test(bloque) && /\.it-enlace \{[^}]*min-height: 44px/.test(bloque) &&
-    /\.inv-modal__cerrar \{[^}]*width: 44px; height: 44px/.test(bloque) && /\.it-modulo \{[^}]*min-height: 96px/.test(bloque) &&
+    /\.inv-modal__cerrar \{[^}]*width: 44px; height: 44px/.test(bloque) && /\.it-modulo \{[^}]*min-height: 52px/.test(bloque) &&
     /\.inv-paso__btn \{[^}]*min-height: 52px/.test(bloque) && /\.audit-count-header \.audit-back-btn \{ min-height: 44px/.test(bloque));
 chk('El kit de iconos tiene la máscara fa-minus', /^\.fa-minus\b/m.test(util));
 

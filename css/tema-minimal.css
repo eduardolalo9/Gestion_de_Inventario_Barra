@@ -72,7 +72,7 @@ html[data-theme="light"] {
 /* ── Superficies: tarjetas blancas, borde fino y sombra discreta ──────── */
 html[data-theme="light"] body .sticky.top-0 { background: var(--bg); box-shadow: 0 1px 0 var(--border-mid); }
 html[data-theme="light"] #bottomTabBar { background: var(--card); box-shadow: var(--sombra-barra); }
-html[data-theme="light"] :is(.it-alerta, .it-pedido, .it-modulo, .pm-tile, .prd-card, .if-card, .adm-card, .eq-card, .ps-card, .vs-kpi, .vs-top, .vs-dias, .bi-card, .imp-sec, .rc-card, .sync-card) {
+html[data-theme="light"] :is(.it-alerta, .it-pedido, .pm-tile, .prd-card, .if-card, .adm-card, .eq-card, .ps-card, .vs-kpi, .vs-top, .vs-dias, .bi-card, .imp-sec, .rc-card, .sync-card) {
     background: var(--card);
     border: 1px solid var(--border-mid);
     box-shadow: var(--shadow-card);

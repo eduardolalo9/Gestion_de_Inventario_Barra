@@ -554,7 +554,7 @@ button {
 /* Quitar brillo "sheen" interno de botones */
 button::before { display: none !important; }
 button:hover   { opacity: 0.90; box-shadow: none !important; }
-button:active  { transform: scale(0.97) !important; box-shadow: none !important; }
+button:not(.it-modulo):active { transform: scale(0.97) !important; box-shadow: none !important; }
 button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* Sin escala en hover (elimina el translate lift) */
 button[class*="bg-gradient"]:hover {
@@ -3916,12 +3916,18 @@ textarea.ui-campo { resize: vertical; min-height: 88px; }
 .it-pedido__t { font-size: .98rem; font-weight: 700; color: var(--txt-primary); margin: 0; }
 .it-pedido__s { font-size: .8rem; color: var(--txt-secondary); margin: 2px 0 0; }
 
-.it-modulos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.it-modulo { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 96px; padding: 14px; border-radius: var(--r-lg); background: var(--card); border: 1px solid var(--border); text-align: left; font-family: inherit; color: var(--txt-primary); cursor: pointer; min-width: 0; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
-.it-modulo:hover { border-color: var(--accent-dim2); }
-.it-modulo__ico { font-size: 1.15rem; color: var(--brass); margin-bottom: 10px; }
-.it-modulo__t { font-size: .95rem; font-weight: 700; }
-.it-modulo__s { font-size: .76rem; color: var(--txt-secondary); }
+/* Operación (Inicio) — tarjeta compacta 2×2: icono de 22 px a la izquierda que abarca las dos filas;
+   título (13.5/600) y subtítulo (11.5, atenuado) a la derecha. 2 columnas en móvil, 3 desde 1024 px. */
+.it-modulos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (min-width: 1024px) { .it-modulos { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.it-modulo { display: grid; grid-template-columns: 22px minmax(0, 1fr); grid-template-rows: auto auto; align-content: center; align-items: center; column-gap: 10px; row-gap: 1px; min-width: 0; min-height: 52px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border-mid); background: var(--card); color: var(--txt-primary); font-family: inherit; text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation; transition: background-color .15s ease, border-color .15s ease, transform .08s ease; }
+@media (hover: hover) { .it-modulo:hover { background: var(--card-high); border-color: color-mix(in srgb, var(--accent) 45%, var(--border-mid)); } }
+.it-modulo:active { transform: scale(.99); }
+.it-modulo__ico { grid-column: 1; grid-row: 1 / 3; justify-self: center; font-size: 1rem; color: var(--accent); }
+.it-modulo__t { grid-column: 2; font-size: 13.5px; font-weight: 600; line-height: 1.25; color: var(--txt-primary); overflow-wrap: anywhere; }
+.it-modulo__s { grid-column: 2; font-size: 11.5px; line-height: 1.3; color: var(--txt-muted); overflow-wrap: anywhere; }
+@media (min-width: 1024px) { .it-modulo__s { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } }
+@media (prefers-reduced-motion: reduce) { .it-modulo { transition: none; } .it-modulo:active { transform: none; } }
 
 /* ── Conteo: encabezado del área ==================== */
 /* v5.24 — con el medidor y el subtítulo el encabezado mide ~145 px: pegado arriba (top:0) quedaba medio escondido bajo el encabezado de la app y comía el 17 % de la pantalla. Ahora se desplaza con la lista. */
@@ -4104,8 +4110,8 @@ html[data-theme="light"] #sidebar .sb-item { color: var(--sidebar-fg); }
 .it-inv .it-btn:focus-visible { outline-color: var(--blanco); }
 
 /* ── Tarjetas: esquinas 18 px y sombra suave ==================== */
-.it-alerta, .it-pedido, .it-modulo, .prd-card, .inv-total { border-radius: 18px; }
-.it-alerta, .it-pedido, .it-modulo, .prd-card { box-shadow: var(--shadow-card); }
+.it-alerta, .it-pedido, .prd-card, .inv-total { border-radius: 18px; }
+.it-alerta, .it-pedido, .prd-card { box-shadow: var(--shadow-card); }
 .it-pedido { background: var(--card); }
 
 /* ── Monogramas de categoría (pasteles) ==================== */
