@@ -195,7 +195,11 @@
                         if (typeof cargarComprasIniciales === 'function') {
                             cargarComprasIniciales().catch(err =>
                                 console.warn('[Compras] cargarComprasIniciales silenciado:', err)
-                            );
+                            ).then(function() {
+                                // v5.47 — precio vigente = costo de la última compra: se lee costos/ultimos
+                                // (lo que registró cualquier aparato) y se reconcilia con las compras cargadas.
+                                if (typeof cargarUltimosCostos === 'function') return cargarUltimosCostos();
+                            }).catch(err => console.warn('[Precios] cargarUltimosCostos silenciado:', err));
                         }
                         // v5.26 (hallazgo #16) — cargarVentasSemana() (js/93)
                         // existía desde FASE 10 pero nadie la llamaba: la

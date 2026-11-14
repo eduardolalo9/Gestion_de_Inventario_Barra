@@ -51,7 +51,8 @@
 
         /** Precio unitario del producto, o null si no hay uno válido (nunca se inventa). */
         function fvsExportPrecio(p) {
-            return (p && _fvsNumValido(p.precio) && p.precio >= 0) ? p.precio : null;
+            var pv = p ? precioProducto(p) : undefined;   // v5.47: precio vigente (última compra)
+            return (_fvsNumValido(pv) && pv >= 0) ? pv : null;
         }
 
         /**

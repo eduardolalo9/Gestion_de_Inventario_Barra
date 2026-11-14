@@ -132,7 +132,7 @@
         function _pasaFiltrosCatalogo(p, f) {
             if (f.bajoMin   && !_bajoMinimo(p)) return false;
             if (f.oz        && !(typeof tieneConversion === 'function' && tieneConversion(p))) return false;
-            if (f.sinPrecio && typeof p.precio === 'number') return false;
+            if (f.sinPrecio && typeof precioProducto(p) === 'number') return false;
             if (f.sinPV     && p.pv) return false;
             return true;
         }
@@ -153,7 +153,7 @@
             enG.forEach(function(p) {
                 if (_bajoMinimo(p)) n.bajoMin++;
                 if (typeof tieneConversion === 'function' && tieneConversion(p)) n.oz++;
-                if (typeof p.precio !== 'number') n.sinPrecio++;
+                if (typeof precioProducto(p) !== 'number') n.sinPrecio++;
                 if (!p.pv) n.sinPV++;
             });
             var lista = [

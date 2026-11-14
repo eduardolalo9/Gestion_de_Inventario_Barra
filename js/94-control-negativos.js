@@ -74,7 +74,8 @@
                     diasCob = Math.floor(total / prom + 1e-9);
                     estado = diasCob < 1 ? 'no_alcanza' : (diasCob < CN_DIAS_ALERTA ? 'alcanza_n' : 'alcanza');
                 }
-                var precio = (typeof p.precio === 'number' && isFinite(p.precio) && p.precio >= 0) ? p.precio : null;
+                var pvN = precioProducto(p);   // v5.47: precio vigente (última compra)
+                var precio = (typeof pvN === 'number' && isFinite(pvN) && pvN >= 0) ? pvN : null;
                 var pendiente = total < -tol ? _cnRed(-total) : 0;
                 filas.push({
                     id: p.id, nombre: p.name || p.id, grupo: p.group || 'General', unidad: p.unit || '',

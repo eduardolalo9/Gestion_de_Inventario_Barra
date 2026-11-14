@@ -445,7 +445,8 @@
                 var antes = _impRed(ex && typeof ex.valor === 'number' ? ex.valor : 0);
                 if (Object.prototype.hasOwnProperty.call(r.saldos, p.id)) {
                     var dif = _impRed(r.saldos[p.id] - antes);
-                    var precio = (typeof p.precio === 'number') ? p.precio : null;
+                    var pvI = precioProducto(p);   // v5.47: precio vigente (última compra)
+                    var precio = (typeof pvI === 'number') ? pvI : null;
                     if (dif && precio === null) sinPrecio++;
                     var dinero = (precio !== null) ? _impRed(dif * precio, 2) : null;
                     if (dinero !== null) { if (dinero < 0) faltante += dinero; else sobrante += dinero; }

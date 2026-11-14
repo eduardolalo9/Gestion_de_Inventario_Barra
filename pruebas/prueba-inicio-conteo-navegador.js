@@ -114,7 +114,7 @@ const PUERTO = process.env.PUERTO || '8080';
   const antes = await p.evaluate(() => ({ cart: cart.length, ped: pedidoSugeridoProducto(products[0]) }));
   await p.evaluate(() => { window.openOrderModal = function () { window.__abrioPedido = true; }; document.querySelector('.it-pedido .it-btn').click(); });
   await p.waitForTimeout(150);
-  chk('v5.28 · "Revisar" abre la pantalla Pedido sugerido', await p.evaluate(() => activeTab === 'pedido_sugerido' && !!document.querySelector('.ps-pie__btn')));
+  chk('v5.28 · "Revisar" abre la pantalla Pedido sugerido', await p.evaluate(() => activeTab === 'pedidos' && !!document.querySelector('.ps-pie__btn')));
   await p.evaluate(() => document.querySelector('.ps-pie__btn').click());
   await p.waitForTimeout(150);
   const gen = await p.evaluate(() => ({ cart: cart.map(c => [c.id, c.quantity]), abrio: !!window.__abrioPedido,

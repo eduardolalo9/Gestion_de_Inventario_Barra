@@ -9,6 +9,7 @@ const leer = (f) => fs.readFileSync(path.join(RAIZ, f), 'utf8');
 const C = []; const chk = (n, ok, d) => C.push({ n, ok: !!ok, d: d || '' });
 const ctx = { console, Math, Date, String, Number, Array, Object, JSON, isFinite, parseFloat, window: {} };
 vm.createContext(ctx);
+vm.runInContext(require('./_precio-producto'), ctx);   // v5.47: precio vigente
 vm.runInContext(leer('js/15-ciclo-semanal.js'), ctx);
 vm.runInContext(leer('js/46-arrastre.js'), ctx);
 const r = (code) => vm.runInContext(code, ctx);
@@ -49,7 +50,7 @@ chk('Reglas: inventariosIniciales sigue create-only (sin update ni delete)', /ma
 // ── B · pedido sugerido ──
 const c73 = { console, Math, Date, String, Number, Array, Object, JSON, isFinite, parseFloat, window: {}, document: undefined,
   pedidoSugeridoProducto: (p) => p._sug, existenciaMostrada: (p) => p._st };
-vm.createContext(c73); vm.runInContext(leer('js/73-pedido-sugerido.js'), c73);
+vm.createContext(c73); vm.runInContext(require('./_precio-producto'), c73); vm.runInContext(leer('js/73-pedido-sugerido.js'), c73);   // v5.47: precio vigente
 c73._prods = [
   { id: 'A', name: 'TEQUILA', group: 'TEQUILA', unit: 'Bot', precio: 100, stockMinimo: 10, _sug: 8, _st: 2 },
   { id: 'B', name: 'RON', group: 'RON', stockMinimo: 5, _sug: 4, _st: 1 },

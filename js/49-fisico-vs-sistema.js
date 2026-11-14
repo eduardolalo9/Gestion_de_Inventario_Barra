@@ -132,7 +132,8 @@
                 var sinContar = (fisico === null);
                 if (sinContar) { pendientes++; fisico = 0; }
 
-                var precio = (typeof p.precio === 'number') ? p.precio : 0;
+                var pvF = precioProducto(p);   // v5.47: precio vigente (última compra)
+                var precio = (typeof pvF === 'number') ? pvF : 0;
                 var dif  = redondear(fisico - sistema);
                 var neto = Math.round(dif * precio * 100) / 100;
                 totalNeto += neto;

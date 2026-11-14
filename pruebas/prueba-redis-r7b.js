@@ -70,7 +70,7 @@ const DEAD_FALLBACK = /var\(--[a-z-]+,\s*#[0-9a-fA-F]{3,6}\)/;
 const HEX_A_MANO    = /#[0-9a-fA-F]{3,6}\b/;
 
 // ═══ 1 · PEDIDOS — YA ESTABA LIMPIO (se comprueba, no se asume) ════════════
-const fPedTab = funcion(convJs, 'renderPedidosTab');
+const fPedTab = funcion(convJs, 'renderHistorialPedidos');
 const fPedRes = funcion(convJs, '_renderPedidosResultados');
 chk('★ renderPedidosTab() no tiene emoji de interfaz ni color hex a mano',
     !EMOJI_UI.test(sinComentarios(fPedTab)) && !HEX_A_MANO.test(sinComentarios(fPedTab)));
@@ -121,9 +121,10 @@ chk('fa-circle-exclamation, fa-coins y fa-receipt están definidos en el kit (ut
     /\.fa-circle-exclamation\s*[,{ ]/.test(util) && /\.fa-coins\s*[,{ ]/.test(util) && /\.fa-receipt\s*[,{ ]/.test(util));
 
 // ═══ 4 · LO QUE NO SE TOCÓ ══════════════════════════════════════════════════
-chk('_diferenciasDeCosto() conserva su cálculo (±1% contra el precio del catálogo, nunca inventado)',
+chk('_diferenciasDeCosto() conserva su cálculo (±1% contra el precio vigente —última compra o catálogo—, nunca inventado)',
     /Math\.abs\(pct\) >= 1/.test(funcion(compJs, '_diferenciasDeCosto')) &&
-    /if \(!prod \|\| typeof prod\.precio !== 'number' \|\| prod\.precio <= 0\) return;/.test(funcion(compJs, '_diferenciasDeCosto')));
+    /var pv = precioProducto\(prod\);/.test(funcion(compJs, '_diferenciasDeCosto')) &&
+    /if \(!prod \|\| typeof pv !== 'number' \|\| pv <= 0\) return;/.test(funcion(compJs, '_diferenciasDeCosto')));
 chk('Los permisos purchases.read/purchases.import/purchases.create siguen gateando lo mismo que antes',
     /hasPermission\('purchases\.read'\)/.test(fTab) &&
     /permiso: 'purchases\.import'/.test(fs.readFileSync(path.join(RAIZ, 'js/96-importar.js'), 'utf8')) &&   // v5.18: en el módulo

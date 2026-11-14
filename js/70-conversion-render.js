@@ -906,7 +906,7 @@
             // Parrot. Verlos aquí evita descubrirlo al final, cuando ya estorba.
             var sinPrecio = 0, sinPV = 0;
             products.forEach(function(p) {
-                if (typeof p.precio !== 'number') sinPrecio++;
+                if (typeof precioProducto(p) !== 'number') sinPrecio++;
                 if (!p.pv) sinPV++;
             });
             // v5.28 — microcopy "123 productos • 9 visibles".
@@ -987,8 +987,8 @@
                      + _celdaNum(total) + '</td>';
 
                 html += '<td style="' + tdNum + '" class="cat-col-sec">'
-                     + (typeof product.precio === 'number'
-                        ? '$' + escapeHtml(product.precio.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+                     + (typeof precioProducto(product) === 'number'
+                        ? '$' + escapeHtml(precioProducto(product).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
                         : '<span style="color:var(--txt-muted)">—</span>') + '</td>';
                 html += '<td style="' + tdNum + '" class="cat-col-sec">'
                      + _celdaNum(product.stockMinimo) + '</td>';
@@ -1022,47 +1022,52 @@
             return { html: html, coincidencias: r.coincidencias, total: r.total };
         }
 
+        // v5.47 — La pestaña PEDIDOS es el Pedido sugerido (js/73): lo que hay que pedir hoy. Los pedidos ya
+        // generados (los que se compartieron por WhatsApp) viven en Historia → Pedidos (renderHistorialPedidos).
         function renderPedidosTab() {
-            // v5.26 (hallazgo del paquete de textos) — "Solo en este
-            // dispositivo" era falso: 'orders' se sincroniza a Firestore vía
-            // ordersChunks (ver eliminarPedido más abajo), igual que compras
-            // o inventarios. "Sincronizado" es lo que realmente pasa.
-            let headerHtml = UI.cabecera('Pedidos', 'Pedidos para compartir por WhatsApp. Sincronizado entre dispositivos.');
-            // v5.28 — acceso directo a la pantalla Pedido Sugerido (js/73).
-            headerHtml += '<button type="button" class="ps-acceso" onclick="abrirPedidoSugerido()">'
-                        + '<i class="fa-solid fa-cart-shopping" aria-hidden="true"></i><span>Pedido sugerido</span><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button>';
+            return (typeof renderPedidoSugeridoTab === 'function') ? renderPedidoSugeridoTab() : renderInicioTab();
+        }
+
+        // Pedido abierto (tarjeta desplegada) en Historia → Pedidos. Solo en memoria.
+        var _pedidoAbiertoId = null;
+
+        /** Va a Historia → Pedidos (y, si se da un id, deja ese pedido abierto). */
+        function abrirHistorialPedidos(idAbrir) {
+            _historiaVista = 'pedidos';
+            if (idAbrir) _pedidoAbiertoId = String(idAbrir);
+            switchTab('historia');
+        }
+
+        function pedidoAlternar(id) {
+            id = String(id);
+            _pedidoAbiertoId = (_pedidoAbiertoId === id) ? null : id;
+            if (typeof BusquedaUI !== 'undefined' && document.getElementById('sbx-res-pedidos')) BusquedaUI.refrescar('pedidos', { sinAnimacion: true });
+            else renderTab();
+        }
+
+        /** Historia → Pedidos: los pedidos generados, en tarjetas compactas. */
+        function renderHistorialPedidos() {
+            // v5.26 (hallazgo del paquete de textos) — 'orders' se sincroniza a Firestore vía ordersChunks
+            // (ver eliminarPedido más abajo): el texto dice «Sincronizado», que es lo que de verdad pasa.
+            let html = '<p class="pg-ayuda" style="margin:0 0 10px;">Pedidos para compartir por WhatsApp. Sincronizado entre dispositivos.</p>';
             if (orders.length === 0) {
-                // REDISEÑO R3 — el vacío de Pedidos cae dentro de R7, pero su
-                // emoji vivía en este archivo y la prueba de R3 vigila el
-                // archivo entero, no una región: dejarlo como excepción habría
-                // sido abrir la puerta a que volvieran los demás. Es el mismo
-                // estado vacío de Inicio, con el icono del carrito.
-                return headerHtml
-                     + '<div class="bi-card inicio-vacio" style="padding:50px 20px;">'
-                     + '<i class="fa-solid fa-cart-shopping inicio-vacio__ico" aria-hidden="true"></i>'
+                return html
+                     + '<div class="bi-card inicio-vacio" style="padding:40px 20px;">'
+                     + '<i class="fa-solid fa-clipboard-list inicio-vacio__ico" aria-hidden="true"></i>'
                      + '<p style="font-size:.95rem;font-weight:600;color:var(--txt-secondary);margin-bottom:6px;">No hay pedidos todavía</p>'
-                     + '<p style="font-size:.78rem;color:var(--txt-muted);">Ve a Inicio, agrega productos al pedido y genera uno</p></div>';
+                     + '<p style="font-size:.78rem;color:var(--txt-muted);">Ve a Pedidos, marca lo que hace falta y genera uno</p></div>';
             }
             // FASE 6 — barra unificada sobre folio, proveedor, nota y productos.
-            let html = headerHtml;
             html += BusquedaUI.barra('pedidos', {
                 placeholder: 'Buscar por folio, proveedor o producto…',
                 etiqueta: 'Buscar pedidos',
                 sticky: true
             });
-            html += '<div class="mb-6">';
             if (isAdmin()) {
-            // v5.26 (hallazgo del paquete de textos) — era bg-gradient-to-r
-            // from-red-500 to-orange-600 (Tailwind fijo): en modo oscuro no
-            // cambiaba de tono como el resto de la app. Usa la clase
-            // .bt--peligro (ya theme-aware en estilos.css) en vez de un hex
-            // a mano para el texto: resuelve a blanco en modo claro y a un
-            // rojo oscuro legible en modo oscuro, sin tocar esta regla cada
-            // vez que cambie un tema. "width:auto" anula el 100% de .bt
-            // porque este botón vive solo, no en una pila a lo ancho.
-            html += '<button onclick="deleteAllOrders()" class="bt bt--peligro" style="width:auto;padding:0 24px;min-height:48px;" title="Eliminar todos los pedidos"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg><span>Eliminar todos los pedidos</span></button>';
+                // v5.26 — .bt--peligro es theme-aware (blanco en claro, rojo oscuro legible en oscuro).
+                html += '<div class="mb-6"><button onclick="deleteAllOrders()" class="bt bt--peligro" style="width:auto;padding:0 24px;min-height:48px;" title="Eliminar todos los pedidos">'
+                      + '<i class="fa-solid fa-trash" aria-hidden="true"></i><span>Eliminar todos los pedidos</span></button></div>';
             }
-            html += '</div>';
             html += BusquedaUI.region('pedidos', _renderPedidosResultados().html);
             return html;
         }
@@ -1077,44 +1082,55 @@
                 return { html: BusquedaUI.vacio('pedidos', 'pedidos'), coincidencias: 0, total: r.total };
             }
             html += BusquedaUI.resumen('pedidos', r.coincidencias, r.total, 'pedido', 'pedidos');
-            html += '<div class="space-y-4">';
-            // v5.26 (hallazgo del paquete de textos) — toda la tarjeta era
-            // Tailwind con colores fijos (bg-white, text-gray-900, gradientes
-            // puna a punta…): en modo oscuro se quedaba una tarjeta blanca
-            // entre tarjetas oscuras. Reescrita con los mismos tokens de tema
-            // que ya usa el resto de pantallas (var(--card), var(--txt-*),
-            // etc.) y con aria-label en los dos botones de icono (antes solo
-            // tenían title, invisible para un lector de pantalla en un botón
-            // sin texto).
-            filteredOrders.slice(0, lim).forEach((order, idx) => {
-                const delay = Math.min(idx * 50, 400);
-                // v5.39 (densidad) — tarjeta de pedido en clases: una línea de cabecera
-                // (folio mono · proveedor · fecha) y una tabla compacta de 3 columnas.
-                html += '<div class="bi-card ped-card" data-sbx-item style="animation-delay:' + delay + 'ms">'
-                      + '<div class="ped-card__cab"><div class="ped-card__ident">'
-                      + '<h3 class="ped-card__id">' + resaltarBusqueda(order.id, _pedidosSearchTerm) + '</h3>'
-                      + '<p class="ped-card__meta">Proveedor: ' + resaltarBusqueda(order.supplier, _pedidosSearchTerm)
-                      + ' · Fecha: ' + escapeHtml(order.date)
-                      + (order.deliveryDate ? ' · Entrega: ' + escapeHtml(order.deliveryDate) : '') + '</p>';
-                html += '</div><div class="ped-card__acc">'
-                      + '<button data-sbx-principal onclick="shareOrderWhatsApp(\'' + escapeHtml(order.id) + '\')" class="ui-icono-btn" aria-label="Compartir pedido ' + escapeHtml(order.id) + ' por WhatsApp" title="Compartir por WhatsApp"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg></button>'
-                      + '<button onclick="deleteOrder(\'' + escapeHtml(order.id) + '\')" class="ui-icono-btn ui-icono-btn--peligro" aria-label="Eliminar pedido ' + escapeHtml(order.id) + '" title="Eliminar pedido"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>'
-                      + '</div></div>'
-                      + '<table class="ped-tabla"><thead><tr>'
-                      + '<th>Producto</th><th class="ped-tabla__c">Unidad</th><th class="ped-tabla__n">Cant.</th></tr></thead><tbody>';
-                (order.products || []).forEach(p => {
-                    html += '<tr><td>' + escapeHtml(p.name) + '</td>'
-                          + '<td class="ped-tabla__c">' + escapeHtml(p.unit) + '</td>'
-                          + '<td class="ped-tabla__n num">' + p.quantity + '</td></tr>';
-                });
-                html += '</tbody></table>'
-                      + '<div class="ped-card__pie">Total Productos: <b class="num">' + (order.total || 0).toFixed(2) + '</b></div>';
-                if (order.note) html += '<div class="ped-card__nota"><b>Nota:</b> ' + escapeHtml(order.note) + '</div>';
-                html += '</div>';
+            html += '<div class="ped-lista">';
+            // v5.47 — tarjeta COMPACTA: folio, proveedor, fecha, nº de productos y total en una sola vista;
+            // al tocarla se despliega el pedido completo (productos, nota y acciones).
+            filteredOrders.slice(0, lim).forEach((order) => {
+                const idTxt = String(order.id);
+                const abierto = _pedidoAbiertoId === idTxt;
+                const prods = order.products || [];
+                const detId = 'ped-det-' + idTxt.replace(/[^A-Za-z0-9_-]/g, '-');
+                const fechaCorta = String(order.date || '').split(',')[0];
+                html += '<article class="ped-c' + (abierto ? ' ped-c--abierto' : '') + '" data-sbx-item>'
+                      + '<button type="button" class="ped-c__cab" data-sbx-principal data-ped-accion="abrir" data-ped-id="' + escapeHtml(idTxt) + '"'
+                      + ' aria-expanded="' + (abierto ? 'true' : 'false') + '" aria-controls="' + detId + '">'
+                      + '<span class="ped-c__txt"><span class="ped-c__id num">' + resaltarBusqueda(idTxt, _pedidosSearchTerm) + '</span>'
+                      + '<span class="ped-c__prov">' + resaltarBusqueda(order.supplier, _pedidosSearchTerm) + '</span>'
+                      + '<span class="ped-c__meta">' + escapeHtml(fechaCorta) + ' · ' + prods.length + ' producto' + (prods.length === 1 ? '' : 's') + '</span></span>'
+                      + '<span class="ped-c__tot"><b class="num">' + (order.total || 0).toFixed(2) + '</b><small>total</small></span>'
+                      + '<i class="fa-solid fa-chevron-down ped-c__flecha" aria-hidden="true"></i></button>';
+                if (abierto) {
+                    html += '<div class="ped-c__det" id="' + detId + '">'
+                          + '<p class="ped-c__fecha">' + escapeHtml(order.date || '') + (order.deliveryDate ? ' · Entrega: ' + escapeHtml(order.deliveryDate) : '') + '</p>'
+                          + '<table class="ped-tabla"><thead><tr>'
+                          + '<th>Producto</th><th class="ped-tabla__c">Unidad</th><th class="ped-tabla__n">Cant.</th></tr></thead><tbody>';
+                    prods.forEach(p => {
+                        html += '<tr><td>' + escapeHtml(p.name) + '</td>'
+                              + '<td class="ped-tabla__c">' + escapeHtml(p.unit) + '</td>'
+                              + '<td class="ped-tabla__n num">' + p.quantity + '</td></tr>';
+                    });
+                    html += '</tbody></table>'
+                          + '<div class="ped-card__pie">Total Productos: <b class="num">' + (order.total || 0).toFixed(2) + '</b></div>';
+                    if (order.note) html += '<div class="ped-card__nota"><b>Nota:</b> ' + escapeHtml(order.note) + '</div>';
+                    html += '<div class="ped-c__acc">'
+                          + '<button type="button" class="bt bt--primario" onclick="shareOrderWhatsApp(\'' + escapeHtml(idTxt) + '\')" aria-label="Compartir pedido ' + escapeHtml(idTxt) + ' por WhatsApp">'
+                          + '<i class="fa-solid fa-paper-plane" aria-hidden="true"></i> Compartir por WhatsApp</button>'
+                          + '<button type="button" onclick="deleteOrder(\'' + escapeHtml(idTxt) + '\')" class="ui-icono-btn ui-icono-btn--peligro" aria-label="Eliminar pedido ' + escapeHtml(idTxt) + '" title="Eliminar pedido">'
+                          + '<i class="fa-solid fa-trash" aria-hidden="true"></i></button>'
+                          + '</div></div>';
+                }
+                html += '</article>';
             });
             html += '</div>';
             html += BusquedaUI.centinela('pedidos', filteredOrders.length - lim);
             return { html: html, coincidencias: r.coincidencias, total: r.total };
+        }
+
+        if (typeof document !== 'undefined' && document.addEventListener) {
+            document.addEventListener('click', function(e) {
+                var el = e.target && e.target.closest ? e.target.closest('[data-ped-accion="abrir"]') : null;
+                if (el) pedidoAlternar(el.getAttribute('data-ped-id'));
+            });
         }
 
         // Bug #11 fix: modal de confirmación propio — reemplaza confirm() nativo que

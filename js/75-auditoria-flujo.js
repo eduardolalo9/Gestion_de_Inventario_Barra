@@ -321,7 +321,7 @@
                     unit:   p.unit || '',
                     grupo:  p.group || p.grupo || p.categoria || '',
                     group:  p.group || p.grupo || p.categoria || '',
-                    precio:      (typeof p.precio      === 'number') ? p.precio      : null,
+                    precio:      (typeof precioProducto(p) === 'number') ? precioProducto(p) : null,   // v5.47: precio vigente
                     stockMinimo: (typeof p.stockMinimo === 'number') ? p.stockMinimo : null,
                     conversion:  (typeof p.conversion  === 'number') ? p.conversion  : null,
                     proveedor:   p.proveedor || '',
@@ -735,7 +735,7 @@
                 // fecha. id/total/contado son los únicos campos que arman el
                 // inicial semanal.
                 return { id: p.id, total: total, contado: contado,
-                         precio: (typeof p.precio === 'number') ? p.precio : null };
+                         precio: (typeof precioProducto(p) === 'number') ? precioProducto(p) : null };   // v5.47: precio vigente al cierre
             });
 
             return {

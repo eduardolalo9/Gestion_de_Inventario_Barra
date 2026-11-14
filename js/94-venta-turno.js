@@ -99,7 +99,8 @@
                 var despues = aplica ? _vtRed(disponible - c) : disponible;
                 var alcanza = !aplica || despues >= -0.0005;
                 var faltante = alcanza ? 0 : _vtRed(c - Math.max(disponible, 0));
-                var precio = (typeof p.precio === 'number' && isFinite(p.precio)) ? p.precio : null;
+                var pvT = precioProducto(p);   // v5.47: precio vigente (última compra)
+                var precio = (typeof pvT === 'number' && isFinite(pvT)) ? pvT : null;
                 insumos.push({
                     productoId: pid, nombre: p.name || pid, unidad: p.unit || '',
                     consumo: _vtRed(c), disponible: disponible, despues: despues,
@@ -171,7 +172,8 @@
                     var p = porId[pid];
                     var c = _vtRed(consumo[pid]);
                     if (!c) return;
-                    var precio = (p && typeof p.precio === 'number' && isFinite(p.precio)) ? p.precio : null;
+                    var pvT2 = p ? precioProducto(p) : undefined;   // v5.47: precio vigente (última compra)
+                    var precio = (typeof pvT2 === 'number' && isFinite(pvT2)) ? pvT2 : null;
                     var imp = precio !== null ? _vtRed(c * precio, 2) : null;
                     if (imp === null) sinPrecio++; else costo += imp;
                     insumos.push({ productoId: pid, nombre: p ? (p.name || pid) : pid, unidad: p ? (p.unit || '') : '',

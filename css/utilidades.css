@@ -908,7 +908,7 @@ button.fvs-t__celda:hover, button.fvs-t__celda:focus-visible { border-color: var
 .fvs-tab { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 0 10px; border: 0; border-radius: 9px; background: transparent; color: var(--txt-secondary); font-family: var(--f-head); font-size: .82rem; font-weight: 700; cursor: pointer; }
 .fvs-tab--on { background: var(--card); color: var(--txt-primary); box-shadow: 0 0 0 1px var(--border-mid); }
 .fvs-tab:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; }
-.fvs-tab__n { min-width: 22px; padding: 1px 7px; border-radius: 999px; background: var(--accent-dim); color: var(--accent); font-size: .72rem; }
+.fvs-tab__n { min-width: 22px; padding: 1px 7px; border-radius: 999px; background: var(--accent-dim); color: var(--txt-primary); font-size: .72rem; }   /* contraste AA en claro */
 
 .fvs-kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0 0 8px; }
 @media (min-width: 900px) { .fvs-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
@@ -1012,3 +1012,29 @@ button.fvs-t__celda:hover, button.fvs-t__celda:focus-visible { border-color: var
 .mc-tarjeta__txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .mc-tarjeta__txt b { font-size: .9rem; }
 .mc-tarjeta__txt span { font-size: .76rem; color: var(--txt-secondary); }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   v5.47 — Historia → Pedidos: tarjeta COMPACTA de pedido (folio, proveedor,
+   fecha, productos y total); al tocarla se despliega el pedido completo.
+   ══════════════════════════════════════════════════════════════════════════ */
+.ped-lista { display: flex; flex-direction: column; gap: 8px; }
+.ped-c { border: 1px solid var(--border-mid); border-radius: 12px; background: var(--card); overflow: hidden; }
+.ped-c--abierto { border-color: var(--accent); }
+.ped-c__cab { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 56px; padding: 8px 12px; border: 0; background: transparent; color: inherit; text-align: left; font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.ped-c__cab:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
+.ped-c__txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.ped-c__id { font-family: var(--f-num); font-size: .78rem; font-weight: 700; color: var(--accent); overflow-wrap: anywhere; }
+.ped-c__prov { font-size: .9rem; font-weight: 700; color: var(--txt-primary); overflow-wrap: anywhere; }
+.ped-c__meta { font-size: .72rem; color: var(--txt-muted); }
+.ped-c__tot { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; line-height: 1.1; }
+.ped-c__tot b { font-family: var(--f-num); font-size: 1rem; color: var(--txt-primary); }
+.ped-c__tot small { font-size: .58rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--txt-muted); }
+.ped-c__flecha { flex: 0 0 auto; font-size: .7rem; color: var(--txt-muted); transition: transform .15s ease; }
+.ped-c--abierto .ped-c__flecha { transform: rotate(180deg); }
+.ped-c__det { display: flex; flex-direction: column; gap: 8px; padding: 4px 12px 12px; border-top: 1px solid var(--border); }
+.ped-c__fecha { margin: 6px 0 0; font-size: .72rem; color: var(--txt-muted); }
+.ped-c__acc { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.ped-c__acc .bt { flex: 1; width: auto; min-height: 46px; }
+.ps-acceso b { font-family: var(--f-num); font-size: .85rem; padding: 1px 9px; border-radius: 999px; background: var(--accent-dim); color: var(--txt-primary); }   /* contraste AA en claro */
+.ped-c .ped-tabla th, .ped-c .ped-tabla td { padding: 4px 6px !important; line-height: 1.3; }   /* misma densidad que la tarjeta anterior */
+.ped-c__det { padding: 4px 8px 10px; }

@@ -114,7 +114,8 @@
             var conPrecio = 0, valor = 0, bajo = [];
             products.forEach(function(p) {
                 var st = existenciaMostrada(p);
-                if (typeof p.precio === 'number') { conPrecio++; valor += st * p.precio; }
+                var pv = precioProducto(p);   // v5.47: precio vigente (última compra)
+                if (typeof pv === 'number') { conPrecio++; valor += st * pv; }
                 if (typeof _bajoMinimo === 'function' && _bajoMinimo(p)) bajo.push(p);
             });
             var cs = _panelComprasSemana();
@@ -256,7 +257,7 @@
             h += _panelTile('fa-receipt', k.comprasN ? _panelMoneda(k.comprasImp) : '0', 'Compras esta semana',
                     { clase: 'pm-tile--dinero', sub: k.comprasN + ' documento' + (k.comprasN === 1 ? '' : 's'), accion: "switchTab('compras')" });
             h += _panelTile('fa-cart-shopping', k.carrito, 'En carrito', { accion: 'openOrderModal()' });
-            h += _panelTile('fa-clipboard-list', k.pedidos, 'Pedidos', { accion: "switchTab('pedidos')" });
+            h += _panelTile('fa-clipboard-list', k.pedidos, 'Pedidos', { accion: "abrirHistorialPedidos()" });   // v5.47: los generados viven en Historia → Pedidos
             h += '</div>';
 
             if (!(opciones && opciones.sinInventario)) h += _panelEstadoInventario();
@@ -310,7 +311,8 @@
             h += '</div>';
             h += '<div class="pm-card__fila"><span>Total</span><b>' + _panelNum(st) + (bajo ? ' <span class="pm-estado pm-estado--critico">bajo mínimo</span>' : '') + '</b></div>';
             if (typeof p.stockMinimo === 'number') h += '<div class="pm-card__fila"><span>Mínimo</span><b>' + _panelNum(p.stockMinimo) + '</b></div>';
-            if (typeof p.precio === 'number') h += '<div class="pm-card__fila"><span>Precio</span><b>' + _panelMoneda(p.precio) + '</b></div>';
+            var pvF = precioProducto(p), orF = precioProductoOrigen(p);
+            if (typeof pvF === 'number') h += '<div class="pm-card__fila"><span>Precio' + (orF.origen === 'compra' ? ' · última compra' : '') + '</span><b>' + _panelMoneda(pvF) + '</b></div>';
             if (costo) h += '<div class="pm-card__fila"><span>Último costo</span><b>' + _panelMoneda(Number(costo.costo) || 0) + ' <small>(' + escapeHtml(costo.fecha || '') + ')</small></b></div>';
 
             // FASE 14 — el desglose desde el ancla: de qué corte sale, qué se

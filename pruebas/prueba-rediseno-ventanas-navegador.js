@@ -14,7 +14,7 @@ const PRODS = [
 const VENTANAS = [
   ['Conteo', () => { auditoriaView = 'selection'; switchTab('inventario'); }, 'Conteo', false, false],
   ['Ventas', () => switchTab('ventas'), 'Ventas', true, true],
-  ['Pedido sugerido', () => switchTab('pedido_sugerido'), 'Pedido sugerido', true, true],
+  ['Pedidos (Pedido sugerido)', () => switchTab('pedidos'), 'Pedidos', false, false],   // v5.47: es la pestaña Pedidos, sin Volver
   ['Notificaciones', () => { _notificaciones = [{ id: 'a1', texto: 'Se cerró el área Almacén', tipo: 'inventario', creadoEn: Date.now(), leido: false }]; switchTab('notificaciones'); }, 'Notificaciones', false, false],
   ['Papelera', () => switchTab('papelera'), 'Papelera', false, false],
   ['Importar', () => switchTab('importar'), 'Importar desde Excel', false, false],
@@ -112,10 +112,10 @@ const MEDIR = () => {
     await p.click('#tabContent .mc-cab__volver'); await p.waitForTimeout(150);
     const hub = await p.evaluate(() => (document.querySelector('#tabContent .pg-cab__tit') || {}).textContent);
     chk(`${tag} Importar: la vista previa nombra el archivo y Volver regresa al hub`, /<b>x\.xlsx<\/b>/.test(descArchivo) && hub === 'Importar desde Excel', JSON.stringify([descArchivo, hub]));
-    // Atrás de Android pulsa el mismo botón
-    await p.evaluate(() => { switchTab('pedido_sugerido'); }); await p.waitForTimeout(120);
-    await p.click('#tabContent .mc-cab__volver'); await p.waitForTimeout(150);
-    chk(`${tag} Pedido sugerido: Volver regresa a Inicio`, await p.evaluate(() => activeTab === 'inicio'));
+    // v5.47 — «Pedidos generados» (en la pestaña Pedidos) abre Historia → Pedidos
+    await p.evaluate(() => { switchTab('pedidos'); }); await p.waitForTimeout(120);
+    await p.click('#psHistorialBtn'); await p.waitForTimeout(150);
+    chk(`${tag} Pedidos: «Pedidos generados» abre Historia → Pedidos`, await p.evaluate(() => activeTab === 'historia' && _historiaVista === 'pedidos'));
 
     chk(`${tag} Sin errores de JavaScript`, errs.length === 0, errs.join(' | '));
     await ctx.close();

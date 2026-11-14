@@ -113,7 +113,7 @@ html[data-theme="light"] #bottomTabBar { background: var(--card); }
 }
 .ps-orden__btn { min-height: 44px; }
 .mc-pill { min-height: 44px; color: var(--txt-primary); }
-.mc-pill--select select { padding-right: 18px !important; font-size: var(--d-fs-sm) !important; }
+.mc-pill--select select { padding-right: 18px !important; font-size: var(--d-fs-sm) !important; min-height: 44px !important; }   /* v5.47: objetivo táctil ≥ 44 px */
 .mc-pill--select i { right: 8px; }
 .sbx-chip__n { font-size: var(--d-fs-etq); padding: 0 5px; border-radius: 4px; line-height: 16px; }
 
@@ -162,7 +162,7 @@ html[data-theme] :is(.it-alerta, .it-pedido, .pm-tile, .prd-card, .if-card, .adm
 .ps-card--sel { border-color: var(--border); background: var(--card-high); }
 .ps-card--sel.ps-card--critico { border-left-color: var(--danger); }
 .ps-card--sel.ps-card--bajo    { border-left-color: var(--warn); }
-.ps-check { width: 36px; height: 44px; }
+.ps-check { width: 44px; height: 44px; }   /* v5.47: Pedidos es pestaña principal → objetivo táctil ≥ 44 px (el círculo sigue de 20 px) */
 .ps-check__c { width: 20px; height: 20px; border-width: 1.5px; }
 .ps-check__c i { font-size: .6rem; }
 .ps-card__nom {
