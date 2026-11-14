@@ -153,7 +153,7 @@ function montarApp(db, uid, opciones) {
     };
     deps.window = deps;
 
-    const montar = new Function('deps', 'with (deps) {\n' + ciclo + '\n' + arrastre + '\n' + conv + '\n' + firest + '\n' + flujo +
+    const montar = new Function('deps', 'with (deps) {\n' + require('./_precio-producto') + '\n' +   /* v5.47: precio vigente */  ciclo + '\n' + arrastre + '\n' + conv + '\n' + firest + '\n' + flujo +
         '\n; return { contabilizarInventario: contabilizarInventario,' +
         '            _saldosDesdeSnapshot: _saldosDesdeSnapshot,' +
         '            cierreMensualDesdeSnapshot: cierreMensualDesdeSnapshot,' +

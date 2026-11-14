@@ -91,7 +91,7 @@ function montarTelefono(db, uid, opciones) {
     deps.window = deps;
 
     const fuente = fs.readFileSync(path.join(RAIZ, 'js/40-firestore.js'), 'utf8');
-    const montar = new Function('deps', 'with (deps) {\n' + fuente +
+    const montar = new Function('deps', 'with (deps) {\n' + require('./_precio-producto') + '\n' +   /* v5.47: precio vigente */  fuente +
         '\n; return {' +
         '   syncConteoProductoAtomico: syncConteoProductoAtomico,' +
         '   drenarConteosPendientes:   drenarConteosPendientes,' +

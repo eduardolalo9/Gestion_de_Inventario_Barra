@@ -611,8 +611,10 @@
                 _agregarCompraLocal(compra, asientos);
                 // v5.47 — el precio vigente de sus productos pasa a ser el costo de esta compra.
                 // No espera ni interrumpe: la compra ya está confirmada.
-                try { aplicarCostosDeCompra(compra).then(function(r) { if (r && r.cambios.length) _preciosRepintar(); }); }
-                catch (ePrecio) { console.warn('[Precios] aplicarCostosDeCompra:', ePrecio); }
+                try {
+                    aplicarCostosDeCompra(compra).then(function(r) { if (r && r.cambios.length) _preciosRepintar(); })
+                        .catch(function(ePrecio) { console.warn('[Precios] aplicarCostosDeCompra:', ePrecio); });
+                } catch (ePrecio) { console.warn('[Precios] aplicarCostosDeCompra:', ePrecio); }
                 saveToLocalStorage();
 
                 _registrarEnSyncQueue({
@@ -742,8 +744,10 @@
             var cancelada = Object.assign({}, actual, cambios);
             _agregarCompraLocal(cancelada, []);
             // v5.47 — si esa compra era la que fijaba el precio, regresa la anterior.
-            try { revertirCostosDeCompra(cancelada.compraId).then(function(r) { if (r && r.cambios.length) _preciosRepintar(); }); }
-            catch (ePrecio) { console.warn('[Precios] revertirCostosDeCompra:', ePrecio); }
+            try {
+                revertirCostosDeCompra(cancelada.compraId).then(function(r) { if (r && r.cambios.length) _preciosRepintar(); })
+                    .catch(function(ePrecio) { console.warn('[Precios] revertirCostosDeCompra:', ePrecio); });
+            } catch (ePrecio) { console.warn('[Precios] revertirCostosDeCompra:', ePrecio); }
             saveToLocalStorage();
             try {
                 _registrarEnSyncQueue({
@@ -1012,11 +1016,14 @@
 
         /** Repinta lo que muestra dinero, sin interrumpir una captura abierta. */
         function _preciosRepintar() {
-            if (typeof renderTab !== 'function' || typeof document === 'undefined') return;
-            if (document.body && document.body.classList.contains('modal-open')) return;
-            var a = document.activeElement;
-            if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return;
-            try { renderTab(); } catch (e) { console.warn('[Precios] Repintado falló:', e); }
+            // Nunca lanza: corre al final de una compra ya confirmada.
+            try {
+                if (typeof renderTab !== 'function' || typeof document === 'undefined') return;
+                if (document.body && document.body.classList && document.body.classList.contains('modal-open')) return;
+                var a = document.activeElement;
+                if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return;
+                renderTab();
+            } catch (e) { console.warn('[Precios] Repintado falló:', e); }
         }
 
         // ══════════════════════════════════════════════════════════════════════

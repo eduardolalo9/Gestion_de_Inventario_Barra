@@ -92,8 +92,10 @@ fs.readdirSync(path.join(RAIZ, 'js')).filter(f => /\.js$/.test(f)).forEach(f => 
 chk('★ Ninguna pantalla, cálculo ni Excel lee product.precio por su cuenta (todo pasa por precioProducto)', exceso.length === 0, exceso.join(' | '));
 chk('guardarCompra aplica los costos de la compra y cancelarCompra los revierte',
     /aplicarCostosDeCompra\(compra\)/.test(extraerFuncion(compras88, 'guardarCompra')) && /revertirCostosDeCompra\(cancelada\.compraId\)/.test(extraerFuncion(compras88, 'cancelarCompra')));
-chk('★ Registrar la compra NO falla si el costo no se pudo guardar (va en try/catch y sin await)',
-    !/await aplicarCostosDeCompra/.test(compras88) && !/await revertirCostosDeCompra/.test(compras88));
+chk('★ Registrar la compra NO falla si el costo no se pudo guardar ni si el repintado falla (try/catch, .catch y sin await)',
+    !/await aplicarCostosDeCompra/.test(compras88) && !/await revertirCostosDeCompra/.test(compras88)
+    && /aplicarCostosDeCompra\(compra\)[\s\S]{0,200}\.catch\(/.test(compras88) && /revertirCostosDeCompra\(cancelada\.compraId\)[\s\S]{0,200}\.catch\(/.test(compras88)
+    && /function _preciosRepintar\(\) \{[\s\S]{0,120}try \{/.test(compras88));
 chk('La escritura de costos/ultimos es una transacción con FieldPath (un producto con punto en el id no rompe la ruta)',
     /runTransaction/.test(extraerFuncion(compras88, '_costosUltimosPersistir')) && /new FP\('productos', pid\)/.test(extraerFuncion(compras88, '_costosUltimosPersistir')));
 chk('Solo escribe quien puede registrar compras (purchases.import / purchases.create): igual que firestore.rules',

@@ -32,7 +32,7 @@ const reg = (() => {
     const deps = { window: {}, console: { warn() {}, info() {}, log() {}, error() {} }, document: { getElementById: () => null, addEventListener() {} } };
     const f = (rel, nombre) => { const s = leer(rel); const i = s.indexOf('function ' + nombre + '('); let n = 0, d = false;
         for (let j = i; j < s.length; j++) { if (s[j] === '{') { n++; d = true; } else if (s[j] === '}') { n--; if (d && n === 0) return s.slice(i, j + 1); } } };
-    return new Function('deps', 'with (deps) {\n' + f('js/53-papelera.js', 'papeleraRegistroCorte') + '\n' + f('js/96-importar.js', 'importarElegirUltimoCorte') +
+    return new Function('deps', 'with (deps) {\n' + require('./_precio-producto') + '\n' +   /* v5.47: precio vigente */  f('js/53-papelera.js', 'papeleraRegistroCorte') + '\n' + f('js/96-importar.js', 'importarElegirUltimoCorte') +
         '\n; return { registro: papeleraRegistroCorte, elegir: importarElegirUltimoCorte }; }')(deps);
 })();
 

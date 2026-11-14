@@ -125,7 +125,7 @@ function montar(db, uid) {
         // Sin nombrar funciones nuevas: así la prueba corre también contra el
         // código anterior y demuestra qué fallaba.
         '; return { handleAuditSessionChange, auditoriaResetear };';
-    const api = new Function('deps', 'with (deps) {\n' + codigo + '\n}')(deps);
+    const api = new Function('deps', 'with (deps) {\n' + require('./_precio-producto') + '\n' +   /* v5.47: precio vigente */  codigo + '\n}')(deps);
     api.deps = deps; api.avisos = avisos;
     // Lanza la creación y espera a que la cadena de confirmaciones termine.
     api.crear = async function() {

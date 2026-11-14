@@ -52,7 +52,7 @@ function extraerFuncion(rel, nombre) {
 function montarImportar() {
     const deps = { window: {}, console: { warn() {}, info() {}, log() {}, error() {} },
                    document: { getElementById: () => null, addEventListener() {} } };
-    return new Function('deps', 'with (deps) {\n' + leer('js/15-ciclo-semanal.js') + '\n' + leer('js/46-arrastre.js') + '\n' +
+    return new Function('deps', 'with (deps) {\n' + require('./_precio-producto') + '\n' +   /* v5.47: precio vigente */  leer('js/15-ciclo-semanal.js') + '\n' + leer('js/46-arrastre.js') + '\n' +
         leer('js/96-importar.js') + '\n; return { validar: importarValidarExistencias, armar: importarArmarCorte, ' +
         'fechaISOLocal: fechaISOLocal, semanaId: semanaId }; }')(deps);
 }
@@ -71,7 +71,7 @@ function montarExistencia(db, productos, recetasLista) {
                    extraerFuncion('js/88-compras.js', 'compraCancelada') + '\n' +
                    extraerFuncion('js/93-ventas.js', '_ventasPeriodoDeDoc') + '\n' +
                    leer('js/48-consumo-teorico.js') + '\n' + leer('js/47-existencia.js');
-    return new Function('deps', 'with (deps) {\n' + cuerpo + '\n; return { cargar: existenciaCargarInicial, ' +
+    return new Function('deps', 'with (deps) {\n' + require('./_precio-producto') + '\n' +   /* v5.47: precio vigente */  cuerpo + '\n; return { cargar: existenciaCargarInicial, ' +
         'estado: existenciaInicialEstado, oficial: existenciaOficial }; }')(deps);
 }
 

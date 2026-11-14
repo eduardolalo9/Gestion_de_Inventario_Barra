@@ -135,7 +135,7 @@ function montarFirestoreAuditoria(db, uid, opciones) {
     };
     deps.window = deps;
 
-    const montar = new Function('deps', 'with (deps) {\n' + firest +
+    const montar = new Function('deps', 'with (deps) {\n' + require('./_precio-producto') + '\n' +   /* v5.47: precio vigente */  firest +
         '\n; return { _archivarConteoHuerfanoSiAplica: _archivarConteoHuerfanoSiAplica,' +
         '            _construirConteoHuerfano: _construirConteoHuerfano,' +
         '            _conteoHuerfanoTieneContenido: _conteoHuerfanoTieneContenido,' +
@@ -205,7 +205,7 @@ function montarListenerPropio(db, uid, opciones) {
     };
     deps.window = deps;
 
-    const montar = new Function('deps', 'with (deps) {\n' + cuerpo +
+    const montar = new Function('deps', 'with (deps) {\n' + require('./_precio-producto') + '\n' +   /* v5.47: precio vigente */  cuerpo +
         '\n; return subscribeMyAuditoria; }');
 
     let subscribeMyAuditoria;
