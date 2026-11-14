@@ -181,7 +181,7 @@
             mods.push({ tab: 'ventas',    icono: 'fa-receipt', t: 'Ventas',    s: 'Importar y consumo' });
             var h = '<section aria-label="Operación"><div class="it-seccion"><h3 class="it-seccion__titulo">Operación</h3></div><div class="it-modulos">';
             mods.forEach(function(m) {
-                h += '<button type="button" class="it-modulo" onclick="inicioIrModulo(\'' + m.tab + '\')">'
+                h += '<button type="button" class="it-modulo" onclick="inicioIrModulo(\'' + jsArg(m.tab) + '\')">'
                    + '<i class="fa-solid ' + m.icono + ' it-modulo__ico" aria-hidden="true"></i>'
                    + '<span class="it-modulo__t">' + _itEsc(m.t) + '</span><span class="it-modulo__s">' + _itEsc(m.s) + '</span></button>';
             });

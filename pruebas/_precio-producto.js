@@ -9,4 +9,8 @@ const ini = src.indexOf('function _costoValido(c)');
 const f0 = src.indexOf('function precioProductoOrigen(');
 if (ini === -1 || f0 === -1) throw new Error('_precio-producto: no se encontró el acceso al precio en js/00-nucleo.js');
 const fin = src.indexOf('\n        }\n', f0) + '\n        }\n'.length;
-module.exports = 'var costosUltimos = (typeof costosUltimos === "undefined") ? {} : costosUltimos;\n' + src.slice(ini, fin);
+// v5.48 — jsArg() (js/00-nucleo.js) también lo usan los módulos que pintan manejadores en línea (88, 92, 96…).
+const j0 = src.indexOf('function jsArg(');
+if (j0 === -1) throw new Error('_precio-producto: no se encontró jsArg en js/00-nucleo.js');
+const j1 = src.indexOf('\n        }\n', j0) + '\n        }\n'.length;
+module.exports = 'var costosUltimos = (typeof costosUltimos === "undefined") ? {} : costosUltimos;\n' + src.slice(ini, fin) + '\n' + src.slice(j0, j1);

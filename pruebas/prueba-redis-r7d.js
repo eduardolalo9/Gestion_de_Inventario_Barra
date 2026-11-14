@@ -163,7 +163,7 @@ chk('★ Toda clase ui-/nt-/aj-/pr-/hs-/sy- que usa el JS está definida en esti
 // ═══ 6 · LÓGICA DE NEGOCIO SIN CAMBIOS ═════════════════════════════════════
 chk('resolverAjuste y solicitarAjuste conservan su firma', /async function resolverAjuste\(/.test(roles) && /async function solicitarAjuste\(/.test(roles));
 chk('Aprobar/Rechazar siguen llamando resolverAjuste(id, estado) con id validado (FASE 7 S2)',
-    /resolverAjuste\(\\'' \+ idSeg \+ '\\',\\'aprobado\\'\)/.test(roles) && /\^\[A-Za-z0-9\]\{1,40\}\$/.test(roles));
+    /resolverAjuste\(\\'' \+ jsArg\(idSeg\) \+ '\\',\\'aprobado\\'\)/.test(roles) && /\^\[A-Za-z0-9\]\{1,40\}\$/.test(roles));
 chk('Usuarios y permisos sigue exigiendo permissions.read', /hasPermission\('permissions\.read'\)/.test(piezas.renderUsuariosPermisosTab));
 chk('El panel Admin sigue exigiendo isAdmin()', /if \(!isAdmin\(\)\) return/.test(piezas.renderAdminTab));
 chk('Las áreas de conteo siguen exigiendo warehouses.read', /hasPermission\('warehouses\.read'\)/.test(piezas.renderAreasConteoAdmin));

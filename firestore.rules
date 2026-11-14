@@ -1290,9 +1290,16 @@
                // para que no se pueda falsificar la autoría de un evento.
                match /historialCambios/{docId} {
                  allow read:   if isAdminUser();
-                 allow create: if request.auth != null
-                                  && request.resource.data.uid == request.auth.uid;
                  allow update, delete: if false;
+                 // v5.48 (auditoría de seguridad M-2): antes bastaba cualquier token
+                 // vivo —cuenta sin documento usuarios/{uid}, o dada de baja— y el
+                 // documento podía traer cualquier cantidad de campos. Ahora la cuenta
+                 // debe estar activa y el evento no puede inflarse (los que emite la
+                 // app llevan ~10-15 campos; 40 deja margen). Un uid ajeno sigue
+                 // rechazándose (FASE 0 — S-3).
+                 allow create: if _cuentaActiva()
+                                  && request.resource.data.uid == request.auth.uid
+                                  && request.resource.data.keys().size() <= 40;
                }
              }
            }

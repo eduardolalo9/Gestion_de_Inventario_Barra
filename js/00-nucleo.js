@@ -49,6 +49,53 @@
         }
 
         // ==================== FUNCIÓN DE ESCAPE PARA SEGURIDAD ====================
+        /**
+         * jsArg(valor) — v5.48 (auditoría de seguridad C-1)
+         * Devuelve el CUERPO de un literal de cadena JavaScript entre comillas
+         * simples, seguro para ir dentro de un atributo HTML (onclick="f('…')").
+         *
+         * POR QUÉ NO BASTA escapeHtml: el navegador decodifica las entidades del
+         * atributo ANTES de ejecutar el JavaScript. escapeHtml convierte ' en
+         * &#039;, que el parser vuelve a ' y cierra la cadena: un id como
+         * x');alert(1);// ejecutaba código. Aquí todo lo que no sea
+         * letra/número/espacio/_ . - sale como \xHH o \uHHHH: ni HTML ni JS
+         * lo pueden interpretar como sintaxis, y al ejecutarse el JS recupera
+         * exactamente el valor original.
+         *
+         * Uso:  onclick="f(\'' + jsArg(id) + '\')"
+         */
+        function jsArg(valor) {
+            if (valor === null || valor === undefined) return '';
+            return String(valor).replace(/[^A-Za-z0-9 _.\-]/g, function(c) {
+                var h = c.charCodeAt(0).toString(16);
+                return h.length <= 2 ? '\\x' + ('0' + h).slice(-2) : '\\u' + ('0000' + h).slice(-4);
+            });
+        }
+
+        /**
+         * datoNubeSeguro(item) — v5.48 (auditoría de seguridad C-1, defensa en
+         * profundidad). Las subcolecciones ordersChunks/inventoriesChunks las
+         * puede escribir cualquier cuenta activa (todas sincronizan sus propios
+         * pedidos e inventarios), y Firestore Rules no recorre listas: el
+         * contenido de cada elemento no se puede validar en el servidor. Aquí
+         * se descarta, al LEER, cualquier elemento cuyo id traiga caracteres de
+         * sintaxis (comillas, <, >, &, \, acento grave, saltos de línea) o sea
+         * absurdamente largo. Un id legítimo (PED-001-ab12, INV-…, sesiones)
+         * nunca los contiene.
+         */
+        function datoNubeSeguro(item) {
+            if (item === null || typeof item !== 'object') return false;
+            var campos = ['id', 'inventoryId'];
+            for (var i = 0; i < campos.length; i++) {
+                var v = item[campos[i]];
+                if (v === undefined || v === null) continue;
+                if (typeof v !== 'string' && typeof v !== 'number') return false;
+                var s = String(v);
+                if (s.length > 120 || /['"<>&\\`\r\n\u2028\u2029]/.test(s)) return false;
+            }
+            return true;
+        }
+
         function escapeHtml(unsafe) {
             if (unsafe === null || unsafe === undefined) return '';
             return String(unsafe)

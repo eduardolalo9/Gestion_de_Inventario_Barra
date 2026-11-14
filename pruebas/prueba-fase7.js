@@ -57,7 +57,7 @@ chk('ajustes: resolver toca solo estado/resolvidoEn/resolvidoPor', /hasOnly\(\['
 const rend = cuerpo(roles, 'function renderAjustesTab(') || roles;
 chk('La pantalla de ajustes escapa la cantidad y normaliza estado e id',
     /escapeHtml\(String\(sug\)\)/.test(rend) && /\['pendiente', 'aprobado', 'rechazado'\]\.indexOf\(a\.estado\)/.test(rend) &&
-    /resolverAjuste\(\\'' \+ idSeg/.test(rend) && !/' \(Sugerido: ' \+ a\.cantidadSugerida/.test(rend));
+    /resolverAjuste\(\\'' \+ jsArg\(idSeg\)/.test(rend) && !/' \(Sugerido: ' \+ a\.cantidadSugerida/.test(rend));
 chk('Una cantidad sugerida de 0 ya no se pierde', !/cantidadSugerida: cantidadSugerida \|\| null/.test(roles) && !/parseFloat\(c\.value\)\|\|null/.test(roles));
 
 // ── S3 ──

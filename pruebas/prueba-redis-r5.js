@@ -169,7 +169,7 @@ chk('El permiso del historial (inventory.history) no cambió',
 chk('El permiso de Físico vs Sistema (inventory.viewAll) no cambió',
     /function renderFisicoVsSistema\(\) \{\s*if \(!hasPermission\('inventory\.viewAll'\)\)/.test(inv));
 chk('Contabilizar desde el detalle cerrado sigue llamando a la misma función, con los mismos argumentos',
-    fDetalle.indexOf('onclick="contabilizarInventario(\\\'\' + _detalleInventarioCerradoId + \'\\\', \' + meta.numero + \')"') !== -1);
+    fDetalle.indexOf('onclick="contabilizarInventario(\\\'\' + jsArg(_detalleInventarioCerradoId) + \'\\\', \' + meta.numero + \')"') !== -1);
 
 // ═══ Versión ═══════════════════════════════════════════════════════════════
 const vHtml = (html.match(/\?v=(\d+\.\d+)/) || [])[1];

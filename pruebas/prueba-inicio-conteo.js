@@ -121,6 +121,7 @@ ctx.auditCurrentUser = { userName: 'Contador-BM1G' };
 ctx.UI = { badge: k => '[badge ' + k + ']' };
 ctx.inventarioAbierto = inv => inv.estado === 'SINCRONIZADO';
 vm.createContext(ctx);
+vm.runInContext(require('./_precio-producto'), ctx);   // v5.48: jsArg() del código real
 vm.runInContext(mod, ctx);
 const d = ctx.inicioTableroDatos();
 chk('★ Contados = unión entre personas (A, B, C = 3 de 4), no suma', d.contados === 3 && d.total === 4, JSON.stringify([d.contados, d.total]));

@@ -200,7 +200,7 @@
             h += '<div class="cn-fila__cifra"><span class="cn-fila__etq">Total</span><b class="num cn-total--' + tono + '">' + _cnNum(f.total) + '</b>'
                + (f.pendiente > 0 ? '<span class="cn-fila__val num">' + (f.valor === null ? 'sin precio' : '−' + _cnMoneda(f.valor)) + '</span>' : '') + '</div>';
             h += '<div class="cn-fila__acc">'
-               + '<button type="button" class="cn-btn" onclick="controlNegativosVerRecetas(\'' + id + '\')" aria-label="Ver las recetas que usan ' + escapeHtml(f.nombre) + '" title="Recetas que lo usan"><i class="fa-solid fa-book" aria-hidden="true"></i></button>'
+               + '<button type="button" class="cn-btn" onclick="controlNegativosVerRecetas(\'' + jsArg(id) + '\')" aria-label="Ver las recetas que usan ' + escapeHtml(f.nombre) + '" title="Recetas que lo usan"><i class="fa-solid fa-book" aria-hidden="true"></i></button>'
                + ((f.estado === 'negativo' && typeof hasPermission === 'function' && hasPermission('purchases.create'))
                     ? '<button type="button" class="cn-btn" onclick="controlNegativosCapturarCompra()" aria-label="Capturar la compra de ' + escapeHtml(f.nombre) + '" title="Capturar compra"><i class="fa-solid fa-receipt" aria-hidden="true"></i></button>' : '')
                + '</div>';
@@ -236,7 +236,7 @@
             var filtros = [['negativos', 'Negativos', r.negativos], ['riesgo', 'No alcanza', r.noAlcanza + r.alcanzaN], ['todos', 'Con consumo', d.filas.length]];
             h += '<div class="sbx-chips" role="group" aria-label="Filtrar">' + filtros.map(function(x) {
                 var on = _cn.filtro === x[0];
-                return '<button type="button" class="sbx-chip' + (on ? ' sbx-chip--on' : '') + '" aria-pressed="' + on + '" onclick="controlNegativosFiltro(\'' + x[0] + '\')">'
+                return '<button type="button" class="sbx-chip' + (on ? ' sbx-chip--on' : '') + '" aria-pressed="' + on + '" onclick="controlNegativosFiltro(\'' + jsArg(x[0]) + '\')">'
                      + x[1] + ' <span class="sbx-chip__n">' + x[2] + '</span></button>';
             }).join('');
             if (typeof hasPermission === 'function' && hasPermission('inventory.export')) {

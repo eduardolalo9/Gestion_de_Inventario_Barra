@@ -372,7 +372,7 @@
                     html += '<input id="areaCor_' + escapeHtml(a.id) + '" class="ui-campo" value="' + escapeHtml(a.etiquetaCorta || '') + '" '
                          +  'maxlength="20" placeholder="Etiqueta corta (para los botones)" aria-label="Etiqueta corta">';
                     html += '<div class="ui-fila">';
-                    html += '<button type="button" class="adm-btn primary" onclick="uiGuardarArea(\'' + escapeHtml(a.id) + '\')">Guardar</button>';
+                    html += '<button type="button" class="adm-btn primary" onclick="uiGuardarArea(\'' + jsArg(a.id) + '\')">Guardar</button>';
                     html += '<button type="button" class="adm-btn" onclick="uiCancelarEdicion()">Cancelar</button>';
                     html += '</div>';
                 } else {
@@ -389,11 +389,11 @@
                     // dejaba las dos acciones apiladas a todo lo ancho de la tarjeta.
                     html += '<button type="button" class="ui-icono-btn" '
                          +  'title="Editar" aria-label="Editar ' + escapeHtml(a.nombre) + '" '
-                         +  'onclick="uiEditarArea(\'' + escapeHtml(a.id) + '\')"><i class="fa-solid fa-pen" aria-hidden="true"></i></button>';
+                         +  'onclick="uiEditarArea(\'' + jsArg(a.id) + '\')"><i class="fa-solid fa-pen" aria-hidden="true"></i></button>';
                     if (!sistema) {
                         html += '<button type="button" class="ui-icono-btn ui-icono-btn--peligro" '
                              +  'title="Eliminar" aria-label="Eliminar ' + escapeHtml(a.nombre) + '" '
-                             +  'onclick="uiEliminarArea(\'' + escapeHtml(a.id) + '\')"><i class="fa-solid fa-trash" aria-hidden="true"></i></button>';
+                             +  'onclick="uiEliminarArea(\'' + jsArg(a.id) + '\')"><i class="fa-solid fa-trash" aria-hidden="true"></i></button>';
                     }
                     html += '</div>';
                 }

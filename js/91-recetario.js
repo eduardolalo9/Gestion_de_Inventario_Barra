@@ -694,7 +694,7 @@
             lista.slice(0, lim).forEach(function(receta) {
                 var cr = costoReceta(receta);
                 var costoTxt = cr.incompleto ? 'Costo incompleto' : ('$' + cr.costo.toFixed(2));
-                html += '<div class="rec-card" data-sbx-item onclick="_recetarioAbrirFicha(\'' + receta.id + '\')">';
+                html += '<div class="rec-card" data-sbx-item onclick="_recetarioAbrirFicha(\'' + jsArg(receta.id) + '\')">';
                 html += '<div class="rec-card__cab">';
                 html += '<p class="rec-card__nom">' + resaltarBusqueda(receta.nombre || '(sin nombre)', porInsumo ? '' : _recetarioSearchTerm) + '</p>';
                 if (!receta.activa) html += '<span style="font-size:.68rem;background:var(--card-high);color:var(--txt-muted);padding:2px 8px;border-radius:999px;white-space:nowrap;">Inactiva</span>';
