@@ -178,7 +178,8 @@
             (filas || []).forEach(function(f) {
                 var g = f.p.group || 'General';
                 if (g !== grupo) { cerrar(); grupo = g; subVal = 0; subUni = 0; }
-                var precio = (typeof f.p.precio === 'number' && isFinite(f.p.precio)) ? f.p.precio : '';
+                var pvX = precioProducto(f.p);   // v5.47: precio vigente (última compra)
+                var precio = (typeof pvX === 'number' && isFinite(pvX)) ? pvX : '';
                 var total = r2(Number(f.total) || 0);
                 var valor = precio === '' ? '' : r2(precio * total);
                 out.push([g, f.p.id, f.p.name || '', f.p.unit || '', precio, total, valor]); tipos.push('dato');

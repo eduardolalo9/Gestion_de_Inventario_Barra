@@ -53,6 +53,7 @@ const ctx = {
     }
 };
 ctx.window = ctx; vm.createContext(ctx);
+vm.runInContext(require('./_precio-producto'), ctx);   // v5.47: precio vigente
 vm.runInContext(src49, ctx);
 vm.runInContext(src86, ctx);
 const antesProductos = JSON.stringify(ctx.products), antesConteo = JSON.stringify(ctx.auditoriaConteo);

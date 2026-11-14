@@ -49,7 +49,7 @@ chk('Inicio: sin bloque "Reportes Publicados"', !/Reportes Publicados/i.test(fnI
 const fnPanel = sinComent(extraerFuncion(panel, 'renderPanelInicio'));
 chk('Inicio: la tarjeta "Origen del Total" ya no se pinta', !/_panelExistenciaSemana\(\)/.test(fnPanel));
 chk('Inicio: _panelExistenciaSemana se conserva (FASE 14/16 la prueban)', /function _panelExistenciaSemana\(/.test(panel));
-chk('Inicio: la tarjeta de pedido sugerido abre la pantalla nueva', /abrirPedidoSugerido\(\)/.test(tablero));
+chk('Inicio: la tarjeta de pedido sugerido abre la pantalla nueva (v5.47: la pestaña Pedidos)', /abrirPedidoSugerido\(\)/.test(tablero));
 
 // ═══ 2 · PRODUCTOS ══════════════════════════════════════════════════════════
 const fnBarra = extraerFuncion(r70, '_productosBarraAcciones');
@@ -100,6 +100,7 @@ chk('Pedido sugerido: "Generar pedido" usa el carrito de siempre (addToCart + op
         _ps: { cantidades: {} }
     };
     vm.createContext(ctx);
+    vm.runInContext(require('./_precio-producto'), ctx);   // v5.47: precio vigente
     vm.runInContext(['_psRed', 'pedidoSugeridoFilas', 'pedidoSugeridoOrdenar', 'pedidoSugeridoResumen', '_psCantidad']
         .map(n => extraerFuncion(ps, n)).join('\n'), ctx);
     const lista = [

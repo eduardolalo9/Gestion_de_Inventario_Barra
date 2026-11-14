@@ -84,6 +84,33 @@
         // NO reescribe product.precio (ver §2.5 del diseño): es solo la señal para
         // el aviso de diferencia de costo en la importación.
         let costosUltimos = {};
+        // v5.47 — el precio vigente de un producto es el costo de su última compra (costosUltimos) y, si
+        // todavía no tiene compra, el precio del catálogo. Lo decide SOLO este acceso (ver js/88-compras.js,
+        // «PRECIO VIGENTE»): toda pantalla, cálculo y Excel con dinero pasa por precioProducto().
+        function _costoValido(c) {
+            return !!c && typeof c.costo === 'number' && isFinite(c.costo) && c.costo > 0;
+        }
+
+        /** Costo de la última compra del producto, o null. */
+        function ultimoCostoCompra(productoId) {
+            var c = (typeof costosUltimos !== 'undefined' && costosUltimos) ? costosUltimos[productoId] : null;
+            return _costoValido(c) ? c : null;
+        }
+
+        /** Precio vigente del producto: última compra si la hay; si no, el precio del catálogo (o undefined). */
+        function precioProducto(p) {
+            if (!p) return undefined;
+            var c = ultimoCostoCompra(p.id);
+            return c ? c.costo : p.precio;
+        }
+
+        /** De dónde sale el precio vigente: { origen: 'compra', fecha, folio } | { origen: 'catalogo' } | { origen: 'ninguno' }. */
+        function precioProductoOrigen(p) {
+            var c = p ? ultimoCostoCompra(p.id) : null;
+            if (c) return { origen: 'compra', fecha: c.fecha || '', folio: c.folio || '' };
+            return { origen: (p && typeof p.precio === 'number') ? 'catalogo' : 'ninguno' };
+        }
+
         // FASE 4B — estado de la pantalla de importación de compras (js/88-compras.js).
         // 'lista' | 'vista_previa' | 'incidencias' | 'incidencias_previa'.
         let comprasImportView = 'lista';

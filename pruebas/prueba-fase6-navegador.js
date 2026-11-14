@@ -237,7 +237,7 @@ const PUERTO = process.env.PUERTO || '8080';
       { id: 'PED-001', supplier: 'Standard Foods', date: '2026-09-01', products: [{ name: 'DON JULIO 70', unit: 'PZA', quantity: 2 }], total: 2 },
       { id: 'PED-002', supplier: 'Fresco del Valle', date: '2026-09-02', products: [{ name: 'LIMON', unit: 'KG', quantity: 5 }], total: 5 }
     ];
-    activeTab = 'pedidos'; renderTab(); return !!document.getElementById('sbx-input-pedidos');
+    activeTab = 'historia'; _historiaVista = 'pedidos'; renderTab(); return !!document.getElementById('sbx-input-pedidos');   // v5.47: la lista de pedidos vive en Historia → Pedidos
   });
   await p.fill('#sbx-input-pedidos', 'fresco'); await p.waitForTimeout(320);
   chk('Pedidos: busca por proveedor', ped && await p.evaluate(() =>
@@ -254,7 +254,7 @@ const PUERTO = process.env.PUERTO || '8080';
       { id: 'INV-2', area: 'barra1',  date: '2026-09-07', products: [{ name: 'CAMPARI', stock: 1, unit: 'PZA', abiertas: [] }], totalProducts: 1 },
       { id: 'INV-3', area: 'barra1',  date: '2026-09-14', products: [{ name: 'APEROL', stock: 2, unit: 'PZA', abiertas: [] }], totalProducts: 2 }
     ];
-    activeTab = 'historia'; renderTab();
+    activeTab = 'historia'; _historiaVista = 'inventario'; renderTab();   // v5.47: Historia tiene vista Inventario | Pedidos
   });
   await p.click('#tabContent [data-sbx-filtro="area:barra1"]'); await p.waitForTimeout(150);
   await p.fill('#sbx-input-historia', 'aperol'); await p.waitForTimeout(320);

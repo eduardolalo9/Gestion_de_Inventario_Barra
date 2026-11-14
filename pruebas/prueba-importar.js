@@ -32,7 +32,7 @@ const ctx = { window: {}, console: { warn() {}, info() {}, log() {}, error() {} 
               APP_VERSION: '5.18', DB_VERSION: 1 };
 let A;
 try {
-    A = new Function('ctx', 'with (ctx) {' + ciclo + '\n' + arr + '\n' + cat + '\n' + imp + '\n' + det + `
+    A = new Function('ctx', 'with (ctx) {' + require('./_precio-producto') + '\n' + ciclo + '\n' + arr + '\n' + cat + '\n' + imp + '\n' + det + `
       return { importarPlantilla, importarPlantillaCsv, importarValidarCatalogo, importarValidarExistencias, importarArmarCorte,
                importarValidarMomento, comprasDetalleDatos, anclaElegir, anclaEtiqueta, COLUMNAS_CATALOGO, IMPORTAR_SECCIONES, _impNumero };
     }`)(ctx);

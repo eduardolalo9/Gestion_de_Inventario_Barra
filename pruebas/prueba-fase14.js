@@ -162,7 +162,7 @@ if (A) {
 // ═══ 4 · Venta del turno — capa pura ═══════════════════════════════════════
 let T;
 try {
-    T = new Function('ctx', 'with (ctx) {' + turno + '\nreturn { ventaTurnoAnalizar, ventaTurnoEfecto };}')({ window: {} });
+    T = new Function('ctx', 'with (ctx) {' + require('./_precio-producto') + '\n' + turno + '\nreturn { ventaTurnoAnalizar, ventaTurnoEfecto };}')({ window: {} });
 } catch (e) { chk('js/94-venta-turno.js se ejecuta aislado', false, String(e)); }
 if (T) {
     chk('js/94-venta-turno.js se ejecuta aislado', true);

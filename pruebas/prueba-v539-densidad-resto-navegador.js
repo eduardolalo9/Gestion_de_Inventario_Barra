@@ -33,11 +33,11 @@ const CONTRASTE = (sel) => {
     const ir = async (tab) => { await p.evaluate((t) => { activeTab = t; renderTab(); window.scrollTo(0, 0); }, tab); await p.waitForTimeout(250); };
     const desborde = () => p.evaluate(() => document.scrollingElement.scrollWidth > innerWidth + 1);
 
-    // Pedidos
-    await ir('pedidos');
-    const ped = await p.evaluate(() => { const c = document.querySelector('.ped-card'); const filas = [...c.querySelectorAll('.ped-tabla tbody tr')].map(r => Math.round(r.getBoundingClientRect().height));
+    // Pedidos (v5.47: los pedidos generados viven en Historia → Pedidos; se abre la tarjeta para medir el pedido completo)
+    await p.evaluate(() => { _historiaVista = 'pedidos'; _pedidoAbiertoId = 'PED-0042'; }); await ir('historia');
+    const ped = await p.evaluate(() => { const c = document.querySelector('.ped-c--abierto'); const filas = [...c.querySelectorAll('.ped-tabla tbody tr')].map(r => Math.round(r.getBoundingClientRect().height));
       return { filas, cab: [...c.querySelectorAll('.ped-tabla th')].map(t => t.textContent), cant: getComputedStyle(c.querySelector('td.ped-tabla__n')).fontFamily,
-               bts: [...c.querySelectorAll('.ui-icono-btn')].map(b => [Math.round(b.getBoundingClientRect().height), b.getAttribute('aria-label')]), nota: /Antes de las 4/.test(c.textContent), total: /Total Productos: 5\.00/.test(c.textContent) }; });
+               bts: [...c.querySelectorAll('.ped-c__acc button')].map(b => [Math.round(b.getBoundingClientRect().height), b.getAttribute('aria-label')]), nota: /Antes de las 4/.test(c.textContent), total: /Total Productos: 5\.00/.test(c.textContent) }; });
     chk(T + '★ Pedidos: filas de la tabla ≤ 40 px, encabezados cortos (Producto / Unidad / Cant.) y cantidad en mono', ped.filas.every(h => h <= 40) && ped.cab.join('|') === 'Producto|Unidad|Cant.' && /IBM Plex Mono/.test(ped.cant), JSON.stringify(ped));
     chk(T + 'Pedidos: compartir y eliminar siguen de 44 px y con nombre accesible; nota y total intactos', ped.bts.length === 2 && ped.bts.every(b => b[0] >= 44 && /pedido PED-0042/.test(b[1])) && ped.nota && ped.total, JSON.stringify(ped.bts));
     // Recetario

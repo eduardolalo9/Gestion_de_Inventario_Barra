@@ -609,6 +609,12 @@
                 // avanzar el estado local por delante de lo que el servidor
                 // ya aceptó).
                 _agregarCompraLocal(compra, asientos);
+                // v5.47 — el precio vigente de sus productos pasa a ser el costo de esta compra.
+                // No espera ni interrumpe: la compra ya está confirmada.
+                try {
+                    aplicarCostosDeCompra(compra).then(function(r) { if (r && r.cambios.length) _preciosRepintar(); })
+                        .catch(function(ePrecio) { console.warn('[Precios] aplicarCostosDeCompra:', ePrecio); });
+                } catch (ePrecio) { console.warn('[Precios] aplicarCostosDeCompra:', ePrecio); }
                 saveToLocalStorage();
 
                 _registrarEnSyncQueue({
@@ -737,6 +743,11 @@
             // Solo tras la confirmación del servidor se refleja localmente.
             var cancelada = Object.assign({}, actual, cambios);
             _agregarCompraLocal(cancelada, []);
+            // v5.47 — si esa compra era la que fijaba el precio, regresa la anterior.
+            try {
+                revertirCostosDeCompra(cancelada.compraId).then(function(r) { if (r && r.cambios.length) _preciosRepintar(); })
+                    .catch(function(ePrecio) { console.warn('[Precios] revertirCostosDeCompra:', ePrecio); });
+            } catch (ePrecio) { console.warn('[Precios] revertirCostosDeCompra:', ePrecio); }
             saveToLocalStorage();
             try {
                 _registrarEnSyncQueue({
@@ -810,6 +821,212 @@
         }
 
         // ══════════════════════════════════════════════════════════════════════
+        //  PRECIO VIGENTE = COSTO DE LA ÚLTIMA COMPRA  (v5.47)
+        //  ────────────────────────────────────────────────────────────────────
+        //  Pedido del dueño: «los precios de productos se actualizan con el
+        //  último precio de compra». Se usa el documento costos/ultimos que el
+        //  diseño de FASE 4 ya preveía (y sus reglas: lo escribe quien registra
+        //  compras —purchases.import / purchases.create— y lo lee toda cuenta
+        //  activa), pero que nunca se había conectado.
+        //    · El catálogo NO se reescribe: product.precio sigue siendo el precio
+        //      del catálogo (admin lo publica) y es el respaldo cuando un producto
+        //      todavía no tiene compra. Así no hay escrituras al catálogo por
+        //      quien no puede publicarlo ni diferencias entre dispositivos.
+        //    · precioProducto(p) es el ÚNICO lugar que decide el precio vigente:
+        //      toda pantalla, cálculo y Excel que usa dinero pasa por ahí.
+        //    · Cada entrada: { costo, fecha (ingreso), folio, compraId, ts,
+        //      previo }. `previo` guarda la anterior para poder REGRESAR a ella si
+        //      la compra vigente se cancela (la cancelación existe justo para
+        //      importaciones con un dato equivocado).
+        //    · Un 0 NUNCA es precio (la captura manual acepta «0 si no tuvo
+        //      costo»): se ignora y queda el anterior.
+        //    · Una compra con fecha de ingreso más vieja que la vigente no la
+        //      reemplaza (importar tarde una entrada antigua no regresa el precio).
+        //  Las funciones de abajo hasta costosAplicar son PURAS (sin red ni DOM).
+        // ══════════════════════════════════════════════════════════════════════
+
+        /** Entradas de costo que deja una compra: { productoId: { costo, fecha, folio, compraId, ts } }. Canceladas: ninguna. */
+        function costosDeCompra(compra, ts) {
+            var out = {};
+            if (!compra || !compra.compraId || compraCancelada(compra) || !Array.isArray(compra.lineas)) return out;
+            var fecha = String(compra.fechaIngreso || compra.fecha || '');
+            compra.lineas.forEach(function(l) {
+                if (!l || l.enCatalogo === false || !l.productoId) return;
+                var costo = Number(l.costoUnitario);
+                if (!isFinite(costo) || costo <= 0) return;
+                out[String(l.productoId)] = {
+                    costo: Math.round(costo * 10000) / 10000, fecha: fecha,
+                    folio: String(compra.folio || compra.docSap || ''), compraId: String(compra.compraId),
+                    ts: (typeof ts === 'number') ? ts : (Number(compra.creadoEn) || 0)
+                };   // en una misma compra, la última línea del producto manda
+            });
+            return out;
+        }
+
+        /** ¿`nueva` debe reemplazar a `vigente`? Más reciente por fecha de ingreso; a igual fecha, la registrada después. */
+        function _costoEsMasNuevo(nueva, vigente) {
+            if (!_costoValido(vigente)) return true;
+            if (String(nueva.compraId) === String(vigente.compraId)) return nueva.costo !== vigente.costo || nueva.fecha !== vigente.fecha;
+            var fn = String(nueva.fecha || ''), fv = String(vigente.fecha || '');
+            if (fn !== fv) return fn > fv;
+            return (Number(nueva.ts) || 0) > (Number(vigente.ts) || 0);
+        }
+
+        function _sinPrevio(e) { var c = Object.assign({}, e); delete c.previo; return c; }
+
+        /**
+         * costosAplicar(vigentes, { nuevas, revertir }) — PURA.
+         *   nuevas:   { productoId: entrada } (de costosDeCompra)
+         *   revertir: [compraId] canceladas: si la vigente es de esa compra, vuelve la previa (o se quita).
+         * → { mapa: { productoId: entrada } completo, cambios: [productoId], eliminar: [productoId] }
+         */
+        function costosAplicar(vigentes, opciones) {
+            opciones = opciones || {};
+            var mapa = {}, cambios = {}, eliminar = {};
+            var base = vigentes && typeof vigentes === 'object' ? vigentes : {};
+            Object.keys(base).forEach(function(k) { mapa[k] = base[k]; });
+            (opciones.revertir || []).forEach(function(cid) {
+                Object.keys(mapa).forEach(function(pid) {
+                    var e = mapa[pid];
+                    if (!e) return;
+                    if (String(e.compraId) === String(cid)) {
+                        if (_costoValido(e.previo)) { mapa[pid] = Object.assign({}, e.previo, { previo: null }); delete eliminar[pid]; }
+                        else { delete mapa[pid]; eliminar[pid] = true; }
+                        cambios[pid] = true;
+                    } else if (e.previo && String(e.previo.compraId) === String(cid)) {
+                        mapa[pid] = Object.assign({}, e, { previo: null });
+                        cambios[pid] = true;
+                    }
+                });
+            });
+            var nuevas = opciones.nuevas || {};
+            Object.keys(nuevas).forEach(function(pid) {
+                var n = nuevas[pid], v = mapa[pid];
+                if (!_costoValido(n) || !_costoEsMasNuevo(n, v)) return;
+                var mismaCompra = !!v && String(v.compraId) === String(n.compraId);
+                mapa[pid] = Object.assign({}, n, { previo: mismaCompra ? (v.previo || null) : (_costoValido(v) ? _sinPrevio(v) : null) });
+                cambios[pid] = true; delete eliminar[pid];
+            });
+            return { mapa: mapa, cambios: Object.keys(cambios), eliminar: Object.keys(eliminar) };
+        }
+
+        function _puedeEscribirCostos() {
+            return typeof hasPermission === 'function' && (hasPermission('purchases.import') || hasPermission('purchases.create'));
+        }
+
+        /**
+         * Aplica un cambio a costos/ultimos EN EL SERVIDOR con una transacción (dos
+         * aparatos registrando compras a la vez no se pisan) y deja el espejo local
+         * igual al resultado. Devuelve el mapa resultante o null si no se pudo.
+         * Nunca lanza: registrar la compra ya se confirmó; el precio se reintenta
+         * solo en la próxima carga (reconciliarCostosConCompras).
+         */
+        async function _costosUltimosPersistir(opciones) {
+            if (!_db || !navigator.onLine || !_puedeEscribirCostos()) return null;
+            try {
+                var ref = _db.collection('costos').doc('ultimos');
+                var FV = firebase.firestore.FieldValue, FP = firebase.firestore.FieldPath;
+                var resultado = null;
+                await _db.runTransaction(async function(tx) {
+                    var snap = await tx.get(ref);
+                    var actual = (snap.exists && snap.data() && snap.data().productos) || {};
+                    var r = costosAplicar(actual, opciones);
+                    resultado = r.mapa;
+                    if (!r.cambios.length) return;
+                    if (!snap.exists) { tx.set(ref, { productos: r.mapa }); return; }
+                    var args = [];
+                    r.cambios.forEach(function(pid) {
+                        args.push(new FP('productos', pid));
+                        args.push(r.eliminar.indexOf(pid) !== -1 ? FV.delete() : r.mapa[pid]);
+                    });
+                    tx.update.apply(tx, [ref].concat(args));
+                });
+                if (resultado) costosUltimos = resultado;
+                return resultado;
+            } catch (e) {
+                console.warn('[Precios] No se pudo guardar el último costo (se reintenta en la próxima carga):', e);
+                return null;
+            }
+        }
+
+        /** Una compra recién guardada: el precio vigente de sus productos pasa a ser su costo. */
+        async function aplicarCostosDeCompra(compra) {
+            var nuevas = costosDeCompra(compra, Date.now());
+            if (!Object.keys(nuevas).length) return { cambios: [] };
+            var local = costosAplicar(costosUltimos, { nuevas: nuevas });
+            costosUltimos = local.mapa;                       // se ve al instante en este aparato
+            var guardado = await _costosUltimosPersistir({ nuevas: nuevas });
+            return { cambios: local.cambios, guardado: !!guardado };
+        }
+
+        /** Una compra cancelada: el precio regresa a la compra anterior (o al catálogo). */
+        async function revertirCostosDeCompra(compraId) {
+            var local = costosAplicar(costosUltimos, { revertir: [compraId] });
+            costosUltimos = local.mapa;
+            var guardado = await _costosUltimosPersistir({ revertir: [compraId] });
+            return { cambios: local.cambios, guardado: !!guardado };
+        }
+
+        /**
+         * Pone al día el espejo local con lo que ya se sabe de las compras
+         * cargadas en este aparato (cubre importaciones hechas desde otro
+         * aparato antes de que existiera costos/ultimos, un guardado que falló y
+         * compras canceladas). Si esta cuenta puede escribir, lo sube también.
+         */
+        function reconciliarCostosConCompras() {
+            var nuevas = {}, canceladas = [];
+            (Array.isArray(compras) ? compras : []).forEach(function(c) {
+                if (!c) return;
+                if (compraCancelada(c)) { canceladas.push(c.compraId); return; }
+                var m = costosDeCompra(c);
+                Object.keys(m).forEach(function(pid) { if (!nuevas[pid] || _costoEsMasNuevo(m[pid], nuevas[pid])) nuevas[pid] = m[pid]; });
+            });
+            var op = { nuevas: nuevas, revertir: canceladas };
+            var r = costosAplicar(costosUltimos, op);
+            if (r.cambios.length) {
+                costosUltimos = r.mapa;
+                _costosUltimosPersistir(op);   // sin esperar: si falla, se reintenta en la próxima carga
+            }
+            return r.cambios.length;
+        }
+
+        /**
+         * Lee costos/ultimos (lo que registró cualquier aparato) y lo reconcilia
+         * con las compras locales. Se llama al arrancar y cuando cambian las
+         * compras (sync en vivo). Sin red se queda con la copia local.
+         */
+        async function cargarUltimosCostos() {
+            var cambio = false;
+            if (_db && navigator.onLine) {
+                try {
+                    var snap = await _db.collection('costos').doc('ultimos').get();
+                    var del = (snap.exists && snap.data() && snap.data().productos) || {};
+                    if (JSON.stringify(del) !== JSON.stringify(costosUltimos)) { costosUltimos = del; cambio = true; }
+                } catch (e) {
+                    console.warn('[Precios] No se pudo leer costos/ultimos:', e);
+                }
+            }
+            if (reconciliarCostosConCompras() > 0) cambio = true;
+            if (cambio) {
+                try { saveToLocalStorage(); } catch (_) {}
+                _preciosRepintar();
+            }
+            return cambio;
+        }
+
+        /** Repinta lo que muestra dinero, sin interrumpir una captura abierta. */
+        function _preciosRepintar() {
+            // Nunca lanza: corre al final de una compra ya confirmada.
+            try {
+                if (typeof renderTab !== 'function' || typeof document === 'undefined') return;
+                if (document.body && document.body.classList && document.body.classList.contains('modal-open')) return;
+                var a = document.activeElement;
+                if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return;
+                renderTab();
+            } catch (e) { console.warn('[Precios] Repintado falló:', e); }
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
         //  DIFERENCIA DE COSTO — solo avisa, nunca reescribe el catálogo (§2.5)
         // ══════════════════════════════════════════════════════════════════════
 
@@ -828,13 +1045,16 @@
             compra.lineas.forEach(function(l) {
                 if (!l.enCatalogo) return;
                 var prod = products.find(function(p) { return p.id === l.productoId; });
-                if (!prod || typeof prod.precio !== 'number' || prod.precio <= 0) return;
-                var pct = ((l.costoUnitario - prod.precio) / prod.precio) * 100;
+                // v5.47 — contra el precio VIGENTE (la última compra, o el catálogo si no hay): el aviso
+                // dice cuánto cambió el costo respecto de la compra anterior.
+                var pv = precioProducto(prod);
+                if (!prod || typeof pv !== 'number' || pv <= 0) return;
+                var pct = ((l.costoUnitario - pv) / pv) * 100;
                 if (Math.abs(pct) >= 1) {
                     out.push({
                         productoId:     l.productoId,
                         nombre:         prod.name,
-                        precioCatalogo: prod.precio,
+                        precioCatalogo: pv,
                         costoCompra:    l.costoUnitario,
                         pct:            Math.round(pct * 10) / 10
                     });
@@ -1912,8 +2132,9 @@
             l.texto = texto;
             l.productoId = hit.length === 1 ? String(hit[0].id) : '';
             _cmLimpiarError('cm-p-' + i, function(e) { if (e.lineasDetalle && e.lineasDetalle[i]) delete e.lineasDetalle[i].productoId; });
-            if (l.productoId && String(l.costo || '').trim() === '' && hit[0].precio > 0) {
-                l.costo = String(hit[0].precio);
+            var pvM = (l.productoId && hit[0]) ? precioProducto(hit[0]) : 0;   // v5.47: sugiere el costo de la última compra
+            if (l.productoId && String(l.costo || '').trim() === '' && pvM > 0) {
+                l.costo = String(pvM);
                 var k = document.getElementById('cm-k-' + i); if (k) k.value = l.costo;
             }
             _cmRefrescarTotales();

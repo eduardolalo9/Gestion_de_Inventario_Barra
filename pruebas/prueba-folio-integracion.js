@@ -112,7 +112,7 @@ function montar(db, uid, deviceId) {
         leer('js/40-firestore.js') + '\n' + leer('js/75-auditoria-flujo.js') + '\n' +
         '; return { handleAuditSessionChange, auditoriaResetear, syncToCloud, subscribeAllUsersAuditoria, ' +
         '           _obtenerSiguienteNumeroInventario, _adminIniciarSesionFirestore, cerrarInventarioFisico: (typeof cerrarInventarioFisico === "function" ? cerrarInventarioFisico : null) };';
-    const api = new Function('deps', 'with (deps) {\n' + codigo + '\n}')(deps);
+    const api = new Function('deps', 'with (deps) {\n' + require('./_precio-producto') + '\n' +   /* v5.47: precio vigente */  codigo + '\n}')(deps);
     api.deps = deps; api.avisos = avisos;
     api.crear = async function() {
         deps._pendiente = null;

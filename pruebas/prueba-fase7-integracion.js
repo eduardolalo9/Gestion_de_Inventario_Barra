@@ -64,7 +64,7 @@ function montarFirestore(db, uid, admin) {
         requestAnimationFrame: (f) => f(), setTimeout: (f) => { try { f(); } catch (_) {} return 0; }, clearTimeout() {}
     };
     deps.window = deps;
-    const montar = new Function('deps', 'with (deps) {\n' + src +
+    const montar = new Function('deps', 'with (deps) {\n' + require('./_precio-producto') + '\n' +   /* v5.47: precio vigente */  src +
         '\n; return { _writeChunkedSubcollection: _writeChunkedSubcollection, _readChunkedSubcollection: _readChunkedSubcollection }; }');
     return montar(deps);
 }
@@ -86,7 +86,7 @@ function montarSolicitarAjuste(db, uid) {
     const avisos = [];
     const deps = { _db: db, currentUserUid: uid, showNotification: (t) => avisos.push(String(t)),
                    crearNotificacion: async () => {}, console: { error() {}, warn() {}, info() {} } };
-    const f = new Function('deps', 'with (deps) {\n' + cuerpo + '\n; return solicitarAjuste; }')(deps);
+    const f = new Function('deps', 'with (deps) {\n' + require('./_precio-producto') + '\n' +   /* v5.47: precio vigente */  cuerpo + '\n; return solicitarAjuste; }')(deps);
     f._avisos = avisos;
     return f;
 }

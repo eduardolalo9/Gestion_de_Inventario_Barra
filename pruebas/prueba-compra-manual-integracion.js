@@ -81,7 +81,7 @@ function montarCompras(db, uid, opciones) {
     };
     deps.window = deps;
 
-    const montar = new Function('deps', 'with (deps) {\n' + ciclo + '\n' + firest + '\n' + compras +
+    const montar = new Function('deps', 'with (deps) {\n' + require('./_precio-producto') + '\n' +   /* v5.47: precio vigente */  ciclo + '\n' + firest + '\n' + compras +
         '\n; return { guardarCompra: guardarCompra,' +
         '            _compraId: _compraId,' +
         '            _asientosDesdeCompra: _asientosDesdeCompra,' +

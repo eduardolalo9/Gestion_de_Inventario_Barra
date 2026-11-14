@@ -138,7 +138,7 @@ chk('La versión de caché subió por encima de 4.0 (FASE 5)',
         new RegExp("BusquedaUI\\.registrar\\('" + k + "', \\{[\\s\\S]{0,500}?alAplicar[\\s\\S]{0,300}?refrescar").test(app));
 });
 [['Inicio', render, "function renderInicioTab"], ['Productos', render, "function renderProductosTab"],
- ['Pedidos', render, "function renderPedidosTab"], ['Conteo', inv, "function renderAuditoriaConteo"],
+ ['Historia → Pedidos', render, "function renderHistorialPedidos"], ['Conteo', inv, "function renderAuditoriaConteo"],
  ['Historia', inv, "function renderHistoriaTab"]].forEach(([n, src, fn]) => {
     const i = src.indexOf(fn); const cuerpo = i === -1 ? '' : src.slice(i, src.indexOf('\n        }\n', i));
     chk(n + ' usa la barra unificada y una región de resultados',

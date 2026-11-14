@@ -23,7 +23,7 @@ const ctx = { window: {}, console: { warn() {}, info() {}, log() {}, error() {} 
               document: { getElementById: () => null, addEventListener() {} }, AREAS_CONTEO: [], areas: {} };
 let A;
 try {
-    A = new Function('ctx', 'with (ctx) {' + imp + '\nreturn { importarValidarExistencias, importarArmarCorte, importarPlantilla, COLUMNAS_EXISTENCIAS, IMPORTAR_SECCIONES };}')(ctx);
+    A = new Function('ctx', 'with (ctx) {' + require('./_precio-producto') + '\n' + imp + '\nreturn { importarValidarExistencias, importarArmarCorte, importarPlantilla, COLUMNAS_EXISTENCIAS, IMPORTAR_SECCIONES };}')(ctx);
     chk('js/96-importar.js real se ejecuta', true);
 } catch (e) { chk('js/96-importar.js real se ejecuta', false, String(e && e.stack || e)); }
 

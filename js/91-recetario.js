@@ -58,12 +58,13 @@
          *   3) sin forma de calcularlo  → null
          */
         function costoPorUnidadBase(producto) {
-            if (!producto || typeof producto.precio !== 'number' || producto.precio < 0) return null;
+            var precio = precioProducto(producto);   // v5.47: precio vigente (última compra)
+            if (!producto || typeof precio !== 'number' || precio < 0) return null;
             if (typeof producto.conversion === 'number' && producto.conversion > 0) {
-                return producto.precio / producto.conversion;
+                return precio / producto.conversion;
             }
             if (typeof producto.capacidadMl === 'number' && producto.capacidadMl > 0) {
-                return producto.precio / producto.capacidadMl;
+                return precio / producto.capacidadMl;
             }
             return null;
         }
@@ -130,12 +131,13 @@
          */
         function costoLineaReceta(ing, producto) {
             if (!ing || !producto) return null;
-            if (typeof producto.precio !== 'number' || producto.precio < 0) return null;
+            var precio = precioProducto(producto);   // v5.47: precio vigente (última compra)
+            if (typeof precio !== 'number' || precio < 0) return null;
             var cant = (typeof ing.cantidad === 'number' && isFinite(ing.cantidad)) ? ing.cantidad : null;
             if (cant === null) return null;
             var factor = factorAUnidadProducto(ing.uom, producto);
             if (factor === null) return null;
-            return cant * factor * producto.precio;
+            return cant * factor * precio;
         }
         window.costoLineaReceta = costoLineaReceta;
 

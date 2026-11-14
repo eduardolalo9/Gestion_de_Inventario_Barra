@@ -104,7 +104,7 @@ function montar(db, uid) {
         '; return { reconteoIniciar, reconteoAgregarProducto, _rcAplicarEdicion, _rcFinalizarConfirmado, reconteoFinalizar,' +
         ' reconteoVerDetalle, reconteoReabrir, _hayReconteoAbierto, _recalcAdminAggregatedConteo,' +
         ' activo: function() { return _reconteoActivo; }, pendiente: function() { return _auditSyncPending; } };';
-    const api = new Function('deps', 'with (deps) {\n' + codigo + '\n}')(deps);
+    const api = new Function('deps', 'with (deps) {\n' + require('./_precio-producto') + '\n' +   /* v5.47: precio vigente */  codigo + '\n}')(deps);
     api.deps = deps; api.avisos = avisos;
     return api;
 }

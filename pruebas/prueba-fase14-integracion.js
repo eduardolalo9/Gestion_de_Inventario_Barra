@@ -136,7 +136,7 @@ function montarApp(db, uid, opciones) {
     };
     deps.window = deps;
 
-    const montar = new Function('deps', 'with (deps) {\n' + ciclo + '\n' + arrastre + '\n' + conv + '\n' + firest + '\n' + flujo +
+    const montar = new Function('deps', 'with (deps) {\n' + require('./_precio-producto') + '\n' +   /* v5.47: precio vigente */  ciclo + '\n' + arrastre + '\n' + conv + '\n' + firest + '\n' + flujo +
         '\n; return { contabilizarInventario: contabilizarInventario,' +
         '            _saldosDesdeSnapshot: _saldosDesdeSnapshot,' +
         '            cierreMensualDesdeSnapshot: cierreMensualDesdeSnapshot,' +
@@ -187,7 +187,7 @@ function montarExistencia(db, productos, recetasLista) {
                    extraerFuncion('js/88-compras.js', 'compraCancelada') + '\n' +
                    extraerFuncion('js/93-ventas.js', '_ventasPeriodoDeDoc') + '\n' +
                    leer('js/48-consumo-teorico.js') + '\n' + leer('js/47-existencia.js');
-    return new Function('deps', 'with (deps) {\n' + cuerpo + '\n; return { cargar: existenciaCargarInicial, ' +
+    return new Function('deps', 'with (deps) {\n' + require('./_precio-producto') + '\n' +   /* v5.47: precio vigente */  cuerpo + '\n; return { cargar: existenciaCargarInicial, ' +
         'estado: existenciaInicialEstado, oficial: existenciaOficial, resumen: existenciaArrastreResumen, ' +
         'fechaISOLocal: fechaISOLocal, semanaId: semanaId }; }')(deps);
 }

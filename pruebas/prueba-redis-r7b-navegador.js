@@ -161,7 +161,7 @@ const PUERTO = process.env.PUERTO || '8080';
   // ══ E · PEDIDOS — sigue en pantalla igual que siempre (sin regresión) ═══
   await p.evaluate(() => {
     orders = [{ id: 'PED-1', supplier: 'DON JULIO', date: '2026-10-01', products: [{ name: 'TEQUILA', unit: 'Botellas', quantity: 2 }], total: 2 }];
-    activeTab = 'pedidos'; renderTab();
+    activeTab = 'historia'; _historiaVista = 'pedidos'; renderTab();   // v5.47: los pedidos generados viven en Historia → Pedidos
   });
   await p.waitForTimeout(150);
   const pedidos = await p.evaluate(() => {

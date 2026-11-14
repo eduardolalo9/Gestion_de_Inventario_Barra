@@ -2131,8 +2131,31 @@
             return { html: html, coincidencias: r.coincidencias, total: r.total };
         }
 
+        // v5.47 — Historia tiene dos vistas: Inventario (lo de siempre) y Pedidos (los generados). Solo en memoria.
+        var _historiaVista = 'inventario';
+
+        function historiaVista(v) {
+            _historiaVista = (v === 'pedidos') ? 'pedidos' : 'inventario';
+            renderTab();
+        }
+
+        function _historiaSegmentadoHtml() {
+            var pedidos = _historiaVista === 'pedidos';
+            var tab = function(id, icono, texto, n, on) {
+                return '<button type="button" role="tab" id="hsTab-' + id + '" class="fvs-tab' + (on ? ' fvs-tab--on' : '') + '"'
+                     + ' aria-selected="' + (on ? 'true' : 'false') + '" onclick="historiaVista(\'' + id + '\')">'
+                     + '<i class="fa-solid ' + icono + '" aria-hidden="true"></i><span>' + texto + '</span><span class="fvs-tab__n num">' + n + '</span></button>';
+            };
+            return '<div class="fvs-tabs" role="tablist" aria-label="Historial">'
+                 + tab('inventario', 'fa-boxes-stacked', 'Inventario', inventories.length, !pedidos)
+                 + tab('pedidos', 'fa-clipboard-list', 'Pedidos', orders.length, pedidos)
+                 + '</div>';
+        }
+
         function renderHistoriaTab() {
-            let html = UI.cabecera('Historial', 'Reportes publicados y conteos anteriores.');
+            let html = UI.cabecera('Historial', 'Inventarios y pedidos generados.');
+            html += _historiaSegmentadoHtml();
+            if (_historiaVista === 'pedidos') return html + renderHistorialPedidos();
 
             // ── Sección: Reportes publicados por admin (visible para todos) ──
             html += '<div id="historiaReportesWrap" class="hs-seccion">';
@@ -2380,6 +2403,7 @@
             // P0 — limpiar tambien los campos de compras
             ['productPrecio','productStockMinimo','productConversion','productProveedor','productPV']
                 .forEach(function(id) { var el = document.getElementById(id); if (el) el.value = ''; });
+            var _hintPrecio = document.getElementById('productPrecioHint'); if (_hintPrecio) { _hintPrecio.hidden = true; _hintPrecio.textContent = ''; }
             if (productId) {
                 const product = products.find(p => p.id === productId);
                 if (product) {
@@ -2395,6 +2419,14 @@
                     // P0 — stockMinimo puede ser 0 y 0 es un valor legitimo ('no se
                     // repone'), asi que aqui NO vale un if(valor) como en los de arriba.
                     if (typeof product.precio      === 'number') document.getElementById('productPrecio').value      = product.precio;
+                    // v5.47 — el precio vigente sale de la última compra: se dice aquí para que no sorprenda.
+                    var _orig = precioProductoOrigen(product);
+                    if (_hintPrecio && _orig.origen === 'compra') {
+                        _hintPrecio.textContent = 'Precio vigente: $' + precioProducto(product).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                            + ' (última compra' + (_orig.fecha ? ' ' + _orig.fecha : '') + (_orig.folio ? ', folio ' + _orig.folio : '')
+                            + '). Este campo es el precio del catálogo: se usa mientras no haya compra.';
+                        _hintPrecio.hidden = false;
+                    }
                     if (typeof product.conversion  === 'number') document.getElementById('productConversion').value  = product.conversion;
                     if (typeof product.stockMinimo === 'number') document.getElementById('productStockMinimo').value = product.stockMinimo;
                     if (product.proveedor) document.getElementById('productProveedor').value = product.proveedor;
@@ -2914,6 +2946,8 @@
             closeOrderModal();
             showNotification('Pedido creado');
             updateHeaderActions();
+            // v5.47 — el pedido recién generado queda abierto en Historia → Pedidos.
+            if (typeof abrirHistorialPedidos === 'function') abrirHistorialPedidos(order.id);
         }
 
         function deleteOrder(orderId) {

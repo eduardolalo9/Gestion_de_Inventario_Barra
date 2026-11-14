@@ -121,7 +121,7 @@ function montar(db, uid, deviceId, opts) {
         '           leerHistorial: function() { return _historialInventarios; }, hayMas: function() { return _historialHayMas; }, ' +
         '           handleAuditSessionChange, loadFromCloud, subscribeMainDoc, auditoriaResetear, syncToCloud, subscribeAllUsersAuditoria, ' +
         '           _obtenerSiguienteNumeroInventario, _adminIniciarSesionFirestore, cerrarInventarioFisico: (typeof cerrarInventarioFisico === "function" ? cerrarInventarioFisico : null) };';
-    const api = new Function('deps', 'with (deps) {\n' + codigo + '\n}')(deps);
+    const api = new Function('deps', 'with (deps) {\n' + require('./_precio-producto') + '\n' +   /* v5.47: precio vigente */  codigo + '\n}')(deps);
     api.deps = deps; api.avisos = avisos;
     // _applyCloudData completo necesita media app; aquí solo importa lo que
     // hace con la sesión, que es EXACTAMENTE lo que hace la real (js/45, tramo

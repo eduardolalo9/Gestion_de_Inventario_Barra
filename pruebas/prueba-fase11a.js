@@ -53,7 +53,7 @@ chk('ml y oz siguen convirtiéndose con la conversión del catálogo (caso de la
 chk('★ Una UoM que no se sabe interpretar devuelve null — nunca se inventa un factor',
     /return null;\s*\/\/ unidad que no sabemos interpretar/.test(receta));
 chk('costoLineaReceta usa cantidad × factor × precio',
-    /return cant \* factor \* producto\.precio;/.test(receta));
+    /return cant \* factor \* precio;/.test(receta) && /var precio = precioProducto\(producto\);/.test(receta));   // v5.47: precio vigente (última compra)
 chk('★ costoReceta ya NO multiplica por costoPorUnidadBase (que asumía mililitros)',
     /costoLineaReceta\(ing, producto\)/.test(receta) &&
     !/total \+= cu \* \(typeof ing\.cantidad/.test(receta));

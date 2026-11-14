@@ -43,7 +43,8 @@ const PUERTO = process.env.PUERTO || '8080';
   }));
   chk('Panel: 6 indicadores (productos, bajo mínimo, valor, compras, carrito, pedidos)', k.tiles.length === 6, JSON.stringify(k.tiles));
   chk('Bajo mínimo cuenta 3 (A, B y el de prueba)', /3 BAJO M[ÍI]NIMO/i.test(k.tiles[1]), k.tiles[1]);
-  chk('Valor en existencia = 2×100 + 3×50 + 0×1 = $350', /\$350/.test(k.tiles[2]), k.tiles[2]);
+  // v5.47 — el valor usa el precio vigente: A tiene una compra a $80 (costosUltimos, la del «Último costo» de la ficha), así que 2×80 + 3×50 = $310.
+  chk('Valor en existencia = 2×80 (última compra) + 3×50 + 0×1 = $310', /\$310/.test(k.tiles[2]), k.tiles[2]);
   chk('Compras de la semana muestran el importe', /\$1,200/.test(k.tiles[3]), k.tiles[3]);
   chk('v5.24 · Inicio ya no trae las gráficas "Bajo mínimo — existencia / mínimo", "Productos por grupo" ni "Comparación de existencias"',
       k.barras.length === 0 && await p.evaluate(() => !/Bajo mínimo — existencia|Productos por grupo|Comparación de existencias/.test(document.getElementById('tabContent').innerText)), JSON.stringify(k.barras));

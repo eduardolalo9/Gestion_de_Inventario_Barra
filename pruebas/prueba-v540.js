@@ -6,7 +6,7 @@ const RAIZ = path.join(__dirname, '..');
 const leer = (f) => fs.readFileSync(path.join(RAIZ, f), 'utf8');
 const C = []; const chk = (n, ok, d) => C.push({ n, ok: !!ok, d: d || '' });
 const ctx = { console, Math, Date, String, Number, Array, Object, JSON, isFinite, window: {} };
-vm.createContext(ctx); vm.runInContext(leer('js/94-control-negativos.js'), ctx);
+vm.createContext(ctx); vm.runInContext(require('./_precio-producto'), ctx); vm.runInContext(leer('js/94-control-negativos.js'), ctx);
 const calc = (e) => vm.runInContext('controlNegativosCalcular', ctx)(e);
 const P = [{ id: 'A', name: 'TEQUILA', precio: 300 }, { id: 'B', name: 'LIMON', precio: 10 }, { id: 'C', name: 'RON', precio: 200 }, { id: 'D', name: 'SIN MOV' }, { id: 'E', name: 'HIELO' }];
 const T = { A: -0.8, B: 20, C: -1.5, D: 5, E: 30 }, INI = { A: 1, B: 50, E: 30 };

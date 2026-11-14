@@ -81,7 +81,7 @@ const ctx = {
     console: { warn: function() {} }
 };
 
-const codigo = existenciaSrc + '\n'
+const codigo = require('./_precio-producto') + '\n' + existenciaSrc + '\n'
     + extraerFuncion(multiusuario, 'inventarioAbierto') + '\n'
     + ['tieneDatosConversion', 'tieneConversion', 'convertirOzAPuntos'].map(function(n) { return extraerFuncion(conversion, n); }).join('\n') + '\n'
     + fvsSrc;

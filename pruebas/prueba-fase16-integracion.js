@@ -68,7 +68,7 @@ function montarTotal(db, uid, permisos, productos, recetasLista) {
                    extraerFuncion('js/88-compras.js', 'compraCancelada') + '\n' +
                    extraerFuncion('js/93-ventas.js', '_ventasPeriodoDeDoc') + '\n' +
                    leer('js/48-consumo-teorico.js') + '\n' + leer('js/47-existencia.js') + '\n' + leer('js/51-total-publicado.js');
-    return new Function('deps', 'with (deps) {\n' + cuerpo + '\n; return { cargar: existenciaCargarInicial, estado: existenciaInicialEstado, ' +
+    return new Function('deps', 'with (deps) {\n' + require('./_precio-producto') + '\n' +   /* v5.47: precio vigente */  cuerpo + '\n; return { cargar: existenciaCargarInicial, estado: existenciaInicialEstado, ' +
         'oficial: existenciaOficial, publicar: totalPublicadoPublicarAhora, enUso: totalPublicadoEnUso, info: totalPublicadoInfo, ' +
         'desuscribir: totalPublicadoDesuscribir, fechaISOLocal: fechaISOLocal, semanaId: semanaId }; }')(deps);
 }
@@ -77,7 +77,7 @@ function montarPapelera(db, uid, sesion) {
     const deps = { _db: db, FIRESTORE_DOC_ID: DOC_ID, currentUserUid: uid, _auditoriaSessionId: sesion,
                    estadoAreasVacio: (v) => ({ almacen: v, barra1: v, barra2: v }), console: { warn() {}, error() {}, log() {} } };
     deps.window = deps;
-    return new Function('deps', 'with (deps) {\n' + leer('js/53-papelera.js') + '\n; return { agrupar: papeleraAgrupar, restaurarConteos: _papRestaurarConteos, ' +
+    return new Function('deps', 'with (deps) {\n' + require('./_precio-producto') + '\n' +   /* v5.47: precio vigente */  leer('js/53-papelera.js') + '\n; return { agrupar: papeleraAgrupar, restaurarConteos: _papRestaurarConteos, ' +
         'registrosConteo: papeleraRegistrosConteo }; }')(deps);
 }
 

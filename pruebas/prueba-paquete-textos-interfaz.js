@@ -51,10 +51,11 @@ const tablero      = leer('js/72-inicio-tablero.js');
 const roles        = leer('js/50-roles-permisos.js');
 
 // ── 1 · Pedidos: "Sincronizado", no "Solo en este dispositivo" ──────────────
-const fnPedidosTab = extraerFuncion(conversion, 'renderPedidosTab');
-chk('★ renderPedidosTab() ya no dice "Solo en este dispositivo" (orders SÍ se sincroniza vía ordersChunks)',
+// v5.47 — la lista de pedidos generados pasó de la pestaña Pedidos a Historia → Pedidos.
+const fnPedidosTab = extraerFuncion(conversion, 'renderHistorialPedidos');
+chk('★ renderHistorialPedidos() ya no dice "Solo en este dispositivo" (orders SÍ se sincroniza vía ordersChunks)',
     !/Solo en este dispositivo/.test(fnPedidosTab));
-chk('renderPedidosTab() dice "Sincronizado entre dispositivos"',
+chk('renderHistorialPedidos() dice "Sincronizado entre dispositivos"',
     /Sincronizado entre dispositivos/.test(fnPedidosTab));
 
 // ── 2 · "Cualquier fecha ancla el Total", no "Solo domingo o fin de mes" ────
@@ -86,7 +87,7 @@ chk('★ js/72-inicio-tablero.js explica por qué el tablero y el contador del c
 // ── 6/7 · Pedidos y "Generar Pedido" con tokens de tema, no Tailwind fijo ───
 const fnPedidosResultados = extraerFuncion(conversion, '_renderPedidosResultados');
 const TAILWIND_FIJO = /(bg-white\b|text-gray-\d|bg-gray-\d|from-purple|from-red-500|to-orange-600|from-green-500|to-emerald-500|bg-purple-50|divide-gray)/;
-chk('★ renderPedidosTab() sin clases Tailwind fijas de color',
+chk('★ renderHistorialPedidos() sin clases Tailwind fijas de color',
     !TAILWIND_FIJO.test(sinComentarios(fnPedidosTab)));
 chk('★ _renderPedidosResultados() (tarjetas de pedido) sin clases Tailwind fijas de color',
     !TAILWIND_FIJO.test(sinComentarios(fnPedidosResultados)));

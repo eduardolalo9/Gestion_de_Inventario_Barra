@@ -143,7 +143,7 @@ try {
     const helpers = extraer(compras, '_normCabCompras') + '\n' + extraer(compras, '_findColCompras') + '\n' + extraer(compras, '_numeroExcel');
     V = new Function('ctx', 'with (ctx) {' + helpers + '\n' + ciclo + '\n' + arr + '\n' + ventasJs +
         '\nreturn { _parsearExcelVentas, _ventasAgregarLineas, ventaClasificarFila, ventaPartesLinea };}')({ window: {}, console: { warn() {} }, escapeHtml: s => s });
-    T = new Function('ctx', 'with (ctx) {' + turno + '\nreturn { ventaCortesiasAnalizar, ventaTurnoAnalizar };}')({ window: {}, ventaPartesLinea: V.ventaPartesLinea });
+    T = new Function('ctx', 'with (ctx) {' + require('./_precio-producto') + '\n' + turno + '\nreturn { ventaCortesiasAnalizar, ventaTurnoAnalizar };}')({ window: {}, ventaPartesLinea: V.ventaPartesLinea });
     chk('js/93 y js/94 reales se ejecutan (con los lectores de celdas reales de js/88)', true);
 } catch (e) { chk('js/93 y js/94 reales se ejecutan (con los lectores de celdas reales de js/88)', false, String(e && e.stack || e)); }
 if (V && T) {

@@ -124,7 +124,7 @@ function montarCompras(db, uid, opciones) {
     };
     deps.window = deps;
 
-    const montar = new Function('deps', 'with (deps) {\n' + ciclo + '\n' + firest + '\n' + compras +
+    const montar = new Function('deps', 'with (deps) {\n' + require('./_precio-producto') + '\n' +   /* v5.47: precio vigente */  ciclo + '\n' + firest + '\n' + compras +
         '\n; return { guardarCompra: guardarCompra,' +
         '            _compraId: _compraId,' +
         '            _asientosDesdeCompra: _asientosDesdeCompra,' +
@@ -571,7 +571,16 @@ async function main() {
         'compras=' + (await contarCompras()) + ' movimientos=' + (await contarMovimientos()));
 
     // La diferencia de costo se detecta, pero NO toca el catálogo.
+    // v5.47: el aviso compara contra el precio VIGENTE (última compra). Tras guardar, la compra ya es
+    // la última y no hay diferencia con ella misma; el aviso se calcula en la VISTA PREVIA, antes de
+    // guardar, así que se reproduce ese momento: sin compra previa → vigente = precio del catálogo.
+    const costosGuardados = appExcel._deps.costosUltimos;
+    chk('I15 · v5.47 tras guardar, la compra pasó a ser el precio vigente (sin diferencia consigo misma)',
+        appExcel._diferenciasDeCosto(g27615).length === 0,
+        JSON.stringify(appExcel._diferenciasDeCosto(g27615)));
+    appExcel._deps.costosUltimos = {};
     const difs = appExcel._diferenciasDeCosto(g27615);
+    appExcel._deps.costosUltimos = costosGuardados;
     chk('I15 · detecta que el costo importado difiere del precio del catálogo',
         difs.length >= 1 && difs.some(d => d.productoId === '1180015'),
         JSON.stringify(difs));

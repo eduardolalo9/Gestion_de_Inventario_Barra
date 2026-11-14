@@ -70,7 +70,7 @@
                     enStock: (typeof stock === 'number') ? _psRed(stock) : null,
                     minimo: p.stockMinimo,
                     sugerido: (typeof sug === 'number') ? sug : null,
-                    precio: (typeof p.precio === 'number' && p.precio >= 0) ? p.precio : null,
+                    precio: (typeof precioProducto(p) === 'number' && precioProducto(p) >= 0) ? precioProducto(p) : null,   // v5.47: precio vigente (última compra)
                     proveedor: p.proveedor || ''
                 });
             });
@@ -236,8 +236,11 @@
             });
             grupos.sort(function(a, b) { return a.localeCompare(b, 'es'); });
             var h = '<div class="ps-pantalla">';
-            h += moduloCabecera('Pedido sugerido', "switchTab('inicio')", (typeof _syncEnabled !== 'undefined' && !_syncEnabled) ? 'pendiente' : 'ok',
-                           'Productos bajo su mínimo y cuánto pedir para reponerlos.');
+            // v5.47 — esta ES la pestaña Pedidos: encabezado común sin Volver y acceso al historial de lo generado.
+            h += UI.cabecera('Pedidos', 'Lo que hay que pedir: productos bajo su mínimo y cuánto reponer.');
+            h += '<button type="button" class="ps-acceso" id="psHistorialBtn" onclick="abrirHistorialPedidos()">'
+               + '<i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i><span>Pedidos generados</span>'
+               + '<b class="num">' + (typeof orders !== 'undefined' ? orders.length : 0) + '</b><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button>';
             h += '<div class="ps-filtros" role="group" aria-label="Filtros">'
                + '<button type="button" class="mc-pill' + (_ps.soloBajo ? ' mc-pill--on' : '') + '" aria-pressed="' + _ps.soloBajo + '" data-ps-accion="bajo">Bajo stock</button>'
                + '<label class="mc-pill mc-pill--select' + (_ps.grupo ? ' mc-pill--on' : '') + '"><span class="sbx-sr">Grupo</span>'
@@ -264,7 +267,7 @@
 
         function pedidoSugeridoGrupo(g) { _ps.grupo = String(g || ''); renderTab(); }
 
-        function abrirPedidoSugerido() { switchTab('pedido_sugerido'); }
+        function abrirPedidoSugerido() { switchTab('pedidos'); }   // v5.47: Pedidos ES el pedido sugerido
 
         // ══════════════════════════════════════════════════════════════════════
         //  v5.37 — EXPORTAR EL PEDIDO SUGERIDO A EXCEL

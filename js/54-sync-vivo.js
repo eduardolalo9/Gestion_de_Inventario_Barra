@@ -183,6 +183,10 @@
             var comprasCambiaron = false;
             pend.compras.forEach(function(c) { if (_svAgregarCompraLocal(c)) comprasCambiaron = true; });
             if (comprasCambiaron && typeof saveToLocalStorage === 'function') saveToLocalStorage();
+            // v5.47 — otra persona registró o canceló una compra: el precio vigente se pone al día.
+            if (comprasCambiaron && typeof cargarUltimosCostos === 'function') {
+                cargarUltimosCostos().catch(function(e) { console.warn('[SyncVivo] Costos:', e); });
+            }
             _syncVivo.cuenta.refrescos++;
 
             var soloCompras = Object.keys(motivos).every(function(k) { return k === 'compras'; });
@@ -307,7 +311,9 @@
             if (Date.now() - _syncVivo.ultimaRecuperacion < SYNC_VIVO_MIN_RECUPERA_MS) return;
             _syncVivo.ultimaRecuperacion = Date.now();
             if (typeof cargarComprasIniciales === 'function') {
-                cargarComprasIniciales().catch(function(e) { console.warn('[SyncVivo] Recuperar compras:', e); });
+                cargarComprasIniciales().catch(function(e) { console.warn('[SyncVivo] Recuperar compras:', e); })
+                    .then(function() { if (typeof cargarUltimosCostos === 'function') return cargarUltimosCostos(); })
+                    .catch(function(e) { console.warn('[SyncVivo] Recuperar costos:', e); });
             }
             // v5.26 (hallazgo #16) — mismo motivo que cargarComprasIniciales
             // arriba: la pestaña Ventas (ventas/ventasPeriodos/ventasSemanaId,
