@@ -281,7 +281,7 @@
             var campo = function(id, etq, valor, extra, campoNom) {
                 return '<label class="cp-rango__campo" for="' + id + '"><span class="cp-rango__etq">' + etq + '</span>'
                      + '<input type="date" id="' + id + '" class="cp-rango__fecha" value="' + escapeHtml(valor) + '"' + extra
-                     + ' onchange="comprasCambiarRango(\'' + campoNom + '\', this.value)"></label>';
+                     + ' onchange="comprasCambiarRango(\'' + jsArg(campoNom) + '\', this.value)"></label>';
             };
             return '<div class="cp-rango" role="group" aria-label="Rango de fechas de ingreso">'
                  + campo('cp-desde', 'Desde', _comprasFiltroDesde, _comprasFiltroHasta ? ' max="' + escapeHtml(_comprasFiltroHasta) + '"' : '', 'desde')
@@ -1652,7 +1652,7 @@
                 if (g.incidencias.length) {
                     html += '<div style="margin-top:8px;font-size:.8rem;color:var(--warn)">'
                           + '<i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> ' + g.incidencias.length + ' incidencia(s) — '
-                          + '<a href="javascript:void(0)" onclick="_comprasVerIncidenciasGrupo(\'' + escapeHtml(g.compraId) + '\')" '
+                          + '<a href="javascript:void(0)" onclick="_comprasVerIncidenciasGrupo(\'' + jsArg(g.compraId) + '\')" '
                           + 'style="color:var(--warn);text-decoration:underline">ver detalle</a></div>';
                 }
                 if (diferencias.length) {

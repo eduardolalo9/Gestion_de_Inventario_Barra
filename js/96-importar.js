@@ -1008,10 +1008,10 @@
                     return;
                 }
                 h += '<div class="imp-sec__acc">'
-                   + '<button type="button" class="bt bt--primario" data-imp-subir="' + s.id + '" onclick="importarElegirArchivo(\'' + s.id + '\')">'
+                   + '<button type="button" class="bt bt--primario" data-imp-subir="' + s.id + '" onclick="importarElegirArchivo(\'' + jsArg(s.id) + '\')">'
                    + '<i class="fa-solid fa-file-arrow-up" aria-hidden="true"></i> Subir archivo</button>';
                 s.formatos.forEach(function(f) {
-                    h += '<button type="button" class="bt bt--secundario" data-imp-plantilla="' + s.id + ':' + f + '" onclick="importarDescargarPlantilla(\'' + s.id + '\', \'' + f + '\')">'
+                    h += '<button type="button" class="bt bt--secundario" data-imp-plantilla="' + s.id + ':' + f + '" onclick="importarDescargarPlantilla(\'' + jsArg(s.id) + '\', \'' + jsArg(f) + '\')">'
                        + '<i class="fa-solid fa-download" aria-hidden="true"></i> Plantilla .' + f + '</button>';
                 });
                 h += '</div></section>';

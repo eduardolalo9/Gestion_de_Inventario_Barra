@@ -1960,7 +1960,7 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
                     html += '<span class="notif-dot' + (n.leido ? ' read' : '') + '" aria-hidden="true"></span>';
                     html += '<span class="nt-icono">' + _notifIcono(n.tipo) + '</span>';
                     html += '<div class="notif-body"><div class="notif-text">' + escapeHtml(_notifTextoLimpio(n.texto)) + '</div><div class="notif-time ui-mono">' + ts + '</div></div>';
-                    if (!n.leido && idSeg) html += '<button type="button" class="ui-link" onclick="marcarNotifLeida(\'' + idSeg + '\')">Leído</button>';
+                    if (!n.leido && idSeg) html += '<button type="button" class="ui-link" onclick="marcarNotifLeida(\'' + jsArg(idSeg) + '\')">Leído</button>';
                     html += '</div>';
                 });
                 html += '</div>';
@@ -2017,7 +2017,7 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
                     html += '<div class="ajuste-meta">' + escapeHtml(a.productoNombre || a.productoId) + ' · ' + escapeHtml(ts) + ' · <b>' + estado + '</b></div>';
                     html += '<div class="ajuste-desc">' + escapeHtml(a.motivo || '') + (sug !== null ? ' (Sugerido: ' + escapeHtml(String(sug)) + ')' : '') + '</div>';
                     if (isAdmin() && estado === 'pendiente' && idSeg) {
-                        html += '<div class="ajuste-btns"><button type="button" class="ajuste-btn ok" onclick="resolverAjuste(\'' + idSeg + '\',\'aprobado\')"><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Aprobar</button><button type="button" class="ajuste-btn nok" onclick="resolverAjuste(\'' + idSeg + '\',\'rechazado\')"><i class="fa-solid fa-xmark" aria-hidden="true"></i> Rechazar</button></div>';
+                        html += '<div class="ajuste-btns"><button type="button" class="ajuste-btn ok" onclick="resolverAjuste(\'' + jsArg(idSeg) + '\',\'aprobado\')"><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Aprobar</button><button type="button" class="ajuste-btn nok" onclick="resolverAjuste(\'' + jsArg(idSeg) + '\',\'rechazado\')"><i class="fa-solid fa-xmark" aria-hidden="true"></i> Rechazar</button></div>';
                     }
                     html += '</div>';
                 });
@@ -2603,7 +2603,7 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
                 const marcada = (_permEdicion.areas === null) || (_permEdicion.areas.indexOf(a) !== -1);
                 html += '<label class="pr-area">'
                       + '<input type="checkbox" ' + (marcada ? 'checked' : '') + ' '
-                      + 'onchange="permToggleArea(\'' + escapeHtml(a) + '\')"> '
+                      + 'onchange="permToggleArea(\'' + jsArg(a) + '\')"> '
                       + escapeHtml(areasAuditoria[a] || a) + '</label>';
             });
             html += '</div>';
@@ -2644,7 +2644,7 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
                     html += '<label class="pr-fila' + (bloqueo ? ' pr-fila--bloqueada' : '') + '">';
                     html += '<input type="checkbox" ' + (tiene ? 'checked' : '')
                           + (bloqueo ? ' disabled' : '')
-                          + ' onchange="permToggle(\'' + escapeHtml(p) + '\')">';
+                          + ' onchange="permToggle(\'' + jsArg(p) + '\')">';
                     html += '<span class="pr-fila__cuerpo">';
                     html += '<span class="pr-fila__nombre">' + escapeHtml(meta.nombre) + '</span> '
                           + _permBadgeEstado(estado);
@@ -2662,7 +2662,7 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
             html += '<div class="adm-card">';
             html += '<button type="button" class="adm-btn success" onclick="permGuardar()">'
                   + '<i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Guardar cambios</button>';
-            html += '<button type="button" class="adm-btn" onclick="permSeleccionarUsuario(\'' + escapeHtml(_permUidSel) + '\')">'
+            html += '<button type="button" class="adm-btn" onclick="permSeleccionarUsuario(\'' + jsArg(_permUidSel) + '\')">'
                   + '<i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Descartar cambios</button>';
             html += '</div>';
 
@@ -2760,7 +2760,7 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
                             rhtml += '<div class="rep-card">';
                             rhtml += '<div class="rep-card-title"><i class="fa-solid fa-file-chart-column" aria-hidden="true"></i> ' + escapeHtml(r.fecha || d.id) + '</div>';
                             rhtml += '<div class="rep-card-meta ui-mono">' + (r.totalProductos || 0) + ' productos</div>';
-                            rhtml += '<button type="button" class="adm-btn" onclick="descargarReporte(\'' + d.id + '\')"><i class="fa-solid fa-download" aria-hidden="true"></i> Descargar Excel</button>';
+                            rhtml += '<button type="button" class="adm-btn" onclick="descargarReporte(\'' + jsArg(d.id) + '\')"><i class="fa-solid fa-download" aria-hidden="true"></i> Descargar Excel</button>';
                             rhtml += '</div>';
                         });
                         el.innerHTML = rhtml;

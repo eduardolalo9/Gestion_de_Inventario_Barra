@@ -532,6 +532,28 @@ async function main() {
             .set({ uid: 'bartender1', tipo: 'inventario', detalle: 'conteo guardado' }));
     });
 
+    await prueba('S3f. (v5.48) una cuenta DADA DE BAJA ya no puede escribir en historialCambios', async () => {
+        await reiniciarConDatosBase();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+            await ctx.firestore().doc('usuarios/baja9').set({ uid: 'baja9', role: 'BARTENDER', status: 'inactivo' });
+        });
+        await assertFails(testEnv.authenticatedContext('baja9').firestore().doc('historialCambios/ev6')
+            .set({ uid: 'baja9', tipo: 'inventario', detalle: 'x' }));
+    });
+
+    await prueba('S3g. (v5.48) un token sin documento usuarios/{uid} no puede escribir en historialCambios', async () => {
+        await reiniciarConDatosBase();
+        await assertFails(testEnv.authenticatedContext('fantasma9').firestore().doc('historialCambios/ev7')
+            .set({ uid: 'fantasma9', tipo: 'inventario', detalle: 'x' }));
+    });
+
+    await prueba('S3h. (v5.48) un evento con más de 40 campos se rechaza; con 40 pasa', async () => {
+        await reiniciarConDatosBase();
+        const campos = (n) => { const o = { uid: 'bartender1', tipo: 'inventario' }; for (let i = 0; i < n - 2; i++) o['c' + i] = i; return o; };
+        await assertFails(bt1.doc('historialCambios/ev8').set(campos(41)));
+        await assertSucceeds(bt1.doc('historialCambios/ev9').set(campos(40)));
+    });
+
     await prueba('S7a. bartender NO puede marcar leída la notificación de OTRO usuario', async () => {
         await reiniciarConDatosBase();
         await testEnv.withSecurityRulesDisabled(async (ctx) => {

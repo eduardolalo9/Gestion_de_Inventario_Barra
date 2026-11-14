@@ -672,7 +672,7 @@
                     if (typeof pedido === 'number' && pedido > 0) {
                         html += '<div class="prd-card__pedido">'
                               + '<span class="prd-card__pedido-txt">Pedido sugerido <b class="num">' + pedido + '</b></span>'
-                              + '<button type="button" class="prd-card__pedido-btn" onclick="agregarPedidoSugerido(\'' + escapeHtml(product.id) + '\')" title="Agregar la cantidad sugerida al carrito">Al carrito</button>'
+                              + '<button type="button" class="prd-card__pedido-btn" onclick="agregarPedidoSugerido(\'' + jsArg(product.id) + '\')" title="Agregar la cantidad sugerida al carrito">Al carrito</button>'
                               + '</div>';
                     } else if (pedido === null && nivel) {
                         html += '<div class="prd-card__pedido prd-card__pedido--sin-datos">Sin dato de conversión para sugerir cantidad</div>';
@@ -700,12 +700,12 @@
                     // todo el ancho de arriba (los nombres reales son largos:
                     // "ACEITUNA SIN HUESO", "LIMON CON SEMILLA").
                     html += '<div class="prd-card__actions">';
-                    html += '<button class="prd-action-btn cart" data-sbx-principal onclick="addToCart(\'' + escapeHtml(product.id) + '\')" title="Agregar al carrito" aria-label="Agregar al carrito">'
+                    html += '<button class="prd-action-btn cart" data-sbx-principal onclick="addToCart(\'' + jsArg(product.id) + '\')" title="Agregar al carrito" aria-label="Agregar al carrito">'
                           + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg></button>';
                     if (isAdmin()) {
-                        html += '<button class="prd-action-btn edit" onclick="editProduct(\'' + escapeHtml(product.id) + '\')" title="Editar producto" aria-label="Editar producto">'
+                        html += '<button class="prd-action-btn edit" onclick="editProduct(\'' + jsArg(product.id) + '\')" title="Editar producto" aria-label="Editar producto">'
                               + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button>';
-                        html += '<button class="prd-action-btn del" onclick="deleteProduct(\'' + escapeHtml(product.id) + '\')" title="Eliminar producto" aria-label="Eliminar producto">'
+                        html += '<button class="prd-action-btn del" onclick="deleteProduct(\'' + jsArg(product.id) + '\')" title="Eliminar producto" aria-label="Eliminar producto">'
                               + '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>';
                     }
                     html += '</div>';
@@ -747,7 +747,7 @@
             getAvailableGroups().forEach(function(g) {
                 var isActive = selectedGroup === g;
                 html += '<button type="button" class="grp-pill' + (isActive ? ' grp-pill--active' : '') + '"'
-                      + ' onclick="updateSelectedGroup(\'' + escapeHtml(g).replace(/'/g, '&#39;') + '\')">'
+                      + ' onclick="updateSelectedGroup(\'' + jsArg(g) + '\')">'
                       + escapeHtml(g)
                       + '</button>';
             });
@@ -858,7 +858,7 @@
             getAvailableGroups().forEach(function(group) {
                 var isActive = selectedGroup === group;
                 html += '<button type="button" class="grp-pill' + (isActive ? ' grp-pill--active' : '') + '"'
-                      + ' onclick="updateSelectedGroup(\'' + escapeHtml(group).replace(/'/g, '&#39;') + '\')">'
+                      + ' onclick="updateSelectedGroup(\'' + jsArg(group) + '\')">'
                       + escapeHtml(group)
                       + '</button>';
             });
@@ -969,7 +969,7 @@
                 // v5.28 — en el teléfono, una sola línea: código 10 px gris +
                 // nombre 14 px en negritas + la unidad como pastilla. Tocar la
                 // fila abre la ficha con precio, mínimo, PV y proveedor.
-                html += '<td style="' + td + '" class="cat-prod" onclick="if(!event.target.closest(\'button\')&&typeof abrirFichaProducto===\'function\')abrirFichaProducto(\'' + escapeHtml(product.id) + '\')">'
+                html += '<td style="' + td + '" class="cat-prod" onclick="if(!event.target.closest(\'button\')&&typeof abrirFichaProducto===\'function\')abrirFichaProducto(\'' + jsArg(product.id) + '\')">'
                      + '<div class="cat-prod__linea">'
                      + '<span class="cat-prod__cod">' + escapeHtml(product.id) + '</span>'
                      + '<span class="cat-prod__nom">' + (product.name ? resaltarBusqueda(product.name, searchTerm) : '(sin nombre)') + '</span>'
@@ -1000,13 +1000,13 @@
 
                 if (admin) {
                     html += '<td style="' + td + '"><div style="display:flex;gap:6px;justify-content:center">';
-                    html += '<button type="button" data-sbx-principal onclick="editProduct(\'' + escapeHtml(product.id) + '\')" '
+                    html += '<button type="button" data-sbx-principal onclick="editProduct(\'' + jsArg(product.id) + '\')" '
                          + 'title="Editar" aria-label="Editar ' + escapeHtml(product.name || product.id) + '" '
                          + 'style="min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;'
                          + 'border-radius:10px;border:1px solid var(--border-mid);background:var(--surface);'
                          + 'color:var(--txt-primary);cursor:pointer">'
                          + '<svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button>';
-                    html += '<button type="button" onclick="deleteProduct(\'' + escapeHtml(product.id) + '\')" '
+                    html += '<button type="button" onclick="deleteProduct(\'' + jsArg(product.id) + '\')" '
                          + 'title="Eliminar" aria-label="Eliminar ' + escapeHtml(product.name || product.id) + '" '
                          + 'style="min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;'
                          + 'border-radius:10px;border:1px solid var(--danger);background:var(--danger-dim);'
@@ -1113,9 +1113,9 @@
                           + '<div class="ped-card__pie">Total Productos: <b class="num">' + (order.total || 0).toFixed(2) + '</b></div>';
                     if (order.note) html += '<div class="ped-card__nota"><b>Nota:</b> ' + escapeHtml(order.note) + '</div>';
                     html += '<div class="ped-c__acc">'
-                          + '<button type="button" class="bt bt--primario" onclick="shareOrderWhatsApp(\'' + escapeHtml(idTxt) + '\')" aria-label="Compartir pedido ' + escapeHtml(idTxt) + ' por WhatsApp">'
+                          + '<button type="button" class="bt bt--primario" onclick="shareOrderWhatsApp(\'' + jsArg(idTxt) + '\')" aria-label="Compartir pedido ' + escapeHtml(idTxt) + ' por WhatsApp">'
                           + '<i class="fa-solid fa-paper-plane" aria-hidden="true"></i> Compartir por WhatsApp</button>'
-                          + '<button type="button" onclick="deleteOrder(\'' + escapeHtml(idTxt) + '\')" class="ui-icono-btn ui-icono-btn--peligro" aria-label="Eliminar pedido ' + escapeHtml(idTxt) + '" title="Eliminar pedido">'
+                          + '<button type="button" onclick="deleteOrder(\'' + jsArg(idTxt) + '\')" class="ui-icono-btn ui-icono-btn--peligro" aria-label="Eliminar pedido ' + escapeHtml(idTxt) + '" title="Eliminar pedido">'
                           + '<i class="fa-solid fa-trash" aria-hidden="true"></i></button>'
                           + '</div></div>';
                 }

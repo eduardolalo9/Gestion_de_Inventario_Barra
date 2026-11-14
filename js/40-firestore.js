@@ -396,7 +396,16 @@
                     if (d.id !== 'chunk_' + data.chunkIndex) return;             // id y contenido deben coincidir
                     if (total !== null && !(data.chunkIndex < total)) return;    // sobrante de una escritura anterior
                     const items = data.items;
-                    if (Array.isArray(items)) items.forEach(item => result.push(item));
+                    // v5.48 (auditoría C-1): cualquier cuenta activa puede escribir estos
+                    // fragmentos y Rules no valida el contenido de una lista; un elemento
+                    // con un id que trae sintaxis se descarta al leer (ver datoNubeSeguro).
+                    if (Array.isArray(items)) items.forEach(item => {
+                        if (typeof datoNubeSeguro === 'function' && !datoNubeSeguro(item)) {
+                            console.warn('[Seguridad] Elemento descartado de', subcollName, '(id no permitido).');
+                            return;
+                        }
+                        result.push(item);
+                    });
                 });
                 return result;
             } catch (e) {

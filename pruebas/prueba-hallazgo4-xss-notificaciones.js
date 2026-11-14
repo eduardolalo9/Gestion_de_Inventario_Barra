@@ -36,7 +36,7 @@ const rules = leer('firestore.rules');
 chk('★ renderNotificacionesTab() descarta un id que no sea alfanumérico (mismo candado que /ajustes)',
     /const idSeg = \/\^\[A-Za-z0-9\]\{1,40\}\$\/\.test\(String\(n\.id \|\| ''\)\) \? n\.id : '';/.test(roles));
 chk('★ El botón "Leído" usa idSeg, ya no n.id crudo, dentro del onclick',
-    /marcarNotifLeida\(\\'' \+ idSeg \+ '\\'\)/.test(roles) &&
+    /marcarNotifLeida\(\\'' \+ jsArg\(idSeg\) \+ '\\'\)/.test(roles) &&
     !/marcarNotifLeida\(\\'' \+ n\.id \+ '\\'\)/.test(roles));
 chk('Sin un id válido, el botón no se pinta (en vez de pintar un onclick vacío o roto)',
     /if \(!n\.leido && idSeg\) html \+=/.test(roles));

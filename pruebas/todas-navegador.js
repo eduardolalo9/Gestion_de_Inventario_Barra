@@ -58,6 +58,7 @@ const PRUEBAS = [
     'prueba-redis-r7b-navegador.js',
     'prueba-inicio-operacion-navegador.js', // Inicio · tarjetas de Operación compactas 2×2 (6 anchos × 2 temas)
     'prueba-v547-pedidos-precios-navegador.js', // v5.47 — Pedidos = Pedido sugerido, Historia Inventario|Pedidos con tarjeta compacta, precio de la última compra
+    'prueba-v548-xss-navegador.js',    // v5.48 — un id con sintaxis JS ya no ejecuta código al tocar un botón (Chromium real)
     'prueba-v546-muestreo-compartido-navegador.js', // v5.46 — muestreo compartido (inventario en la nube), lista de reconteo del equipo, insignia sobre el buscador, autoguardado al volver
     'prueba-v545-fvs-navegador.js', // v5.45 — Físico vs Sistema: KPIs, insignias, selección múltiple, edición rápida, grupos plegables y muestreo
     'prueba-v544-auditoria-consolidada-navegador.js', // v5.44 — Auditoría consolidada: 15 columnas + hoja Inventario valorizada (descarga real)

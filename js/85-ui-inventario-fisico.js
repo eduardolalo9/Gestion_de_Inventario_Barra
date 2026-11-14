@@ -374,7 +374,7 @@
             } else {
                 html += '<div class="if-areas">';
                 lista.forEach(function(inv) {
-                    html += '<div class="rc-hist" onclick="_detalleInventarioCerradoId=\'' + inv.inventoryId + '\'; _detalleInventarioCerradoData=null; auditoriaView=\'detalle_cerrado\'; renderTab();">';
+                    html += '<div class="rc-hist" onclick="_detalleInventarioCerradoId=\'' + jsArg(inv.inventoryId) + '\'; _detalleInventarioCerradoData=null; auditoriaView=\'detalle_cerrado\'; renderTab();">';
                     html += '<div class="rc-hist__fila"><span class="rc-hist__titulo">#' + inv.numero + ' · Inventario Barra</span>';
                     // FASE 3 — un inventario contabilizado ya no es solo
                     // "cerrado": su resultado pasó a ser el inicial de la
@@ -752,7 +752,7 @@
             var tab = function(id, icono, texto, extra) {
                 var on = t === id;
                 return '<button type="button" role="tab" id="fvsTab-' + id + '" class="fvs-tab' + (on ? ' fvs-tab--on' : '') + '"'
-                     + ' aria-selected="' + (on ? 'true' : 'false') + '" aria-controls="fvsPanel" onclick="fvsCambiarTab(\'' + id + '\')">'
+                     + ' aria-selected="' + (on ? 'true' : 'false') + '" aria-controls="fvsPanel" onclick="fvsCambiarTab(\'' + jsArg(id) + '\')">'
                      + '<i class="fa-solid ' + icono + '" aria-hidden="true"></i><span>' + texto + '</span>' + (extra || '') + '</button>';
             };
             return '<div class="fvs-tabs" role="tablist" aria-label="Vistas de Físico vs Sistema">'
@@ -1365,7 +1365,7 @@
             html += '</dl>';
 
             if (hasPermission('inventory.export')) {
-                html += '<button type="button" class="bt bt--secundario" onclick="exportarInventarioCerrado(\'' + _detalleInventarioCerradoId + '\', ' + meta.numero + ')"><i class="fa-solid fa-download" aria-hidden="true"></i> Exportar Excel</button>';
+                html += '<button type="button" class="bt bt--secundario" onclick="exportarInventarioCerrado(\'' + jsArg(_detalleInventarioCerradoId) + '\', ' + meta.numero + ')"><i class="fa-solid fa-download" aria-hidden="true"></i> Exportar Excel</button>';
             }
 
             // ── FASE 3 · CONTABILIZAR ────────────────────────────────────────
@@ -1397,7 +1397,7 @@
                     html += '<div class="pm-paso pm-paso--aviso">'
                          +  '<div class="pm-paso__txt"><i class="fa-solid fa-book" aria-hidden="true"></i> No se puede contabilizar. ' + escapeHtml(_motivo) + '</div></div>';
                 } else {
-                    html += '<button type="button" class="bt bt--primario" onclick="contabilizarInventario(\'' + _detalleInventarioCerradoId + '\', ' + meta.numero + ')">'
+                    html += '<button type="button" class="bt bt--primario" onclick="contabilizarInventario(\'' + jsArg(_detalleInventarioCerradoId) + '\', ' + meta.numero + ')">'
                          +  '<i class="fa-solid fa-book" aria-hidden="true"></i> Contabilizar</button>';
                 }
             }
@@ -1480,8 +1480,8 @@
                     .some(k => k.endsWith('__' + area) && !myAuditoriaUnlocks[k].used);
                 html += '<div class="if-area">';
                 html += '<div class="audit-area-card' + (isCompleta ? ' completada' : '') + '"'
-                      + ' onclick="auditoriaEntrarArea(\'' + area + '\')"'
-                      + ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();auditoriaEntrarArea(\'' + area + '\');}"'
+                      + ' onclick="auditoriaEntrarArea(\'' + jsArg(area) + '\')"'
+                      + ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();auditoriaEntrarArea(\'' + jsArg(area) + '\');}"'
                       + ' role="button" tabindex="0" aria-label="Entrar a ' + areasAuditoria[area] + '">';
                 html += '<div class="audit-area-icon"><i class="' + areasAuditoriaFA[area] + '" style="font-size:1.05rem;color:' + (isCompleta ? 'var(--green)' : 'var(--accent)') + ';"></i></div>';
                 html += '<div class="audit-area-info">';
@@ -1502,7 +1502,7 @@
                     // D — según el permiso, no según isAdmin(): el mismo
                     // criterio que aplica reabrirArea().
                     if (hasPermission('inventory.reopenArea')) {
-                        accionArea = '<button type="button" class="bt bt--secundario" onclick="reabrirArea(\'' + area + '\')" aria-label="Reabrir ' + escapeHtml(areasAuditoria[area]) + '"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Reabrir</button>';
+                        accionArea = '<button type="button" class="bt bt--secundario" onclick="reabrirArea(\'' + jsArg(area) + '\')" aria-label="Reabrir ' + escapeHtml(areasAuditoria[area]) + '"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Reabrir</button>';
                     } else if (tieneUnlock) {
                         html += ' · <span style="color:var(--amber);font-weight:700;"><i class="fa-solid fa-unlock" aria-hidden="true"></i> Corrección habilitada</span>';
                     } else {
@@ -1512,7 +1512,7 @@
                 } else if (hasPermission('inventory.closeOther')) {
                     // FASE 2A — cerrar el área para TODAS las personas es una
                     // acción visible y propia, no un efecto de "finalizar".
-                    accionArea = '<button type="button" class="bt bt--secundario" onclick="auditoriaCerrarArea(\'' + area + '\')"><i class="fa-solid fa-lock" aria-hidden="true"></i> Cerrar área para todos</button>';
+                    accionArea = '<button type="button" class="bt bt--secundario" onclick="auditoriaCerrarArea(\'' + jsArg(area) + '\')"><i class="fa-solid fa-lock" aria-hidden="true"></i> Cerrar área para todos</button>';
                 }
                 html += '</div>';
                 html += '<svg class="audit-area-arrow" width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 18l6-6-6-6"/></svg>';
@@ -1700,15 +1700,15 @@
                     // Ahora ocupan su propia fila, 48 px de alto y 8 px entre sí.
                     if (completada) {
                         html += '<div class="if-acc-usuario">';
-                        html += '<button type="button" class="bt bt--secundario" onclick="adminVerConteoUsuario(\'' + escapeHtml(u.uid) + '\',\'' + area + '\')">'
+                        html += '<button type="button" class="bt bt--secundario" onclick="adminVerConteoUsuario(\'' + jsArg(u.uid) + '\',\'' + jsArg(area) + '\')">'
                               + '<i class="fa-solid fa-eye" aria-hidden="true"></i> Ver</button>';
-                        html += '<button type="button" class="bt bt--secundario" onclick="adminUnlockAreaUsuario(\'' + escapeHtml(u.uid) + '\',\'' + area + '\')">'
+                        html += '<button type="button" class="bt bt--secundario" onclick="adminUnlockAreaUsuario(\'' + jsArg(u.uid) + '\',\'' + jsArg(area) + '\')">'
                               + '<i class="fa-solid fa-unlock" aria-hidden="true"></i> Habilitar</button>';
                         // ETAPA 15: reapertura completa del almacén (distinto del
                         // desbloqueo por producto de arriba) — solo mientras el
                         // Inventario Físico esté SINCRONIZADO, solo con permiso.
                         if (hasPermission('inventory.reopenArea') && _inventarioActivo && _inventarioActivo.estado === 'SINCRONIZADO') {
-                            html += '<button type="button" class="bt bt--secundario" onclick="reabrirAlmacenAdmin(\'' + escapeHtml(u.uid) + '\',\'' + area + '\')">'
+                            html += '<button type="button" class="bt bt--secundario" onclick="reabrirAlmacenAdmin(\'' + jsArg(u.uid) + '\',\'' + jsArg(area) + '\')">'
                                   + '<i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i> Reabrir</button>';
                         }
                         html += '</div>';
@@ -1800,8 +1800,8 @@
                     // que vive en auditoriaConteo vía _recalcAdminAggregatedConteo y ahora
                     // cubre enteras Y abiertas (ver js/45-inventario-datos.js).
                     html += '<div class="inv-card' + (hasData ? ' has-data' : '') + (areaData._hayConflicto ? ' inv-card--conflict' : '') + '" data-sbx-item'
-                          + ' onclick="openInventarioModal(\'' + escapeHtml(product.id) + '\')"'
-                          + ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();openInventarioModal(\'' + escapeHtml(product.id) + '\');}"'
+                          + ' onclick="openInventarioModal(\'' + jsArg(product.id) + '\')"'
+                          + ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();openInventarioModal(\'' + jsArg(product.id) + '\');}"'
                           + ' role="button" tabindex="0" aria-label="Contar ' + escapeHtml(product.name) + '" style="animation-delay:' + delay + 'ms">';
                     html += '<div class="inv-card__ripple"></div>';
 
@@ -1897,7 +1897,7 @@
                     }
 
                     if (hasExtra) {
-                        html += '<button class="inv-card__expand-btn' + (isExpanded ? ' open' : '') + '" id="card-expand-btn-' + escapeHtml(product.id) + '" onclick="toggleCardExpand(\'' + escapeHtml(product.id) + '\', event)" aria-expanded="' + isExpanded + '">';
+                        html += '<button class="inv-card__expand-btn' + (isExpanded ? ' open' : '') + '" id="card-expand-btn-' + escapeHtml(product.id) + '" onclick="toggleCardExpand(\'' + jsArg(product.id) + '\', event)" aria-expanded="' + isExpanded + '">';
                         html += '<svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>';
                         html += '<span>' + (isExpanded ? 'Ocultar' : 'Ver más abiertas') + '</span>';
                         html += '<span style="font-size:0.65rem;opacity:0.7;margin-left:2px">(+' + (abiertas.length - 1) + ')</span>';
@@ -2011,7 +2011,7 @@
             getAvailableGroups().forEach(function(group) {
                 var isActive = selectedGroup === group;
                 html += '<button type="button" class="grp-pill' + (isActive ? ' grp-pill--active' : '') + '"'
-                      + ' onclick="updateSelectedGroup(\'' + escapeHtml(group).replace(/'/g, '&#39;') + '\')">'
+                      + ' onclick="updateSelectedGroup(\'' + jsArg(group) + '\')">'
                       + escapeHtml(group)
                       + '</button>';
             });
@@ -2101,7 +2101,7 @@
                 const isExpanded = expandedInventories.has(inv.id);
                 const delay = Math.min(idx * 50, 400);
                 html += '<div class="bg-white rounded-2xl shadow-md overflow-hidden" data-sbx-item style="animation: tabContentIn 0.3s ease-out both; animation-delay:' + delay + 'ms">';
-                html += '<div class="p-4 sm:p-6 cursor-pointer hover:bg-gray-50 transition-colors" data-sbx-principal onclick="toggleInventory(\'' + escapeHtml(inv.id) + '\')">';
+                html += '<div class="p-4 sm:p-6 cursor-pointer hover:bg-gray-50 transition-colors" data-sbx-principal onclick="toggleInventory(\'' + jsArg(inv.id) + '\')">';
                 html += '<div class="flex items-center justify-between gap-4">';
                 html += '<div class="flex-1">';
                 html += '<div class="flex items-center gap-3 mb-1">';
@@ -2111,8 +2111,8 @@
                 html += '<p class="text-sm text-gray-600">' + escapeHtml(inv.date) + ' • ' + inv.products.length + ' productos • Total: ' + (inv.totalProducts || 0).toFixed(2) + '</p>';
                 html += '</div>';
                 html += '<div class="flex items-center gap-2">';
-                html += '<button onclick="event.stopPropagation(); downloadInventory(\'' + escapeHtml(inv.id) + '\')" class="p-2.5 bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl hover:shadow-lg transition-all transform active:scale-95" title="Descargar"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg></button>';
-                html += '<button onclick="event.stopPropagation(); shareInventoryWhatsApp(\'' + escapeHtml(inv.id) + '\')" class="p-2.5 bg-gradient-to-br from-green-500 to-emerald-500 text-white rounded-xl hover:shadow-lg transition-all transform active:scale-95" title="Compartir"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg></button>';
+                html += '<button onclick="event.stopPropagation(); downloadInventory(\'' + jsArg(inv.id) + '\')" class="p-2.5 bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl hover:shadow-lg transition-all transform active:scale-95" title="Descargar"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg></button>';
+                html += '<button onclick="event.stopPropagation(); shareInventoryWhatsApp(\'' + jsArg(inv.id) + '\')" class="p-2.5 bg-gradient-to-br from-green-500 to-emerald-500 text-white rounded-xl hover:shadow-lg transition-all transform active:scale-95" title="Compartir"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg></button>';
                 html += '<svg class="w-5 h-5 text-gray-600 transition-transform ' + (isExpanded ? 'rotate-180' : '') + '" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>';
                 html += '</div></div></div>';
                 if (isExpanded) {
@@ -2143,7 +2143,7 @@
             var pedidos = _historiaVista === 'pedidos';
             var tab = function(id, icono, texto, n, on) {
                 return '<button type="button" role="tab" id="hsTab-' + id + '" class="fvs-tab' + (on ? ' fvs-tab--on' : '') + '"'
-                     + ' aria-selected="' + (on ? 'true' : 'false') + '" onclick="historiaVista(\'' + id + '\')">'
+                     + ' aria-selected="' + (on ? 'true' : 'false') + '" onclick="historiaVista(\'' + jsArg(id) + '\')">'
                      + '<i class="fa-solid ' + icono + '" aria-hidden="true"></i><span>' + texto + '</span><span class="fvs-tab__n num">' + n + '</span></button>';
             };
             return '<div class="fvs-tabs" role="tablist" aria-label="Historial">'
@@ -2200,10 +2200,10 @@
                             rhtml += '<div class="rep-card-title"><i class="fa-solid fa-file-chart-column" aria-hidden="true"></i> ' + escapeHtml(r.fecha || d.id) + '</div>';
                             rhtml += '<div class="rep-card-meta ui-mono">' + (r.totalProductos || 0) + ' productos · publicado por admin</div>';
                             rhtml += '<div class="hs-rep-acciones">';
-                            rhtml += '<button type="button" class="adm-btn" onclick="descargarReporte(\'' + d.id + '\')"><i class="fa-solid fa-download" aria-hidden="true"></i> Descargar Excel</button>';
+                            rhtml += '<button type="button" class="adm-btn" onclick="descargarReporte(\'' + jsArg(d.id) + '\')"><i class="fa-solid fa-download" aria-hidden="true"></i> Descargar Excel</button>';
                             // Icono eliminar — solo visible para admin
                             if (typeof isAdmin === 'function' && isAdmin()) {
-                                rhtml += '<button type="button" class="ui-icono-btn ui-icono-btn--peligro" onclick="eliminarReporte(\'' + d.id + '\')" title="Eliminar reporte" aria-label="Eliminar reporte ' + escapeHtml(r.fecha || d.id) + '"><i class="fa-solid fa-trash" aria-hidden="true"></i></button>';
+                                rhtml += '<button type="button" class="ui-icono-btn ui-icono-btn--peligro" onclick="eliminarReporte(\'' + jsArg(d.id) + '\')" title="Eliminar reporte" aria-label="Eliminar reporte ' + escapeHtml(r.fecha || d.id) + '"><i class="fa-solid fa-trash" aria-hidden="true"></i></button>';
                             }
                             rhtml += '</div>';
                             rhtml += '</div>';
@@ -2871,8 +2871,8 @@
                 html += '<tr style="border-top:1px solid var(--border-mid);">'
                       + '<td style="padding:10px;color:var(--txt-primary);">' + escapeHtml(item.name) + '</td>'
                       + '<td style="padding:10px;text-align:center;color:var(--txt-secondary);">' + escapeHtml(item.unit) + '</td>'
-                      + '<td style="padding:10px;text-align:center;"><input type="number" value="' + item.quantity + '" min="0.01" step="0.01" onchange="updateCartQuantity(\'' + escapeHtml(item.id) + '\', this.value)" aria-label="Cantidad de ' + escapeHtml(item.name) + '" style="width:72px;padding:6px;text-align:center;background:var(--surface);color:var(--txt-primary);border:1px solid var(--border-mid);border-radius:6px;font-weight:600;font-family:inherit;"></td>'
-                      + '<td style="padding:10px;text-align:center;"><button onclick="removeFromCart(\'' + escapeHtml(item.id) + '\')" class="ui-icono-btn ui-icono-btn--peligro" aria-label="Quitar ' + escapeHtml(item.name) + ' del pedido" title="Quitar del pedido"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button></td></tr>';
+                      + '<td style="padding:10px;text-align:center;"><input type="number" value="' + item.quantity + '" min="0.01" step="0.01" onchange="updateCartQuantity(\'' + jsArg(item.id) + '\', this.value)" aria-label="Cantidad de ' + escapeHtml(item.name) + '" style="width:72px;padding:6px;text-align:center;background:var(--surface);color:var(--txt-primary);border:1px solid var(--border-mid);border-radius:6px;font-weight:600;font-family:inherit;"></td>'
+                      + '<td style="padding:10px;text-align:center;"><button onclick="removeFromCart(\'' + jsArg(item.id) + '\')" class="ui-icono-btn ui-icono-btn--peligro" aria-label="Quitar ' + escapeHtml(item.name) + ' del pedido" title="Quitar del pedido"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button></td></tr>';
             });
             tbody.innerHTML = html;
             orderTotal.textContent = 'Total: ' + total.toFixed(2);

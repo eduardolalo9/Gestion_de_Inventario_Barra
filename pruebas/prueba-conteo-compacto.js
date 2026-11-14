@@ -29,9 +29,9 @@ chk('El radio del contenedor del par tarjeta+botón usa token (--r-lg), no 20px 
 chk('El icono del área se achicó a 1.05rem (inline) y la flecha a 18 px',
     /font-size:1\.05rem;color:/.test(js) && /audit-area-arrow" width="18" height="18"/.test(js));
 chk('★ "Reabrir" sigue diciendo qué área reabre (aria-label con el nombre) aunque el texto visible es corto',
-    /onclick="reabrirArea\(\\'' \+ area \+ '\\'\)" aria-label="Reabrir ' \+ escapeHtml\(areasAuditoria\[area\]\) \+ '"/.test(js) && /<\/i> Reabrir<\/button>/.test(js));
+    /onclick="reabrirArea\(\\'' \+ jsArg\(area\) \+ '\\'\)" aria-label="Reabrir ' \+ escapeHtml\(areasAuditoria\[area\]\) \+ '"/.test(js) && /<\/i> Reabrir<\/button>/.test(js));
 chk('"Cerrar área para todos" conserva su texto completo (acción de grupo, no se abrevia)', /<\/i> Cerrar área para todos<\/button>/.test(js));
-chk('La tarjeta sigue siendo role="button" con onclick auditoriaEntrarArea (no cambió la acción)', /role="button" tabindex="0" aria-label="Entrar a '/.test(js) && /auditoriaEntrarArea\(\\'' \+ area/.test(js));
+chk('La tarjeta sigue siendo role="button" con onclick auditoriaEntrarArea (no cambió la acción)', /role="button" tabindex="0" aria-label="Entrar a '/.test(js) && /auditoriaEntrarArea\(\\'' \+ jsArg\(area\)/.test(js));
 chk('Sin colores hex a mano en las reglas nuevas', !/\.if-area[^{]*\{[^}]*#[0-9a-fA-F]{3,6}\b/.test(css));
 const vH = (html.match(/\?v=(\d+\.\d+)/) || [])[1], vS = (sw.match(/APP_VERSION\s*=\s*'(\d+\.\d+)'/) || [])[1];
 chk('La versión de index.html y sw.js coincide', vH && vH === vS, 'index=' + vH + ' sw=' + vS);
