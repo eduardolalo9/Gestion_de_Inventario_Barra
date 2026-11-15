@@ -486,12 +486,27 @@ async function main() {
         }));
     });
 
-    await prueba('S2c. el alta normal de un usuario SIGUE funcionando', async () => {
+    await prueba('S2c. el alta normal de un usuario SIGUE funcionando (forma exacta que escribe la app)', async () => {
         await reiniciarConDatosBase();
         const nuevo = testEnv.authenticatedContext('usuario-nuevo3').firestore();
         await assertSucceeds(nuevo.doc('usuarios/usuario-nuevo3').set({
-            uid: 'usuario-nuevo3', email: 'nuevo@bar.mx', role: 'user'
+            uid: 'usuario-nuevo3', role: 'user', creadoEn: Date.now()
         }));
+    });
+
+    await prueba('S2d. (v5.50) el alta propia NO admite campos extra (p. ej. esAdmin)', async () => {
+        await reiniciarConDatosBase();
+        const nuevo = testEnv.authenticatedContext('usuario-nuevo4').firestore();
+        await assertFails(nuevo.doc('usuarios/usuario-nuevo4').set({
+            uid: 'usuario-nuevo4', role: 'user', creadoEn: Date.now(), esAdmin: true
+        }));
+    });
+
+    await prueba('S2e. (v5.50) el alta propia exige creadoEn numérico y uid igual al del token', async () => {
+        await reiniciarConDatosBase();
+        const nuevo = testEnv.authenticatedContext('usuario-nuevo5').firestore();
+        await assertFails(nuevo.doc('usuarios/usuario-nuevo5').set({ uid: 'usuario-nuevo5', role: 'user' }));
+        await assertFails(nuevo.doc('usuarios/usuario-nuevo5').set({ uid: 'otro-uid', role: 'user', creadoEn: Date.now() }));
     });
 
     await prueba('S3a. bartender NO puede MODIFICAR un evento del historial permanente', async () => {

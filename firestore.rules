@@ -185,7 +185,14 @@
                  // Ahora el alta del propio perfil no admite permissionOverrides
                  // en absoluto, y 'status' solo puede nacer como 'activo'. Los
                  // overrides quedan reservados a un admin vía 'update'.
+                 // v5.50 (auditoría M-3): el alta propia solo puede traer los campos que la
+                 // app escribe al crear la cuenta (js/50-roles-permisos.js: uid, role, creadoEn;
+                 // status solo si es 'activo'). Antes se aceptaba cualquier campo extra.
                  allow create: if request.auth != null && request.auth.uid == uid
+                                  && request.resource.data.keys().hasOnly(['uid', 'role', 'creadoEn', 'status'])
+                                  && request.resource.data.keys().hasAll(['uid', 'role', 'creadoEn'])
+                                  && request.resource.data.uid == uid
+                                  && request.resource.data.creadoEn is int
                                   && request.resource.data.role in ['user', 'BARTENDER']
                                   && !request.resource.data.keys().hasAny(['permissionOverrides', 'areasAsignadas'])
                                   && (!('status' in request.resource.data)
