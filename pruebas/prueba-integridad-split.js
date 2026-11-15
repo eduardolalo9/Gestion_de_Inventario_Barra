@@ -49,7 +49,10 @@ chk('Todos los archivos declarados existen en disco',
     faltantes.length === 0, faltantes.map(f => f.ruta).join(', '));
 
 // ═══ 3 · Cada archivo en disco está declarado ══════════════════════════════
-const enDisco = fs.readdirSync(path.join(RAIZ, 'js')).filter(f => f.endsWith('.js')).sort();
+// v5.49: js/xlsx.full.min.js es una biblioteca de terceros (SheetJS 0.20.3, auditoría C-3), no un módulo
+// de la app; se declara en index.html sin pasar por la convención de módulos. Se excluye SOLO ese archivo.
+const VENDOR = new Set(['xlsx.full.min.js']);
+const enDisco = fs.readdirSync(path.join(RAIZ, 'js')).filter(f => f.endsWith('.js') && !VENDOR.has(f)).sort();
 const declSet = new Set(declaradas.map(d => path.basename(d.ruta)));
 const huerfanos = enDisco.filter(f => !declSet.has(f));
 chk('Ningún archivo js queda huérfano (en disco pero sin etiqueta)',
@@ -150,7 +153,8 @@ if (mWarm && mPre) {
     const sinCubrir = enDisco.filter(f => !cubiertos.has(f));
     chk('Todos los js están en PRECACHE_URLS o en WARM_URLS',
         sinCubrir.length === 0, 'sin cubrir: ' + sinCubrir.join(', '));
-    const sobran = [...cubiertos].filter(f => !enDisco.includes(f));
+    const todoEnDisco = fs.readdirSync(path.join(RAIZ, 'js')).filter(f => f.endsWith('.js'));   // incluye el vendor
+    const sobran = [...cubiertos].filter(f => !todoEnDisco.includes(f));
     chk('El Service Worker no pide js que ya no existen',
         sobran.length === 0, 'sobran: ' + sobran.join(', '));
 }

@@ -29,7 +29,7 @@
 // pruebas/prueba-integridad-split.js falla si se desincronizan: un index.html
 // nuevo sirviendo un .js viejo desde cache es el fallo mas dificil de
 // diagnosticar que puede tener una PWA partida en archivos.
-const APP_VERSION = '5.48';
+const APP_VERSION = '5.49';
 const CACHE_NAME  = 'barinventory-v' + APP_VERSION;
 
 // SW8 FIX: OFFLINE_URL calculado desde el scope del SW en tiempo de ejecución.
@@ -76,6 +76,8 @@ const PRECACHE_URLS = [
 // A diferencia de addAll(), esto va UNO POR UNO y cada fallo se tolera: que un
 // archivo no se pueda traer no puede tumbar al resto ni impedir la activacion.
 const WARM_URLS = [
+    // v5.49 — SheetJS propio (~950 KB). Va en WARM (no en PRECACHE): no debe impedir la instalación del SW; sin red, la importación de Excel necesita que ya esté en caché.
+    './js/xlsx.full.min.js?v=' + APP_VERSION,
     // v5.31 — tema minimalista claro. En WARM (PRECACHE tiene tope de 6): si faltara sin red, la app se ve con el tema esmeralda de siempre.
     './css/tema-minimal.css?v=' + APP_VERSION,
     './css/densidad.css?v=' + APP_VERSION,   // v5.38 — capa de densidad operativa (va la última)
