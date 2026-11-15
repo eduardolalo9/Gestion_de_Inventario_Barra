@@ -49,10 +49,10 @@ jobs:
       - name: Preparar Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'   # firebase-admin 14 exige Node >= 22
 
       - name: Instalar firebase-admin
-        run: npm install --no-save firebase-admin
+        run: npm install --no-save firebase-admin@14.5.1
 
       - name: Escribir la credencial en un archivo temporal
         env:

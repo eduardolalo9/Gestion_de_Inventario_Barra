@@ -129,12 +129,16 @@ async function copiarColeccion(ref, profundidad, cuenta) {
     // 'firebase-admin/firestore'); v11/v12 exponían admin.firestore(). Se
     // intenta la moderna y se cae a la antigua, para que el script no dependa
     // de qué versión quedó instalada en la máquina o en el runner.
+    // v14 exige Node >= 22. Si la API moderna falla, el error REAL se muestra
+    // (antes se tapaba con "reading 'applicationDefault'" y costó días detectarlo).
     let initializeApp, applicationDefault, getFirestore;
     try {
         ({ initializeApp, applicationDefault } = require('firebase-admin/app'));
         ({ getFirestore } = require('firebase-admin/firestore'));
-    } catch (_) {
-        const admin = require('firebase-admin');
+    } catch (errModerno) {
+        let admin;
+        try { admin = require('firebase-admin'); } catch (_) { throw errModerno; }
+        if (!admin.credential || !admin.firestore) throw errModerno;   // sin API antigua: mostrar el error real
         initializeApp      = admin.initializeApp;
         applicationDefault = admin.credential.applicationDefault;
         getFirestore       = function(app) { return admin.firestore(app); };
