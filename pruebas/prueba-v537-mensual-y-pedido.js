@@ -65,7 +65,7 @@ chk('Nombre del archivo con fecha local', vm.runInContext(`pedidoSugeridoExportN
 const s73 = leer('js/73-pedido-sugerido.js');
 const exportar = s73.slice(s73.indexOf('function exportarPedidoSugeridoExcel('), s73.indexOf('function pedidoSugeridoGenerar('));
 chk('★ Exportar solo lee: no escribe catálogo, carrito, localStorage ni Firestore', exportar.length > 100 && !/addToCart|saveToLocalStorage|syncToCloud|localStorage|collection\(|\.set\(|\.update\(/.test(exportar));
-chk('★ El alcance NO depende del filtro de grupo ni de la búsqueda (soloBajo fijo, sin _ps.grupo)', /pedidoSugeridoFilas\(typeof products !== 'undefined' \? products : \[\], \{ soloBajo: true \}\)/.test(exportar) && !/_ps\.grupo|_ps\.busqueda/.test(exportar));
+chk('★ El alcance NO depende del filtro de grupo ni de la búsqueda (soloBajo fijo, sin _ps.grupo)', /pedidoSugeridoFilas\(typeof products !== 'undefined' \? products : \[\], \{ soloBajo: true, fuente: _ps\.fuente \}\)/.test(exportar) && !/_ps\.grupo|_ps\.busqueda/.test(exportar));
 chk('Botón solo con inventory.export', /_psPuedeExportar\(\) \? '<button type="button" class="mc-pill" id="psExportBtn"/.test(s73) && /hasPermission\('inventory\.export'\)/.test(s73));
 
 let mal = 0;

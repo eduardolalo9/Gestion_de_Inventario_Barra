@@ -25,8 +25,26 @@
             orden:       { campo: 'nombre', dir: 1 },
             seleccion:   null,       // { pid: true } — null = aún no se inicializó en esta sesión
             cantidades:  {},         // { pid: n } — lo que la persona escribió
-            busqueda:    ''
+            busqueda:    '',
+            fuente:      'sistema'   // v5.50 — base de la existencia: 'sistema' (arrastre + compras − ventas) | 'conteo' (suma del conteo de todas las áreas)
         };
+
+        /**
+         * v5.50 — total del CONTEO FÍSICO de todas las áreas (la misma cifra de getTotalStock:
+         * suma stockByArea de las áreas configuradas). null = el producto no tiene ningún
+         * conteo: no se inventa un 0 (sugeriría pedir el mínimo completo de lo que simplemente
+         * no se ha contado).
+         */
+        function pedidoSugeridoConteoTotal(p) {
+            var sb = p && p.stockByArea;
+            if (!sb || typeof sb !== 'object') return null;
+            var areas = (typeof AREAS_CONTEO !== 'undefined' && AREAS_CONTEO && AREAS_CONTEO.length) ? AREAS_CONTEO : ['almacen', 'barra1', 'barra2'];
+            var hay = areas.some(function(a) { return typeof sb[a] === 'number' && isFinite(sb[a]); });
+            if (!hay) return null;
+            if (typeof getTotalStock === 'function') return getTotalStock(p);
+            var t = 0; areas.forEach(function(a) { t += (typeof sb[a] === 'number' ? sb[a] : 0); });
+            return Math.round(t * 1000) / 1000;
+        }
 
         /**
          * Cabecera de módulo (Ventas, Pedido sugerido, Control de negativos, Equipo).
@@ -62,10 +80,14 @@
             (lista || []).forEach(function(p) {
                 if (!p || typeof p.stockMinimo !== 'number' || p.stockMinimo <= 0) return;
                 if (opciones.grupo && (p.group || 'General') !== opciones.grupo) return;
-                var sug = (typeof pedidoSugeridoProducto === 'function') ? pedidoSugeridoProducto(p) : null;
+                var conteo = opciones.fuente === 'conteo';   // v5.50: base = conteo total de las áreas
+                var stock = conteo ? pedidoSugeridoConteoTotal(p)
+                                   : ((typeof existenciaMostrada === 'function') ? existenciaMostrada(p) : null);
+                var sug = conteo ? ((typeof pedidoSugeridoDesdeTotal === 'function') ? pedidoSugeridoDesdeTotal(p, stock) : null)
+                                 : ((typeof pedidoSugeridoProducto === 'function') ? pedidoSugeridoProducto(p) : null);
                 if (opciones.soloBajo && !(typeof sug === 'number' && sug > 0)) return;
-                var stock = (typeof existenciaMostrada === 'function') ? existenciaMostrada(p) : null;
                 out.push({
+                    sinConteo: conteo && stock === null,
                     id: p.id, nombre: p.name || p.id, grupo: p.group || 'General', unidad: p.unit || '',
                     enStock: (typeof stock === 'number') ? _psRed(stock) : null,
                     minimo: p.stockMinimo,
@@ -113,7 +135,7 @@
         }
 
         function _psFilasBase() {
-            return pedidoSugeridoFilas(typeof products !== 'undefined' ? products : [], { soloBajo: _ps.soloBajo, grupo: _ps.grupo });
+            return pedidoSugeridoFilas(typeof products !== 'undefined' ? products : [], { soloBajo: _ps.soloBajo, grupo: _ps.grupo, fuente: _ps.fuente });
         }
 
         function _psInicializarSeleccion() {
@@ -121,7 +143,7 @@
             // Primera vez en la sesión: todo lo que tiene sugerido > 0 ya va
             // marcado — es lo que se pide 9 de cada 10 veces; se desmarca lo que no.
             _ps.seleccion = {};
-            pedidoSugeridoFilas(typeof products !== 'undefined' ? products : [], { soloBajo: true }).forEach(function(f) {
+            pedidoSugeridoFilas(typeof products !== 'undefined' ? products : [], { soloBajo: true, fuente: _ps.fuente }).forEach(function(f) {
                 _ps.seleccion[f.id] = true;
             });
         }
@@ -175,7 +197,7 @@
                + (f.proveedor ? '<span class="ps-card__prov">' + escapeHtml(f.proveedor) + '</span>' : '') + '</div>';
             h += '</div>';
             h += '<div class="ps-card__cifras">'
-               + '<div class="ps-card__num"><span class="ps-card__etq">Stock</span><b class="num' + (typeof f.enStock === 'number' && f.enStock < f.minimo ? ' ps-bajo' : '') + '">' + _psNum(f.enStock) + '</b></div>'
+               + '<div class="ps-card__num"><span class="ps-card__etq">' + (_ps.fuente === 'conteo' ? 'Conteo' : 'Stock') + '</span><b class="num' + (typeof f.enStock === 'number' && f.enStock < f.minimo ? ' ps-bajo' : '') + '">' + _psNum(f.enStock) + '</b></div>'
                + '<div class="ps-card__num ps-card__num--muted"><span class="ps-card__etq">Mín</span><span class="num">' + _psNum(f.minimo) + '</span></div>'
                + '</div>';
             h += '<label class="ps-card__cant"><span class="ps-card__etq">Pedir</span>'
@@ -241,6 +263,19 @@
             h += '<button type="button" class="ps-acceso" id="psHistorialBtn" onclick="abrirHistorialPedidos()">'
                + '<i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i><span>Pedidos generados</span>'
                + '<b class="num">' + (typeof orders !== 'undefined' ? orders.length : 0) + '</b><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button>';
+            // v5.50 — base de la existencia: la del sistema o el conteo total de todas las áreas.
+            var _psConteo = _ps.fuente === 'conteo';
+            var _psSinConteo = _psConteo ? pedidoSugeridoFilas(typeof products !== 'undefined' ? products : [], { soloBajo: false, fuente: 'conteo' })
+                                           .filter(function(f) { return f.sinConteo; }).length : 0;
+            h += '<div class="ps-filtros ps-fuente" role="group" aria-label="Base de la existencia">'
+               + '<button type="button" class="mc-pill' + (!_psConteo ? ' mc-pill--on' : '') + '" aria-pressed="' + !_psConteo + '" data-ps-accion="fuente" data-ps-fuente="sistema">'
+               + '<i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i> Existencia del sistema</button>'
+               + '<button type="button" class="mc-pill' + (_psConteo ? ' mc-pill--on' : '') + '" aria-pressed="' + _psConteo + '" data-ps-accion="fuente" data-ps-fuente="conteo">'
+               + '<i class="fa-solid fa-list-check" aria-hidden="true"></i> Conteo de todas las áreas</button>'
+               + '</div>';
+            h += '<p class="ps-fuente__nota" id="psFuenteNota">' + (_psConteo
+                 ? 'Usando el conteo físico total (Almacén + barras). ' + (_psSinConteo ? _psSinConteo + ' producto' + (_psSinConteo === 1 ? '' : 's') + ' con mínimo sin conteo: no se sugieren.' : 'Todos los productos con mínimo tienen conteo.')
+                 : 'Usando la existencia del sistema (arrastre + compras − ventas).') + '</p>';
             h += '<div class="ps-filtros" role="group" aria-label="Filtros">'
                + '<button type="button" class="mc-pill' + (_ps.soloBajo ? ' mc-pill--on' : '') + '" aria-pressed="' + _ps.soloBajo + '" data-ps-accion="bajo">Bajo stock</button>'
                + '<label class="mc-pill mc-pill--select' + (_ps.grupo ? ' mc-pill--on' : '') + '"><span class="sbx-sr">Grupo</span>'
@@ -345,6 +380,7 @@
             var sinPrecio = filas.filter(function(f) { return f.precio === null; }).length;
             var inf = [['Concepto', 'Valor'], ['Generado', info.generado || ''], ['Usuario', info.usuario || ''], ['Versión de la app', info.version || ''],
                        ['Productos con pedido sugerido', filas.length], ['Sin precio válido', sinPrecio],
+                       ['Base de la existencia', info.fuente === 'conteo' ? 'Conteo físico total de todas las áreas (Almacén + barras)' : 'Existencia del sistema (arrastre + compras − ventas)'],
                        ['Alcance', 'Todos los productos con pedido sugerido (existencia por debajo del stock mínimo). No lo recortan el filtro de grupo, la búsqueda ni la selección.'],
                        ['Pedido sugerido', 'Redondeo hacia arriba de (Stock mínimo − Existencia) en unidades de compra (la misma cifra de la pantalla).'],
                        ['Cantidad a pedir', 'La cantidad escrita en la pantalla; si no se cambió, el pedido sugerido.'],
@@ -367,13 +403,13 @@
             if (_psExport.enCurso) return { ok: false, motivo: 'en_curso' };
             if (!_psPuedeExportar()) { showNotification('⚠️ No tienes permiso para exportar'); return { ok: false, motivo: 'sin_permiso' }; }
             if (typeof XLSX === 'undefined') { showNotification('⏳ Cargando la librería de Excel… intenta en unos segundos'); return { ok: false, motivo: 'sin_xlsx' }; }
-            var filas = pedidoSugeridoExportFilas(pedidoSugeridoFilas(typeof products !== 'undefined' ? products : [], { soloBajo: true }), _psCantidad);
+            var filas = pedidoSugeridoExportFilas(pedidoSugeridoFilas(typeof products !== 'undefined' ? products : [], { soloBajo: true, fuente: _ps.fuente }), _psCantidad);
             if (!filas.length) { showNotification('ℹ️ Ningún producto tiene pedido sugerido'); return { ok: false, motivo: 'sin_filas' }; }
             _psExport.enCurso = true;
             try {
                 var ahora = new Date();
                 var cuenta = (typeof _auth !== 'undefined' && _auth && _auth.currentUser) ? _auth.currentUser : null;
-                var info = { generado: ahora.toLocaleString('es-MX', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
+                var info = { fuente: _ps.fuente, generado: ahora.toLocaleString('es-MX', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }),
                              usuario: cuenta ? (cuenta.email || cuenta.uid) : ((typeof currentUserUid !== 'undefined' && currentUserUid) ? currentUserUid : 'Sin sesión'),
                              version: (typeof _exVersionApp === 'function') ? _exVersionApp() : '' };
                 var nombre = pedidoSugeridoExportNombre(ahora);
@@ -427,6 +463,13 @@
                 } else if (acc === 'bajo') {
                     _ps.soloBajo = !_ps.soloBajo;
                     renderTab();
+                } else if (acc === 'fuente') {
+                    var nueva = el.getAttribute('data-ps-fuente') === 'conteo' ? 'conteo' : 'sistema';
+                    if (nueva === _ps.fuente) return;
+                    // Cambia la base → cambian los sugeridos: se vuelve a marcar lo que ahora hace falta y
+                    // se descartan las cantidades escritas sobre la base anterior (ya no corresponden).
+                    _ps.fuente = nueva; _ps.seleccion = null; _ps.cantidades = {};
+                    renderTab();
                 } else if (acc === 'generar') {
                     pedidoSugeridoGenerar();
                 }
@@ -458,3 +501,4 @@
         window.pedidoSugeridoGrupo = pedidoSugeridoGrupo;
         window.moduloCabecera = moduloCabecera;
         window.exportarPedidoSugeridoExcel = exportarPedidoSugeridoExcel;
+        window.pedidoSugeridoConteoTotal = pedidoSugeridoConteoTotal;

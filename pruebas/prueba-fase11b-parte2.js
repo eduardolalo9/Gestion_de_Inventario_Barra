@@ -63,6 +63,7 @@ const ctx = {
 };
 
 const codigo =
+    extraerFuncion(fvsSrc, 'pedidoSugeridoDesdeTotal') + '\n' +   // v5.50: la fórmula vive aquí y pedidoSugeridoProducto delega
     extraerFuncion(fvsSrc, 'pedidoSugeridoProducto') + '\n' +
     extraerFuncion(fvsSrc, 'nivelAlertaProducto');
 

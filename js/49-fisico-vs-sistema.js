@@ -365,7 +365,17 @@
             if (!product || typeof product.stockMinimo !== 'number' || product.stockMinimo <= 0) return null;
             var total = (typeof existenciaMostrada === 'function')
                 ? existenciaMostrada(product, cacheEntradas, cacheVentas) : null;
-            if (typeof total !== 'number') return null;
+            return pedidoSugeridoDesdeTotal(product, total);
+        }
+
+        /**
+         * pedidoSugeridoDesdeTotal(product, total) — v5.50. La MISMA fórmula, pero con el
+         * total que se le entregue: la pantalla de Pedidos lo usa con el conteo físico de
+         * todas las áreas (getTotalStock) cuando se elige esa base. Sin número → null.
+         */
+        function pedidoSugeridoDesdeTotal(product, total) {
+            if (!product || typeof product.stockMinimo !== 'number' || product.stockMinimo <= 0) return null;
+            if (typeof total !== 'number' || !isFinite(total)) return null;
             if (total >= product.stockMinimo) return 0;
             if (typeof product.conversion !== 'number' || product.conversion <= 0) return null;
             var deficit = product.stockMinimo - total;

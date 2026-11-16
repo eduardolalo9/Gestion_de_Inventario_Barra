@@ -1038,3 +1038,7 @@ button.fvs-t__celda:hover, button.fvs-t__celda:focus-visible { border-color: var
 .ps-acceso b { font-family: var(--f-num); font-size: .85rem; padding: 1px 9px; border-radius: 999px; background: var(--accent-dim); color: var(--txt-primary); }   /* contraste AA en claro */
 .ped-c .ped-tabla th, .ped-c .ped-tabla td { padding: 4px 6px !important; line-height: 1.3; }   /* misma densidad que la tarjeta anterior */
 .ped-c__det { padding: 4px 8px 10px; }
+
+/* v5.50 — Pedidos: base de la existencia (sistema | conteo de todas las áreas) */
+.ps-fuente { margin-bottom: 2px; }
+.ps-fuente__nota { margin: 2px 4px 8px; font-size: .78rem; line-height: 1.35; color: var(--txt-secondary); }
