@@ -71,7 +71,7 @@ chk('(informativo) window.miFuncion() resuelve a la misma función propia; no ab
 // ═══ 5 · Superficie de eventos ═══
 chk('★ Solo escucha eventos de USUARIO: click, change, input, submit (nunca load, error, focus, mouseover…)', Object.keys(D._EVENTOS).sort().join() === 'change,click,input,submit');
 const fuente = leer('js/02-despachador-eventos.js');
-chk('★ Se registra en fase de CAPTURA (recibe también los eventos que no burbujean, como los disparados por código)', /addEventListener\(tipo, _manejar, true\)/.test(fuente));
+chk('★ Se registra en fase de CAPTURA (recibe también los eventos que no burbujean, como los disparados por código)', /addEventListener\(tipo, _alCapturar, true\)/.test(fuente));
 chk('El despachador no usa eval, new Function, setTimeout con texto ni innerHTML', !/\beval\s*\(|new\s+Function|innerHTML|document\.write|setTimeout\s*\(\s*['"]/.test(fuente.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '')));
 
 // ═══ 6 · Guarda estática: todo manejador en línea de la fuente es ejecutable ═══

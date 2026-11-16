@@ -66,6 +66,28 @@ const MONTAR = () => {
   await p.fill('#tv', '7'); await p.press('#tv', 'Tab');
   chk('onchange con this.value llega con el valor escrito', JSON.stringify(await p.evaluate(() => window.__n)) === JSON.stringify([['cant', '7']]), JSON.stringify(await p.evaluate(() => window.__n)));
 
+  // orden de propagación: igual que un onclick en línea (regresión: el ⋮ del Recetario abría además la ficha de la tarjeta)
+  await p.evaluate(() => {
+    window.__n = [];
+    document.body.insertAdjacentHTML('beforeend',
+      '<div id="pc" onclick="accionPrueba(\'padre-captura\')"><button id="hc" onclick="accionPrueba(\'hijo-captura\')">x</button></div>' +
+      '<div id="pb" onclick="accionPrueba(\'padre-contenedor\')"><div id="cont"><button id="hb" onclick="accionPrueba(\'hijo-contenedor\')">y</button></div></div>' +
+      '<div id="pn" onclick="accionPrueba(\'padre-nb\')"><input id="hn" onchange="accionPrueba(\'hijo-nb\')"></div>');
+    // (1) oyente en CAPTURA del document que detiene la propagación solo para #hc: ningún onclick (ni el del botón) debe correr
+    document.addEventListener('click', (e) => { if (e.target.closest && e.target.closest('#hc')) e.stopPropagation(); }, true);
+    // (2) oyente de burbuja en un contenedor intermedio: el botón (más abajo) SÍ corre, el padre (más arriba) NO
+    document.getElementById('cont').addEventListener('click', (e) => e.stopPropagation());
+  });
+  await p.evaluate(() => document.getElementById('hc').click());
+  const o1 = await p.evaluate(() => window.__n.slice()); await p.evaluate(() => { window.__n = []; });
+  await p.evaluate(() => document.getElementById('hb').click());
+  const o2 = await p.evaluate(() => window.__n.slice()); await p.evaluate(() => { window.__n = []; });
+  await p.evaluate(() => document.getElementById('hn').dispatchEvent(new Event('change', { bubbles: false })));
+  const o3 = await p.evaluate(() => window.__n.slice()); await p.evaluate(() => { window.__n = []; });
+  chk('★ Si un oyente en captura detiene el clic, NO corre ningún onclick en línea (ni el del padre ni el del hijo), como en el navegador', o1.length === 0, JSON.stringify(o1));
+  chk('★ Si un contenedor intermedio detiene la subida, el onclick del hijo corre y el del padre NO', JSON.stringify(o2) === JSON.stringify([['hijo-contenedor']]), JSON.stringify(o2));
+  chk('★ Un evento que NO burbujea llega al onchange del propio elemento pero no al del padre', JSON.stringify(o3) === JSON.stringify([['hijo-nb']]), JSON.stringify(o3));
+
   // ── Inyección de HTML: lo que el CSP estricto DEBE impedir ──
   await p.evaluate(() => {
     window.__pwn = []; window.__n = [];

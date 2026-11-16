@@ -295,6 +295,45 @@
                 }
             }
 
+            // v5.53 — Orden de ejecución IGUAL al de un manejador en línea. Un atributo onclick="" corre en la
+            // fase de BURBUJA del propio elemento: si un oyente anterior (p. ej. uno en captura del document, o uno de un
+            // contenedor) llama a stopPropagation(), los manejadores de los padres NO corren. Ejecutarlos desde la captura
+            // del document rompía eso (el ⋮ del Recetario abría además la ficha de la tarjeta). Por eso, durante la captura
+            // solo se ENGANCHA, en cada elemento con atributo, un oyente de burbuja de un solo evento; el navegador lo
+            // invoca en su turno y respeta stopPropagation / eventos que no burbujean, tal como con el atributo.
+            function _alCapturar(ev) {
+                var attr = EVENTOS[ev.type];
+                if (!attr || _probando) return;
+                if (_detectarModo() === 'sombra') { _manejar(ev); return; }   // solo verifica: el navegador ejecuta el atributo
+                var enganchados = [];
+                var limpiar = function() { enganchados.forEach(function(x) { x.el.removeEventListener(ev.type, x.fn, false); }); enganchados = []; };
+                var el = ev.target && ev.target.nodeType === 1 ? ev.target : (ev.target && ev.target.parentElement);
+                for (; el && el !== document; el = el.parentElement) {
+                    if (!el.getAttribute) continue;
+                    var t0 = el.getAttribute(attr);
+                    if (t0 === null || t0 === undefined || t0 === '') continue;
+                    (function(nodo) {
+                        var fn = function(ev2) {
+                            nodo.removeEventListener(ev.type, fn, false);
+                            if (ev2 !== ev) return;
+                            var texto = nodo.getAttribute(attr);
+                            if (texto === null || texto === undefined || texto === '') return;
+                            var res = ejecutar(texto, nodo, ev);
+                            if (!res.ok) {
+                                _anotar(texto, res.motivo);
+                                if (typeof console !== 'undefined') console.warn('[CSP] Manejador no soportado (' + attr + '): ' + res.motivo + ' → ' + String(texto).slice(0, 80));
+                                return;
+                            }
+                            if (res.detuvo && ev.stopPropagation) ev.stopPropagation();
+                        };
+                        nodo.addEventListener(ev.type, fn, false);
+                        enganchados.push({ el: nodo, fn: fn });
+                    })(el);
+                }
+                // Si algún oyente detuvo la propagación antes de llegar a un elemento, su escucha no se usó: se retira.
+                if (enganchados.length) setTimeout(limpiar, 0);
+            }
+
             // Teclado: las tarjetas que son role="button" se activan con Enter o Espacio. Antes lo hacía un
             // onkeydown en línea; ahora basta marcar el elemento con data-activar-teclado (no es un manejador
             // en línea, así que funciona igual con o sin 'unsafe-inline'): se convierte en un clic.
@@ -319,10 +358,10 @@
             function iniciar() {
                 if (typeof document === 'undefined' || !document.addEventListener || iniciar._hecho) return;
                 iniciar._hecho = true;
-                // FASE DE CAPTURA: recibe también los eventos que no burbujean (un change/input disparado por
-                // código con bubbles:false SÍ llegaba a un manejador en línea, que está en el propio elemento).
-                // La subida por los padres se hace a mano en _manejar, respetando stopPropagation.
-                Object.keys(EVENTOS).forEach(function(tipo) { document.addEventListener(tipo, _manejar, true); });
+                // FASE DE CAPTURA solo para ENGANCHAR (ver _alCapturar): así también se atienden los eventos que no
+                // burbujean (un change/input disparado por código con bubbles:false SÍ llegaba a un manejador en línea,
+                // que está en el propio elemento) y el orden/stopPropagation es el del navegador.
+                Object.keys(EVENTOS).forEach(function(tipo) { document.addEventListener(tipo, _alCapturar, true); });
                 document.addEventListener('keydown', _teclado, false);
             }
 
@@ -331,7 +370,7 @@
                 modo: function() { return _detectarModo(); },
                 // { n: manejadores revisados en esta sesión, fallos?: { texto: {n, m} } (persistentes en el aparato) }
                 resumen: function() { var d = {}; try { d = JSON.parse(localStorage.getItem(LS) || '{}') || {}; } catch (e) { d = {}; } d.n = _n; return d; },
-                _manejar: _manejar, _EVENTOS: EVENTOS
+                _manejar: _manejar, _alCapturar: _alCapturar, _EVENTOS: EVENTOS
             };
         })();
         if (typeof window !== 'undefined') { window.CspDespachador = CspDespachador; CspDespachador.iniciar(); }

@@ -123,7 +123,7 @@ jobs:
       - name: Instalar Chromium para Playwright
         run: npx playwright install --with-deps chromium
 
-      # todas-navegador.js levanta y apaga su propio http-server.
+      # todas-navegador.js levanta y apaga su propio servidor estático (herramientas/servidor-estatico.js).
       # prueba-p0.js baja SheetJS de cdnjs: si la red del runner lo bloquea,
       # el fallo dirá "XLSX is not defined" y no es un fallo del código.
       - name: Ejecutar las pruebas de navegador
