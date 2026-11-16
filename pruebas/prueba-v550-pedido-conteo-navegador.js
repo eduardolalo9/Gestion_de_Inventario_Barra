@@ -1,4 +1,5 @@
-// v5.50 — Pedidos: opción «Conteo de todas las áreas». Chromium real, 390 px.
+// v5.50/5.51 — Pedidos: opción «Conteo de todas las áreas». Chromium real, 390 px.
+// v5.51: el conteo sale del inventario en curso (auditoriaConteo), no de stockByArea (que aquí está EN CEROS a propósito).
 const { chromium } = require('playwright');
 const C = []; const chk = (n, ok, d) => C.push({ n, ok: !!ok, d: d || '' });
 const PUERTO = process.env.PUERTO || '8080';
@@ -12,11 +13,16 @@ const MONTAR = () => {
   currentUserUid = 'u'; currentUserRole = 'admin'; _authzState.loaded = true; _authzState.overrides = {}; _authzState.permissions = new Set(['*']);
   const P = (id, name, extra) => Object.assign({ id, name, group: 'TEQUILA', unit: 'PZA', precio: 100, stockMinimo: 10, conversion: 1 }, extra);
   products = [
-    P('A', 'PRODUCTO A', { stockByArea: { almacen: 3, barra1: 1 } }),             // sistema 20 · conteo 4
-    P('B', 'PRODUCTO B', { stockByArea: { almacen: 8, barra1: 7, barra2: 0 } }),  // sistema 2  · conteo 15
-    P('C', 'PRODUCTO C'),                                                         // sin conteo
-    P('D', 'PRODUCTO D', { stockByArea: { almacen: 3 } })                         // sistema 3  · conteo 3
+    P('A', 'PRODUCTO A', { stockByArea: { almacen: 0, barra1: 0, barra2: 0 } }),   // sistema 20 · conteo 4
+    P('B', 'PRODUCTO B', { stockByArea: { almacen: 0, barra1: 0, barra2: 0 } }),   // sistema 2  · conteo 15
+    P('C', 'PRODUCTO C', { stockByArea: { almacen: 0, barra1: 0, barra2: 0 } }),   // nadie lo contó
+    P('D', 'PRODUCTO D', { stockByArea: { almacen: 0, barra1: 0, barra2: 0 } })    // sistema 3  · conteo 3
   ];
+  auditoriaConteo = {
+    A: { almacen: { enteras: 3, abiertas: [] }, barra1: { enteras: 1, abiertas: [] } },
+    B: { almacen: { enteras: 8, abiertas: [] }, barra1: { enteras: 7, abiertas: [] }, barra2: { enteras: 0, abiertas: [] } },
+    D: { almacen: { enteras: 3, abiertas: [] } }
+  };
   const sis = { A: 20, B: 2, C: 20, D: 3 };
   window.existenciaMostrada = (p) => sis[p.id];
   orders = []; inventories = []; compras = []; movimientos = []; costosUltimos = {}; cart = [];
@@ -51,7 +57,7 @@ const ids = (p) => p.evaluate(() => Array.from(document.querySelectorAll('.ps-ca
   chk('El botón de conteo queda activo y el del sistema apagado', await pill('conteo').getAttribute('aria-pressed') === 'true' && await pill('sistema').getAttribute('aria-pressed') === 'false');
   chk('La etiqueta de la cifra cambia a «Conteo»', (await p.locator('.ps-card__etq').first().textContent()).trim() === 'Conteo');
   const nota = await p.locator('#psFuenteNota').innerText();
-  chk('★ La nota avisa del producto sin conteo (no se sugiere) y de la base usada', /conteo físico total/i.test(nota) && /1 producto con mínimo sin conteo/.test(nota), nota);
+  chk('★ La nota avisa del producto sin conteo (no se sugiere) y de la base usada', /conteo físico del inventario en curso/i.test(nota) && /1 producto con mínimo sin conteo/.test(nota), nota);
   chk('★ Al cambiar de base se descartó la cantidad escrita (99) y los sugeridos son los del conteo',
       await p.evaluate(() => Object.keys(_ps.cantidades).length === 0 && Array.from(document.querySelectorAll('.ps-input')).map(i => i.value).join(',') === '6,7'));
   chk('Todo lo sugerido queda marcado para el pedido', await p.evaluate(() => Array.from(document.querySelectorAll('.ps-check')).every(c => c.getAttribute('aria-checked') === 'true')));
@@ -78,6 +84,14 @@ const ids = (p) => p.evaluate(() => Array.from(document.querySelectorAll('.ps-ca
   // ── Exportación: misma base
   const filasConteo = await p.evaluate(() => { _ps.fuente = 'conteo'; return pedidoSugeridoExportFilas(pedidoSugeridoFilas(products, { soloBajo: true, fuente: _ps.fuente }), (f) => f.sugerido).map(f => f.id + ':' + f.cantidad).join(','); });
   chk('La exportación con base «conteo» lleva A:6 y D:7', filasConteo === 'A:6,D:7', filasConteo);
+  // ── Sin «Ver todos los conteos» la opción ni se ofrece (conteo ciego)
+  const sinPermiso = await p.evaluate(() => {
+    _ps.fuente = 'conteo';
+    _authzState.permissions = new Set(['inventory.count', 'inventory.read']); _authzState.overrides = {};
+    renderTab();
+    return { botones: document.querySelectorAll('[data-ps-fuente]').length, nota: !!document.getElementById('psFuenteNota'), fuente: _ps.fuente };
+  });
+  chk('★ Sin inventory.viewAll no hay botones de base ni nota, y la base vuelve a «sistema» (conteo ciego)', sinPermiso.botones === 0 && !sinPermiso.nota && sinPermiso.fuente === 'sistema', JSON.stringify(sinPermiso));
   chk('Sin errores de página', errs.length === 0, errs.join(' | '));
   await nav.close();
   const fallos = C.filter(c => !c.ok);
