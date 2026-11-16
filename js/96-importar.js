@@ -43,6 +43,9 @@
         ];
 
         var importarSeccion = null;   // sección abierta (null = el menú del módulo)
+
+        /** v5.53 — «Importar desde Excel» del menú lateral (antes: sentencias dentro del onclick). */
+        function irAImportarDesdeMenu() { importarSeccion = null; switchTab('importar'); sbClose(); }
         var _impPendiente   = null;   // { seccion, archivo, filas, validacion, ... } en vista previa
         var _impResultado   = null;   // resultado de la última aplicación
         var _impSeccionArchivo = null;

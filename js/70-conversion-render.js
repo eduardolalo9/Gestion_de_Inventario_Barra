@@ -1,3 +1,9 @@
+        /** v5.53 — tocar la fila abre la ficha, salvo que el toque sea en un botón de la fila (antes era un if dentro del onclick). */
+        function abrirFichaDesdeFila(ev, id) {
+            if (ev && ev.target && ev.target.closest && ev.target.closest('button')) return;
+            if (typeof abrirFichaProducto === 'function') abrirFichaProducto(id);
+        }
+
         function getTotalStock(product) {
             if (!product || !product.stockByArea) return 0;
             // PREMIUM — suma las áreas CONFIGURADAS (R6). Antes eran tres fijas,
@@ -688,7 +694,7 @@
                         var d          = ad[area];
                         var totalAudit = d ? (d.enteras + d.sumaAbiertas) : null;
                         html += '<div class="prd-area-chip' + (totalAudit === null ? ' prd-area-chip--vacio' : '') + '">';
-                        html += '<span class="prd-area-chip__label">' + CHIP_LABELS[area] + '</span>';
+                        html += '<span class="prd-area-chip__label">' + escapeHtml(CHIP_LABELS[area]) + '</span>';
                         html += '<span class="prd-area-chip__val num">'
                               + (totalAudit !== null ? totalAudit.toFixed(2) : '—')
                               + '</span>';
@@ -969,7 +975,7 @@
                 // v5.28 — en el teléfono, una sola línea: código 10 px gris +
                 // nombre 14 px en negritas + la unidad como pastilla. Tocar la
                 // fila abre la ficha con precio, mínimo, PV y proveedor.
-                html += '<td style="' + td + '" class="cat-prod" onclick="if(!event.target.closest(\'button\')&&typeof abrirFichaProducto===\'function\')abrirFichaProducto(\'' + jsArg(product.id) + '\')">'
+                html += '<td style="' + td + '" class="cat-prod" onclick="abrirFichaDesdeFila(event, \'' + jsArg(product.id) + '\')">'
                      + '<div class="cat-prod__linea">'
                      + '<span class="cat-prod__cod">' + escapeHtml(product.id) + '</span>'
                      + '<span class="cat-prod__nom">' + (product.name ? resaltarBusqueda(product.name, searchTerm) : '(sin nombre)') + '</span>'

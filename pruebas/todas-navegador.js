@@ -61,6 +61,7 @@ const PRUEBAS = [
     'prueba-v548-xss-navegador.js',    // v5.48 — un id con sintaxis JS ya no ejecuta código al tocar un botón (Chromium real)
     'prueba-v550-pedido-conteo-navegador.js', // v5.50 — Pedidos: cambiar de base, generar el pedido, táctil
     'prueba-v552-muestreo-filtros-navegador.js', // v5.52 — Muestreo: desviación, grupo, buscador y revisados
+    'prueba-v553-csp-estricto-navegador.js', // v5.53 — política estricta en Chromium real (servidor propio): hashes, despachador e inyección
     'prueba-v546-muestreo-compartido-navegador.js', // v5.46 — muestreo compartido (inventario en la nube), lista de reconteo del equipo, insignia sobre el buscador, autoguardado al volver
     'prueba-v545-fvs-navegador.js', // v5.45 — Físico vs Sistema: KPIs, insignias, selección múltiple, edición rápida, grupos plegables y muestreo
     'prueba-v544-auditoria-consolidada-navegador.js', // v5.44 — Auditoría consolidada: 15 columnas + hoja Inventario valorizada (descarga real)
@@ -119,8 +120,12 @@ function esperarServidor(intentos) {
         process.exit(1);
     }
 
-    const servidor = spawn('npx', ['--yes', 'http-server', '-p', String(PUERTO), '-c-1'],
-        { cwd: RAIZ, stdio: 'ignore', shell: process.platform === 'win32' });
+    // v5.53 — con CSP_ESTRICTO=1 se sirve index.html con la política FINAL (sin 'unsafe-inline' en script-src,
+    // con el hash de cada <script> en línea): toda la suite corre como correría en producción sin manejadores en línea.
+    // Siempre el servidor propio (sin npx): `servidor.kill()` apaga el proceso REAL. Con `npx http-server` solo se
+    // apagaba el envoltorio de npx y el servidor quedaba vivo ocupando el puerto, y una segunda corrida (p. ej. la de
+    // CSP estricta) hablaba sin saberlo con el servidor anterior, sin política estricta.
+    const servidor = spawn(process.execPath, [path.join(RAIZ, 'herramientas', 'servidor-estatico.js'), String(PUERTO)], { cwd: RAIZ, stdio: 'ignore', env: Object.assign({}, process.env) });
 
     // Pase lo que pase —fallo, Ctrl-C, excepción— el servidor se apaga. Dejarlo
     // vivo bloquearía el puerto 8080 en la siguiente ejecución.
@@ -132,6 +137,21 @@ function esperarServidor(intentos) {
     if (!await esperarServidor(20)) {
         console.error('\n  No arrancó el servidor en el puerto ' + PUERTO +
                       '. ¿Lo tienes ocupado con otra cosa?\n');
+        apagar();
+        process.exit(1);
+    }
+
+    // Guardia: el servidor que contesta en el puerto debe ser el NUESTRO y servir la política del modo pedido. Si quedó
+    // otro servidor vivo de una corrida anterior (que no es estricto), la suite «estricta» mentiría en verde.
+    const html = await new Promise(function(resolve) {
+        http.get('http://127.0.0.1:' + PUERTO + '/index.html', function(res) { let t = ''; res.setEncoding('utf8'); res.on('data', function(d) { t += d; }); res.on('end', function() { resolve(t); }); })
+            .on('error', function() { resolve(''); });
+    });
+    const scriptSrc = (html.match(/script-src([^;]*)/) || [])[1] || '';
+    const esEstricta = scriptSrc !== '' && scriptSrc.indexOf("'unsafe-inline'") === -1;
+    if (esEstricta !== (process.env.CSP_ESTRICTO === '1')) {
+        console.error('\n  El servidor del puerto ' + PUERTO + ' NO sirve la política esperada (' + (process.env.CSP_ESTRICTO === '1' ? 'ESTRICTA' : 'normal') +
+                      '). ¿Quedó un servidor de una corrida anterior? Ciérralo y repite.\n');
         apagar();
         process.exit(1);
     }

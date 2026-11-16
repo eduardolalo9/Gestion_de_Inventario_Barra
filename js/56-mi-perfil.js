@@ -169,6 +169,9 @@
             setTimeout(function() { var b = document.getElementById('perfilCerrarBtn'); if (b) b.focus(); }, 30);
         }
 
+        /** v5.53 — tocar el FONDO oscuro cierra el perfil; tocar dentro de la tarjeta no (antes: if dentro del onclick). */
+        function cerrarMiPerfilSiFondo(el, ev) { if (ev && ev.target === el) cerrarMiPerfil(); }
+
         function cerrarMiPerfil() {
             var ov = document.getElementById('perfilOverlay');
             if (!ov || ov.classList.contains('hidden')) return;

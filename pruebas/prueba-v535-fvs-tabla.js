@@ -175,7 +175,7 @@ chk('Reutiliza la fila fija y la descarga de js/97 (sin duplicar el truco del zi
 chk('★ El exportador usa el MISMO orden visible que la pantalla', /fisicoVsSistemaOrdenVisible\(datos\.filas, op\)/.test(src86) && /fisicoVsSistemaOrdenVisible\(r\.items, _fvsOpcionesVista\(\)\)/.test(src85));
 const c85v = sinCom(funcion(src85, 'fvsElegirGrupo') + funcion(src85, 'fvsAlternarDifAsc') + funcion(src85, 'fvsReiniciarVista'));
 chk('★ Grupo y «Diferencias ↑» solo cambian la vista (sin guardar ni sincronizar)', c85v.length > 50 && !/saveToLocalStorage|syncToCloud|localStorage|_db/.test(c85v));
-chk('Volver reinicia la vista (grupo y orden) junto con la búsqueda', /_fvsSearchTerm=\\'\\'; fvsReiniciarVista\(\); renderTab\(\);/.test(src85));
+chk('Volver reinicia la vista (grupo y orden) junto con la búsqueda', /function fvsVolverAConteo\(\) \{ auditoriaView = 'selection'; _fvsSearchTerm = ''; fvsReiniciarVista\(\); renderTab\(\); \}/.test(src85) && /volver: 'fvsVolverAConteo\(\)'/.test(src85));   // v5.53: antes eran sentencias dentro del onclick
 chk('Con «Diferencias ↑» se oculta el chip de invertir el orden (un solo orden a la vez)', /_chipsFvs\(\)\.filter\(function\(c\) \{ return !\(\(_fvsVista\.difAsc \|\| _fvsVista\.difDesc\) && c\.id === 'orden_desc'\); \}\)/.test(src85));
 chk('La pantalla sigue negando el acceso sin inventory.viewAll', /function renderFisicoVsSistema\(\) \{\s*if \(!hasPermission\('inventory\.viewAll'\)\)/.test(src85));
 chk('La corrección por área se conserva (data-fvs-accion="editar", solo si se puede editar)', /if \(editable && p\)[\s\S]{0,120}data-fvs-accion="editar"/.test(funcion(src85, '_fvsFilaHtml')));

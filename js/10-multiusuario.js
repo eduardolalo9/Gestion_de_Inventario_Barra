@@ -451,10 +451,10 @@
             html += '<div class="audit-rename-row">';
             html += '<input id="auditRenameInput" class="audit-rename-input" type="text" maxlength="32"'
                   + ' placeholder="Tu nombre..."'
-                  + ' onkeydown="if(event.key===\"Enter\"){event.preventDefault();auditSaveName();}">';
+                  + ' data-enter-click="#auditRenameGuardar">';
             // FASE 10B — antes: texto blanco sobre azul claro (1.72:1) y
             // botones de 12 px con min-height:auto. Ahora los del pulgar.
-            html += '<button type="button" class="bt bt--primario" onclick="auditSaveName()">Guardar</button>';
+            html += '<button type="button" id="auditRenameGuardar" class="bt bt--primario" onclick="auditSaveName()">Guardar</button>';
             html += '<button type="button" class="bt bt--secundario" onclick="toggleAuditRename()">Cancelar</button>';
             html += '</div>';
             html += '</div>'; // #auditRenameInline

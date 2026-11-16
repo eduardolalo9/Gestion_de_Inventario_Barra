@@ -110,8 +110,8 @@ const DEAD_FALLBACK = /var\(--[a-z-]+,\s*#[0-9a-fA-F]{3,6}\)/;
 
 // ═══ 2 · ORDERMODAL — HOVER Y FONDO A MANO ═════════════════════════════════
 chk('★ El hover de "Cancelar" en orderModal usa --border-mid, no rgba(202,196,208,…) suelto',
-    /this\.style\.background='var\(--border-mid\)'/.test(orderModal) &&
-    !/rgba\(202,\s*196,\s*208/.test(orderModal));
+    /class="bi-hover-fondo"/.test(orderModal) && /\.bi-hover-fondo:hover \{ background: var\(--border-mid\) !important; \}/.test(util) &&
+    !/rgba\(202,\s*196,\s*208/.test(orderModal) && !/onmouseover|onmouseout/.test(orderModal));   // v5.53: el hover es de CSS, no un onmouseover en línea
 chk('★ "Compartir WhatsApp" usa var(--ok-dim), no rgba(109,213,140,…) a mano',
     /background:var\(--ok-dim\)/.test(orderModal) && !/rgba\(109,\s*213,\s*140/.test(orderModal));
 chk('--ok-dim está definido como alias de --green-dim', /--ok-dim:\s*var\(--green-dim\)/.test(estilos));

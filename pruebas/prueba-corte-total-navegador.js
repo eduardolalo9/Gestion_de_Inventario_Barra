@@ -73,7 +73,7 @@ const PUERTO = process.env.PUERTO || '8080';
     window._anclaPosteriorA = async () => ({ hay: false });
     window.existenciaCargarInicial = function () {};
   });
-  if (process.env.XLSX_LOCAL) await p.addScriptTag({ path: process.env.XLSX_LOCAL });   // sin red: SheetJS desde disco
+  if (process.env.XLSX_LOCAL && !(await p.evaluate(() => typeof XLSX !== 'undefined'))) await p.addScriptTag({ path: process.env.XLSX_LOCAL });   // v5.49: la página ya lo carga de js/xlsx.full.min.js; solo se inyecta si faltara
   const hayXlsx = await p.evaluate(() => typeof XLSX !== 'undefined');
   if (hayXlsx) {
     // Camino real: botón "Subir" → <input type=file> → FileReader → SheetJS → vista previa.

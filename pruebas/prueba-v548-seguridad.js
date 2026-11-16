@@ -67,7 +67,8 @@ ctx.__leer.then((res) => {
     });
     chk('★ GUARDA: ningún manejador on*="…" interpola un valor sin pasar por jsArg() (' + malos.length + ' fuera de regla)', malos.length === 0, malos.join(' | '));
     const cuantos = fs.readdirSync(path.join(RAIZ, 'js')).filter(f => f.endsWith('.js')).reduce((n, f) => n + (leer('js/' + f).match(/\\'' \+ jsArg\(/g) || []).length, 0);
-    chk('Los 57 sitios revisados en la auditoría usan jsArg() (hay ≥ 57)', cuantos >= 57, String(cuantos));
+    // v5.53: de los 57 sitios originales, 2 eran onkeydown duplicados de su onclick y pasaron a data-activar-teclado (sin argumento que escapar).
+    chk('Los sitios revisados en la auditoría siguen usando jsArg() (hay ≥ 55)', cuantos >= 55, String(cuantos));
 
     const fallos = C.filter(c => !c.ok);
     C.forEach(c => console.log((c.ok ? '  ✅ ' : '  ❌ ') + c.n + (c.ok ? '' : '  ← ' + c.d)));

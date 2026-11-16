@@ -60,7 +60,17 @@
         }
         // Abrir el Historial: se invalida y renderHistorialInventarios() lo
         // carga una sola vez (_asegurarHistorialCargado). Antes se pedía dos veces.
-        var _IF_ABRIR_HISTORIAL = 'onclick="auditoriaView=\'historial\'; _historialInventarios=null; _historialLimite=30; renderTab();"';
+        // v5.53 — navegación de Conteo como FUNCIONES con nombre (antes eran sentencias dentro de onclick="…"):
+        // una política de contenido sin 'unsafe-inline' no ejecuta asignaciones en línea. Misma lógica, mismas variables.
+        function auditoriaIrAHistorial() { auditoriaView = 'historial'; _historialInventarios = null; _historialLimite = 30; renderTab(); }
+        function auditoriaIrAFisicoVsSistema() { auditoriaView = 'fisico_vs_sistema'; renderTab(); }
+        function auditoriaIrAMuestreoConteo() { auditoriaView = 'muestreo_conteo'; renderTab(); }
+        function auditoriaVerDetalleCerrado(id) { _detalleInventarioCerradoId = String(id); _detalleInventarioCerradoData = null; auditoriaView = 'detalle_cerrado'; renderTab(); }
+        function auditoriaVolverASeleccion() { auditoriaView = 'selection'; renderTab(); }
+        function auditoriaVolverAHistorial() { auditoriaView = 'historial'; renderTab(); }
+        function fvsVolverAConteo() { auditoriaView = 'selection'; _fvsSearchTerm = ''; fvsReiniciarVista(); renderTab(); }
+        function cerrarInventarioHuerfanoActivo() { cerrarInventarioHuerfano(_inventarioActivoId); }
+        var _IF_ABRIR_HISTORIAL = 'onclick="auditoriaIrAHistorial()"';
 
         function _renderInventarioFisicoHeader() {
             if (!_inventarioActivo && _inventarioActivoSinResolver()) {
@@ -201,7 +211,7 @@
             // inventario sigue SINCRONIZADO: cerrado, es cosa del Historial.
             if (hasPermission('inventory.viewAll') && !esCerrado) {
                 acc += _ifBtn('bt--secundario', '<i class="fa-solid fa-file-chart-column" aria-hidden="true"></i> Físico vs Sistema',
-                    'onclick="auditoriaView=\'fisico_vs_sistema\'; renderTab();"');
+                    'onclick="auditoriaIrAFisicoVsSistema()"');
             }
             if (acc) html += '<div class="bt-pila bt-pila--rejilla">' + acc + '</div>';
 
@@ -228,7 +238,7 @@
             if (!(isAdmin() && hasPermission('inventory.closeGlobal'))) return '';
             if (_esInventarioHuerfano()) {
                 return '<div class="bt-zona-peligro">'
-                     + '<button type="button" onclick="cerrarInventarioHuerfano(_inventarioActivoId)" class="bt bt--peligro"><i class="fa-solid fa-folder-open" aria-hidden="true"></i> Cerrar inventario abandonado #' + (inv.numero || '—') + '</button>'
+                     + '<button type="button" onclick="cerrarInventarioHuerfanoActivo()" class="bt bt--peligro"><i class="fa-solid fa-folder-open" aria-hidden="true"></i> Cerrar inventario abandonado #' + (inv.numero || '—') + '</button>'
                      + '<p class="bt-nota">Quedó abierto de una versión anterior y ya no tiene conteos. Se cierra sin contabilizar.</p>'
                      + '</div>';
             }
@@ -353,7 +363,7 @@
             // v5.43 — encabezado común (UI.cabecera) con Volver a la izquierda, fuera de la tarjeta.
             let html = '<div class="audit-screen">'
                      + UI.cabecera('Historial de inventarios', 'Inventarios físicos cerrados y contabilizados.',
-                                   { volver: 'auditoriaView=\'selection\'; renderTab();', volverEtiqueta: 'Volver a Conteo' })
+                                   { volver: 'auditoriaVolverASeleccion()', volverEtiqueta: 'Volver a Conteo' })
                      + '<div class="if-card">';
 
             if (_historialInventarios === null) {
@@ -374,7 +384,7 @@
             } else {
                 html += '<div class="if-areas">';
                 lista.forEach(function(inv) {
-                    html += '<div class="rc-hist" onclick="_detalleInventarioCerradoId=\'' + jsArg(inv.inventoryId) + '\'; _detalleInventarioCerradoData=null; auditoriaView=\'detalle_cerrado\'; renderTab();">';
+                    html += '<div class="rc-hist" onclick="auditoriaVerDetalleCerrado(\'' + jsArg(inv.inventoryId) + '\')">';
                     html += '<div class="rc-hist__fila"><span class="rc-hist__titulo">#' + inv.numero + ' · Inventario Barra</span>';
                     // FASE 3 — un inventario contabilizado ya no es solo
                     // "cerrado": su resultado pasó a ser el inicial de la
@@ -936,7 +946,7 @@
         function _muestreoConteoTarjetaHtml() {
             var ids = _muestreoConteoIds();
             if (!ids.length || !_muestreoConteoPuede()) return '';
-            return '<button type="button" class="mc-tarjeta" onclick="auditoriaView=\'muestreo_conteo\'; renderTab();">'
+            return '<button type="button" class="mc-tarjeta" onclick="auditoriaIrAMuestreoConteo()">'
                  + '<span class="mc-tarjeta__ico"><i class="fa-solid fa-clipboard-list" aria-hidden="true"></i></span>'
                  + '<span class="mc-tarjeta__txt"><b>Lista de reconteo</b><span>' + ids.length + ' producto' + (ids.length === 1 ? '' : 's')
                  + ' por volver a contar</span></span><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button>';
@@ -960,7 +970,7 @@
             var m = _fvsMuestreo();
             var h = '<div class="audit-screen">'
                   + UI.cabecera('Lista de reconteo', 'Administración pidió volver a contar estos productos. Tu corrección se guarda como tu conteo.',
-                                { volver: 'auditoriaView=\'selection\'; renderTab();', volverEtiqueta: 'Volver a Conteo' });
+                                { volver: 'auditoriaVolverASeleccion()', volverEtiqueta: 'Volver a Conteo' });
             if (!_muestreoConteoPuede()) return h + '<p class="fvs-mu__vacio">No tienes permiso para contar.</p></div>';
             if (!ids.length) return h + '<p class="fvs-mu__vacio">No hay productos por volver a contar.</p></div>';
             h += '<div class="fvs-mu">';
@@ -1380,7 +1390,7 @@
             // v5.43 — encabezado común (UI.cabecera) con Volver a la izquierda, fuera de la tarjeta.
             var html = '<div class="audit-screen">'
                      + UI.cabecera('Físico vs Sistema', 'Lo contado contra la existencia del sistema, producto por producto.',
-                                   { volver: 'auditoriaView=\'selection\'; _fvsSearchTerm=\'\'; fvsReiniciarVista(); renderTab();', volverEtiqueta: 'Volver a Conteo' })
+                                   { volver: 'fvsVolverAConteo()', volverEtiqueta: 'Volver a Conteo' })
                      + '<div class="if-card">';
             // v5.45 — resumen ejecutivo (KPIs + insignias) y pestañas arriba.
             _fvsInl = null;
@@ -1414,7 +1424,7 @@
             // v5.43 — encabezado común (UI.cabecera) con Volver al historial.
             let html = '<div class="audit-screen">';
             html += UI.cabecera('Inventario físico', 'Solo lectura: lo que quedó registrado al cerrarlo.',
-                                { volver: 'auditoriaView=\'historial\'; renderTab();', volverEtiqueta: 'Volver al historial' });
+                                { volver: 'auditoriaVolverAHistorial()', volverEtiqueta: 'Volver al historial' });
             html += '<div class="if-card">';
 
             if (_detalleInventarioCerradoData === null) {
@@ -1565,11 +1575,11 @@
                 html += '<div class="if-area">';
                 html += '<div class="audit-area-card' + (isCompleta ? ' completada' : '') + '"'
                       + ' onclick="auditoriaEntrarArea(\'' + jsArg(area) + '\')"'
-                      + ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();auditoriaEntrarArea(\'' + jsArg(area) + '\');}"'
-                      + ' role="button" tabindex="0" aria-label="Entrar a ' + areasAuditoria[area] + '">';
+                      + ' data-activar-teclado'
+                      + ' role="button" tabindex="0" aria-label="Entrar a ' + escapeHtml(areasAuditoria[area]) + '">';
                 html += '<div class="audit-area-icon"><i class="' + areasAuditoriaFA[area] + '" style="font-size:1.05rem;color:' + (isCompleta ? 'var(--green)' : 'var(--accent)') + ';"></i></div>';
                 html += '<div class="audit-area-info">';
-                html += '<div class="audit-area-name">' + areasAuditoria[area] + '</div>';
+                html += '<div class="audit-area-name">' + escapeHtml(areasAuditoria[area]) + '</div>';
                 html += '<div class="audit-area-status ' + (isCompleta ? 'completada' : 'pendiente') + '">';
                 html += isCompleta
                     ? '<svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg> Completada'
@@ -1752,7 +1762,7 @@
                     html += '<div class="audit-area-row">';
 
                     // Nombre del área
-                    html += '<span class="audit-area-row-label">' + areasAuditoria[area] + '</span>';
+                    html += '<span class="audit-area-row-label">' + escapeHtml(areasAuditoria[area]) + '</span>';
 
                     // Badge de estado
                     if (completada) {
@@ -1885,7 +1895,7 @@
                     // cubre enteras Y abiertas (ver js/45-inventario-datos.js).
                     html += '<div class="inv-card' + (hasData ? ' has-data' : '') + (areaData._hayConflicto ? ' inv-card--conflict' : '') + '" data-sbx-item'
                           + ' onclick="openInventarioModal(\'' + jsArg(product.id) + '\')"'
-                          + ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();openInventarioModal(\'' + jsArg(product.id) + '\');}"'
+                          + ' data-activar-teclado'
                           + ' role="button" tabindex="0" aria-label="Contar ' + escapeHtml(product.name) + '" style="animation-delay:' + delay + 'ms">';
                     html += '<div class="inv-card__ripple"></div>';
 

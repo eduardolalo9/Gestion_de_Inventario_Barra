@@ -76,7 +76,7 @@ const GRIS_DE_FABRICA = /rgb\(239, 239, 239\)|buttonface/i;
       tarjetas: document.querySelectorAll('.inv-card').length,
       abrePorClic: !!(c && (c.getAttribute('onclick') || '').includes('openInventarioModal')),
       esAccesible: !!(c && c.getAttribute('role') === 'button' && c.getAttribute('tabindex') === '0'),
-      tieneTeclado: !!(c && (c.getAttribute('onkeydown') || '').includes('openInventarioModal')),
+      tieneTeclado: !!(c && c.hasAttribute('data-activar-teclado') && (c.getAttribute('onclick') || '').includes('openInventarioModal')),   // v5.53: el teclado va por data-activar-teclado (js/02), no por un onkeydown en línea
       modalOculto: document.getElementById('inventarioModal').classList.contains('hidden')
     };
   });

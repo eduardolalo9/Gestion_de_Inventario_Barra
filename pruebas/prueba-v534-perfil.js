@@ -47,7 +47,8 @@ chk('Botón de cabecera FUERA de #headerActions (renderTab lo reescribe en cada 
     /id="perfilBtn"/.test(idx) && pos('id="perfilBtn"') < pos('id="headerActions"') && !/headerActions\.innerHTML[^;]*perfil/i.test(render));
 chk('Acceso desde «Más» (sidebar) cierra el menú y abre el perfil', /id="sbPerfilBtn" onclick="sbClose\(\); abrirMiPerfil\(\)"/.test(idx));
 chk('Overlay accesible: role=dialog, aria-modal, título enlazado, cierra con clic en el fondo',
-    /id="perfilOverlay"[^>]*role="dialog"[^>]*aria-modal="true"[^>]*aria-labelledby="perfilTitulo"[^>]*event\.target === this/.test(idx) && /id="perfilTitulo"/.test(idx));
+    /id="perfilOverlay"[^>]*role="dialog"[^>]*aria-modal="true"[^>]*aria-labelledby="perfilTitulo"[^>]*onclick="cerrarMiPerfilSiFondo\(this, event\)"/.test(idx) && /id="perfilTitulo"/.test(idx)
+    && /function cerrarMiPerfilSiFondo\(el, ev\) \{ if \(ev && ev\.target === el\) cerrarMiPerfil\(\); \}/.test(mod));   // v5.53: el «solo si es el fondo» pasó de un if en el onclick a una función con nombre
 chk('Arranca oculto (clase hidden)', /id="perfilOverlay" class="pf-overlay hidden"/.test(idx));
 chk('Atrás de Android cierra el perfil antes que el menú y que los modales',
     /nombre: 'mi perfil'[\s\S]*?cerrarMiPerfil/.test(nav) && nav.indexOf("nombre: 'mi perfil'") < nav.indexOf("nombre: 'menú'") && nav.indexOf("nombre: 'mi perfil'") < nav.indexOf("nombre: 'producto'"));

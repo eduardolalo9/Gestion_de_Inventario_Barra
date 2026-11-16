@@ -123,8 +123,43 @@ jobs:
       - name: Instalar Chromium para Playwright
         run: npx playwright install --with-deps chromium
 
-      # todas-navegador.js levanta y apaga su propio http-server.
+      # todas-navegador.js levanta y apaga su propio servidor estático (herramientas/servidor-estatico.js).
       # prueba-p0.js baja SheetJS de cdnjs: si la red del runner lo bloquea,
       # el fallo dirá "XLSX is not defined" y no es un fallo del código.
       - name: Ejecutar las pruebas de navegador
+        run: npm run test:navegador
+
+  # ════════════════════════════════════════════════════════════════════════
+  #  v5.53 — LA MISMA suite de navegador, pero con la política de contenido
+  #  (CSP) ESTRICTA: sin 'unsafe-inline' en script-src y con el hash de cada
+  #  <script> en línea. Demuestra que ningún botón depende de un manejador
+  #  en línea (los ejecuta js/02-despachador-eventos.js) ANTES de quitar
+  #  'unsafe-inline' de producción. Va en paralelo: no alarga el tiempo total.
+  # ════════════════════════════════════════════════════════════════════════
+  navegador-csp-estricto:
+    name: Pruebas en navegador con CSP estricto
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Descargar el código (historial completo)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Preparar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Instalar Chromium para Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Ejecutar las pruebas de navegador con CSP estricto
+        env:
+          CSP_ESTRICTO: '1'
         run: npm run test:navegador

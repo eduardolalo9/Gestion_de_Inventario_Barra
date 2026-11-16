@@ -124,7 +124,7 @@ chk('★ El texto guardado de una notificación NO se modifica: se limpia solo a
     /function _notifTextoLimpio\(/.test(roles) && /escapeHtml\(_notifTextoLimpio\(n\.texto\)\)/.test(piezas.renderNotificacionesTab));
 chk('El icono de la notificación sale del TIPO (ajuste, reporte, catálogo, recetario)',
     /ajuste: 'pen-to-square', reporte: 'file-chart-column', catalogo: 'boxes-stacked', recetario: 'book'/.test(roles));
-chk('showNotification conserva su emoji (texto plano de aviso)', /showNotification\(\\'⚠️ Selecciona un producto\\'\)/.test(roles));
+chk('showNotification conserva su emoji (texto plano de aviso)', /showNotification\('⚠️ Selecciona un producto'\)/.test(roles));   // v5.53: ahora vive en solicitarAjusteDesdeFormulario(), no dentro de un onclick
 
 // ═══ 4 · ICONOS DEL KIT ═════════════════════════════════════════════════════
 ['bell', 'trash', 'bolt', 'user-shield', 'user', 'pen-to-square', 'list-check', 'circle-check', 'xmark', 'lock', 'location-dot',

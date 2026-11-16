@@ -1652,8 +1652,8 @@
                 if (g.incidencias.length) {
                     html += '<div style="margin-top:8px;font-size:.8rem;color:var(--warn)">'
                           + '<i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> ' + g.incidencias.length + ' incidencia(s) — '
-                          + '<a href="javascript:void(0)" onclick="_comprasVerIncidenciasGrupo(\'' + jsArg(g.compraId) + '\')" '
-                          + 'style="color:var(--warn);text-decoration:underline">ver detalle</a></div>';
+                          + '<button type="button" onclick="_comprasVerIncidenciasGrupo(\'' + jsArg(g.compraId) + '\')" '
+                          + 'style="color:var(--warn);text-decoration:underline;background:none;border:0;padding:0;font:inherit;cursor:pointer">ver detalle</button></div>';
                 }
                 if (diferencias.length) {
                     html += '<div style="margin-top:6px;font-size:.8rem;color:var(--txt-secondary)">'
@@ -2382,7 +2382,7 @@
             var h = '<div class="cp-tarjeta' + (cancel ? ' cp-tarjeta--cancelada' : '') + '" role="button" tabindex="0" data-sbx-item data-compra-id="' + _idC + '"'
                   + ' aria-label="Ver los productos de esta entrada de ' + escapeHtml(c.proveedorNombre || 'Sin proveedor') + (cancel ? ' (cancelada)' : '') + '"'
                   + ' onclick="comprasVerDetalle(this.getAttribute(\'data-compra-id\'))"'
-                  + ' onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();comprasVerDetalle(this.getAttribute(\'data-compra-id\'));}">'
+                  + ' data-activar-teclado>'
                   + '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:baseline">'
                   + '<span class="cp-tarjeta__prov">' + (consulta && typeof resaltarBusqueda === 'function'
                         ? resaltarBusqueda(c.proveedorNombre || 'Sin proveedor', consulta) : escapeHtml(c.proveedorNombre || 'Sin proveedor'))

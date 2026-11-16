@@ -1047,3 +1047,6 @@ button.fvs-t__celda:hover, button.fvs-t__celda:focus-visible { border-color: var
 .fvs-mu__filtros { margin: 6px 0 8px; }
 .fvs-mu__res { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 2px 2px 8px; font-size: .82rem; color: var(--txt-secondary); }
 .fvs-mu__limpiar { min-height: 44px; padding: 0 12px; border: 0; background: none; color: var(--accent, var(--txt-primary)); font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; }
+
+/* v5.53 — antes onmouseover/onmouseout en línea; el hover es de CSS (no ejecuta nada) */
+.bi-hover-fondo:hover { background: var(--border-mid) !important; }
