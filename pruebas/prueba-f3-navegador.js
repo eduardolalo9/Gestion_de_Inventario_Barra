@@ -123,7 +123,7 @@ const C = []; const chk = (n, ok, d) => { C.push({ n, ok, d }); };
     const hist = renderHistorialInventarios();
     _inventarioActivo = null; _inventarioActivoId = null;
     return { aviso: /Inventario abandonado/.test(cab), reconteo: /data-rc-accion="iniciar"/.test(cab),
-             boton: /cerrarInventarioHuerfano\(_inventarioActivoId\)/.test(zona) && /abandonado #102/.test(zona),
+             boton: /cerrarInventarioHuerfanoActivo\(\)/.test(zona) && /abandonado #102/.test(zona),
              normal: /cerrarInventarioFisico\(\)/.test(zona), hist: /cerrado · abandonado/i.test(hist) };
   });
   chk('4.20 · Un huérfano se anuncia como abandonado, con su propio botón para cerrarlo',

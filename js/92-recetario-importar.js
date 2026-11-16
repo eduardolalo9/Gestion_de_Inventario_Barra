@@ -351,8 +351,8 @@
                 if (r.incidencias.length) {
                     html += '<div style="margin-top:8px;font-size:.8rem;color:var(--warn)">'
                           + '⚠️ ' + r.incidencias.length + ' incidencia(s) — '
-                          + '<a href="javascript:void(0)" onclick="_recetarioVerIncidenciasGrupo(\'' + jsArg(r.pv) + '\')" '
-                          + 'style="color:var(--warn);text-decoration:underline">ver detalle</a></div>';
+                          + '<button type="button" onclick="_recetarioVerIncidenciasGrupo(\'' + jsArg(r.pv) + '\')" '
+                          + 'style="color:var(--warn);text-decoration:underline;background:none;border:0;padding:0;font:inherit;cursor:pointer">ver detalle</button></div>';
                 }
                 html += '</div>';
             });

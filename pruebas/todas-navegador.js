@@ -61,6 +61,7 @@ const PRUEBAS = [
     'prueba-v548-xss-navegador.js',    // v5.48 — un id con sintaxis JS ya no ejecuta código al tocar un botón (Chromium real)
     'prueba-v550-pedido-conteo-navegador.js', // v5.50 — Pedidos: cambiar de base, generar el pedido, táctil
     'prueba-v552-muestreo-filtros-navegador.js', // v5.52 — Muestreo: desviación, grupo, buscador y revisados
+    'prueba-v553-csp-estricto-navegador.js', // v5.53 — política estricta en Chromium real (servidor propio): hashes, despachador e inyección
     'prueba-v546-muestreo-compartido-navegador.js', // v5.46 — muestreo compartido (inventario en la nube), lista de reconteo del equipo, insignia sobre el buscador, autoguardado al volver
     'prueba-v545-fvs-navegador.js', // v5.45 — Físico vs Sistema: KPIs, insignias, selección múltiple, edición rápida, grupos plegables y muestreo
     'prueba-v544-auditoria-consolidada-navegador.js', // v5.44 — Auditoría consolidada: 15 columnas + hoja Inventario valorizada (descarga real)
@@ -119,8 +120,12 @@ function esperarServidor(intentos) {
         process.exit(1);
     }
 
-    const servidor = spawn('npx', ['--yes', 'http-server', '-p', String(PUERTO), '-c-1'],
-        { cwd: RAIZ, stdio: 'ignore', shell: process.platform === 'win32' });
+    // v5.53 — con CSP_ESTRICTO=1 se sirve index.html con la política FINAL (sin 'unsafe-inline' en script-src,
+    // con el hash de cada <script> en línea): toda la suite corre como correría en producción sin manejadores en línea.
+    const servidor = process.env.CSP_ESTRICTO === '1'
+        ? spawn(process.execPath, [path.join(RAIZ, 'herramientas', 'servidor-estatico.js'), String(PUERTO)], { cwd: RAIZ, stdio: 'ignore', env: Object.assign({}, process.env) })
+        : spawn('npx', ['--yes', 'http-server', '-p', String(PUERTO), '-c-1'],
+            { cwd: RAIZ, stdio: 'ignore', shell: process.platform === 'win32' });
 
     // Pase lo que pase —fallo, Ctrl-C, excepción— el servidor se apaga. Dejarlo
     // vivo bloquearía el puerto 8080 en la siguiente ejecución.

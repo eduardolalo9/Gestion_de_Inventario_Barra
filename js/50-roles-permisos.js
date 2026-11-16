@@ -1970,6 +1970,20 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
         }
 
         // ── RENDER: AJUSTES ────────────────────────────────────────────────
+        /**
+         * v5.53 — «Enviar solicitud» del formulario de ajustes. Antes era una función anónima escrita dentro
+         * del onclick; ahora es una función con nombre (una política sin 'unsafe-inline' no ejecuta eso).
+         * Misma lógica: valida el producto, lee motivo y cantidad, envía y limpia el formulario.
+         */
+        function solicitarAjusteDesdeFormulario() {
+            var s = document.getElementById('ajusteProductoSel'), m = document.getElementById('ajusteMotivoTxt'), c = document.getElementById('ajusteCantidadIn');
+            if (!s || !m || !c) return;
+            if (!s.value) { showNotification('⚠️ Selecciona un producto'); return; }
+            var p = products.find(function(x) { return x.id === s.value; });
+            solicitarAjuste(s.value, p ? p.name : s.value, m.value, (c.value.trim() === '' ? null : parseFloat(c.value)));
+            m.value = ''; c.value = ''; s.value = '';
+        }
+
         function renderAjustesTab() {
             let html = '<div class="max-w-2xl mx-auto">';
             html += UI.cabecera('Ajustes', isAdmin() ? 'Áreas de conteo y ajustes de producto.' : 'Solicita ajustes de producto y consulta su estado.');
@@ -1988,7 +2002,7 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
                 html += '</select>';
                 html += '<textarea id="ajusteMotivoTxt" class="ui-campo" placeholder="Motivo del ajuste (ej. conteo real vs sistema)" aria-label="Motivo del ajuste" rows="3"></textarea>';
                 html += '<input type="number" id="ajusteCantidadIn" class="ui-campo" placeholder="Cantidad sugerida (opcional)" aria-label="Cantidad sugerida" min="0" step="0.01" inputmode="decimal">';
-                html += '<button class="adm-btn primary" onclick="(function(){var s=document.getElementById(\'ajusteProductoSel\');var m=document.getElementById(\'ajusteMotivoTxt\');var c=document.getElementById(\'ajusteCantidadIn\');if(!s.value){showNotification(\'⚠️ Selecciona un producto\');return;}var p=products.find(function(x){return x.id===s.value;});solicitarAjuste(s.value,p?p.name:s.value,m.value,(c.value.trim()===\'\'?null:parseFloat(c.value)));m.value=\'\';c.value=\'\';s.value=\'\';})()">';
+                html += '<button class="adm-btn primary" onclick="solicitarAjusteDesdeFormulario()">';
                 html += '<i class="fa-solid fa-paper-plane" aria-hidden="true"></i> Enviar solicitud</button>';
                 html += '</div>';
             }

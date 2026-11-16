@@ -1,3 +1,15 @@
+        /** v5.53 — acciones del menú lateral que antes eran código dentro del onclick. */
+        function elegirArchivoImportarDatos() {
+            var i = document.getElementById('importDataInput');
+            if (i) i.click();
+            sbClose();
+        }
+        function sincronizarDesdeMenu() {
+            if (_db && navigator.onLine) { syncToCloud(); sbClose(); showNotification('☁️ Sincronizando…'); }
+            else if (!_db) { showNotification('⚙️ Configura Firebase primero'); }
+            else { showNotification('📴 Sin conexión'); }
+        }
+
         function initializeApp() {
             // ── Inicializar identidad del dispositivo (multiusuario) ──────────
             initAuditUser();

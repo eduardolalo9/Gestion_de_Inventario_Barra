@@ -34,7 +34,7 @@ const PANTALLAS = ['inicio', 'inventario', 'productos', 'pedido_sugerido', 'pedi
     _adminSubvista = 'permisos'; _permUidSel = null;
     _permUsuarios = [{ uid: 'admin1', email: 'eduardo@barra.mx', displayName: 'Eduardo', role: 'ADMIN', status: 'activo' }];
   });
-  await p.addScriptTag({ content: `
+  await p.evaluate(`
     window.__rgb = s => (s.match(/[\\d.]+/g) || []).map(Number);
     window.__lum = c => c.slice(0, 3).map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }).reduce((a, v, i) => a + v * [0.2126, 0.7152, 0.0722][i], 0);
     window.__fondo = el => {
@@ -62,7 +62,7 @@ const PANTALLAS = ['inicio', 'inventario', 'productos', 'pedido_sugerido', 'pedi
         if (ratio < min) malos.push((el.className || el.tagName).toString().slice(0, 36) + ' "' + el.textContent.trim().slice(0, 18) + '" ' + ratio.toFixed(2));
       });
       return { malos, n };
-    };` });
+    };`);
 
   for (const tema of ['light', 'dark']) {
     await p.evaluate(t => applyTheme(t), tema);

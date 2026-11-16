@@ -43,7 +43,7 @@ const PUERTO = process.env.PUERTO || '8080';
   await p.waitForTimeout(200);
 
   chk('★ Sin "Ver todos los conteos", el botón NO aparece',
-      await p.evaluate(() => !document.querySelector('[onclick*="fisico_vs_sistema"]')), '');
+      await p.evaluate(() => !document.querySelector('[onclick*="auditoriaIrAFisicoVsSistema"]')), '');
 
   await p.evaluate(() => {
     _authzState.permissions = new Set(['inventory.count', 'inventory.viewOwn', 'inventory.viewAll']);
@@ -51,9 +51,9 @@ const PUERTO = process.env.PUERTO || '8080';
   });
   await p.waitForTimeout(150);
   chk('★ Con "Ver todos los conteos", el botón sí aparece',
-      await p.evaluate(() => !!document.querySelector('[onclick*="fisico_vs_sistema"]')), '');
+      await p.evaluate(() => !!document.querySelector('[onclick*="auditoriaIrAFisicoVsSistema"]')), '');
 
-  await p.evaluate(() => document.querySelector('[onclick*="fisico_vs_sistema"]').click());
+  await p.evaluate(() => document.querySelector('[onclick*="auditoriaIrAFisicoVsSistema"]').click());
   await p.waitForTimeout(200);
   const t1 = await p.evaluate(() => document.getElementById('tabContent').innerText);
   chk('Abre la pantalla con el título correcto', /Físico vs Sistema/.test(t1), t1.slice(0, 80));
@@ -84,7 +84,7 @@ const PUERTO = process.env.PUERTO || '8080';
 
   chk('Volver regresa a la selección y limpia la búsqueda',
       await p.evaluate(() => {
-          document.querySelector('button[onclick*="auditoriaView=\'selection\'"]').click();
+          document.querySelector('button[onclick*="fvsVolverAConteo"]').click();
           return auditoriaView === 'selection' && _fvsSearchTerm === '';
       }), '');
 

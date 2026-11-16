@@ -526,7 +526,7 @@
             if (_papelera.estado === 'error') {
                 return h + '<div class="pap-vacio">No se pudo leer la papelera (' + escapeHtml(String(_papelera.error)) + '). '
                      + '¿Ya se desplegaron las reglas de Firestore de la v5.19?</div>'
-                     + '<div class="pap-acc"><button type="button" class="bt bt--secundario" onclick="papeleraCargar().then(renderTab)">Reintentar</button></div></div>';
+                     + '<div class="pap-acc"><button type="button" class="bt bt--secundario" onclick="papeleraRecargar()">Reintentar</button></div></div>';
             }
             var grupos = papeleraAgrupar(_papelera.items);
             if (!grupos.length) {
@@ -559,7 +559,7 @@
             }
             var venc = papeleraVencidos(_papelera.items).length;
             h += '<div class="pap-acc">'
-               + '<button type="button" class="bt bt--secundario" onclick="papeleraCargar().then(renderTab)"><i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i> Actualizar</button>'
+               + '<button type="button" class="bt bt--secundario" onclick="papeleraRecargar()"><i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i> Actualizar</button>'
                + (venc ? '<button type="button" class="bt bt--secundario" onclick="papeleraPurgar()"><i class="fa-solid fa-trash" aria-hidden="true"></i> Vaciar ' + venc + ' de más de ' + PAPELERA_DIAS_PURGA + ' días</button>' : '')
                + '</div></div>';
             return h;
@@ -596,6 +596,8 @@
         window.papeleraVencidos             = papeleraVencidos;
         window.papeleraAgregarConteosABatch = papeleraAgregarConteosABatch;
         window.papeleraProtegerProductos    = papeleraProtegerProductos;
+        function papeleraRecargar() { return papeleraCargar().then(renderTab); }   // v5.53: antes .then(renderTab) iba dentro del onclick
+        window.papeleraRecargar             = papeleraRecargar;
         window.papeleraCargar               = papeleraCargar;
         window.papeleraRestaurar            = papeleraRestaurar;
         window.papeleraDescargar            = papeleraDescargar;
