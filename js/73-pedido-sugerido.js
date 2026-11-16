@@ -30,20 +30,27 @@
         };
 
         /**
-         * v5.50 — total del CONTEO FÍSICO de todas las áreas (la misma cifra de getTotalStock:
-         * suma stockByArea de las áreas configuradas). null = el producto no tiene ningún
-         * conteo: no se inventa un 0 (sugeriría pedir el mínimo completo de lo que simplemente
-         * no se ha contado).
+         * v5.50/5.51 — total del CONTEO FÍSICO de todas las áreas del inventario EN CURSO.
+         * Lee del MISMO sitio que Físico vs Sistema (fvsConteoFisicoProducto → auditoriaConteo, el
+         * agregado en vivo de todos los contadores), con las botellas abiertas ya convertidas a puntos.
+         * NO lee product.stockByArea: ese campo no es el conteo del inventario abierto (v5.50 lo leía
+         * y mostraba ceros aunque las áreas sí estuvieran contadas).
+         * null = nadie contó ese producto en ninguna área: no se inventa un 0 (pediría el mínimo entero
+         * de algo que simplemente no se ha contado).
          */
         function pedidoSugeridoConteoTotal(p) {
-            var sb = p && p.stockByArea;
-            if (!sb || typeof sb !== 'object') return null;
-            var areas = (typeof AREAS_CONTEO !== 'undefined' && AREAS_CONTEO && AREAS_CONTEO.length) ? AREAS_CONTEO : ['almacen', 'barra1', 'barra2'];
-            var hay = areas.some(function(a) { return typeof sb[a] === 'number' && isFinite(sb[a]); });
-            if (!hay) return null;
-            if (typeof getTotalStock === 'function') return getTotalStock(p);
-            var t = 0; areas.forEach(function(a) { t += (typeof sb[a] === 'number' ? sb[a] : 0); });
-            return Math.round(t * 1000) / 1000;
+            if (!p || typeof fvsConteoFisicoProducto !== 'function') return null;
+            var t = fvsConteoFisicoProducto(p.id);
+            return (typeof t === 'number' && isFinite(t)) ? t : null;
+        }
+
+        /**
+         * El conteo de TODAS las áreas solo lo ve quien tiene «Ver todos los conteos»
+         * (inventory.viewAll): para el resto el conteo es ciego y auditoriaConteo trae solo lo suyo,
+         * así que mostrarlo como «total de todas las áreas» sería falso.
+         */
+        function _psPuedeConteo() {
+            return typeof hasPermission === 'function' && hasPermission('inventory.viewAll');
         }
 
         /**
@@ -264,17 +271,18 @@
                + '<i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i><span>Pedidos generados</span>'
                + '<b class="num">' + (typeof orders !== 'undefined' ? orders.length : 0) + '</b><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button>';
             // v5.50 — base de la existencia: la del sistema o el conteo total de todas las áreas.
+            if (_ps.fuente === 'conteo' && !_psPuedeConteo()) _ps.fuente = 'sistema';
             var _psConteo = _ps.fuente === 'conteo';
             var _psSinConteo = _psConteo ? pedidoSugeridoFilas(typeof products !== 'undefined' ? products : [], { soloBajo: false, fuente: 'conteo' })
                                            .filter(function(f) { return f.sinConteo; }).length : 0;
-            h += '<div class="ps-filtros ps-fuente" role="group" aria-label="Base de la existencia">'
+            if (_psPuedeConteo()) h += '<div class="ps-filtros ps-fuente" role="group" aria-label="Base de la existencia">'
                + '<button type="button" class="mc-pill' + (!_psConteo ? ' mc-pill--on' : '') + '" aria-pressed="' + !_psConteo + '" data-ps-accion="fuente" data-ps-fuente="sistema">'
                + '<i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i> Existencia del sistema</button>'
                + '<button type="button" class="mc-pill' + (_psConteo ? ' mc-pill--on' : '') + '" aria-pressed="' + _psConteo + '" data-ps-accion="fuente" data-ps-fuente="conteo">'
                + '<i class="fa-solid fa-list-check" aria-hidden="true"></i> Conteo de todas las áreas</button>'
                + '</div>';
-            h += '<p class="ps-fuente__nota" id="psFuenteNota">' + (_psConteo
-                 ? 'Usando el conteo físico total (Almacén + barras). ' + (_psSinConteo ? _psSinConteo + ' producto' + (_psSinConteo === 1 ? '' : 's') + ' con mínimo sin conteo: no se sugieren.' : 'Todos los productos con mínimo tienen conteo.')
+            if (_psPuedeConteo()) h += '<p class="ps-fuente__nota" id="psFuenteNota">' + (_psConteo
+                 ? 'Usando el conteo físico del inventario en curso (todas las áreas). ' + (_psSinConteo ? _psSinConteo + ' producto' + (_psSinConteo === 1 ? '' : 's') + ' con mínimo sin conteo: no se sugieren.' : 'Todos los productos con mínimo tienen conteo.')
                  : 'Usando la existencia del sistema (arrastre + compras − ventas).') + '</p>';
             h += '<div class="ps-filtros" role="group" aria-label="Filtros">'
                + '<button type="button" class="mc-pill' + (_ps.soloBajo ? ' mc-pill--on' : '') + '" aria-pressed="' + _ps.soloBajo + '" data-ps-accion="bajo">Bajo stock</button>'
@@ -380,7 +388,7 @@
             var sinPrecio = filas.filter(function(f) { return f.precio === null; }).length;
             var inf = [['Concepto', 'Valor'], ['Generado', info.generado || ''], ['Usuario', info.usuario || ''], ['Versión de la app', info.version || ''],
                        ['Productos con pedido sugerido', filas.length], ['Sin precio válido', sinPrecio],
-                       ['Base de la existencia', info.fuente === 'conteo' ? 'Conteo físico total de todas las áreas (Almacén + barras)' : 'Existencia del sistema (arrastre + compras − ventas)'],
+                       ['Base de la existencia', info.fuente === 'conteo' ? 'Conteo físico del inventario en curso (suma de todas las áreas)' : 'Existencia del sistema (arrastre + compras − ventas)'],
                        ['Alcance', 'Todos los productos con pedido sugerido (existencia por debajo del stock mínimo). No lo recortan el filtro de grupo, la búsqueda ni la selección.'],
                        ['Pedido sugerido', 'Redondeo hacia arriba de (Stock mínimo − Existencia) en unidades de compra (la misma cifra de la pantalla).'],
                        ['Cantidad a pedir', 'La cantidad escrita en la pantalla; si no se cambió, el pedido sugerido.'],
@@ -465,6 +473,7 @@
                     renderTab();
                 } else if (acc === 'fuente') {
                     var nueva = el.getAttribute('data-ps-fuente') === 'conteo' ? 'conteo' : 'sistema';
+                    if (nueva === 'conteo' && !_psPuedeConteo()) return;
                     if (nueva === _ps.fuente) return;
                     // Cambia la base → cambian los sugeridos: se vuelve a marcar lo que ahora hace falta y
                     // se descartan las cantidades escritas sobre la base anterior (ya no corresponden).
