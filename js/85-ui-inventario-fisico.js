@@ -508,9 +508,11 @@
         //  no se guarda, no se sincroniza y se reinicia al salir con Volver.
         // v5.45 — también: pestaña (comparativo | muestreo), grupos plegados y
         // selección múltiple. Todo en memoria, como el resto de la vista.
-        var _fvsVista = { grupo: null, difAsc: false, difDesc: false, tab: 'comparativo', colapsados: {}, sel: {} };
+        var _fvsVista = { grupo: null, difAsc: false, difDesc: false, tab: 'comparativo', colapsados: {}, sel: {},
+                          muDesv: 'todas', muGrupo: null, muRev: 'todos' };   // v5.52 — filtros de la pestaña Muestreo (solo memoria)
+        var _fvsMuTerm = '';   // v5.52 — texto del buscador de Muestreo (propio: no pisa el del Comparativo)
 
-        function fvsReiniciarVista() { _fvsVista.grupo = null; _fvsVista.difAsc = false; _fvsVista.difDesc = false; _fvsVista.tab = 'comparativo'; _fvsVista.colapsados = {}; _fvsVista.sel = {}; }
+        function fvsReiniciarVista() { _fvsVista.grupo = null; _fvsVista.difAsc = false; _fvsVista.difDesc = false; _fvsVista.tab = 'comparativo'; _fvsVista.colapsados = {}; _fvsVista.sel = {}; _fvsVista.muDesv = 'todas'; _fvsVista.muGrupo = null; _fvsVista.muRev = 'todos'; _fvsMuTerm = ''; }
 
         /** «Grupo»: '' = todos los grupos. Solo cambia lo que se ve. */
         function fvsElegirGrupo(valor) {
@@ -1115,28 +1117,10 @@
         }
 
         // ── Pestaña Muestreo ─────────────────────────────────────────────────
-        function _fvsMuestreoHtml(datos) {
-            var m = _fvsMuestreo();
-            var tol = (typeof EXISTENCIA_TOLERANCIA === 'number') ? EXISTENCIA_TOLERANCIA : 0.001;
-            var editable = _fvsPuedeCorregir();
-            var areasL = _fvsAreasLista();
-            var porId = {};
-            datos.filas.forEach(function(f) { porId[f.id] = f; });
-            var ids = m.ids.filter(function(id) { return porId[id]; });
-            var rev = ids.filter(function(id) { return m.revisados[id]; }).length;
-            // v5.46 — con la lista en la nube solo administración la modifica.
-            var gestiona = !m.nube || _fvsMuestreoPuedeEditar();
-            var h = '<div class="fvs-mu" id="fvsPanel" role="tabpanel" aria-labelledby="fvsTab-muestreo">';
-            h += '<div class="fvs-mu__barra"><span class="fvs-mu__prog"><b class="num">' + rev + '</b> de <b class="num">' + ids.length + '</b> revisados'
-               + (m.nube ? ' · <i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i> compartida con el equipo' : '') + '</span>'
-               + (gestiona ? '<button type="button" class="fvs-ctl__btn" onclick="fvsMuestreoAleatoria(5)"><i class="fa-solid fa-plus" aria-hidden="true"></i><span>Muestra aleatoria (5)</span></button>' : '')
-               + (gestiona && ids.length ? '<button type="button" class="fvs-ctl__btn fvs-ctl__btn--ghost" onclick="fvsMuestreoVaciar()"><i class="fa-solid fa-trash" aria-hidden="true"></i><span>Vaciar</span></button>' : '')
-               + '</div>';
-            if (!ids.length) {
-                return h + '<p class="fvs-mu__vacio">Lista vacía. En <b>Comparativo</b> marca productos y toca «Agregar a muestreo», o pide una muestra aleatoria.</p></div>';
-            }
-            ids.forEach(function(id) {
-                var f = porId[id];
+        //  v5.52 — filtros: desviación, grupo, buscador y revisados (solo cambian lo que se ve).
+        function _fvsMuTarjetaHtml(f, c) {
+            var m = c.m, tol = c.tol, editable = c.editable, areasL = c.areasL, gestiona = c.gestiona, id = f.id;
+            var h = '';
                 var p = products.find(function(x) { return x.id === id; });
                 var tono = _fvsTono(f, tol);
                 var hecho = !!m.revisados[id];
@@ -1167,7 +1151,105 @@
                       : (hecho ? '<span class="fvs-mu__btn fvs-mu__btn--on"><i class="fa-solid fa-check" aria-hidden="true"></i> Revisado</span>' : ''))
                    + '</div>';
                 h += '</article>';
+            return h;
+        }
+
+        /** Filas del muestreo, en el orden de la lista, ya con su comparación. */
+        function _fvsMuBase(datos, m) {
+            var porId = {};
+            datos.filas.forEach(function(f) { porId[f.id] = f; });
+            return m.ids.filter(function(id) { return porId[id]; }).map(function(id) { return porId[id]; });
+        }
+
+        function _fvsMuHayFiltros() {
+            return _fvsVista.muDesv !== 'todas' || !!_fvsVista.muGrupo || _fvsVista.muRev !== 'todos' || !!_fvsMuTerm;
+        }
+
+        /** Resultados (región del buscador): tarjetas filtradas + resumen. Lo repinta el buscador en cada tecla. */
+        function _renderFvsMuResultados() {
+            var datos = fisicoVsSistemaCalcular();
+            if (!datos) return { html: '', coincidencias: 0, total: 0 };
+            var m = _fvsMuestreo();
+            var tol = (typeof EXISTENCIA_TOLERANCIA === 'number') ? EXISTENCIA_TOLERANCIA : 0.001;
+            var base = _fvsMuBase(datos, m);
+            var filtradas = fvsMuestreoFiltrar(base, { desv: _fvsVista.muDesv, grupo: _fvsVista.muGrupo, rev: _fvsVista.muRev, revisados: m.revisados, tol: tol });
+            var items = _fvsMuTerm ? _motorFvsMu.buscar(filtradas, _fvsMuTerm).items : filtradas;
+            var h = '';
+            if (_fvsMuHayFiltros()) {
+                h += '<div class="fvs-mu__res" role="status"><span><b class="num">' + items.length + '</b> de <b class="num">' + base.length + '</b> en el muestreo</span>'
+                   + '<button type="button" class="fvs-mu__limpiar" data-fvs-accion="mu-limpiar">Quitar filtros</button></div>';
+            }
+            if (!items.length) {
+                return { html: h + '<p class="fvs-mu__vacio">Ningún producto del muestreo coincide con los filtros.</p>', coincidencias: 0, total: base.length };
+            }
+            var c = { m: m, tol: tol, editable: _fvsPuedeCorregir(), areasL: _fvsAreasLista(), gestiona: !m.nube || _fvsMuestreoPuedeEditar() };
+            items.forEach(function(f) { h += _fvsMuTarjetaHtml(f, c); });
+            return { html: h, coincidencias: items.length, total: base.length };
+        }
+
+        /** Controles: Desviación y Grupo (selectores) y Revisados (tres botones). Fuera de la región del buscador. */
+        function _fvsMuFiltrosHtml(base, m) {
+            var tol = (typeof EXISTENCIA_TOLERANCIA === 'number') ? EXISTENCIA_TOLERANCIA : 0.001;
+            var n = fvsMuestreoConteos(base, m.revisados, tol);
+            if (_fvsVista.muGrupo && !n.grupos.some(function(g) { return g.grupo === _fvsVista.muGrupo; })) _fvsVista.muGrupo = null;
+            var dsel = _fvsVista.muDesv, gsel = _fvsVista.muGrupo, rsel = _fvsVista.muRev;
+            var DESV = [['todas', 'Todas las desviaciones'], ['con', 'Con diferencia'], ['faltante', 'Faltante'], ['sobrante', 'Sobrante'], ['coincide', 'Coincide']];
+            var dtxt = DESV.filter(function(d) { return d[0] === dsel; })[0][1];
+            var h = '<div class="fvs-ctl fvs-mu__filtros" role="group" aria-label="Filtrar el muestreo">';
+            h += '<label class="fvs-ctl__btn fvs-ctl__grupo' + (dsel !== 'todas' ? ' fvs-ctl__btn--on' : '') + '">'
+               + '<i class="fa-solid fa-scale-unbalanced" aria-hidden="true"></i>'
+               + '<span class="fvs-ctl__txt">Desviación<span class="fvs-ctl__val">' + escapeHtml(dsel === 'todas' ? 'Todas' : dtxt) + '</span></span>'
+               + '<i class="fa-solid fa-chevron-down fvs-ctl__flecha" aria-hidden="true"></i>'
+               + '<select id="fvsMuDesvSel" class="fvs-ctl__sel" aria-label="Desviación" onchange="fvsMuFiltrar(\'desv\', this.value)">';
+            DESV.forEach(function(d) { h += '<option value="' + d[0] + '"' + (d[0] === dsel ? ' selected' : '') + '>' + d[1] + ' (' + n.desv[d[0]] + ')</option>'; });
+            h += '</select></label>';
+            h += '<label class="fvs-ctl__btn fvs-ctl__grupo' + (gsel ? ' fvs-ctl__btn--on' : '') + '">'
+               + '<i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i>'
+               + '<span class="fvs-ctl__txt">Grupo<span class="fvs-ctl__val">' + escapeHtml(gsel || 'Todos') + '</span></span>'
+               + '<i class="fa-solid fa-chevron-down fvs-ctl__flecha" aria-hidden="true"></i>'
+               + '<select id="fvsMuGrupoSel" class="fvs-ctl__sel" aria-label="Grupo" onchange="fvsMuFiltrar(\'grupo\', this.value)">'
+               + '<option value=""' + (gsel ? '' : ' selected') + '>Todos los grupos (' + base.length + ')</option>';
+            n.grupos.forEach(function(g) { h += '<option value="' + escapeHtml(g.grupo) + '"' + (g.grupo === gsel ? ' selected' : '') + '>' + escapeHtml(g.grupo) + ' (' + g.n + ')</option>'; });
+            h += '</select></label>';
+            [['todos', 'Todos', 'fa-clipboard-list'], ['pendientes', 'Pendientes', 'fa-hourglass'], ['revisados', 'Revisados', 'fa-check']].forEach(function(r) {
+                h += '<button type="button" class="fvs-ctl__btn' + (rsel === r[0] ? ' fvs-ctl__btn--on' : '') + '" data-fvs-accion="mu-rev" data-fvs-rev="' + r[0] + '"'
+                   + ' aria-pressed="' + (rsel === r[0] ? 'true' : 'false') + '"><i class="fa-solid ' + r[2] + '" aria-hidden="true"></i>'
+                   + '<span>' + r[1] + ' <b class="num">' + n.rev[r[0]] + '</b></span></button>';
             });
+            return h + '</div>';
+        }
+
+        function fvsMuFiltrar(clave, valor) {
+            if (clave === 'desv') _fvsVista.muDesv = ['con', 'faltante', 'sobrante', 'coincide'].indexOf(valor) !== -1 ? valor : 'todas';
+            else if (clave === 'grupo') _fvsVista.muGrupo = (valor === undefined || valor === null || valor === '') ? null : String(valor);
+            else if (clave === 'rev') _fvsVista.muRev = (valor === 'pendientes' || valor === 'revisados') ? valor : 'todos';
+            renderTab();
+        }
+
+        function fvsMuLimpiarFiltros() {
+            _fvsVista.muDesv = 'todas'; _fvsVista.muGrupo = null; _fvsVista.muRev = 'todos'; _fvsMuTerm = '';
+            renderTab();
+        }
+
+        function _fvsMuestreoHtml(datos) {
+            var m = _fvsMuestreo();
+            var base = _fvsMuBase(datos, m);
+            var ids = base.map(function(f) { return f.id; });
+            var rev = ids.filter(function(id) { return m.revisados[id]; }).length;
+            // v5.46 — con la lista en la nube solo administración la modifica.
+            var gestiona = !m.nube || _fvsMuestreoPuedeEditar();
+            var h = '<div class="fvs-mu" id="fvsPanel" role="tabpanel" aria-labelledby="fvsTab-muestreo">';
+            h += '<div class="fvs-mu__barra"><span class="fvs-mu__prog"><b class="num">' + rev + '</b> de <b class="num">' + ids.length + '</b> revisados'
+               + (m.nube ? ' · <i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i> compartida con el equipo' : '') + '</span>'
+               + (gestiona ? '<button type="button" class="fvs-ctl__btn" onclick="fvsMuestreoAleatoria(5)"><i class="fa-solid fa-plus" aria-hidden="true"></i><span>Muestra aleatoria (5)</span></button>' : '')
+               + (gestiona && ids.length ? '<button type="button" class="fvs-ctl__btn fvs-ctl__btn--ghost" onclick="fvsMuestreoVaciar()"><i class="fa-solid fa-trash" aria-hidden="true"></i><span>Vaciar</span></button>' : '')
+               + '</div>';
+            if (!ids.length) {
+                return h + '<p class="fvs-mu__vacio">Lista vacía. En <b>Comparativo</b> marca productos y toca «Agregar a muestreo», o pide una muestra aleatoria.</p></div>';
+            }
+            h += BusquedaUI.barra('fvsmu', { placeholder: 'Buscar en el muestreo…', etiqueta: 'Buscar en el muestreo', sticky: true });
+            h += _fvsMuFiltrosHtml(base, m);
+            h += BusquedaUI.region('fvsmu', _renderFvsMuResultados().html);
             return h + '</div>';
         }
 
@@ -1267,6 +1349,8 @@
                 else if (acc === 'sel-limpiar') { _fvsVista.sel = {}; document.querySelectorAll('#sbx-res-fvs input[data-fvs-sel]').forEach(function(c) { c.checked = false; }); _fvsPintarSel(); }
                 else if (acc === 'mu-revisado') fvsMuestreoRevisado(pid);
                 else if (acc === 'mu-quitar') fvsMuestreoQuitar(pid);
+                else if (acc === 'mu-rev') fvsMuFiltrar('rev', el.getAttribute('data-fvs-rev'));
+                else if (acc === 'mu-limpiar') fvsMuLimpiarFiltros();
             });
             document.addEventListener('change', function(e) {
                 var t = e.target;

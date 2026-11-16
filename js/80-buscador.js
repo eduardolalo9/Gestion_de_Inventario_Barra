@@ -59,6 +59,14 @@
             ]
         });
 
+        // v5.52 — pestaña Muestreo de Físico vs Sistema: mismo criterio (nombre manda, id es código exacto).
+        var _motorFvsMu = crearMotorBusqueda({
+            claves: [
+                { nombre: 'nombre', peso: 3 },
+                { nombre: 'id',     peso: 2, codigo: true }
+            ]
+        });
+
         // v5.27 — Compras: se busca sobre todo por PRODUCTO (pedido de Eduardo,
         // 12-oct-2026): nombre del catálogo, código y la descripción de SAP de
         // cada línea. Folio y Doc SAP como código exacto; proveedor pesa poco
@@ -341,6 +349,18 @@
             precalentar: function() {
                 var d = (typeof fisicoVsSistemaCalcular === 'function') ? fisicoVsSistemaCalcular() : null;
                 if (d) _motorFvs.indexar(d.filas);
+            },
+            paso: 40
+        });
+
+        // v5.52 — Muestreo: su propio término de búsqueda (el del Comparativo es otro).
+        BusquedaUI.registrar('fvsmu', {
+            obtenerConsulta: function() { return _fvsMuTerm; },
+            alAplicar:  function(v) { _fvsMuTerm = v; },
+            refrescar:  function() { return _pintarRegionBusqueda('fvsmu', _renderFvsMuResultados()); },
+            precalentar: function() {
+                var d = (typeof fisicoVsSistemaCalcular === 'function') ? fisicoVsSistemaCalcular() : null;
+                if (d) _motorFvsMu.indexar(d.filas);
             },
             paso: 40
         });

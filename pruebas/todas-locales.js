@@ -77,6 +77,7 @@ const PRUEBAS = [
     'prueba-v548-seguridad.js',        // v5.48 — auditoría C-1: jsArg() en manejadores en línea, ids de la nube y guarda estática
     'prueba-v549-sheetjs.js',          // v5.49 — SheetJS 0.20.3 propio (sin cdnjs) y CSP sin cdnjs en scripts
     'prueba-v550-pedido-conteo.js',    // v5.50 — Pedidos: base «conteo de todas las áreas» (capa pura + guardas)
+    'prueba-v552-muestreo-filtros.js', // v5.52 — Muestreo: filtros por desviación, grupo y revisados (capa pura + guardas)
     'prueba-v531-minimal-y-atras.js', // v5.31 — tema minimalista claro (tokens, contraste, solo CSS) y botón Atrás de Android (módulo aislado, sin tocar funciones)
     'prueba-v532-exportar-existencias.js', // v5.32 — exportar existencias a Excel: capa pura, columnas exactas, solo lectura, sin ceros silenciosos
     'prueba-v533-blindaje-pestana.js', // v5.33 — Etapa 0: blindaje de activeTab (valida al restaurar, no se adopta de la nube, nunca envía "perfil")

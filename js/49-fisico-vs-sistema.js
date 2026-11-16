@@ -275,6 +275,70 @@
             return lista.filter(function(f) { return (f.grupo || 'General') === grupo; });
         }
 
+        // ── v5.52 — MUESTREO: filtros por desviación, grupo y revisados (capa pura) ──
+        //  La lista de muestreo es una selección de productos (ya viene en la nube, compartida con el
+        //  equipo). Estos filtros SOLO cambian lo que se ve: no tocan la lista, no escriben nada.
+        //  «Desviación» = la diferencia físico − sistema de la fila, con la misma tolerancia y el mismo
+        //  criterio de signo que el tono de la tarjeta (negativo = faltante, positivo = sobrante).
+
+        /** 'faltante' | 'sobrante' | 'coincide' — idéntico al tono de la tarjeta (_fvsTono). */
+        function fvsMuestreoTono(f, tol) {
+            if (!f) return 'coincide';
+            return f.diferencia < -tol ? 'faltante' : (f.diferencia > tol ? 'sobrante' : 'coincide');
+        }
+
+        /**
+         * fvsMuestreoFiltrar(filas, o) → copia filtrada, en el MISMO orden recibido.
+         *   o.desv      'todas' (def.) | 'con' (faltante o sobrante) | 'faltante' | 'sobrante' | 'coincide'
+         *   o.grupo     nombre de grupo | null/'' = todos
+         *   o.rev       'todos' (def.) | 'pendientes' (sin revisar) | 'revisados'
+         *   o.revisados { id: marca } — lo que la lista tiene como revisado
+         *   o.tol       tolerancia de la diferencia (def. 0.001)
+         */
+        function fvsMuestreoFiltrar(filas, o) {
+            o = o || {};
+            var tol = (typeof o.tol === 'number') ? o.tol : 0.001;
+            // Un valor desconocido NO filtra (se trata como «todas»/«todos»): nunca esconde productos por un error de captura.
+            var desv = ['con', 'faltante', 'sobrante', 'coincide'].indexOf(o.desv) !== -1 ? o.desv : 'todas';
+            var rev = (o.rev === 'pendientes' || o.rev === 'revisados') ? o.rev : 'todos';
+            var revs = o.revisados || {};
+            var grupo = (o.grupo === null || o.grupo === undefined) ? '' : String(o.grupo);
+            return (filas || []).filter(function(f) {
+                if (!f) return false;
+                if (grupo && (f.grupo || 'General') !== grupo) return false;
+                if (desv !== 'todas') {
+                    var t = fvsMuestreoTono(f, tol);
+                    if (desv === 'con' ? t === 'coincide' : t !== desv) return false;
+                }
+                if (rev !== 'todos') {
+                    var hecho = !!revs[f.id];
+                    if (rev === 'revisados' ? !hecho : hecho) return false;
+                }
+                return true;
+            });
+        }
+
+        /**
+         * Conteos para rotular los filtros, sobre la lista COMPLETA del muestreo (sin aplicar los otros
+         * filtros): { desv: { todas, con, faltante, sobrante, coincide }, rev: { todos, pendientes,
+         * revisados }, grupos: [{ grupo, n }] }.
+         */
+        function fvsMuestreoConteos(filas, revisados, tol) {
+            tol = (typeof tol === 'number') ? tol : 0.001;
+            var revs = revisados || {};
+            var c = { desv: { todas: 0, con: 0, faltante: 0, sobrante: 0, coincide: 0 }, rev: { todos: 0, pendientes: 0, revisados: 0 }, grupos: [] };
+            (filas || []).forEach(function(f) {
+                if (!f) return;
+                var t = fvsMuestreoTono(f, tol);
+                c.desv.todas++; c.desv[t]++;
+                if (t !== 'coincide') c.desv.con++;
+                c.rev.todos++;
+                if (revs[f.id]) c.rev.revisados++; else c.rev.pendientes++;
+            });
+            c.grupos = fisicoVsSistemaGrupos(filas);
+            return c;
+        }
+
         /**
          * «Diferencias ↑»: TODAS las filas por diferencia numérica, de menor a
          * mayor (−5, −0.5, 0, 2…). Lo que no tiene diferencia (sin contar o un
