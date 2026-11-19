@@ -61,6 +61,7 @@ const PRUEBAS = [
     'prueba-v548-xss-navegador.js',    // v5.48 — un id con sintaxis JS ya no ejecuta código al tocar un botón (Chromium real)
     'prueba-v550-pedido-conteo-navegador.js', // v5.50 — Pedidos: cambiar de base, generar el pedido, táctil
     'prueba-v552-muestreo-filtros-navegador.js', // v5.52 — Muestreo: desviación, grupo, buscador y revisados
+    'prueba-v554-exportar-conteo-navegador.js', // v5.54 — exportar / compartir el conteo: hoja, PDF y Excel reales, compartir, permisos
     'prueba-v553-csp-estricto-navegador.js', // v5.53 — política estricta en Chromium real (servidor propio): hashes, despachador e inyección
     'prueba-v546-muestreo-compartido-navegador.js', // v5.46 — muestreo compartido (inventario en la nube), lista de reconteo del equipo, insignia sobre el buscador, autoguardado al volver
     'prueba-v545-fvs-navegador.js', // v5.45 — Físico vs Sistema: KPIs, insignias, selección múltiple, edición rápida, grupos plegables y muestreo

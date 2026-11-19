@@ -1531,6 +1531,8 @@
             // ── 1-3. Estado, datos y acciones del Inventario Físico ─────────
             html += _renderInventarioFisicoHeader();
             html += _muestreoConteoTarjetaHtml();
+            // v5.54 — exportar / compartir el conteo activo en PDF o Excel (js/97-exportar-conteo.js)
+            if (typeof conteoExportBotonHtml === 'function') html += conteoExportBotonHtml();
 
             // ── Avance de las áreas ─────────────────────────────────────────
             // FASE 10B: aquí había un segundo "Nuevo Inventario Físico" (o un
