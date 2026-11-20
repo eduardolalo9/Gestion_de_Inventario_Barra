@@ -78,6 +78,7 @@ const PRUEBAS = [
     'prueba-v549-sheetjs.js',          // v5.49 — SheetJS 0.20.3 propio (sin cdnjs) y CSP sin cdnjs en scripts
     'prueba-v550-pedido-conteo.js',    // v5.50 — Pedidos: base «conteo de todas las áreas» (capa pura + guardas)
     'prueba-v552-muestreo-filtros.js', // v5.52 — Muestreo: filtros por desviación, grupo y revisados (capa pura + guardas)
+    'prueba-v554-exportar-conteo.js',  // v5.54 — exportar / compartir el conteo activo: datos, PDF A4 (espía de maquetación), Excel y guardas
     'prueba-v553-despachador-csp.js',  // v5.53 — despachador de eventos (preparación para quitar unsafe-inline): analizador, seguridad y guarda estática
     'prueba-v531-minimal-y-atras.js', // v5.31 — tema minimalista claro (tokens, contraste, solo CSS) y botón Atrás de Android (módulo aislado, sin tocar funciones)
     'prueba-v532-exportar-existencias.js', // v5.32 — exportar existencias a Excel: capa pura, columnas exactas, solo lectura, sin ceros silenciosos

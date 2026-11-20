@@ -1050,3 +1050,32 @@ button.fvs-t__celda:hover, button.fvs-t__celda:focus-visible { border-color: var
 
 /* v5.53 — antes onmouseover/onmouseout en línea; el hover es de CSS (no ejecuta nada) */
 .bi-hover-fondo:hover { background: var(--border-mid) !important; }
+
+/* ═══ v5.54 — Exportar / compartir el conteo activo (js/97-exportar-conteo.js) ═══ */
+.cx-fila { margin: 0 0 12px; }
+.cx-btn { width: 100%; min-height: 48px; display: flex; align-items: center; justify-content: center; gap: 10px; font-weight: 700; }
+.cx-ov { position: fixed; inset: 0; z-index: 9000; display: flex; align-items: flex-end; justify-content: center; }
+.cx-velo { position: absolute; inset: 0; background: var(--scrim); }
+.cx-hoja { position: relative; width: 100%; max-width: 480px; max-height: 92vh; overflow-y: auto; background: var(--card); color: var(--txt-primary);
+           border: 1px solid var(--border-strong); border-bottom: 0; border-radius: 22px 22px 0 0; padding: 10px 16px calc(16px + env(safe-area-inset-bottom, 0px)); box-shadow: var(--shadow-modal); }
+.cx-asa { width: 42px; height: 5px; border-radius: 9px; background: var(--border-strong); margin: 0 auto 12px; }
+.cx-tit { margin: 0; font-size: 1.15rem; font-weight: 800; }
+.cx-sub { margin: 3px 0 12px; font-size: .78rem; color: var(--txt-secondary); }
+.cx-areas { display: flex; gap: 7px; margin-bottom: 12px; }
+.cx-area { flex: 1; min-height: 44px; padding: 8px 5px; border-radius: 11px; border: 1.5px solid var(--border-mid); background: var(--surface); color: var(--txt-secondary); text-align: center; font: inherit; font-size: .76rem; font-weight: 700; cursor: pointer; }
+.cx-area small { display: block; margin-top: 2px; font-size: .66rem; font-weight: 500; }
+.cx-area--on { border-color: var(--accent); background: var(--accent-container); color: var(--txt-primary); }
+.cx-opc { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; margin-bottom: 8px; padding: 10px 12px; border-radius: 14px; border: 1px solid var(--border-mid);
+          background: var(--surface); color: var(--txt-primary); text-align: left; font: inherit; cursor: pointer; }
+.cx-opc[disabled] { opacity: .55; cursor: progress; }
+.cx-opc--pri { border-color: var(--accent); background: var(--accent-container); }
+.cx-opc__t b { display: block; font-size: .9rem; }
+.cx-opc__t small { display: block; font-size: .72rem; color: var(--txt-secondary); font-weight: 500; }
+.cx-par { display: flex; gap: 8px; }
+.cx-par .cx-opc { flex: 1; flex-direction: column; text-align: center; gap: 6px; padding: 12px 6px; margin-bottom: 8px; }
+.cx-ico { flex: none; width: 42px; height: 42px; border-radius: 11px; display: inline-flex; align-items: center; justify-content: center; font-size: .72rem; font-weight: 800; border: 1px solid transparent; }
+.cx-ico--pdf { background: var(--red-dim); color: var(--red-text); border-color: var(--red); }
+.cx-ico--xls { background: var(--green-dim); color: var(--green-text); border-color: var(--green); }
+.cx-nota { margin: 4px 0 8px; text-align: center; font-size: .72rem; color: var(--txt-secondary); }
+.cx-cerrar { width: 100%; min-height: 44px; border: 0; background: transparent; color: var(--txt-secondary); font: inherit; font-weight: 600; cursor: pointer; }
+@media (min-width: 640px) { .cx-ov { align-items: center; } .cx-hoja { border-radius: 20px; border-bottom: 1px solid var(--border-strong); } }

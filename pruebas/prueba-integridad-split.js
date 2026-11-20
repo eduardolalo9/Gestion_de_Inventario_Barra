@@ -51,7 +51,9 @@ chk('Todos los archivos declarados existen en disco',
 // ═══ 3 · Cada archivo en disco está declarado ══════════════════════════════
 // v5.49: js/xlsx.full.min.js es una biblioteca de terceros (SheetJS 0.20.3, auditoría C-3), no un módulo
 // de la app; se declara en index.html sin pasar por la convención de módulos. Se excluye SOLO ese archivo.
-const VENDOR = new Set(['xlsx.full.min.js']);
+// v5.54: js/jspdf.umd.min.js (jsPDF 4.2.1, MIT) tampoco es un módulo: se carga BAJO DEMANDA al abrir «Exportar» (js/97-exportar-conteo.js),
+// por eso no tiene etiqueta en index.html; sí está en la lista de calentamiento del service worker (prueba-v554 lo comprueba).
+const VENDOR = new Set(['xlsx.full.min.js', 'jspdf.umd.min.js']);
 const enDisco = fs.readdirSync(path.join(RAIZ, 'js')).filter(f => f.endsWith('.js') && !VENDOR.has(f)).sort();
 const declSet = new Set(declaradas.map(d => path.basename(d.ruta)));
 const huerfanos = enDisco.filter(f => !declSet.has(f));

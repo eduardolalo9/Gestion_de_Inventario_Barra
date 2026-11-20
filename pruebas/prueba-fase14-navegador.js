@@ -185,7 +185,8 @@ const PUERTO = process.env.PUERTO || '8080';
   });
   chk('★ Un inventario cerrado a mitad de semana ofrece "Contabilizar como ancla del Total"',
       /Contabilizar como ancla del Total/.test(paso) && /punto de partida \(ancla\) del Total/.test(paso), paso.replace(/<[^>]+>/g, ' ').slice(0, 400));
-  const futuro = await p.evaluate(() => { const d = new Date(); d.setDate(d.getDate() + 3); const f = fechaISOLocal(d);
+  // Un día futuro que NO sea domingo ni fin de mes (esos son cierre de semana/mes y se tratan distinto): antes era «hoy + 3», que los jueves caía en domingo.
+  const futuro = await p.evaluate(() => { const d = new Date(); d.setDate(d.getDate() + 3); while (d.getDay() === 0 || esUltimoDiaDelMes(d)) d.setDate(d.getDate() + 1); const f = fechaISOLocal(d);
     return _renderSiguientePasoInventario({ estado: 'CERRADO', semanaId: semanaId(f), fechaRecuento: f, numero: 1011 }); });
   chk('…pero uno fechado en el futuro no, y dice por qué', /futuro/.test(futuro) && !/data-inv-accion="contabilizar"/.test(futuro), futuro.replace(/<[^>]+>/g, ' ').slice(0, 300));
 
