@@ -49,10 +49,10 @@
             return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : [100, 116, 139];
         }
 
-        function conteoExportNombre(fecha, extension) {
+        function conteoExportNombre(fecha, extension, base) {
             var d = fecha instanceof Date ? fecha : new Date();
             var p = function(n) { return (n < 10 ? '0' : '') + n; };
-            return 'Conteo_activo_' + d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + '.' + extension;
+            return (base || 'Conteo_activo') + '_' + d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + '.' + extension;
         }
 
         // ── Capa pura: datos ─────────────────────────────────────────────────
@@ -389,7 +389,7 @@
 
         // ── Capa de aplicación (lee el estado de la app; no escribe datos) ───
 
-        var _cx = { abierto: false, areas: null, ocupado: false, cargando: null, previo: null };
+        var _cx = { abierto: false, areas: null, ocupado: false, cargando: null, previo: null, origen: null, lectura: null };
 
         function _cxAreasDisponibles() {
             var claves = (typeof AREAS_CONTEO !== 'undefined' && AREAS_CONTEO && AREAS_CONTEO.length) ? AREAS_CONTEO.slice() : ['almacen', 'barra1', 'barra2'];
@@ -399,10 +399,15 @@
             });
         }
 
-        /** ¿Se ofrece exportar? Permiso de exportar + ver todos los conteos + inventario abierto. */
-        function conteoExportAplicable() {
+        /**
+         * ¿Se ofrece exportar? Permiso de exportar + ver todos los conteos y:
+         *   · sin `origen`: un inventario ABIERTO (el conteo activo);
+         *   · con `origen` { inventoryId }: un inventario CERRADO/CONTABILIZADO, leído de su snapshot (necesita nube).
+         */
+        function conteoExportAplicable(origen) {
             if (typeof hasPermission !== 'function' || !hasPermission('inventory.export')) return false;
             if (typeof puedeVerConteosAjenos === 'function' && !puedeVerConteosAjenos()) return false;
+            if (origen && origen.inventoryId) return typeof _db !== 'undefined' && !!_db;
             return typeof _inventarioActivo !== 'undefined' && !!_inventarioActivo
                 && typeof inventarioAbierto === 'function' && !!inventarioAbierto(_inventarioActivo);
         }
@@ -418,6 +423,17 @@
             return '<div class="cx-fila"><button type="button" id="cxAbrirBtn" class="bt bt--primario cx-btn" onclick="conteoExportAbrir()"'
                  + ' aria-haspopup="dialog" aria-label="Exportar o compartir el conteo activo en PDF o Excel">'
                  + '<i class="fa-solid fa-download" aria-hidden="true"></i> Exportar / Compartir conteo</button></div>';
+        }
+
+        /**
+         * Botón «Descargar / Compartir» de un inventario CERRADO o CONTABILIZADO (la tarjeta de Contabilizar y el detalle del
+         * Historial). Abre la misma hoja de opciones, con el conteo que quedó guardado al cierre. Vacío si no aplica.
+         */
+        function conteoExportBotonInventarioHtml(inventoryId, numero) {
+            if (!inventoryId || !conteoExportAplicable({ inventoryId: inventoryId })) return '';
+            return '<button type="button" class="bt bt--secundario cx-btn-inv" onclick="conteoExportAbrirInventario(\'' + jsArg(inventoryId) + '\', ' + (Number(numero) || 0) + ')"'
+                 + ' aria-haspopup="dialog" aria-label="Descargar o compartir el inventario #' + (Number(numero) || 0) + ' en PDF o Excel">'
+                 + '<i class="fa-solid fa-download" aria-hidden="true"></i> Descargar / Compartir</button>';
         }
 
         /** Carga jsPDF bajo demanda. Resuelve con el constructor o rechaza con un motivo legible. */
@@ -454,12 +470,15 @@
 
         function _cxHojaHtml() {
             var disp = _cxAreasDisponibles();
-            var num = (typeof _inventarioActivo !== 'undefined' && _inventarioActivo && _inventarioActivo.numero) ? _inventarioActivo.numero : '';
+            var cerrado = !!(_cx.origen && _cx.origen.inventoryId);
+            var num = cerrado ? _cx.origen.numero
+                    : ((typeof _inventarioActivo !== 'undefined' && _inventarioActivo && _inventarioActivo.numero) ? _inventarioActivo.numero : '');
             var h = '<div class="cx-velo" onclick="conteoExportCerrar()"></div>'
                   + '<div class="cx-hoja" role="dialog" aria-modal="true" aria-labelledby="cxTit">'
                   + '<div class="cx-asa" aria-hidden="true"></div>'
-                  + '<h2 id="cxTit" class="cx-tit">Exportar conteo activo</h2>'
-                  + '<p class="cx-sub">' + (num ? 'Inventario #' + escapeHtml(String(num)) + ' · ' : '') + 'conteo físico · incluye las botellas abiertas convertidas</p>'
+                  + '<h2 id="cxTit" class="cx-tit">' + (cerrado ? 'Exportar inventario' + (num ? ' #' + escapeHtml(String(num)) : '') : 'Exportar conteo activo') + '</h2>'
+                  + '<p class="cx-sub">' + (!cerrado && num ? 'Inventario #' + escapeHtml(String(num)) + ' · ' : '')
+                  + (cerrado ? 'conteo al cierre' : 'conteo físico') + ' · incluye las botellas abiertas convertidas</p>'
                   + '<div class="cx-areas" role="group" aria-label="Áreas a incluir">';
             disp.forEach(function(a) {
                 var on = _cx.areas.indexOf(a.clave) !== -1;
@@ -488,9 +507,12 @@
             if (ov) ov.innerHTML = _cxHojaHtml();
         }
 
-        function conteoExportAbrir() {
-            if (!conteoExportAplicable()) { showNotification('⚠️ No tienes permiso para exportar el conteo o no hay un inventario abierto'); return; }
+        function conteoExportAbrir(origen) {
+            if (origen && typeof origen !== 'object') origen = null;   // un clic por el despachador de eventos no trae argumentos útiles
+            if (!conteoExportAplicable(origen)) { showNotification('⚠️ No tienes permiso para exportar el conteo' + (origen ? '' : ' o no hay un inventario abierto')); return; }
             if (document.getElementById('cxOverlay')) return;
+            _cx.origen = origen && origen.inventoryId ? { inventoryId: String(origen.inventoryId), numero: origen.numero } : null;
+            _cx.lectura = null;
             _cx.areas = _cxAreasDisponibles().map(function(a) { return a.clave; });
             _cx.previo = document.activeElement;
             var ov = document.createElement('div');
@@ -501,7 +523,9 @@
             document.addEventListener('keydown', _cxTecla, true);
             var primero = ov.querySelector('.cx-area'); if (primero && primero.focus) primero.focus();
             conteoExportPrecargar();
+            if (_cx.origen) { _cx.lectura = _cxLeerSnapshot(_cx.origen); _cx.lectura.catch(function() {}); }   // se lee ya, para que Compartir no espere a la red
         }
+        function conteoExportAbrirInventario(inventoryId, numero) { conteoExportAbrir({ inventoryId: inventoryId, numero: numero }); }
 
         function conteoExportAlternarArea(clave) {
             var i = _cx.areas.indexOf(clave);
@@ -514,8 +538,93 @@
             _cxPintarHoja();
         }
 
-        /** Foto de datos para exportar: filas + áreas + info del encabezado. Lee, no escribe. */
+        /**
+         * Lee el inventario CERRADO/CONTABILIZADO: su cabecera y el snapshot que se congeló al cerrar (inventories/{id} +
+         * snapshotChunks, los mismos que usa el Historial). SOLO LEE. Devuelve una promesa { meta, registros }.
+         */
+        function _cxLeerSnapshot(origen) {
+            if (typeof _db === 'undefined' || !_db) return Promise.reject(new Error('Sin conexión a la nube'));
+            var ref = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID).collection('inventories').doc(origen.inventoryId);
+            return Promise.all([ref.get(), _readChunkedSubcollection(ref, 'snapshotChunks')]).then(function(res) {
+                var meta = res[0] && res[0].exists ? (res[0].data() || {}) : null;
+                var registros = res[1] || [];
+                if (!meta) throw new Error('No se encontró el inventario');
+                if (!registros.length) throw new Error('No se encontró el snapshot de este inventario');
+                return { meta: meta, registros: registros };
+            });
+        }
+
+        /** Fecha corta es-MX de un sello de tiempo, o ''. */
+        function _cxFecha(ms) { return ms ? new Date(ms).toLocaleDateString('es-MX', { year: 'numeric', month: '2-digit', day: '2-digit' }) : ''; }
+
+        /**
+         * Foto de un inventario CERRADO/CONTABILIZADO: el conteo consolidado con la MISMA regla que el Excel del Historial
+         * (_consolidarConteoCongelado) y la MISMA conversión de botellas abiertas (convertirOzAPuntos) aplicada con los datos
+         * del producto congelados al cierre. Un área sin nada contado vale 0.
+         */
+        function _cxInstantaneaCerrada(origen) {
+            // Si la lectura adelantada falló (red), se reintenta una vez antes de rendirse.
+            var lectura = (_cx.lectura || _cxLeerSnapshot(origen)).catch(function() { return _cxLeerSnapshot(origen); });
+            return lectura.then(function(d) {
+                var meta = d.meta, registros = d.registros;
+                var snapMeta = registros.filter(function(r) { return r.tipo === 'meta'; })[0] || {};
+                var hist = (Array.isArray(snapMeta.warehousesSnapshot) && snapMeta.warehousesSnapshot.length) ? snapMeta.warehousesSnapshot
+                         : ((Array.isArray(meta.warehousesSnapshot) && meta.warehousesSnapshot.length) ? meta.warehousesSnapshot : _cxAreasDisponibles().map(function(a) { return a.clave; }));
+                var catalogo = (typeof products !== 'undefined' && Array.isArray(products)) ? products : [];
+                var prods = registros.filter(function(r) { return r.tipo === 'producto'; }).map(function(r) {
+                    var nom = r.name || r.nombre || '';
+                    if (!nom) { var vivo = catalogo.filter(function(p) { return p.id === r.id; })[0]; nom = vivo ? (vivo.name || '') : ''; }
+                    return { id: r.id, name: nom, group: r.group || r.grupo || '', unit: r.unit || '',
+                             capacidadMl: r.capacidadMl, pesoBotellaLlenaOz: r.pesoBotellaLlenaOz, conteoOzHabilitado: r.conteoOzHabilitado };
+                });
+                var usuarios = registros.filter(function(r) { return r.tipo === 'usuario'; });
+                var agregado = _consolidarConteoCongelado(usuarios, hist, prods);
+                var disp = _cxAreasDisponibles().filter(function(a) { return _cx.areas.indexOf(a.clave) !== -1; });
+                var conteoDe = function(p) {
+                    var out = { tocado: false, areas: {} };
+                    var botella = (typeof tieneConversion === 'function') && tieneConversion(p);
+                    disp.forEach(function(a) {
+                        var x = agregado[p.id] ? agregado[p.id][a.clave] : null;
+                        var abiertas = x && Array.isArray(x.abiertas) ? x.abiertas : [];
+                        if (!x || (!(x.enteras > 0) && !abiertas.length)) { out.areas[a.clave] = null; return; }
+                        var suma = 0;
+                        abiertas.forEach(function(v) { suma += botella ? convertirOzAPuntos(v, p.capacidadMl, p.pesoBotellaLlenaOz) : (Number(v) || 0); });
+                        out.tocado = true;
+                        out.areas[a.clave] = { enteras: x.enteras || 0, abiertas: abiertas.slice(), total: _cxRed3((x.enteras || 0) + suma) };
+                    });
+                    return out;
+                };
+                var filas = conteoExportFilas(prods, conteoDe, disp.map(function(a) { return a.clave; }));
+                var ahora = new Date();
+                var perfil = (typeof _lastUserData !== 'undefined' && _lastUserData) ? _lastUserData : null;
+                var usuario = (perfil && (perfil.displayName || perfil.email)) || '';
+                var num = meta.numero || origen.numero || '';
+                var contab = meta.estado === 'CONTABILIZADO';
+                var fecha = ahora.toLocaleDateString('es-MX', { year: 'numeric', month: '2-digit', day: '2-digit' });
+                var hora = ahora.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+                var destino = [meta.semanaDestino ? 'inicial de la semana ' + meta.semanaDestino : '', meta.mesDestino ? 'corte del mes ' + meta.mesDestino : '', meta.anclaDestino ? 'ancla del Total ' + meta.anclaDestino : ''].filter(Boolean).join(' · ');
+                return {
+                    filas: filas, areas: disp, ahora: ahora, nombreBase: 'Inventario_fisico_' + num,
+                    info: {
+                        titulo: 'Inventario físico #' + num + ' — ' + (contab ? 'Contabilizado' : 'Cerrado') + (meta.anulado ? ' (ANULADO)' : ''),
+                        subtitulo: disp.map(function(a) { return a.nombre; }).join(' · ') + (destino ? '  |  ' + destino : ''),
+                        derecha: ['Inventario #' + num + ' · ' + (contab ? 'contabilizado' : 'cerrado') + (meta.anulado ? ' · anulado' : ''),
+                                  (meta.fechaCierre ? 'Cierre ' + _cxFecha(meta.fechaCierre) + ' · ' : '') + 'Generado ' + fecha + ' ' + hora,
+                                  usuario ? 'Por ' + usuario : ''].filter(Boolean),
+                        version: _cxVersionApp(), generado: fecha + ' ' + hora, usuario: usuario, inventario: '#' + num
+                    }
+                };
+            });
+        }
+
+        /** Foto de datos para exportar: filas + áreas + info del encabezado (promesa). Lee, no escribe. */
         function _cxInstantanea() {
+            if (_cx.origen && _cx.origen.inventoryId) return _cxInstantaneaCerrada(_cx.origen);
+            try { return Promise.resolve(_cxInstantaneaActiva()); } catch (e) { return Promise.reject(e); }
+        }
+
+        /** Foto del conteo ACTIVO (inventario abierto). */
+        function _cxInstantaneaActiva() {
             var disp = _cxAreasDisponibles().filter(function(a) { return _cx.areas.indexOf(a.clave) !== -1; });
             var filas = conteoExportFilas(typeof products !== 'undefined' && Array.isArray(products) ? products : [],
                                           function(p) { return fvsConteoPorArea(p.id); }, disp.map(function(a) { return a.clave; }));
@@ -573,17 +682,17 @@
          */
         function conteoExportEjecutar(formato, accion) {
             if (_cx.ocupado) return Promise.resolve({ ok: false, motivo: 'en_curso' });
-            if (!conteoExportAplicable()) { showNotification('⚠️ No tienes permiso para exportar el conteo o no hay un inventario abierto'); return Promise.resolve({ ok: false, motivo: 'sin_permiso' }); }
+            if (!conteoExportAplicable(_cx.origen)) { showNotification('⚠️ No tienes permiso para exportar el conteo' + (_cx.origen ? '' : ' o no hay un inventario abierto')); return Promise.resolve({ ok: false, motivo: 'sin_permiso' }); }
             if (!_cx.areas || !_cx.areas.length) { showNotification('⚠️ Deja al menos un área incluida'); return Promise.resolve({ ok: false, motivo: 'sin_areas' }); }
             if (typeof products === 'undefined' || !Array.isArray(products) || !products.length) { showNotification('⚠️ No hay productos para exportar'); return Promise.resolve({ ok: false, motivo: 'sin_productos' }); }
             if (formato === 'xlsx' && typeof XLSX === 'undefined') { showNotification('⏳ Cargando la librería de Excel… intenta en unos segundos'); return Promise.resolve({ ok: false, motivo: 'sin_xlsx' }); }
             _cx.ocupado = true; _cxPintarHoja();
             var ext = formato === 'pdf' ? 'pdf' : 'xlsx';
             var mime = formato === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-            var preparar = (formato === 'pdf') ? _cxCargarJsPdf() : Promise.resolve(null);
-            return preparar.then(function(J) {
-                var foto = _cxInstantanea();
-                var nombre = conteoExportNombre(foto.ahora, ext), bytes, paginas = null;
+            var preparar = Promise.all([(formato === 'pdf') ? _cxCargarJsPdf() : null, _cxInstantanea()]);
+            return preparar.then(function(par) {
+                var J = par[0], foto = par[1];
+                var nombre = conteoExportNombre(foto.ahora, ext, foto.nombreBase), bytes, paginas = null;
                 if (formato === 'pdf') {
                     var r = conteoExportPdf(J, foto.filas, foto.areas, foto.info);
                     bytes = r.doc.output('arraybuffer'); paginas = r.paginas;
@@ -618,6 +727,8 @@
             window.conteoExportAplicable  = conteoExportAplicable;
             window.conteoExportBotonHtml  = conteoExportBotonHtml;
             window.conteoExportAbrir      = conteoExportAbrir;
+            window.conteoExportAbrirInventario = conteoExportAbrirInventario;
+            window.conteoExportBotonInventarioHtml = conteoExportBotonInventarioHtml;
             window.conteoExportCerrar     = conteoExportCerrar;
             window.conteoExportAlternarArea = conteoExportAlternarArea;
             window.conteoExportEjecutar   = conteoExportEjecutar;

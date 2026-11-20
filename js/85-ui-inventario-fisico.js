@@ -121,7 +121,9 @@
                 ? '<span class="pm-estado pm-estado--abierto pm-estado--cab"><span class="audit-live-dot" aria-hidden="true"></span> <span class="if-badge-pre">INVENTARIO BARRA </span>SINCRONIZADO</span>'
                 : (esContab
                     ? '<span class="pm-estado pm-estado--contab pm-estado--cab"><i class="fa-solid fa-book" aria-hidden="true"></i> <span class="if-badge-pre">INVENTARIO BARRA </span>CONTABILIZADO</span>'
-                    : '<span class="pm-estado pm-estado--cerrado pm-estado--cab"><i class="fa-solid fa-lock" aria-hidden="true"></i> <span class="if-badge-pre">INVENTARIO BARRA </span>CERRADO</span>');
+                    : (inv.anulado === true
+                        ? '<span class="pm-estado pm-estado--cerrado pm-estado--cab"><i class="fa-solid fa-ban" aria-hidden="true"></i> <span class="if-badge-pre">INVENTARIO BARRA </span>ANULADO</span>'
+                        : '<span class="pm-estado pm-estado--cerrado pm-estado--cab"><i class="fa-solid fa-lock" aria-hidden="true"></i> <span class="if-badge-pre">INVENTARIO BARRA </span>CERRADO</span>'));
 
             // Artículos contados = productos con al menos una entrada de conteo
             // de ALGÚN usuario (unión, no suma) — dato ya en memoria.
@@ -287,6 +289,26 @@
                 return partes.length ? partes.join(' y ') : 'el stock inicial de la ' + escapeHtml(semana(null));
             };
             var h = '';
+            // v5.55 — descargar / compartir lo que quedó contado, y anular (solo un CERRADO sin contabilizar).
+            var invId = inv.inventoryId || (typeof _inventarioActivoId !== 'undefined' ? _inventarioActivoId : null);
+            var btnExp = (typeof conteoExportBotonInventarioHtml === 'function') ? conteoExportBotonInventarioHtml(invId, inv.numero) : '';
+            var btnAnular = (isAdmin() && invId && inventarioAnulable(inv))
+                ? '<button type="button" class="bt bt--secundario" onclick="anularInventario(\'' + jsArg(invId) + '\', ' + (Number(inv.numero) || 0) + ')"><i class="fa-solid fa-ban" aria-hidden="true"></i> Anular inventario</button>'
+                : '';
+
+            if (inv.anulado === true) {
+                h += '<div class="pm-paso pm-paso--aviso" role="status">'
+                   + '<div class="pm-paso__titulo"><i class="fa-solid fa-ban" aria-hidden="true"></i> Inventario anulado</div>'
+                   + '<div class="pm-paso__txt">' + escapeHtml(inv.motivoAnulacion || 'Sin motivo registrado')
+                   + (inv.anuladoPorNombre ? ' · ' + escapeHtml(inv.anuladoPorNombre) : '')
+                   + (inv.anuladoEn ? ' · ' + escapeHtml(new Date(inv.anuladoEn).toLocaleDateString('es-MX')) : '')
+                   + '. No se puede contabilizar. Los datos se conservan.</div>';
+                var accAn = btnExp
+                    + (isAdmin() && invId ? '<button type="button" class="bt bt--secundario" onclick="restaurarInventario(\'' + jsArg(invId) + '\', ' + (Number(inv.numero) || 0) + ')"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Restaurar</button>' : '')
+                    + btnCrear(true);
+                if (accAn) h += '<div class="pm-paso__acc">' + accAn + '</div>';
+                return h + '</div>';
+            }
 
             if (ev.hecho) {
                 h += '<div class="pm-paso pm-paso--hecho" role="status">'
@@ -294,7 +316,7 @@
                    + '<div class="pm-paso__txt">Su resultado ya es ' + destinos(ev.semanaDestino, ev.mesDestino, ev.anclaDestino)
                    + (inv.contabilizadoEn ? ' · ' + escapeHtml(new Date(inv.contabilizadoEn).toLocaleDateString('es-MX')) : '')
                    + '. Queda de solo lectura.</div>';
-                if (puedeCrear) h += '<div class="pm-paso__acc">' + btnCrear(true) + '</div>';
+                if (puedeCrear || btnExp) h += '<div class="pm-paso__acc">' + btnExp + btnCrear(true) + '</div>';
                 h += '</div>';
                 return h;
             }
@@ -317,7 +339,7 @@
                                                      : '<i class="fa-solid fa-book" aria-hidden="true"></i> Contabilizar'));
                     acc += '<button type="button" class="bt bt--primario" data-inv-accion="contabilizar">' + etiquetaBtn + '</button>';
                 }
-                acc += btnCrear(false);
+                acc += btnExp + btnAnular + btnCrear(false);
                 if (acc) h += '<div class="pm-paso__acc">' + acc + '</div>';
                 h += '</div>';
                 return h;
@@ -331,7 +353,7 @@
                + '<div class="pm-paso__txt">'
                + (puedeContab ? '<i class="fa-solid fa-book" aria-hidden="true"></i> No se puede contabilizar. ' + escapeHtml(ev.motivo) : 'Queda de solo lectura.')
                + '</div>';
-            if (puedeCrear) h += '<div class="pm-paso__acc">' + btnCrear(true) + '</div>';
+            if (puedeCrear || btnExp || btnAnular) h += '<div class="pm-paso__acc">' + btnExp + btnAnular + btnCrear(true) + '</div>';
             h += '</div>';
             return h;
         }
@@ -359,6 +381,11 @@
         // Admin ve todos los cerrados; usuario normal ve solo aquellos donde
         // participó (filtrado por participantesUids, ya viene en el doc — sin
         // leer snapshots para armar la lista).
+        // v5.55 — el Historial oculta los inventarios ANULADOS; administración los puede mostrar (para restaurarlos).
+        var _historialMostrarAnulados = false;
+        function historialAlternarAnulados() { _historialMostrarAnulados = !_historialMostrarAnulados; renderTab(); }
+        window.historialAlternarAnulados = historialAlternarAnulados;
+
         function renderHistorialInventarios() {
             // v5.43 — encabezado común (UI.cabecera) con Volver a la izquierda, fuera de la tarjeta.
             let html = '<div class="audit-screen">'
@@ -378,23 +405,33 @@
                     return Array.isArray(inv.participantesUids) && inv.participantesUids.indexOf(currentUserUid) !== -1;
                 });
             }
+            // v5.55 — los anulados no se ven salvo que administración pida «Mostrar anulados».
+            var _nAnulados = lista.filter(function(inv) { return inv.anulado === true; }).length;
+            if (!(isAdmin() && _historialMostrarAnulados)) lista = lista.filter(function(inv) { return inv.anulado !== true; });
+            if (isAdmin() && _nAnulados > 0) {
+                html += '<button type="button" class="bt bt--secundario if-hist-anulados" aria-pressed="' + (_historialMostrarAnulados ? 'true' : 'false') + '" onclick="historialAlternarAnulados()">'
+                      + '<i class="fa-solid fa-ban" aria-hidden="true"></i> ' + (_historialMostrarAnulados ? 'Ocultar anulados' : 'Mostrar anulados (' + _nAnulados + ')') + '</button>';
+            }
 
             if (lista.length === 0) {
                 html += '<p class="pm-nota" style="margin:0;">' + (isAdmin() ? 'Todavía no hay inventarios cerrados ni contabilizados.' : 'Todavía no participaste en ningún inventario cerrado.') + '</p>';
             } else {
                 html += '<div class="if-areas">';
                 lista.forEach(function(inv) {
-                    html += '<div class="rc-hist" onclick="auditoriaVerDetalleCerrado(\'' + jsArg(inv.inventoryId) + '\')">';
+                    html += '<div class="rc-hist' + (inv.anulado === true ? ' rc-hist--anulado' : '') + '" onclick="auditoriaVerDetalleCerrado(\'' + jsArg(inv.inventoryId) + '\')">';
                     html += '<div class="rc-hist__fila"><span class="rc-hist__titulo">#' + inv.numero + ' · Inventario Barra</span>';
                     // FASE 3 — un inventario contabilizado ya no es solo
                     // "cerrado": su resultado pasó a ser el inicial de la
                     // semana siguiente, y eso se ve de un vistazo.
                     var _contab = (inv.estado === 'CONTABILIZADO');
                     html += UI.badge(_contab ? 'contabilizado' : 'cerrado', {
-                        texto: _contab ? 'Contabilizado' : (inv.cierreTipo === 'abandonado' ? 'Cerrado · abandonado' : 'Cerrado')
+                        texto: inv.anulado === true ? 'Anulado' : (_contab ? 'Contabilizado' : (inv.cierreTipo === 'abandonado' ? 'Cerrado · abandonado' : 'Cerrado'))
                     });
                     html += '</div>';
                     html += '<div class="rc-hist__dato">Fecha: ' + new Date(inv.fechaCreacion).toLocaleDateString('es-MX') + ' &nbsp;·&nbsp; Artículos: ' + (inv.totalProductos || '—') + '</div>';
+                    if (inv.anulado === true) {
+                        html += '<div class="rc-hist__dato"><i class="fa-solid fa-ban" aria-hidden="true"></i> ' + escapeHtml(inv.motivoAnulacion || 'Sin motivo') + '</div>';
+                    }
                     if (_contab && inv.semanaDestino) {
                         html += '<div class="rc-hist__dato" style="color:var(--accent);font-weight:600;"><i class="fa-solid fa-book" aria-hidden="true"></i> Inicial de la semana '
                              +  escapeHtml(inv.semanaDestino) + '</div>';
@@ -1458,6 +1495,22 @@
             html += '<div class="if-dato"><dt>Productos / participantes</dt><dd>' + (meta.totalProductos || productosSnap.length) + ' &nbsp;·&nbsp; ' + usuarios.length + '</dd></div>';
             html += '</dl>';
 
+            // v5.55 — anulado: se dice arriba, con el motivo, y se puede restaurar.
+            if (meta.anulado === true) {
+                html += '<div class="pm-paso pm-paso--aviso" role="status"><div class="pm-paso__titulo"><i class="fa-solid fa-ban" aria-hidden="true"></i> Inventario anulado</div>'
+                     +  '<div class="pm-paso__txt">' + escapeHtml(meta.motivoAnulacion || 'Sin motivo registrado')
+                     +  (meta.anuladoPorNombre ? ' · ' + escapeHtml(meta.anuladoPorNombre) : '')
+                     +  (meta.anuladoEn ? ' · ' + escapeHtml(new Date(meta.anuladoEn).toLocaleDateString('es-MX')) : '')
+                     +  '. No se puede contabilizar. Los datos se conservan.</div>';
+                if (isAdmin()) {
+                    html += '<div class="pm-paso__acc"><button type="button" class="bt bt--secundario" onclick="restaurarInventario(\'' + jsArg(_detalleInventarioCerradoId) + '\', ' + (Number(meta.numero) || 0) + ')">'
+                         +  '<i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Restaurar inventario</button></div>';
+                }
+                html += '</div>';
+            }
+            // v5.55 — descargar / compartir el conteo que quedó guardado al cierre (PDF y Excel).
+            if (typeof conteoExportBotonInventarioHtml === 'function') html += conteoExportBotonInventarioHtml(_detalleInventarioCerradoId, meta.numero);
+
             if (hasPermission('inventory.export')) {
                 html += '<button type="button" class="bt bt--secundario" onclick="exportarInventarioCerrado(\'' + jsArg(_detalleInventarioCerradoId) + '\', ' + meta.numero + ')"><i class="fa-solid fa-download" aria-hidden="true"></i> Exportar Excel</button>';
             }
@@ -1494,6 +1547,11 @@
                     html += '<button type="button" class="bt bt--primario" onclick="contabilizarInventario(\'' + jsArg(_detalleInventarioCerradoId) + '\', ' + meta.numero + ')">'
                          +  '<i class="fa-solid fa-book" aria-hidden="true"></i> Contabilizar</button>';
                 }
+            }
+
+            if (isAdmin() && inventarioAnulable(meta)) {
+                html += '<button type="button" class="bt bt--secundario" onclick="anularInventario(\'' + jsArg(_detalleInventarioCerradoId) + '\', ' + (Number(meta.numero) || 0) + ')">'
+                     +  '<i class="fa-solid fa-ban" aria-hidden="true"></i> Anular inventario</button>';
             }
 
             html += '<p class="if-seccion">Participantes</p>';

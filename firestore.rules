@@ -729,14 +729,34 @@
                    //  FASE 14 — se agregó 'anclaDestino' por la misma razón: un
                    //  fin de mes entre semana o un recuento de mitad de semana
                    //  escriben el ancla del Total y la anotan en la cabecera.
+                   //  v5.55 — ANULAR / RESTAURAR un inventario CERRADO (pedido de Eduardo,
+                   //  20-nov-2026: «opción de eliminar inventarios físicos creados»).
+                   //  Decisión suya: NO se borra (delete sigue en false: el histórico es evidencia
+                   //  y un contabilizado es la base del stock inicial y de las anclas del Total);
+                   //  se ANULA con motivo, reversible, y deja de verse en el Historial.
+                   //    · solo desde CERRADO y sin cambiar de estado: un CONTABILIZADO nunca se anula;
+                   //    · solo siete campos (lista blanca), nada del contenido ni de las fechas;
+                   //    · al anular: motivo de 5 a 300 caracteres y quien anula = quien escribe;
+                   //    · un anulado NO se puede contabilizar (se agrega a la rama de abajo).
                    allow update: if isAdminUser() && (
                         (resource.data.estado != 'CERRADO' && resource.data.estado != 'CONTABILIZADO'
                          && request.resource.data.estado != 'CONTABILIZADO')
                      || ( resource.data.estado == 'CERRADO'
                           && request.resource.data.estado == 'CONTABILIZADO'
+                          && resource.data.get('anulado', false) != true
                           && request.resource.data.diff(resource.data).affectedKeys()
                                .hasOnly(['estado','contabilizadoEn','contabilizadoPor','semanaDestino','mesDestino','anclaDestino'])
                           && hasPerm('inventory.post') )
+                     || ( resource.data.estado == 'CERRADO'
+                          && request.resource.data.estado == 'CERRADO'
+                          && request.resource.data.diff(resource.data).affectedKeys()
+                               .hasOnly(['anulado','anuladoEn','anuladoPor','anuladoPorNombre','motivoAnulacion','restauradoEn','restauradoPor'])
+                          && request.resource.data.anulado is bool
+                          && ( request.resource.data.anulado == false
+                               || ( request.resource.data.anuladoPor == request.auth.uid
+                                    && request.resource.data.motivoAnulacion is string
+                                    && request.resource.data.motivoAnulacion.size() >= 5
+                                    && request.resource.data.motivoAnulacion.size() <= 300 ) ) )
                    );
                    allow delete: if false;
                    // Snapshot final fragmentado. Una vez escrito es tan

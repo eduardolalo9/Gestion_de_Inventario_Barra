@@ -956,6 +956,12 @@
                          anclaDestino:  inv.anclaDestino || null,
                          motivo: 'Este inventario ya está contabilizado.' };
             }
+            // v5.55 — un inventario ANULADO no se contabiliza (la regla del servidor también lo impide).
+            if (inv.anulado === true) {
+                return { puede: false, anulado: true,
+                         motivo: 'Este inventario está ANULADO' + (inv.motivoAnulacion ? ' (' + inv.motivoAnulacion + ')' : '')
+                               + ': no se puede contabilizar. Si fue un error, restáuralo primero.' };
+            }
             if (inv.estado !== 'CERRADO') {
                 return { puede: false, motivo: 'Primero hay que cerrar el inventario: solo se contabiliza uno CERRADO.' };
             }
@@ -1026,6 +1032,10 @@
                 if (!invSnap.exists) { showNotification('❌ No se encontró el inventario'); return; }
                 const inv = invSnap.data() || {};
 
+                if (inv.anulado === true) {
+                    showNotification('⚠️ Este inventario está ANULADO: no se puede contabilizar. Restáuralo primero si fue un error.');
+                    return;
+                }
                 if (inv.estado === 'CONTABILIZADO') {
                     showNotification('ℹ️ Este inventario ya estaba contabilizado'
                         + (inv.semanaDestino ? ' — semana ' + inv.semanaDestino : '')
@@ -1503,6 +1513,145 @@
                 showNotification('❌ Error al exportar — revisa la conexión');
             }
         }
+
+        // ═════════════════════════════════════════════════════
+        //  v5.55 — ANULAR / RESTAURAR UN INVENTARIO FÍSICO CERRADO
+        //  ────────────────────────────────────────────────────
+        //  Pedido de Eduardo (20-nov-2026): «opción de eliminar inventarios físicos creados». Su decisión: NO borrar
+        //  (las reglas prohíben el delete a propósito: el histórico es evidencia y un contabilizado es la base del stock
+        //  inicial y de las anclas del Total) sino ANULAR, con motivo y de forma reversible.
+        //    · solo un inventario CERRADO (un abierto se cierra primero; un CONTABILIZADO nunca se anula);
+        //    · solo administración; pide motivo (5 a 300 caracteres) y confirma antes de escribir;
+        //    · se escribe solo la marca (anulado, anuladoEn, anuladoPor, anuladoPorNombre, motivoAnulacion): el contenido
+        //      y el snapshot no se tocan, y un anulado deja de verse en el Historial y no se puede contabilizar;
+        //    · «Restaurar» lo devuelve a la lista (anulado = false, con quién y cuándo).
+        //  Necesita la regla v5.55 de Firestore publicada: si el servidor la rechaza, se dice por qué.
+        // ═════════════════════════════════════════════════════
+        /**
+         * ¿Se puede anular? Solo un inventario CERRADO que no esté ya anulado (un abierto se cierra primero y un
+         * CONTABILIZADO nunca se anula). ÚNICO lugar con esta decisión: la pantalla y las funciones de abajo la usan.
+         */
+        function inventarioAnulable(inv) { return !!inv && inv.estado === 'CERRADO' && inv.anulado !== true; }
+        if (typeof window !== 'undefined') window.inventarioAnulable = inventarioAnulable;
+
+        function _anNombreUsuario() {
+            var u = (typeof _lastUserData !== 'undefined' && _lastUserData) ? _lastUserData : null;
+            return (u && (u.displayName || u.email)) || '';
+        }
+        function _anUidAuth() {
+            try { var a = (typeof firebase !== 'undefined' && firebase.auth) ? firebase.auth().currentUser : null; if (a && a.uid) return a.uid; } catch (_) {}
+            return (typeof currentUserUid !== 'undefined') ? currentUserUid : null;
+        }
+
+        /** Ventana con el campo «Motivo». Llama a alAceptar(motivo) solo con 5 a 300 caracteres. */
+        function _anPedirMotivo(numero, alAceptar) {
+            var viejo = document.getElementById('anOverlay'); if (viejo && viejo.parentNode) viejo.parentNode.removeChild(viejo);
+            var ov = document.createElement('div');
+            ov.id = 'anOverlay'; ov.className = 'cx-ov';
+            ov.innerHTML = '<div class="cx-velo" data-an-accion="cancelar"></div>'
+                + '<div class="cx-hoja an-hoja" role="dialog" aria-modal="true" aria-labelledby="anTit">'
+                + '<div class="cx-asa" aria-hidden="true"></div>'
+                + '<h2 id="anTit" class="cx-tit">Anular inventario #' + escapeHtml(String(numero)) + '</h2>'
+                + '<p class="cx-sub">No se borra: queda guardado como evidencia, deja de verse en el Historial y ya no se puede contabilizar. '
+                + 'Puedes restaurarlo después con «Mostrar anulados».</p>'
+                + '<label class="an-etq" for="anMotivo">Motivo (obligatorio)</label>'
+                + '<textarea id="anMotivo" class="an-campo" rows="3" maxlength="300" placeholder="Ej.: se creó por error / era una prueba"></textarea>'
+                + '<p class="an-error" id="anError" role="alert" hidden></p>'
+                + '<div class="an-acc"><button type="button" class="bt bt--secundario" data-an-accion="cancelar">Cancelar</button>'
+                + '<button type="button" class="bt bt--peligro" data-an-accion="aceptar"><i class="fa-solid fa-ban" aria-hidden="true"></i> Anular inventario</button></div></div>';
+            document.body.appendChild(ov);
+            var cerrar = function() { document.removeEventListener('keydown', tecla, true); if (ov.parentNode) ov.parentNode.removeChild(ov); };
+            var tecla = function(e) { if (e.key === 'Escape') { e.stopPropagation(); cerrar(); } };
+            document.addEventListener('keydown', tecla, true);
+            ov.addEventListener('click', function(e) {
+                var b = e.target && e.target.closest ? e.target.closest('[data-an-accion]') : null;
+                if (!b) return;
+                if (b.getAttribute('data-an-accion') === 'cancelar') { cerrar(); return; }
+                var m = (document.getElementById('anMotivo').value || '').trim();
+                var err = document.getElementById('anError');
+                if (m.length < 5) { err.textContent = 'Escribe el motivo (mínimo 5 caracteres).'; err.hidden = false; document.getElementById('anMotivo').focus(); return; }
+                cerrar();
+                alAceptar(m);
+            });
+            var c = document.getElementById('anMotivo'); if (c) c.focus();
+        }
+
+        function _anRefrescar(inventoryId) {
+            _historialInventarios = null;
+            if (typeof _detalleInventarioCerradoId !== 'undefined' && String(_detalleInventarioCerradoId) === String(inventoryId)) _detalleInventarioCerradoData = null;
+            renderTab();
+        }
+
+        function _anErrorEscritura(err, accion) {
+            console.error('[InventarioFisico] Error al ' + accion + ':', err);
+            var denegado = !!err && (err.code === 'permission-denied' || /permission/i.test(err.message || ''));
+            showNotification(denegado
+                ? '❌ El servidor rechazó la acción. ¿Ya publicaste las reglas de Firestore de la v5.55? (' + accion + ')'
+                : '❌ No se pudo ' + accion + ' — revisa la conexión');
+        }
+
+        /** Anular (con motivo). Devuelve una promesa que las pruebas pueden esperar. */
+        function anularInventario(inventoryId, numero) {
+            if (!isAdmin()) { showNotification('⚠️ Solo el administrador puede anular un inventario'); return Promise.resolve({ ok: false, motivo: 'sin_permiso' }); }
+            if (!_db) { showNotification('📴 Sin conexión a Firestore'); return Promise.resolve({ ok: false, motivo: 'sin_nube' }); }
+            if (!navigator.onLine) { showNotification('📴 Sin conexión — conecta a internet antes de anular'); return Promise.resolve({ ok: false, motivo: 'sin_conexion' }); }
+            return new Promise(function(resolve) {
+                var hecho = false, aceptado = false;
+                var fin = function(r) { if (!hecho) { hecho = true; resolve(r); } };
+                _anPedirMotivo(numero, function(motivo) {
+                    aceptado = true;
+                    var ref = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID).collection('inventories').doc(String(inventoryId));
+                    ref.get({ source: 'server' }).then(function(snap) {
+                        var inv = snap.exists ? (snap.data() || {}) : null;
+                        if (!inv) { showNotification('❌ No se encontró el inventario'); return fin({ ok: false, motivo: 'no_existe' }); }
+                        if (inv.anulado === true) { showNotification('ℹ️ Este inventario ya estaba anulado'); _anRefrescar(inventoryId); return fin({ ok: false, motivo: 'ya_anulado' }); }
+                        if (!inventarioAnulable(inv)) {
+                            showNotification(inv.estado === 'CONTABILIZADO' ? '⚠️ Un inventario contabilizado no se puede anular: ya es el stock inicial de la semana.'
+                                                                           : '⚠️ Solo se anula un inventario CERRADO: ciérralo primero.');
+                            return fin({ ok: false, motivo: 'estado' });
+                        }
+                        var datos = { anulado: true, anuladoEn: Date.now(), anuladoPor: _anUidAuth(), anuladoPorNombre: _anNombreUsuario(), motivoAnulacion: motivo };
+                        return ref.update(datos).then(function() {
+                            _registrarEnSyncQueue({
+                                tipo: 'inventario_anulado', detalle: 'Inventario Físico #' + numero + ' anulado — ' + motivo,
+                                valorAntes: JSON.stringify({ numero: numero, estado: 'CERRADO', anulado: false }),
+                                valorDespues: JSON.stringify({ anulado: true }), motivo: 'Anulación de Inventario Físico'
+                            });
+                            showNotification('🚫 Inventario #' + numero + ' anulado. Lo puedes restaurar desde el Historial → «Mostrar anulados».');
+                            _anRefrescar(inventoryId);
+                            fin({ ok: true, motivo: motivo });
+                        });
+                    }).catch(function(err) { _anErrorEscritura(err, 'anular el inventario'); fin({ ok: false, motivo: 'error' }); });
+                });
+                // Si cancelan la ventana del motivo no hay callback: se libera la promesa en cuanto desaparece.
+                var vigilar = setInterval(function() { if (!document.getElementById('anOverlay')) { clearInterval(vigilar); setTimeout(function() { if (!aceptado) fin({ ok: false, motivo: 'cancelado' }); }, 400); } }, 200);
+            });
+        }
+
+        /** Restaurar un anulado (confirma antes). */
+        function restaurarInventario(inventoryId, numero) {
+            if (!isAdmin()) { showNotification('⚠️ Solo el administrador puede restaurar un inventario'); return Promise.resolve({ ok: false, motivo: 'sin_permiso' }); }
+            if (!_db) { showNotification('📴 Sin conexión a Firestore'); return Promise.resolve({ ok: false, motivo: 'sin_nube' }); }
+            if (!navigator.onLine) { showNotification('📴 Sin conexión — conecta a internet antes de restaurar'); return Promise.resolve({ ok: false, motivo: 'sin_conexion' }); }
+            return new Promise(function(resolve) {
+                var aceptado = false;
+                showConfirm('¿Restaurar el inventario #' + numero + '?\n\nVolverá a verse en el Historial y se podrá contabilizar otra vez (si cumple las reglas).', function() {
+                    aceptado = true;
+                    var ref = _db.collection('inventarioApp').doc(FIRESTORE_DOC_ID).collection('inventories').doc(String(inventoryId));
+                    ref.update({ anulado: false, restauradoEn: Date.now(), restauradoPor: _anUidAuth() }).then(function() {
+                        _registrarEnSyncQueue({
+                            tipo: 'inventario_restaurado', detalle: 'Inventario Físico #' + numero + ' restaurado',
+                            valorAntes: JSON.stringify({ anulado: true }), valorDespues: JSON.stringify({ anulado: false }), motivo: 'Restauración de Inventario Físico'
+                        });
+                        showNotification('✅ Inventario #' + numero + ' restaurado');
+                        _anRefrescar(inventoryId);
+                        resolve({ ok: true });
+                    }).catch(function(err) { _anErrorEscritura(err, 'restaurar el inventario'); resolve({ ok: false, motivo: 'error' }); });
+                });
+                var vigilar = setInterval(function() { if (!document.getElementById('_confirmOverlay')) { clearInterval(vigilar); setTimeout(function() { if (!aceptado) resolve({ ok: false, motivo: 'cancelado' }); }, 400); } }, 200);
+            });
+        }
+        if (typeof window !== 'undefined') { window.anularInventario = anularInventario; window.restaurarInventario = restaurarInventario; }
 
         // Historial — carga BAJO DEMANDA (no listener en vivo, ver
         // "RENDIMIENTO" del ticket: evitar escuchar toda la colección).
