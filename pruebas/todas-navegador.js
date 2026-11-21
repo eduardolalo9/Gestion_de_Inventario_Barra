@@ -152,9 +152,11 @@ function esperarServidor(intentos) {
     });
     const scriptSrc = (html.match(/script-src([^;]*)/) || [])[1] || '';
     const esEstricta = scriptSrc !== '' && scriptSrc.indexOf("'unsafe-inline'") === -1;
-    if (esEstricta !== (process.env.CSP_ESTRICTO === '1')) {
-        console.error('\n  El servidor del puerto ' + PUERTO + ' NO sirve la política esperada (' + (process.env.CSP_ESTRICTO === '1' ? 'ESTRICTA' : 'normal') +
-                      '). ¿Quedó un servidor de una corrida anterior? Ciérralo y repite.\n');
+    // v5.57 — index.html ya es estricto: TODA la suite corre bajo la política final. Si el servidor del puerto no la sirve (otro servidor vivo,
+    // CSP_LAXA=1 olvidado…), la suite se niega a correr en vez de dar un verde que no prueba nada.
+    if (!esEstricta) {
+        console.error('\n  El servidor del puerto ' + PUERTO + ' NO sirve la política ESTRICTA (sin unsafe-inline en script-src). ' +
+                      '¿Quedó un servidor de una corrida anterior? Ciérralo y repite.\n');
         apagar();
         process.exit(1);
     }

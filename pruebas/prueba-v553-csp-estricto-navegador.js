@@ -1,6 +1,6 @@
 // v5.53 — Política de contenido ESTRICTA en un Chromium real, con servidor propio (no depende del de la suite):
-//   · 8093: index.html con la política final (sin 'unsafe-inline' en script-src, con el hash de cada <script> en línea).
-//   · 8094: index.html como se entrega hoy (con 'unsafe-inline').
+//   · 8093: index.html con la política final (sin 'unsafe-inline' en script-src, con el hash de cada <script> en línea): la de v5.57 en adelante.
+//   · 8094: la política ANTERIOR (con 'unsafe-inline', CSP_LAXA=1): se conserva para probar el modo «sombra» del despachador.
 // Esta prueba es INDEPENDIENTE del cálculo de hashes: si un hash estuviera mal, el navegador bloquearía el script en línea y aquí se vería.
 const { chromium } = require('playwright');
 const { spawn } = require('child_process');
@@ -8,7 +8,7 @@ const http = require('http'), path = require('path');
 const C = []; const chk = (n, ok, d) => C.push({ n, ok: !!ok, d: d || '' });
 const RAIZ = path.join(__dirname, '..');
 const arrancar = (puerto, estricto) => spawn(process.execPath, [path.join(RAIZ, 'herramientas', 'servidor-estatico.js'), String(puerto)],
-  { cwd: RAIZ, stdio: 'ignore', env: Object.assign({}, process.env, estricto ? { CSP_ESTRICTO: '1' } : { CSP_ESTRICTO: '' }) });
+  { cwd: RAIZ, stdio: 'ignore', env: Object.assign({}, process.env, estricto ? { CSP_ESTRICTO: '1', CSP_LAXA: '' } : { CSP_ESTRICTO: '', CSP_LAXA: '1' }) });
 const esperar = (puerto) => new Promise((ok) => { let n = 40; (function t() { http.get('http://127.0.0.1:' + puerto + '/index.html', (r) => { r.resume(); ok(true); }).on('error', () => { if (--n <= 0) ok(false); else setTimeout(t, 250); }); })(); });
 
 async function cargar(nav, puerto, preparar) {
