@@ -1,4 +1,5 @@
         function renderInventarioTab() {
+            if (auditoriaView !== 'selection') _ifMenuAbierto = false;   // v5.56: el menú ⋮ no se queda abierto al volver
             // ── PANTALLA DE CONTEO ─────────────────────────────────────────────
             if (auditoriaView === 'counting' && auditoriaAreaActiva) {
                 return renderAuditoriaConteo();
@@ -72,6 +73,71 @@
         function cerrarInventarioHuerfanoActivo() { cerrarInventarioHuerfano(_inventarioActivoId); }
         var _IF_ABRIR_HISTORIAL = 'onclick="auditoriaIrAHistorial()"';
 
+        // ═════════════════════════════════════════════════════════════
+        //  v5.56 — MENÚ ⋮ DE LA TARJETA DEL INVENTARIO (Anular / Restaurar)
+        //  Pedido de Eduardo (21-nov-2026): «en la tarjeta del inventario activo, #1008 · Inventario Barra, un botón de
+        //  3 puntos; al seleccionarlo, se despliega "Anular"». Solo administración.
+        //    · inventario ABIERTO de la sesión → «Anular inventario» (anularInventarioAbierto, js/75);
+        //    · inventario CERRADO sin anular   → «Anular inventario» (anularInventario, js/75);
+        //    · inventario ANULADO              → «Restaurar inventario»;
+        //    · CONTABILIZADO (o abandonado)    → sin menú: es el stock inicial / no hay nada que anular.
+        //  Mismo menú y mismas clases que el ⋮ de Recetario (densidad.css). Sin manejadores en línea: delegación.
+        // ═════════════════════════════════════════════════════════════
+        var _ifMenuAbierto = false;
+        function _ifMenuAccionDe(inv) {
+            if (!inv || !isAdmin()) return null;
+            if (inv.anulado === true) return 'restaurar';
+            if (inv.estado === 'CONTABILIZADO') return null;
+            if (inventarioAbierto(inv)) {
+                // solo el inventario de la sesión vigente; uno huérfano se cierra como abandonado (aviso aparte)
+                var huerfano = (typeof _esInventarioHuerfano === 'function') && _esInventarioHuerfano();
+                return (!huerfano && hasPermission('inventory.closeGlobal')) ? 'anular_abierto' : null;
+            }
+            return (typeof inventarioAnulable === 'function' && inventarioAnulable(inv)) ? 'anular' : null;
+        }
+        function _ifMenuInventarioHtml(inv) {
+            var accion = _ifMenuAccionDe(inv);
+            if (!accion) return '';
+            var restaurar = accion === 'restaurar';
+            return '<div class="rec-menu if-menu" data-if-menu-wrap>'
+                 + '<button type="button" class="rec-menu__btn" data-if-menu aria-haspopup="menu" aria-expanded="' + (_ifMenuAbierto ? 'true' : 'false') + '"'
+                 + ' aria-label="Opciones del inventario #' + (Number(inv.numero) || 0) + '" title="Opciones"><i class="fa-solid fa-ellipsis-vertical" aria-hidden="true"></i></button>'
+                 + '<div class="rec-menu__lista" role="menu"' + (_ifMenuAbierto ? '' : ' hidden') + '>'
+                 + '<button type="button" role="menuitem" class="rec-menu__item' + (restaurar ? '' : ' rec-menu__item--peligro') + '" data-if-accion="' + accion + '">'
+                 + '<i class="fa-solid ' + (restaurar ? 'fa-rotate-left' : 'fa-ban') + '" aria-hidden="true"></i> ' + (restaurar ? 'Restaurar inventario' : 'Anular inventario') + '</button>'
+                 + '</div></div>';
+        }
+        function _ifMenuPintar() {
+            Array.prototype.forEach.call(document.querySelectorAll('[data-if-menu-wrap]'), function(w) {
+                var l = w.querySelector('.rec-menu__lista'), b = w.querySelector('[data-if-menu]');
+                if (l) l.hidden = !_ifMenuAbierto;
+                if (b) b.setAttribute('aria-expanded', _ifMenuAbierto ? 'true' : 'false');
+                if (_ifMenuAbierto && l) { var it = l.querySelector('[role="menuitem"]'); if (it && it.focus) it.focus(); }
+            });
+        }
+        document.addEventListener('click', function(e) {
+            var t = e.target && e.target.closest ? e.target : null;
+            if (!t) return;
+            var btn = t.closest('[data-if-menu]');
+            if (btn) { _ifMenuAbierto = !_ifMenuAbierto; _ifMenuPintar(); return; }
+            var item = t.closest('[data-if-accion]');
+            if (item) {
+                var accion = item.getAttribute('data-if-accion');
+                _ifMenuAbierto = false; _ifMenuPintar();
+                var inv = (typeof _inventarioActivo !== 'undefined') ? _inventarioActivo : null;
+                var id = (typeof _inventarioActivoId !== 'undefined') ? _inventarioActivoId : null;
+                if (!inv || !id) return;
+                if (accion === 'anular_abierto') anularInventarioAbierto();
+                else if (accion === 'anular') anularInventario(id, inv.numero);
+                else if (accion === 'restaurar') restaurarInventario(id, inv.numero);
+                return;
+            }
+            if (_ifMenuAbierto && !t.closest('[data-if-menu-wrap]')) { _ifMenuAbierto = false; _ifMenuPintar(); }
+        });
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && _ifMenuAbierto) { _ifMenuAbierto = false; _ifMenuPintar(); }
+        });
+
         function _renderInventarioFisicoHeader() {
             if (!_inventarioActivo && _inventarioActivoSinResolver()) {
                 var hCarga = '<div class="pm-paso' + (_inventarioActivoCarga === 'error' ? ' pm-paso--aviso' : '') + '" role="status">';
@@ -135,7 +201,11 @@
 
             // ── 1. Estado y avance ──────────────────────────────────────────
             let html = '<div class="if-card">';
-            html += '<div class="if-card__titulo">#' + (inv.numero || '—') + ' · Inventario Barra</div>';
+            // v5.56 — con el menú ⋮ (Anular / Restaurar) el título y el botón comparten renglón y el estado baja a la línea
+            // siguiente: título + estado + botón no caben juntos en 390 px sin partir el título en dos.
+            var _tituloInv = '<div class="if-card__titulo">#' + (inv.numero || '—') + ' · Inventario Barra</div>';
+            var _menuInv = _ifMenuInventarioHtml(inv);
+            html += _menuInv ? '<div class="if-cab">' + _tituloInv + _menuInv + '</div>' : _tituloInv;
             html += badge;
             html += '<div class="if-avance">'
                  +  '<div class="if-avance__txt"><span>Artículos contados</span><span>' + productosContados.size + ' / ' + products.length + '</span></div>'
@@ -292,9 +362,6 @@
             // v5.55 — descargar / compartir lo que quedó contado, y anular (solo un CERRADO sin contabilizar).
             var invId = inv.inventoryId || (typeof _inventarioActivoId !== 'undefined' ? _inventarioActivoId : null);
             var btnExp = (typeof conteoExportBotonInventarioHtml === 'function') ? conteoExportBotonInventarioHtml(invId, inv.numero) : '';
-            var btnAnular = (isAdmin() && invId && inventarioAnulable(inv))
-                ? '<button type="button" class="bt bt--secundario" onclick="anularInventario(\'' + jsArg(invId) + '\', ' + (Number(inv.numero) || 0) + ')"><i class="fa-solid fa-ban" aria-hidden="true"></i> Anular inventario</button>'
-                : '';
 
             if (inv.anulado === true) {
                 h += '<div class="pm-paso pm-paso--aviso" role="status">'
@@ -339,7 +406,7 @@
                                                      : '<i class="fa-solid fa-book" aria-hidden="true"></i> Contabilizar'));
                     acc += '<button type="button" class="bt bt--primario" data-inv-accion="contabilizar">' + etiquetaBtn + '</button>';
                 }
-                acc += btnExp + btnAnular + btnCrear(false);
+                acc += btnExp + btnCrear(false);
                 if (acc) h += '<div class="pm-paso__acc">' + acc + '</div>';
                 h += '</div>';
                 return h;
@@ -353,7 +420,7 @@
                + '<div class="pm-paso__txt">'
                + (puedeContab ? '<i class="fa-solid fa-book" aria-hidden="true"></i> No se puede contabilizar. ' + escapeHtml(ev.motivo) : 'Queda de solo lectura.')
                + '</div>';
-            if (puedeCrear || btnExp || btnAnular) h += '<div class="pm-paso__acc">' + btnExp + btnAnular + btnCrear(true) + '</div>';
+            if (puedeCrear || btnExp) h += '<div class="pm-paso__acc">' + btnExp + btnCrear(true) + '</div>';
             h += '</div>';
             return h;
         }
@@ -1746,137 +1813,104 @@
          *  • Borde verde en tarjetas de usuarios activos
          *  • Total de botellas enteras + abiertas por área (no solo número de productos)
          */
+        // ═════════════════════════════════════════════════════════════
+        //  v5.56 — «CONTEOS POR USUARIO», COMPACTO
+        //  Pedido de Eduardo (21-nov-2026): «solo la información importante, más compacto». Antes cada persona ocupaba una
+        //  tarjeta con tres renglones por área (nombre, estado, «184 prods · 2843.555 ent · 5685.98 ab») y los botones de
+        //  cada área. Ahora cada persona es UN renglón: quién, cuántas áreas lleva (2/3), hace cuánto movió algo y una
+        //  píldora por área —✓ finalizada, ● contando, – sin iniciar— con cuántos productos lleva. Las acciones de
+        //  administración (Ver, Habilitar, Reabrir) siguen, pero solo se despliegan al tocar la flecha de esa persona.
+        // ═════════════════════════════════════════════════════════════
+        var _ucAbierto = {};   // uid → true: persona con sus acciones desplegadas (sobrevive a los repintados en vivo)
+
+        function _ucProductos(u, area) {
+            return Object.keys(u.conteo || {}).filter(function(pid) {
+                var d = u.conteo[pid] && u.conteo[pid][area];
+                return d && (d.enteras > 0 || (d.abiertas || []).some(function(v) { return v > 0; }));
+            }).length;
+        }
+        /** 'ok' finalizada · 'cont' contando (hay cantidades y no finalizó) · 'nada' sin iniciar. */
+        function _ucEstadoArea(u, area) {
+            if (u.status && u.status[area] === 'completada') return 'ok';
+            return _ucProductos(u, area) > 0 ? 'cont' : 'nada';
+        }
+        function _ucAbreviarArea(nombre) {
+            var n = String(nombre || '').replace(/^Barra\s+/i, 'B. ').replace(/Restaurante/i, 'Rest.');
+            return n.length > 14 ? n.slice(0, 13) + '.' : n;
+        }
+        function _ucNombre(u) {
+            var e = String(u.email || u.uid || '?');
+            return e.indexOf('@') > 0 ? e.slice(0, e.indexOf('@')) : e;
+        }
+
         function _renderAdminUsersPanel() {
             const users = Object.values(allUsersAuditoria);
             if (users.length === 0) return '';
-
             const AREAS = AREAS_CONTEO;
-
-            // ¿Hay algún usuario actualmente contando (área pendiente con productos ya cargados)?
-            const hayAlguienContando = users.some(u =>
-                AREAS.some(a => u.status[a] !== 'completada' &&
-                    Object.keys(u.conteo).some(pid =>
-                        u.conteo[pid] && u.conteo[pid][a] &&
-                        (u.conteo[pid][a].enteras > 0 || (u.conteo[pid][a].abiertas || []).some(v => v > 0))
-                    )
-                )
-            );
+            const hayAlguienContando = users.some(function(u) { return AREAS.some(function(a) { return _ucEstadoArea(u, a) === 'cont'; }); });
 
             let html = '<div class="if-card if-card--usuarios">';
-
-            // ── Cabecera del panel con indicador EN VIVO ────────────────────
-            html += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">';
-            html += '<p style="font-size:0.75rem;font-weight:700;color:var(--txt-primary);margin:0;"><i class="fa-solid fa-users" aria-hidden="true"></i> Conteos por usuario</p>';
-            if (hayAlguienContando) {
-                html += '<span style="display:inline-flex;align-items:center;gap:5px;font-size:0.62rem;font-weight:700;color:var(--ok);">'
-                      + '<span class="audit-live-dot"></span>EN VIVO</span>';
-            }
+            html += '<div class="uc-cab"><p class="uc-tit"><i class="fa-solid fa-users" aria-hidden="true"></i> Conteos por usuario <span class="uc-n">' + users.length + '</span></p>';
+            if (hayAlguienContando) html += '<span class="uc-vivo"><span class="audit-live-dot" aria-hidden="true"></span>EN VIVO</span>';
             html += '</div>';
 
-            // ── Tarjeta por usuario ─────────────────────────────────────────
             users.forEach(function(u) {
-                const areasOk        = AREAS.filter(a => u.status[a] === 'completada');
-                const totalAreas     = areasOk.length;
-                const isLive         = AREAS.some(a => u.status[a] !== 'completada' &&
-                    Object.keys(u.conteo).some(pid =>
-                        u.conteo[pid] && u.conteo[pid][a] &&
-                        (u.conteo[pid][a].enteras > 0 || (u.conteo[pid][a].abiertas || []).some(v => v > 0))
-                    )
-                );
+                const estados = AREAS.map(function(a) { return _ucEstadoArea(u, a); });
+                const hechas = estados.filter(function(e) { return e === 'ok'; }).length;
+                const contando = estados.indexOf('cont') !== -1;
                 const relTime = u.updatedAt ? _adminRelTime(u.updatedAt) : '';
+                const abierto = !!_ucAbierto[u.uid] && hechas > 0;
 
-                html += '<div class="audit-user-row' + (isLive ? ' live' : '') + '">';
-
-                // Cabecera del usuario
-                html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:4px;">';
-                html += '<div style="display:flex;flex-direction:column;gap:1px;">';
-                html += '<span style="font-size:0.72rem;font-weight:600;color:var(--accent);"><i class="fa-solid fa-user" aria-hidden="true"></i> ' + escapeHtml(u.email) + '</span>';
-                if (relTime) {
-                    html += '<span class="audit-timestamp"><i class="fa-solid fa-clock" aria-hidden="true"></i> ' + relTime + '</span>';
+                html += '<div class="uc-fila' + (contando ? ' uc-fila--vivo' : '') + '">';
+                html += '<div class="uc-fila__cab"><span class="uc-nom" title="' + escapeHtml(u.email || '') + '"><i class="fa-solid fa-user" aria-hidden="true"></i> ' + escapeHtml(_ucNombre(u)) + '</span>'
+                      + (relTime ? '<span class="uc-hace">' + escapeHtml(relTime) + '</span>' : '')
+                      + '<span class="uc-prog' + (hechas === AREAS.length ? ' uc-prog--ok' : '') + '">' + hechas + '/' + AREAS.length + '</span>';
+                if (hechas > 0) {
+                    html += '<button type="button" class="uc-mas" data-uc-toggle="' + escapeHtml(String(u.uid)) + '" aria-expanded="' + (abierto ? 'true' : 'false') + '"'
+                          + ' aria-label="Acciones de ' + escapeHtml(_ucNombre(u)) + '"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></button>';
                 }
                 html += '</div>';
-                html += '<span style="font-size:0.65rem;color:var(--txt-muted);">' + totalAreas + '/' + AREAS_CONTEO.length + ' áreas</span>';
+                html += '<div class="uc-pildoras">';
+                AREAS.forEach(function(area, i) {
+                    var e = estados[i], n = _ucProductos(u, area);
+                    var nomC = _ucAbreviarArea(areasAuditoria[area]);
+                    // Icono: check real (fa-check) si finalizó, el punto que late de «CONTANDO» si está contando, un guion si no empezó.
+                    var ico = e === 'ok' ? '<i class="fa-solid fa-check" aria-hidden="true"></i>'
+                            : (e === 'cont' ? '<span class="audit-counting-badge__punto" aria-hidden="true"></span>' : '–');
+                    html += '<span class="uc-pil uc-pil--' + e + '" title="' + escapeHtml(areasAuditoria[area]) + ': '
+                          + (e === 'ok' ? 'finalizada' : (e === 'cont' ? 'contando' : 'sin iniciar')) + '">'
+                          + '<span class="uc-pil__ico" aria-hidden="true">' + ico + '</span>'
+                          + '<span class="uc-pil__nom">' + escapeHtml(nomC) + '</span>'
+                          + (n > 0 ? '<b class="uc-pil__n">' + n + '</b>' : '') + '</span>';
+                });
                 html += '</div>';
 
-                // ── Fila por área ───────────────────────────────────────────
-                AREAS.forEach(function(area) {
-                    const completada = u.status[area] === 'completada';
-
-                    // Contar productos con cantidad en esta área (siempre, no solo si completada)
-                    const prodsConCantidad = Object.keys(u.conteo).filter(function(pid) {
-                        const d = u.conteo[pid] && u.conteo[pid][area];
-                        return d && (d.enteras > 0 || (d.abiertas || []).some(function(v) { return v > 0; }));
-                    });
-                    const numProds = prodsConCantidad.length;
-
-                    // Sumar totales de botellas para esta área
-                    var totalEnteras = 0, totalAbiertas = 0;
-                    prodsConCantidad.forEach(function(pid) {
-                        var d = u.conteo[pid][area];
-                        totalEnteras  += (d.enteras || 0);
-                        totalAbiertas += (d.abiertas || []).reduce(function(s, v) { return s + (v || 0); }, 0);
-                    });
-
-                    const hayDatosEnCurso = !completada && numProds > 0;
-
-                    html += '<div class="audit-area-row">';
-
-                    // Nombre del área
-                    html += '<span class="audit-area-row-label">' + escapeHtml(areasAuditoria[area]) + '</span>';
-
-                    // Badge de estado
-                    if (completada) {
-                        html += '<span class="audit-done-badge">'
-                              + '<svg width="9" height="9" fill="none" stroke="currentColor" viewBox="0 0 24 24">'
-                              + '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>'
-                              + ' Finalizado</span>';
-                    } else if (hayDatosEnCurso) {
-                        html += '<span class="audit-counting-badge"><span class="audit-counting-badge__punto" aria-hidden="true"></span>CONTANDO…</span>';
-                    } else {
-                        html += '<span style="font-size:0.62rem;color:var(--txt-muted);">Sin iniciar</span>';
-                    }
-
-                    // Contador de productos y botellas (siempre visible si hay datos)
-                    if (numProds > 0) {
-                        html += '<span class="audit-area-row-count">'
-                              + numProds + ' prod'
-                              + (numProds !== 1 ? 's' : '')
-                              // Redondeo de presentación: sumar decimales en coma
-                              // flotante dejaba "2482.3869999999997 ent" en pantalla.
-                              + ' · ' + (Math.round(totalEnteras * 1000) / 1000) + ' ent'
-                              + (totalAbiertas > 0 ? ' · ' + totalAbiertas.toFixed(2) + ' ab' : '')
-                              + '</span>';
-                    }
-
-                    // Botones de acción (solo áreas completadas).
-                    // FASE 10B: eran de 10 px de texto, blanco sobre azul claro
-                    // y sobre ámbar (1.72:1 y 1.63:1, ilegibles) y a 4 px uno del otro.
-                    // Ahora ocupan su propia fila, 48 px de alto y 8 px entre sí.
-                    if (completada) {
-                        html += '<div class="if-acc-usuario">';
-                        html += '<button type="button" class="bt bt--secundario" onclick="adminVerConteoUsuario(\'' + jsArg(u.uid) + '\',\'' + jsArg(area) + '\')">'
-                              + '<i class="fa-solid fa-eye" aria-hidden="true"></i> Ver</button>';
-                        html += '<button type="button" class="bt bt--secundario" onclick="adminUnlockAreaUsuario(\'' + jsArg(u.uid) + '\',\'' + jsArg(area) + '\')">'
-                              + '<i class="fa-solid fa-unlock" aria-hidden="true"></i> Habilitar</button>';
-                        // ETAPA 15: reapertura completa del almacén (distinto del
-                        // desbloqueo por producto de arriba) — solo mientras el
-                        // Inventario Físico esté SINCRONIZADO, solo con permiso.
+                // Acciones de administración: solo de las áreas finalizadas, y solo desplegadas.
+                if (abierto) {
+                    AREAS.forEach(function(area, i) {
+                        if (estados[i] !== 'ok') return;
+                        html += '<div class="uc-acc"><span class="uc-acc__area">' + escapeHtml(areasAuditoria[area]) + '</span><div class="if-acc-usuario">'
+                              + '<button type="button" class="bt bt--secundario" onclick="adminVerConteoUsuario(\'' + jsArg(u.uid) + '\',\'' + jsArg(area) + '\')"><i class="fa-solid fa-eye" aria-hidden="true"></i> Ver</button>'
+                              + '<button type="button" class="bt bt--secundario" onclick="adminUnlockAreaUsuario(\'' + jsArg(u.uid) + '\',\'' + jsArg(area) + '\')"><i class="fa-solid fa-unlock" aria-hidden="true"></i> Habilitar</button>';
                         if (hasPermission('inventory.reopenArea') && _inventarioActivo && _inventarioActivo.estado === 'SINCRONIZADO') {
-                            html += '<button type="button" class="bt bt--secundario" onclick="reabrirAlmacenAdmin(\'' + jsArg(u.uid) + '\',\'' + jsArg(area) + '\')">'
-                                  + '<i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i> Reabrir</button>';
+                            html += '<button type="button" class="bt bt--secundario" onclick="reabrirAlmacenAdmin(\'' + jsArg(u.uid) + '\',\'' + jsArg(area) + '\')"><i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i> Reabrir</button>';
                         }
-                        html += '</div>';
-                    }
-
-                    html += '</div>'; // audit-area-row
-                });
-
-                html += '</div>'; // audit-user-row
+                        html += '</div></div>';
+                    });
+                }
+                html += '</div>';
             });
-
-            html += '</div>'; // panel container
+            html += '</div>';
             return html;
         }
+        // Desplegar / plegar las acciones de una persona (sin repintar toda la pantalla de golpe: se repinta la pestaña).
+        document.addEventListener('click', function(e) {
+            var b = e.target && e.target.closest ? e.target.closest('[data-uc-toggle]') : null;
+            if (!b) return;
+            var uid = b.getAttribute('data-uc-toggle');
+            _ucAbierto[uid] = !_ucAbierto[uid];
+            renderTab();
+        });
 
         /** Admin muestra el conteo de un usuario en un área específica */
         function adminVerConteoUsuario(uid, area) {

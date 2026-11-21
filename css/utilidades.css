@@ -1091,3 +1091,33 @@ button.fvs-t__celda:hover, button.fvs-t__celda:focus-visible { border-color: var
 .an-error { margin: 6px 0 0; font-size: .78rem; font-weight: 600; color: var(--red-text); }
 .an-acc { display: flex; gap: 8px; margin-top: 12px; }
 .an-acc .bt { flex: 1; min-height: 46px; }
+
+/* ═══ v5.56 — Menú ⋮ de la tarjeta del inventario y «Conteos por usuario» compacto (js/85) ═══ */
+.if-cab { flex: 1 1 100%; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.if-cab .if-card__titulo { flex: 1 1 auto; min-width: 0; }
+.if-cab .if-menu { flex: 0 0 auto; margin: -8px -8px -8px 0; }
+.if-menu .rec-menu__lista { right: 0; top: 42px; }
+.uc-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.uc-tit { margin: 0; font-size: .75rem; font-weight: 700; color: var(--txt-primary); }
+.uc-n { margin-left: 4px; padding: 1px 7px; border-radius: 99px; background: var(--card-high); font-size: .66rem; font-weight: 700; color: var(--txt-secondary); }
+.uc-vivo { display: inline-flex; align-items: center; gap: 5px; font-size: .62rem; font-weight: 700; color: var(--ok); }
+.uc-fila { padding: 8px 10px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.uc-fila--vivo { border-color: var(--ok-dim); }
+.uc-fila__cab { display: flex; align-items: center; gap: 8px; min-height: 24px; }
+.uc-nom { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .8rem; font-weight: 700; color: var(--accent); }
+.uc-prog { flex: 0 0 auto; padding: 1px 8px; border-radius: 99px; background: var(--card-high); font-size: .7rem; font-weight: 800; color: var(--txt-secondary); }
+.uc-prog--ok { background: var(--ok-dim); color: var(--ok); }
+.uc-mas { flex: 0 0 auto; width: 44px; height: 44px; margin: -10px -8px -10px -4px; display: inline-flex; align-items: center; justify-content: center; border: 0; background: transparent; color: var(--txt-secondary); cursor: pointer; }
+.uc-mas i { transition: transform .15s ease; }
+.uc-mas[aria-expanded="true"] i { transform: rotate(180deg); }
+.uc-pildoras { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 6px; }
+.uc-pil { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 99px; border: 1px solid var(--border-mid); background: var(--card); font-size: .7rem; font-weight: 600; color: var(--txt-secondary); white-space: nowrap; }
+.uc-pil--ok { border-color: var(--ok-dim); background: var(--ok-dim); color: var(--ok); }
+.uc-pil--cont { border-color: var(--warn-dim); background: var(--warn-dim); color: var(--amber); }
+.uc-pil--nada { opacity: .6; }
+.uc-pil__n { font-family: var(--f-num); font-weight: 800; }
+.uc-hace { flex: 0 0 auto; font-size: .64rem; color: var(--txt-muted); white-space: nowrap; }
+.uc-acc { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border-mid); }
+.uc-acc__area { display: block; margin-bottom: 6px; font-size: .72rem; font-weight: 700; color: var(--txt-secondary); }
+.uc-pil__ico { font-size: .7rem; line-height: 1; }
+.uc-pil__nom { white-space: nowrap; }

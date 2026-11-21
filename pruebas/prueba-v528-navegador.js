@@ -72,13 +72,16 @@ const PUERTO = process.env.PUERTO || '8080';
         botones: bts.map(b => [b.innerText.trim().slice(0, 24), r(b), parseFloat(getComputedStyle(b).fontSize)]),
         recortes: bts.filter(b => b.scrollWidth > b.clientWidth + 1).map(b => b.innerText.trim()),
         estado: t.querySelector('.pm-estado--cab').textContent.replace(/\s+/g, ' ').trim(),
-        tituloYEstadoJuntos: (() => { const a = t.querySelector('.if-card__titulo').getBoundingClientRect(), b = t.querySelector('.pm-estado--cab').getBoundingClientRect(); return Math.abs((a.top + a.bottom) / 2 - (b.top + b.bottom) / 2) < 12; })()
+        tituloYEstadoJuntos: (() => { const a = t.querySelector('.if-card__titulo').getBoundingClientRect(), b = t.querySelector('.pm-estado--cab').getBoundingClientRect(); return Math.abs((a.top + a.bottom) / 2 - (b.top + b.bottom) / 2) < 12; })(),
+        // v5.56 — con el menú ⋮ (Anular / Restaurar, solo administración) el título y el botón comparten renglón y el estado queda en la línea
+        // siguiente, alineado a la izquierda: título + estado + botón de 44 px no caben juntos en 390 px sin partir el título en dos.
+        estadoBajoElTitulo: (() => { if (!t.querySelector('[data-if-menu]')) return false; const a = t.querySelector('.if-card__titulo').getBoundingClientRect(), b = t.querySelector('.pm-estado--cab').getBoundingClientRect(); return b.top >= a.bottom - 2 && b.top - a.bottom < 40 && Math.abs(b.left - a.left) < 6; })(),
       };
     });
     // v5.38 — pisos de la densidad operativa: tarjeta de área 56 px, botón 44 px (objetivo táctil), texto 13 px.
     chk('[' + ANCHO + '] Inventario: conserva las 3 tarjetas de área (>= 56 px, piso v5.38) y todos los botones con texto', inv.tarjetas.length === 3 && inv.tarjetas.every(h => h >= 56) && inv.botones.length >= 9, JSON.stringify(inv));
     chk('[' + ANCHO + '] Inventario: botones >= 44 px, texto >= 13 px y sin texto recortado (piso v5.38)', inv.botones.every(b => b[1] >= 44 && b[2] >= 13) && inv.recortes.length === 0, JSON.stringify(inv.botones));
-    chk('[' + ANCHO + '] Inventario: título y estado en el mismo renglón; el estado se lee completo', inv.tituloYEstadoJuntos && /INVENTARIO BARRA SINCRONIZADO/.test(inv.estado), JSON.stringify(inv));
+    chk('[' + ANCHO + '] Inventario: título y estado juntos (mismo renglón, o el estado justo debajo cuando está el menú ⋮); el estado se lee completo', (inv.tituloYEstadoJuntos || inv.estadoBajoElTitulo) && /INVENTARIO BARRA SINCRONIZADO/.test(inv.estado), JSON.stringify(inv));
     chk('[' + ANCHO + '] Inventario: la pantalla completa mide <= 1800 px (antes ~2330 px a 390)', inv.alto <= 1800, String(inv.alto));
     chk('[' + ANCHO + '] Inventario: sin desplazamiento horizontal (incluye el panel de conteos por usuario)', await sinDesborde());
 

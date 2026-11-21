@@ -61,6 +61,7 @@ const MONTAR = () => {
   _inventarioActivoId = 'inv-1007'; _inventarioActivo = window.__store.inv['inv-1007']; _inventarioActivoCarga = 'ok';
   isAuditoriaMode = true; auditoriaView = 'seleccion'; auditoriaAreaActiva = null; activeTab = 'inventario'; renderTab();
 };
+const menuAnular = async (p) => { await p.locator('[data-if-menu]').click(); await p.locator('[data-if-accion="anular"]').click(); };
 const toastTxt = (p) => p.locator('#toastMessage').textContent();
 const verActivo = (p, id) => p.evaluate((i) => { _inventarioActivoId = i; _inventarioActivo = window.__store.inv[i]; auditoriaView = 'seleccion'; activeTab = 'inventario'; notificationTimeout = null; renderTab(); }, id);
 
@@ -120,17 +121,17 @@ const verActivo = (p, id) => p.evaluate((i) => { _inventarioActivoId = i; _inven
   // ═══ 2 · Inventario CERRADO (antes de contabilizar): descargar/compartir y ANULAR ═══
   await verActivo(p, 'inv-1008'); await p.waitForTimeout(300);
   const paso = p.locator('.pm-paso').first();
-  chk('★ Un inventario CERRADO (aún sin contabilizar) ofrece «Descargar / Compartir» y «Anular inventario»', await p.locator('.pm-paso .cx-btn-inv').count() === 1 && await p.locator('.pm-paso >> text=Anular inventario').count() === 1);
+  chk('★ Un inventario CERRADO (aún sin contabilizar) ofrece «Descargar / Compartir» y, en el menú ⋮, «Anular inventario»', await p.locator('.pm-paso .cx-btn-inv').count() === 1 && await p.locator('[data-if-accion="anular"]').count() === 1);
   chk('Y sigue ofreciendo Contabilizar o explicando por qué no se puede (no se rompió el paso de contabilizar)', await p.locator('[data-inv-accion="contabilizar"]').count() === 1 || /No se puede contabilizar/.test(await paso.innerText()));
   if (CAPTURAS) await p.screenshot({ path: path.join(CAPTURAS, 'cerrado-botones-390.png') });
   // Cancelar con Escape: no escribe
-  await p.locator('.pm-paso >> text=Anular inventario').click(); await p.waitForTimeout(250);
+  await menuAnular(p); await p.waitForTimeout(250);
   chk('★ «Anular inventario» abre una ventana que pide el MOTIVO (obligatorio) y explica que no se borra', await p.evaluate(() => { const o = document.getElementById('anOverlay'); return !!o && /Anular inventario #1008/.test(o.innerText) && /No se borra/.test(o.innerText) && !!document.getElementById('anMotivo'); }));
   if (CAPTURAS) await p.screenshot({ path: path.join(CAPTURAS, 'anular-motivo-390.png') });
   await p.keyboard.press('Escape'); await p.waitForTimeout(150);
   chk('Escape cierra la ventana sin escribir nada', await p.locator('#anOverlay').count() === 0 && await p.evaluate(() => window.__store.updates.length) === 0);
   // Motivo vacío / corto: no escribe
-  await p.locator('.pm-paso >> text=Anular inventario').click(); await p.waitForTimeout(250);
+  await menuAnular(p); await p.waitForTimeout(250);
   await p.locator('[data-an-accion="aceptar"]').click(); await p.waitForTimeout(150);
   chk('★ Sin motivo no se anula: avisa «Escribe el motivo» y la ventana sigue abierta', /Escribe el motivo/.test(await p.locator('#anError').innerText()) && await p.locator('#anOverlay').count() === 1 && await p.evaluate(() => window.__store.updates.length) === 0);
   await p.fill('#anMotivo', 'abc'); await p.locator('[data-an-accion="aceptar"]').click(); await p.waitForTimeout(150);
@@ -141,7 +142,7 @@ const verActivo = (p, id) => p.evaluate((i) => { _inventarioActivoId = i; _inven
   chk('★ Si el servidor rechaza (reglas v5.55 sin publicar) lo dice claro y NO queda anulado en pantalla', /reglas de Firestore de la v5\.55/.test(await toastTxt(p)) && await p.evaluate(() => window.__store.inv['inv-1008'].anulado !== true && window.__store.updates.length === 0));
   // Anular de verdad
   await p.evaluate(() => { window.__rechazar = false; notificationTimeout = null; });
-  await p.locator('.pm-paso >> text=Anular inventario').click(); await p.waitForTimeout(250);
+  await menuAnular(p); await p.waitForTimeout(250);
   await p.fill('#anMotivo', '  Se creó por error durante una prueba  '); await p.locator('[data-an-accion="aceptar"]').click(); await p.waitForTimeout(900);
   const up = await p.evaluate(() => window.__store.updates.slice());
   chk('★ Anular escribe UNA vez, solo la marca: anulado, anuladoEn, anuladoPor, anuladoPorNombre y motivoAnulacion (recortado)', up.length === 1 && up[0].id === 'inv-1008'
@@ -171,7 +172,7 @@ const verActivo = (p, id) => p.evaluate((i) => { _inventarioActivoId = i; _inven
   const up2 = await p.evaluate(() => window.__store.updates.slice());
   chk('★ Restaurar escribe solo anulado=false, restauradoEn y restauradoPor', up2.length === 1 && Object.keys(up2[0].d).sort().join() === 'anulado,restauradoEn,restauradoPor' && up2[0].d.anulado === false && up2[0].d.restauradoPor === 'u', JSON.stringify(up2));
   await p.evaluate(() => { _inventarioActivo = Object.assign({}, window.__store.inv['inv-1008']); renderTab(); }); await p.waitForTimeout(300);
-  chk('Restaurado, vuelve a ofrecer Contabilizar/Anular y ya no dice ANULADO', await p.locator('.pm-paso >> text=Anular inventario').count() === 1 && !/ANULADO/.test(await p.locator('.pm-estado--cab').innerText()));
+  chk('Restaurado, vuelve a ofrecer Contabilizar/Anular y ya no dice ANULADO', await p.locator('[data-if-accion="anular"]').count() === 1 && !/ANULADO/.test(await p.locator('.pm-estado--cab').innerText()));
 
   // ═══ 4 · Historial: ocultar anulados y «Mostrar anulados» ═══
   await p.evaluate(() => { _historialInventarios = ['inv-1007', 'inv-1008', 'inv-1009'].map(i => window.__store.inv[i]); _historialMostrarAnulados = false; _historialHayMas = false; auditoriaView = 'historial'; activeTab = 'inventario'; renderTab(); });

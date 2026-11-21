@@ -133,8 +133,10 @@ const PUERTO = process.env.PUERTO || '8080';
   chk('★ Mientras el inventario no se ha leído, Conteo dice "Cargando" en vez de "sin inventario"',
       /Cargando el Inventario Físico activo/.test(e.txt), e.txt.slice(0, 200));
   chk('★ …y no ofrece ningún botón para crear otro encima', !e.crear);
-  chk('Los totales por área ya no muestran colas de coma flotante',
-      /0\.3 ent/.test(e.txt) && !/0\.30000000000000004/.test(e.txt), (e.txt.match(/[\d.]+ ent/g) || []).join(' '));
+  // v5.56 — «Conteos por usuario» ya no suma botellas por área (solo el estado y cuántos productos lleva cada una): lo que importa
+  // es que NUNCA se vea una cola de coma flotante (0.30000000000000004) ni un decimal largo en el panel.
+  chk('El panel de usuarios no muestra colas de coma flotante ni decimales largos',
+      /Conteos por usuario/.test(e.txt) && !/0\.30000000000000004/.test(e.txt) && !/\d\.\d{5,}/.test(e.txt), (e.txt.match(/[\d.]{6,}/g) || []).join(' '));
   const eErr = await p.evaluate(() => { _inventarioActivoCarga = 'error'; renderTab();
     return document.getElementById('tabContent').innerText.replace(/\s+/g, ' '); });
   chk('Si no se pudo leer, lo dice y tampoco ofrece crear', /No se pudo leer el Inventario Físico activo/.test(eErr) && !/Crear Inventario Físico/.test(eErr));
