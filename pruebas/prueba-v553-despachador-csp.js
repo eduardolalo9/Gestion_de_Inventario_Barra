@@ -143,7 +143,7 @@ chk('★ Meta permisivo pero una CABECERA HTTP estricta (la sonda no se ejecuta)
 chk('Sin meta CSP alguno la sonda decide', modoCon(null, true).modo === 'sombra' && modoCon(null, false).modo === 'activo');
 
 // ═══ 8 · La política estricta (la de v5.54) se genera bien ═══
-const { aplicarCspEstricto, hashesEnLinea } = require('../herramientas/servidor-estatico.js');
+const { aplicarCspEstricto, hashesEnLinea } = require('../herramientas/csp-hashes.js');
 const crypto = require('crypto');
 const estricto = aplicarCspEstricto(html);
 const pol = (/http-equiv="Content-Security-Policy" content="([^"]+)"/.exec(estricto) || [])[1] || '';
@@ -156,7 +156,7 @@ chk('★ Ningún bloque «en línea» arrastra un comentario ni otra etiqueta (e
     bloques.length >= 4 && bloques.every(b => !/<!--|<\/?script/i.test(b)) && bloques[0].trim().startsWith('// Evitar FOUC'), bloques.map(b => b.trim().slice(0, 25)).join(' | '));
 chk('Conserva el resto de la política: object-src none, base-uri self, form-action self, hosts de Firebase', /object-src 'none'/.test(pol) && /base-uri 'self'/.test(pol) && /form-action 'self'/.test(pol) && /www\.gstatic\.com/.test(scriptSrc));
 chk('(decisión documentada) style-src conserva \'unsafe-inline\': hay estilos en línea por toda la app y un estilo no ejecuta código', /style-src[^;]*'unsafe-inline'/.test(pol));
-chk('La política que se entrega HOY sigue siendo la de siempre (con \'unsafe-inline\'): el cambio se activa en una versión aparte, con los datos de la «sombra»', /script-src[^;]*'unsafe-inline'/.test((/Content-Security-Policy" content="([^"]+)"/.exec(html) || [])[1] || ''));
+chk('★ (v5.57) La política que se entrega HOY ya es la estricta: sin \'unsafe-inline\' en script-src y con los 4 hashes (el cambio se activó con los datos de la «sombra»)', !/script-src[^;]*'unsafe-inline'/.test((/Content-Security-Policy" content="([^"]+)"/.exec(html) || [])[1] || '') && (html.match(/'sha256-/g) || []).length >= 4);
 
 // ═══ 9 · La «sombra» no escribe nada en el aparato cuando todo va bien ═══
 function escuchas(localStorageFalso) {

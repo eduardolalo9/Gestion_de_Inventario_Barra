@@ -81,6 +81,7 @@ const PRUEBAS = [
     'prueba-v554-exportar-conteo.js',  // v5.54 — exportar / compartir el conteo activo: datos, PDF A4 (espía de maquetación), Excel y guardas
     'prueba-v555-anular-inventario.js', // v5.55 — anular (no borrar) inventarios y descargar/compartir al contabilizar: reglas, lógica y guardas
     'prueba-v556-anular-abierto.js',   // v5.56 — anular el inventario ABIERTO, menú ⋮ y «Conteos por usuario» compacto: guardas
+    'prueba-v557-csp-hashes.js',       // v5.57 — CSP estricta en producción: sin unsafe-inline, hashes al día, staging recalcula
     'prueba-v553-despachador-csp.js',  // v5.53 — despachador de eventos (preparación para quitar unsafe-inline): analizador, seguridad y guarda estática
     'prueba-v531-minimal-y-atras.js', // v5.31 — tema minimalista claro (tokens, contraste, solo CSS) y botón Atrás de Android (módulo aislado, sin tocar funciones)
     'prueba-v532-exportar-existencias.js', // v5.32 — exportar existencias a Excel: capa pura, columnas exactas, solo lectura, sin ceros silenciosos

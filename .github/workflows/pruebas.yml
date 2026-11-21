@@ -129,37 +129,6 @@ jobs:
       - name: Ejecutar las pruebas de navegador
         run: npm run test:navegador
 
-  # ════════════════════════════════════════════════════════════════════════
-  #  v5.53 — LA MISMA suite de navegador, pero con la política de contenido
-  #  (CSP) ESTRICTA: sin 'unsafe-inline' en script-src y con el hash de cada
-  #  <script> en línea. Demuestra que ningún botón depende de un manejador
-  #  en línea (los ejecuta js/02-despachador-eventos.js) ANTES de quitar
-  #  'unsafe-inline' de producción. Va en paralelo: no alarga el tiempo total.
-  # ════════════════════════════════════════════════════════════════════════
-  navegador-csp-estricto:
-    name: Pruebas en navegador con CSP estricto
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-
-    steps:
-      - name: Descargar el código (historial completo)
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Preparar Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: npm
-
-      - name: Instalar dependencias
-        run: npm ci
-
-      - name: Instalar Chromium para Playwright
-        run: npx playwright install --with-deps chromium
-
-      - name: Ejecutar las pruebas de navegador con CSP estricto
-        env:
-          CSP_ESTRICTO: '1'
-        run: npm run test:navegador
+  # v5.57 — la política de contenido (CSP) ESTRICTA ya es la de index.html (sin 'unsafe-inline' en script-src, con el hash de cada
+  # <script> en línea), así que el trabajo de arriba YA corre toda la suite bajo ella y todas-navegador.js se niega a correr si el servidor
+  # no la sirve. Por eso desaparece el trabajo «navegador-csp-estricto» de v5.53: habría repetido exactamente lo mismo.

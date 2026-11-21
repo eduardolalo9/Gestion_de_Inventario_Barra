@@ -92,6 +92,9 @@ const ACCESO_LOCAL = `
     </script>
 `;
 html = reemplazarUna(html, '</body>', ACCESO_LOCAL + '</body>', 'cierre body');
+// v5.57 — la política de contenido es estricta (sin 'unsafe-inline'): el build de staging cambia scripts en línea y agrega uno,
+// así que los hashes se recalculan AL FINAL; si no, el navegador los bloquearía y staging no arrancaría.
+html = require('./csp-hashes').aplicarCspEstricto(html);
 // El SDK de Firebase no se carga en staging: ninguna petición a Firebase, ni siquiera de código.
 {
     const sdk = html.split('\n').filter((l) => /src="https:\/\/www\.gstatic\.com\/firebasejs\//.test(l));
