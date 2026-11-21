@@ -1,5 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   v5.31 — TEMA MINIMALISTA CLARO (+ oscuro sobrio)
+   v5.31 — TEMA MINIMALISTA CLARO (+ oscuro sobrio) · v5.58: blanco
+   profesional, esmeralda #1A7058 y bronce de detalle
    ───────────────────────────────────────────────────────────────────────────
    Encargo de Eduardo (20-oct-2026): rediseño visual minimalista claro,
    inspirado en Apple y Notion — fondo blanco cálido / gris perla, tarjetas
@@ -19,46 +20,49 @@
         cambian.
    No toca ningún selector que use JavaScript ni ningún id.
 
-   Contraste verificado (WCAG AA 4.5:1), peor caso sobre --surface #F1F1EE:
-     texto 14.1 · secundario 6.0 · tenue 5.3 · esmeralda 5.9 ·
-     botón esmeralda con texto blanco 6.7.
+   Contraste verificado (WCAG AA 4.5:1), v5.58, peor caso sobre
+   --card-high #EAF0ED: texto 14.3 · secundario 7.7 · tenue 4.9 ·
+   esmeralda 5.2 (4.9 sobre su propio tinte) · bronce 4.7 · botón
+   esmeralda con texto blanco 6.0.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ── TOKENS · CLARO MINIMALISTA ───────────────────────────────────────── */
 html[data-theme="light"] {
-    --bg:             #F7F7F5;
-    --surface:        #F1F1EE;
+    --bg:             #F2F5F3;
+    --surface:        #FFFFFF;
     --card:           #FFFFFF;
-    --card-high:      #F4F4F1;
-    --border:         rgba(31, 35, 33, .07);
-    --border-mid:     rgba(31, 35, 33, .11);
-    --border-strong:  rgba(31, 35, 33, .22);
-    --scrim:          rgba(20, 24, 22, .40);
+    --card-high:      #EAF0ED;
+    --border:         rgba(22, 44, 38, .09);
+    --border-mid:     rgba(22, 44, 38, .15);
+    --border-strong:  rgba(22, 44, 38, .28);
+    --scrim:          rgba(13, 20, 27, .46);
     /* v5.38 — esmeralda (familia de #10B981), oscurecido para pasar AA en claro:
        #047857 = 4.9:1 sobre --surface y 5.5:1 de texto blanco encima. */
-    --accent:         #047857;
-    --accent-hover:   #065F46;
+    --accent:         #1A7058;
+    --accent-hover:   #145A47;
     --accent-on:      #FFFFFF;
-    --accent-container: rgba(4, 120, 87, .10);
-    --accent-dim:     rgba(4, 120, 87, .07);
-    --accent-dim2:    rgba(4, 120, 87, .13);
-    --txt-primary:    #1F2321;
+    --accent-container: rgba(26, 112, 88, .10);
+    --accent-dim:     rgba(26, 112, 88, .07);
+    --accent-dim2:    rgba(26, 112, 88, .14);
+    --txt-primary:    #16211F;
     --txt-disabled:   #8A908C;
-    --txt-secondary:  #565C59;
-    --txt-muted:      #5F6561;
+    --txt-secondary:  #3F4D49;
+    --txt-muted:      #5C6B66;
     --shadow-xs:      0 1px 2px rgba(16, 24, 20, .04);
     --shadow-card:    0 1px 2px rgba(16, 24, 20, .04), 0 1px 3px rgba(16, 24, 20, .05);
     --shadow-elev2:   0 4px 12px rgba(16, 24, 20, .06), 0 1px 3px rgba(16, 24, 20, .04);
     --shadow-modal:   0 20px 48px rgba(16, 24, 20, .14), 0 4px 12px rgba(16, 24, 20, .06);
     --modal-bg:       #FFFFFF;
+    --bronze:         #85652F;
+    --bronze-dim:     rgba(133, 101, 47, .10);
     /* Tarjeta principal de Inicio: blanca con detalles esmeralda */
     --hero-bg:        #FFFFFF;
-    --hero-fg:        #1F2321;
-    --hero-fg-2:      #565C59;
+    --hero-fg:        #16211F;
+    --hero-fg-2:      #3F4D49;
     --hero-linea:     rgba(31, 35, 33, .09);
     --hero-seg:       rgba(31, 35, 33, .10);
     --hero-btn-fg:    #FFFFFF;
-    --hero-btn-hover: #065F46;
+    --hero-btn-hover: #145A47;
     --hero-ok-bg:     #E3F1EA;
     --hero-ok-fg:     #0F5138;
     --hero-warn-bg:   #FFF1D6;
@@ -88,10 +92,6 @@ html[data-theme="light"] .it-inv .it-btn:focus-visible { outline-color: var(--ac
 
 /* ── Cifras: dinero con el acento; alertas en su color ────────────────── */
 .pm-tile--dinero .pm-tile__val { color: var(--accent); }
-
-/* ── Pastilla "Finalizado" del panel de usuarios: tenía un verde fijo
-      (2.0:1 en claro). Ahora usa los tokens del tema. ─────────────────── */
-.audit-done-badge { color: var(--ok); background: var(--ok-dim); border-color: var(--ok-dim); }
 
 /* ── Acciones que eran solo un ícono: ahora con su palabra ─────────────
    Mismo botón, mismo onclick, mismo permiso y misma confirmación: solo se

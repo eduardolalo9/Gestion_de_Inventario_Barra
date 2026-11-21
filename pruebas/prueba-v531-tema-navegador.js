@@ -69,10 +69,10 @@ const PANTALLAS = ['inicio', 'inventario', 'productos', 'pedido_sugerido', 'pedi
     const T = '[' + ancho + '/' + tema + '] ';
     if (tema === 'light') {
       const tok = await p.evaluate(() => { const cs = getComputedStyle(document.documentElement); return { card: cs.getPropertyValue('--card').trim(), acc: cs.getPropertyValue('--accent').trim(), body: getComputedStyle(document.body).backgroundColor }; });
-      chk(T + 'Tarjetas blancas, esmeralda (v5.38: #047857) y fondo blanco cálido', tok.card === '#FFFFFF' && tok.acc === '#047857' && tok.body === 'rgb(247, 247, 245)', JSON.stringify(tok));
+      chk(T + 'Tarjetas blancas, esmeralda (v5.58: #1A7058) y fondo blanco cálido', tok.card === '#FFFFFF' && tok.acc === '#1A7058' && tok.body === 'rgb(242, 245, 243)', JSON.stringify(tok));
     } else {
       const tok = await p.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim());
-      chk(T + 'El oscuro es el «Ultra Pro Emerald» de v5.38 (acento #10B981)', tok.toUpperCase() === '#10B981', tok);
+      chk(T + 'El oscuro es el grafito y esmeralda de v5.58 (acento #4AB794)', tok.toUpperCase() === '#4AB794', tok);
     }
     for (const t of PANTALLAS) {
       const r = await p.evaluate(t => {

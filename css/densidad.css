@@ -132,7 +132,7 @@ html[data-theme="light"] .bt { border-radius: var(--d-radio-sm); }
 .it-btn { min-height: 44px; border-radius: var(--d-radio-sm); font-size: var(--d-fs); font-weight: 700; }
 
 /* ── Insignias de estado: lo más chicas posible ─────────────────────────── */
-.bi-badge, .it-pill, .pm-estado, .audit-done-badge {
+.bi-badge, .it-pill, .pm-estado {
     min-height: 0 !important; padding: 1px 6px !important; border-radius: 4px !important;
     font-size: 9px !important; font-weight: 800 !important; letter-spacing: .06em !important; line-height: 14px !important; gap: 4px;
 }
@@ -311,7 +311,6 @@ input:not([type="checkbox"]):not([type="radio"]):not(.sbx__input):not(.ps-input)
 .if-area .audit-area-name { font-size: var(--d-fs); font-weight: 700; }
 .if-area .bt, .if-acc-usuario .bt { min-height: 44px; font-size: var(--d-fs); padding: 0 10px; border-width: 1px; }
 .if-acc-usuario { gap: 8px; margin: 4px 0 2px; }
-.if-pantalla .audit-user-row { padding: 10px; margin-bottom: 6px; }
 .if-pantalla .audit-rename-btn { min-height: 44px; font-size: var(--d-fs); border-radius: var(--d-radio-sm); border-width: 1px; }
 .if-pantalla .audit-rename-input { min-height: 44px; font-size: 16px; }
 .audit-back-btn { min-height: 44px; padding: 0 10px; border-radius: var(--d-radio-sm); font-size: var(--d-fs-sm); }
@@ -559,3 +558,48 @@ html[data-theme="light"] .cp-rango__fecha { color-scheme: light; }
 /* Compras: «Proveedores» y «Total compras» no caben en 4 columnas a 390 px con el relleno normal; el texto pasa a 2 líneas en vez de cortarse. */
 .kpi-fila--compras .kpi { padding: 6px 5px; }
 .kpi-fila--compras .kpi__t { letter-spacing: 0; white-space: normal; line-height: 1.15; overflow: visible; text-overflow: clip; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   v5.58 — EMPRESARIAL: GRAFITO, AZUL MARINO, ESMERALDA Y BRONCE
+   Solo presentación y solo tokens. Los cambios de color viven en los tokens
+   (estilos.css :root, tema-minimal.css); aquí van la marca y la jerarquía
+   de botones. El piso táctil de 44 px no cambia: lo que se reduce es el
+   PESO VISUAL de lo secundario, no su área.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Marca: línea en bronce bajo el nombre (detalle, no acción) ─────────── */
+#sidebar #sbHead .sb-logo { display: flex; flex-direction: column; line-height: 1.1; }
+#sidebar #sbHead .sb-logo::after {
+    content: "Gestión de barra";
+    margin-top: 3px; font-size: 10px; font-weight: 700;
+    letter-spacing: .12em; text-transform: uppercase; color: var(--bronze);
+}
+
+/* ── Botones secundarios: borde neutro; el esmeralda queda para la acción
+      principal y para el hover/foco. ───────────────────────────────────── */
+.bt--secundario, .if-pantalla .audit-rename-btn,
+html[data-theme="light"] .bt--secundario { border-width: 1px; border-color: var(--border-strong); }
+.if-pantalla .audit-rename-btn { color: var(--txt-primary); background: var(--card); }
+.bt--secundario:hover, .bt--secundario:focus-visible,
+.if-pantalla .audit-rename-btn:hover, .if-pantalla .audit-rename-btn:focus-visible { border-color: var(--accent); color: var(--accent); }
+
+/* ── Conteo · áreas: la acción del área deja de ser una barra a lo ancho
+      dentro de una caja; es un botón compacto alineado a la derecha. ──── */
+.if-area:has(> .bt) { padding: 0; background: none; border: 0; }
+.if-pantalla .if-area > .bt,
+.if-pantalla.if-pantalla--compacta .if-area > .bt {
+    width: auto; align-self: flex-end;
+    padding: 0 12px; font-size: var(--d-fs-sm); font-weight: 600;
+    color: var(--txt-secondary); background: var(--card);
+}
+
+/* ── Conteo en PC (≥1024 px): acciones en una fila y áreas en rejilla ──── */
+@media (min-width: 1024px) {
+    .if-pantalla--compacta > .if-card:has(> .bt-pila--rejilla) {
+        display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); column-gap: 8px; align-items: center;
+    }
+    .if-pantalla--compacta > .if-card:has(> .bt-pila--rejilla) > .if-card__titulo,
+    .if-pantalla--compacta > .if-card:has(> .bt-pila--rejilla) > .pm-nota { grid-column: 1 / -1; }
+    .if-pantalla--compacta > .if-card:not(:has(.bt--primario)) > .bt-pila--rejilla { grid-column: 1 / -1; }
+    .if-areas--compacto { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: start; }
+}

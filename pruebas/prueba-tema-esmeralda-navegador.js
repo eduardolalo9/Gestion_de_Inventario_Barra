@@ -40,16 +40,16 @@ const lum = s => { const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(s || ''); if 
         sombraCerrada: cs(sb, 'boxShadow'), monoClases: mono.map(x => x.className), body: cs(document.body, 'backgroundColor') };
     });
     const T = '[' + tema + '] ';
-    // v5.38 — «Ultra Pro Emerald» (2-nov-2026): cajón #0D1410, activo en esmeralda tenue con texto esmeralda,
-    // tarjeta de Inicio = superficie #121915 en oscuro, Plus Jakarta Sans + IBM Plex Mono, oscuro predeterminado.
-    chk(T + '★ La barra lateral es casi negra (#0D1410) en este tema', m.sbBg === 'rgb(13, 20, 16)', m.sbBg);
+    // v5.38 — «Ultra Pro Emerald» (2-nov-2026): cajón #0F1820, activo en esmeralda tenue con texto esmeralda,
+    // tarjeta de Inicio = superficie #15212A en oscuro, Plus Jakarta Sans + IBM Plex Mono, oscuro predeterminado.
+    chk(T + '★ La barra lateral es azul marino (#0F1820) en este tema', m.sbBg === 'rgb(15, 24, 32)', m.sbBg);
     chk(T + 'Sus textos son claros sobre fondo oscuro (luminancia > .6)', lum(m.sbItem) > 0.6 && lum(m.sbMuted) > 0.45, m.sbItem + ' / ' + m.sbMuted);
-    chk(T + '★ El destino activo va en esmeralda (fondo tenue y texto #10B981)', m.sbActivoBg === 'rgba(16, 185, 129, 0.16)' && m.sbActivoColor === 'rgb(16, 185, 129)', m.sbActivoBg + ' / ' + m.sbActivoColor);
+    chk(T + '★ El destino activo va en esmeralda (fondo tenue y texto #4AB794)', m.sbActivoBg === 'rgba(74, 183, 148, 0.16)' && m.sbActivoColor === 'rgb(74, 183, 148)', m.sbActivoBg + ' / ' + m.sbActivoColor);
     // v5.31 (tema minimalista claro, encargo de Eduardo 20-oct-2026) — en claro la tarjeta principal es blanca con texto carbón;
     // en oscuro sigue siendo la verde de v5.25 con texto blanco.
-    chk(T + '★ La tarjeta principal: blanca con texto carbón en claro; superficie #121915 con texto claro en oscuro',
-        tema === 'light' ? (m.heroBg === 'rgb(255, 255, 255)' && m.heroColor === 'rgb(31, 35, 33)')
-                         : (m.heroBg === 'rgb(18, 25, 21)' && m.heroColor === 'rgb(241, 245, 249)'), m.heroBg + ' / ' + m.heroColor);
+    chk(T + '★ La tarjeta principal: blanca con texto carbón en claro; superficie #15212A con texto claro en oscuro',
+        tema === 'light' ? (m.heroBg === 'rgb(255, 255, 255)' && m.heroColor === 'rgb(22, 33, 31)')
+                         : (m.heroBg === 'rgb(21, 33, 42)' && m.heroColor === 'rgb(231, 238, 235)'), m.heroBg + ' / ' + m.heroColor);
     chk(T + '★ El encabezado mide 48 px', m.hd === 48, String(m.hd));
     chk(T + '★ Títulos y cuerpo en Plus Jakarta Sans', /Plus Jakarta Sans/.test(m.h1Fuente) && /Plus Jakarta Sans/.test(m.cuerpo), m.h1Fuente + ' | ' + m.cuerpo);
     chk(T + '★ Las fuentes propias se descargan del servidor (no caen a la del sistema)', m.fuentesOk && m.fuentesOk.some(f => /Plus Jakarta Sans/.test(f)) && m.fuentesOk.some(f => /IBM Plex Mono/.test(f)), JSON.stringify(m.fuentesOk));
