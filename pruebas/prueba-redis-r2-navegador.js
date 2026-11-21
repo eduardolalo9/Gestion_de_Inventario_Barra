@@ -81,8 +81,8 @@ const PUERTO = process.env.PUERTO || '8080';
   });
   chk('Hay exactamente un destino activo, y es Inicio',
       activo.destino === 'inicio' && activo.cuantosActivos === 1, JSON.stringify(activo));
-  chk('★ El destino activo es latón calculado (no un azul heredado)',
-      activo.colorTexto === 'rgb(232, 181, 92)' && activo.colorIcono === 'rgb(232, 181, 92)',
+  chk('★ El destino activo es el esmeralda calculado (no un azul heredado)',
+      activo.colorTexto === 'rgb(61, 170, 136)' && activo.colorIcono === 'rgb(61, 170, 136)',
       JSON.stringify(activo));
   chk('★ El activo lleva aria-current="page" (el color solo no informa)',
       activo.aria === 'page', 'aria-current: ' + activo.aria);
@@ -142,8 +142,8 @@ const PUERTO = process.env.PUERTO || '8080';
     return { fondo: cs.backgroundColor, alto: b.getBoundingClientRect().height,
              tocables: [...b.querySelectorAll('button')].every(x => x.getBoundingClientRect().height >= 44) };
   });
-  chk('La barra inferior usa la superficie del tema (#15181D), no un color fijo',
-      barra.fondo === 'rgb(21, 24, 29)', 'fondo: ' + barra.fondo);
+  chk('La barra inferior usa la superficie del tema (#121C24, translúcida), no un color fijo',
+      /0\.0705882 0\.109804 0\.141176/.test(barra.fondo), 'fondo: ' + barra.fondo);
   chk('Todos sus controles son táctiles (≥ 44 px)', barra.tocables, 'alto barra: ' + barra.alto);
 
   // ── G · El glosario de estados usa los badges del kit ──────────────────
@@ -167,9 +167,9 @@ const PUERTO = process.env.PUERTO || '8080';
   chk('★ El glosario pinta badges del kit, no su propia píldora',
       glos.cuantos === 3 && glos.textos[0] === 'Sincronizado', JSON.stringify(glos.textos));
   chk('"Contabilizado" usa el lila del estado contable, no el morado de Tailwind',
-      glos.colorContab === 'rgb(201, 160, 232)', 'color: ' + glos.colorContab);
+      glos.colorContab === 'rgb(185, 163, 217)', 'color: ' + glos.colorContab);
   chk('Un estado desconocido sale en gris, con su texto tal cual',
-      glos.textos[2] === 'LO_QUE_SEA' && glos.desconocido === 'rgb(180, 176, 170)',
+      glos.textos[2] === 'LO_QUE_SEA' && glos.desconocido === 'rgb(179, 192, 187)',
       JSON.stringify(glos));
 
   chk('Sin errores de JS en toda la prueba', errs.length === 0, errs.join(' | '));

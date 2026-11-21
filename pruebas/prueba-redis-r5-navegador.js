@@ -178,8 +178,8 @@ const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
     const cs = btn ? getComputedStyle(btn) : null;
     return { existe: !!btn, icono: btn ? !!btn.querySelector('.fa-book') : false, bg: cs ? cs.backgroundColor : null };
   });
-  chk('★ El botón "Contabilizar" del detalle es bt--primario (el único latón de la pantalla)',
-      contab.existe && contab.icono && /rgb\(232, 181, 92\)/.test(contab.bg || ''), JSON.stringify(contab));
+  chk('★ El botón "Contabilizar" del detalle es bt--primario (el único acento de la pantalla)',
+      contab.existe && contab.icono && /rgb\(61, 170, 136\)/.test(contab.bg || ''), JSON.stringify(contab));
 
   chk('Sin errores de JS en toda la prueba', errs.length === 0, errs.join(' | '));
 
