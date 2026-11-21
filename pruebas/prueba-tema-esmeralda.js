@@ -33,7 +33,7 @@ chk('v5.38 · Ya no queda ninguna referencia a Manrope ni DM Sans (ni archivos n
 
 // ── Paleta ──
 chk('★ Tema claro = de marca: primario esmeralda #10664A, fondo perla #F5F7F6', /html\[data-theme="light"\]\s*\{[\s\S]*?--accent:\s*#10664A/.test(css) && /html\[data-theme="light"\]\s*\{[\s\S]*?--bg:\s*#F5F7F6/.test(css));
-chk('v5.38 · Cajón lateral casi negro #0D1410 y su pareja (--sidebar-2, --sidebar-line)', /--sidebar:\s*#0D1410/.test(css) && /--sidebar-2:/.test(css) && /--sidebar-line:/.test(css));
+chk('v5.58 · Cajón lateral azul marino #0F1820 y su pareja (--sidebar-2, --sidebar-line)', /--sidebar:\s*#0F1820/.test(css) && /--sidebar-2:/.test(css) && /--sidebar-line:/.test(css));
 chk('★ La barra lateral es oscura en AMBOS temas (tokens re-declarados dentro de #sidebar)',
     /#sidebar \{[^}]*--bg: var\(--sidebar\)[^}]*--txt-primary: var\(--sidebar-fg\)/.test(bloque) && /--accent: var\(--dk-accent\)/.test(bloque));
 chk('El destino activo del menú va en esmeralda sólido con texto blanco', /#sidebar \.sb-item\.sb-active[^{]*\{[^}]*background: var\(--sidebar-active\)[^}]*color: var\(--blanco\)/.test(bloque));
@@ -48,7 +48,7 @@ chk('★ v5.38 · El tema predeterminado es OSCURO (initTheme y toggleTheme)', /
 chk('★ v5.38 · Migración de una sola vez: la marca inventarioApp_temaMarca=ultra-pro fuerza el oscuro una vez y luego respeta la elección',
     /inventarioApp_temaMarca/.test(html) && /'ultra-pro'/.test(html) && /t = 'dark';/.test(html));
 chk('theme-color y manifest siguen el tema nuevo (el fondo del arranque sigue siendo el del ícono)',
-    /theme-color[^>]*#F5F7F6/i.test(html) && /theme-color[^>]*#0A0E0C/i.test(html) && man.theme_color === '#0A0E0C' && man.background_color === '#010c1d');
+    /theme-color[^>]*#F2F5F3/i.test(html) && /theme-color[^>]*#0D141B/i.test(html) && man.theme_color === '#0D141B' && man.background_color === '#010c1d');
 
 // ── Monogramas por categoría ──
 chk('★ UI.mono reconoce whisky, ginebra, destilados y licores (y conserva el tinte por hash para lo demás)',

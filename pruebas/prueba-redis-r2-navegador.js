@@ -81,8 +81,8 @@ const PUERTO = process.env.PUERTO || '8080';
   });
   chk('Hay exactamente un destino activo, y es Inicio',
       activo.destino === 'inicio' && activo.cuantosActivos === 1, JSON.stringify(activo));
-  chk('★ El destino activo es esmeralda calculado (v5.38: #10B981) (no un azul heredado)',
-      activo.colorTexto === 'rgb(16, 185, 129)' && activo.colorIcono === 'rgb(16, 185, 129)',
+  chk('★ El destino activo es esmeralda calculado (v5.58: #4AB794) (no un azul heredado)',
+      activo.colorTexto === 'rgb(74, 183, 148)' && activo.colorIcono === 'rgb(74, 183, 148)',
       JSON.stringify(activo));
   chk('★ El activo lleva aria-current="page" (el color solo no informa)',
       activo.aria === 'page', 'aria-current: ' + activo.aria);
@@ -142,9 +142,9 @@ const PUERTO = process.env.PUERTO || '8080';
     return { fondo: cs.backgroundColor, alto: b.getBoundingClientRect().height,
              tocables: [...b.querySelectorAll('button')].every(x => x.getBoundingClientRect().height >= 44) };
   });
-  // v5.38 — la barra inferior va en --surface (#0E1411), un escalón por encima del fondo.
-  chk('La barra inferior usa la superficie del tema (--surface #0E1411), no un color fijo',
-      barra.fondo === 'rgb(14, 20, 17)', 'fondo: ' + barra.fondo);
+  // v5.38 — la barra inferior va en --surface (#121C24), un escalón por encima del fondo.
+  chk('La barra inferior usa la superficie del tema (--surface #121C24), no un color fijo',
+      barra.fondo === 'rgb(18, 28, 36)', 'fondo: ' + barra.fondo);
   chk('Todos sus controles son táctiles (≥ 44 px)', barra.tocables, 'alto barra: ' + barra.alto);
 
   // ── G · El glosario de estados usa los badges del kit ──────────────────
@@ -168,9 +168,9 @@ const PUERTO = process.env.PUERTO || '8080';
   chk('★ El glosario pinta badges del kit, no su propia píldora',
       glos.cuantos === 3 && glos.textos[0] === 'Sincronizado', JSON.stringify(glos.textos));
   chk('"Contabilizado" usa el lila del estado contable, no el morado de Tailwind',
-      glos.colorContab === 'rgb(201, 160, 232)', 'color: ' + glos.colorContab);
+      glos.colorContab === 'rgb(185, 163, 217)', 'color: ' + glos.colorContab);
   chk('Un estado desconocido sale en gris, con su texto tal cual',
-      glos.textos[2] === 'LO_QUE_SEA' && glos.desconocido === 'rgb(148, 163, 184)',   // v5.38: --txt-secondary #94A3B8
+      glos.textos[2] === 'LO_QUE_SEA' && glos.desconocido === 'rgb(179, 192, 187)',   // v5.38: --txt-secondary #B3C0BB
       JSON.stringify(glos));
 
   chk('Sin errores de JS en toda la prueba', errs.length === 0, errs.join(' | '));

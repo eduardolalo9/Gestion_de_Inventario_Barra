@@ -28,51 +28,54 @@
        ==================== */
 
     /* ── Superficies (carbón azulado, nunca negro plano) ── */
-    /* v5.38 — Ultra Pro Emerald (oscuro primero) */
-    --bg:             #0A0E0C;
-    --surface:        #0E1411;
-    --card:           #121915;
-    --card-high:      #19241E;
-    --border:         #1E2B24;
-    --border-mid:     #26362D;
-    --border-strong:  #3A4D42;
+    /* v5.58 — Grafito & azul marino (antes Ultra Pro Emerald v5.38) */
+    --bg:             #0D141B;
+    --surface:        #121C24;
+    --card:           #15212A;
+    --card-high:      #1D2B34;
+    --border:         #22313A;
+    --border-mid:     #2B3A43;
+    --border-strong:  #3E5160;
     /* Velo de modal: casi negro con tinte frío, no negro puro al 60 % */
-    --scrim:          rgba(0,4,2,.72);
+    --scrim:          rgba(4,8,11,.74);
 
-    /* ── Identidad: latón cálido (NO oro saturado) ── */
-    --accent:         #10B981;
-    --accent-hover:   #34D399;
-    --accent-on:      #04130C;
-    --accent-container: rgba(16,185,129,.16);
-    --accent-dim:     rgba(16,185,129,.10);
-    --accent-dim2:    rgba(16,185,129,.18);
+    /* ── Identidad: esmeralda sobrio (v5.58: menos saturado que #10B981) ── */
+    --accent:         #4AB794;
+    --accent-hover:   #62C4A3;
+    --accent-on:      #062A20;
+    --accent-container: rgba(74,183,148,.16);
+    --accent-dim:     rgba(74,183,148,.10);
+    --accent-dim2:    rgba(74,183,148,.18);
     --brass:          var(--accent);
     --brass-hover:    var(--accent-hover);
     --brass-on:       var(--accent-on);
     --brass-dim:      var(--accent-dim);
+    /* v5.58 — bronce: solo detalles de marca y distintivos, nunca acción */
+    --bronze:         #C9A66B;
+    --bronze-dim:     rgba(201,166,107,.14);
 
     /* ── Semánticos ──
        Ajustados para pasar 4.5:1 sobre las superficies de arriba Y
        para diferenciarse entre sí también en LUMINOSIDAD, no solo en
        tono: así un estado sigue siendo legible para quien no
        distingue verde de rojo. */
-    --green:          #34D399;
-    --green-dim:      rgba(52,211,153,0.12);
+    --green:          #5FC68C;
+    --green-dim:      rgba(95,198,140,0.13);
     --green-dark:     #062B1D;
-    --green-text:     #34D399;
-    --red:            #FB7185;
-    --red-dim:        rgba(251,113,133,0.12);
+    --green-text:     #5FC68C;
+    --red:            #EB8A8F;
+    --red-dim:        rgba(235,138,143,0.13);
     --red-dark:       #4C0519;
-    --red-text:       #FB7185;
-    --amber:          #FBBF24;
-    --amber-dim:      rgba(251,191,36,0.12);
-    --sky:            #6FB2E8;
-    --sky-dim:        rgba(111,178,232,0.12);
+    --red-text:       #EB8A8F;
+    --amber:          #E2B45A;
+    --amber-dim:      rgba(226,180,90,0.14);
+    --sky:            #7DB3D8;
+    --sky-dim:        rgba(125,179,216,0.13);
     /* Lila: contabilizado y corte mensual (FASE 13). Es un estado
        contable, distinto de "completado" (verde) y de "en proceso"
        (azul), y merecía su propio color en vez de reusar uno. */
-    --book:           #C9A0E8;
-    --book-dim:       rgba(201,160,232,0.14);
+    --book:           #B9A3D9;
+    --book-dim:       rgba(185,163,217,0.14);
     --book-on:        #2B1640;
 
     /* Alias semánticos para el código nuevo */
@@ -87,10 +90,10 @@
 
     /* ── Texto ── */
     /* v5.38 — #64748B no pasa AA como texto (3.8:1): solo --txt-disabled */
-    --txt-primary:    #F1F5F9;
-    --txt-secondary:  #94A3B8;
-    --txt-muted:      #8B97AA;
-    --txt-disabled:   #64748B;
+    --txt-primary:    #E7EEEB;
+    --txt-secondary:  #B3C0BB;
+    --txt-muted:      #8E9D98;
+    --txt-disabled:   #66756F;
 
     /* ── Sombras M3 (elevation + tonal tint) ── */
     --shadow-xs:      none;
@@ -120,7 +123,7 @@
     --accent-blue: var(--sky);
     --accent-green:var(--green);
     --shadow-mid:  var(--shadow-card);
-    --modal-bg:    #121915;
+    --modal-bg:    #17242D;
 
     /* ═══ v5.25 — "VERDE ESMERALDA BOSQUE" ====================
        Valores en hex = el oklch del diseño (primario oklch(.455 .09 165), barra oklch(.22 .024 165), perla oklch(.975 .003 160)); se guardan en hex porque
@@ -134,45 +137,46 @@
     --f-body: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
     --f-num:  'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
     --f-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-    --sidebar:        #0D1410;
-    --sidebar-2:      #121915;
-    --sidebar-line:   #1E2B24;
-    --sidebar-fg:     #E2E8F0;
-    --sidebar-muted:  #94A3B8;
-    --sidebar-sep:    #8B97AA;
-    --hero-bg:        #121915;
-    --hero-fg:        #F1F5F9;
+    --sidebar:        #0F1820;
+    --sidebar-2:      #15212A;
+    --sidebar-line:   #22313A;
+    --sidebar-fg:     #E7EEEB;
+    --sidebar-muted:  #B3C0BB;
+    --sidebar-sep:    #8E9D98;
+    --hero-bg:        #15212A;
+    --hero-fg:        #E7EEEB;
     --cat-whisky-bg:  #322843;  --cat-whisky-fg:  #DECEFF;
     --cat-gin-bg:     #163045;  --cat-gin-fg:     #B1DDFF;
     --cat-dest-bg:    #272C44; --cat-dest-fg:    #C9D5FF;
     --cat-lic-bg:     #0C333C; --cat-lic-fg:     #A2E4F4;
     /* v5.25 — paleta FIJA oscura (la usa la barra lateral en ambos temas) y piezas de la tarjeta principal.
        Se declaran aquí, no en el bloque final, para que ese bloque use solo tokens. */
-    --dk-border:        #1E2B24;
-    --dk-border-mid:    #26362D;
-    --dk-border-strong: #3A4D42;
-    --dk-txt-2:         #CBD5E1;
-    --dk-accent:        #10B981;
-    --dk-accent-hover:  #34D399;
-    --dk-accent-on:     #04130C;
-    --dk-accent-container: rgba(16,185,129,.16);
-    --dk-accent-dim:    rgba(16,185,129,.10);
-    --dk-accent-dim2:   rgba(16,185,129,.18);
-    --dk-green:   #34D399;  --dk-green-dim: rgba(52,211,153,.12); --dk-green-dark: #062B1D;
-    --dk-red:     #FB7185;   --dk-red-dim:   rgba(251,113,133,.12);  --dk-red-dim2: rgba(251,113,133,.22);
-    --dk-amber:   #FBBF24;   --dk-amber-dim: rgba(251,191,36,.12);
-    --dk-sky:     #6FB2E8;   --dk-sky-dim:   rgba(111,178,232,.12);
-    --dk-book:    #C9A0E8;  --dk-book-dim:  rgba(201,160,232,.14);
-    --sidebar-active: #0B3B2A;
-    --sidebar-sombra: rgba(0,5,2,.45);
+    --dk-border:        #22313A;
+    --dk-border-mid:    #2B3A43;
+    --dk-border-strong: #3E5160;
+    --dk-txt-2:         #C9D4CF;
+    --dk-accent:        #4AB794;
+    --dk-accent-hover:  #62C4A3;
+    --dk-accent-on:     #062A20;
+    --dk-accent-container: rgba(74,183,148,.16);
+    --dk-accent-dim:    rgba(74,183,148,.10);
+    --dk-accent-dim2:   rgba(74,183,148,.18);
+    --dk-green:   #5FC68C;  --dk-green-dim: rgba(95,198,140,.13); --dk-green-dark: #062B1D;
+    --dk-red:     #EB8A8F;   --dk-red-dim:   rgba(235,138,143,.13);  --dk-red-dim2: rgba(235,138,143,.22);
+    --dk-amber:   #E2B45A;   --dk-amber-dim: rgba(226,180,90,.14);
+    --dk-sky:     #7DB3D8;   --dk-sky-dim:   rgba(125,179,216,.13);
+    --dk-book:    #B9A3D9;  --dk-book-dim:  rgba(185,163,217,.14);
+    --dk-bronze:  #C9A66B;  --dk-bronze-dim: rgba(201,166,107,.14);
+    --sidebar-active: #173A33;
+    --sidebar-sombra: rgba(2,6,9,.45);
     --blanco:         #FFFFFF;
-    --hero-fg-2:      #94A3B8;
-    --hero-linea:     #1E2B24;
-    --hero-seg:       #26362D;
-    --hero-btn-fg:    #04130C;
-    --hero-btn-hover: #34D399;
-    --hero-ok-bg:     rgba(52,211,153,.12);  --hero-ok-fg:   #34D399;
-    --hero-warn-bg:   rgba(251,191,36,.12);  --hero-warn-fg: #FBBF24;
+    --hero-fg-2:      #B3C0BB;
+    --hero-linea:     #22313A;
+    --hero-seg:       #2B3A43;
+    --hero-btn-fg:    #062A20;
+    --hero-btn-hover: #62C4A3;
+    --hero-ok-bg:     rgba(95,198,140,.13);  --hero-ok-fg:   #5FC68C;
+    --hero-warn-bg:   rgba(226,180,90,.14);  --hero-warn-fg: #E2B45A;
     --sombra-hero:    none;
     --sombra-barra:   0 -1px 0 var(--border);
 }
@@ -842,14 +846,6 @@ h3.text-xl.font-bold, h3.text-lg.font-bold, .text-xl.font-bold,
     letter-spacing: -0.01em;
     color: var(--txt-primary);
 }
-
-/* ─── Badges ==================== */
-span.text-sm.font-medium.text-purple-600.bg-purple-50 {
-    background: var(--accent-dim);
-    color: var(--accent);
-    border: 1px solid var(--accent-dim2);
-    border-radius: var(--r-sm);
-}
 span.text-xs.px-2.py-1.bg-purple-100 {
     background: var(--accent-dim) !important;
     color: var(--accent) !important;
@@ -1328,36 +1324,9 @@ html[data-theme="light"] .audit-count-area-badge { background: var(--accent-dim)
     background: currentColor;
     animation: statusPulse 2.4s ease-in-out infinite;
 }
-.audit-done-badge {
-    display: inline-flex; align-items: center; gap: 4px;
-    padding: 1px 6px; border-radius: 20px;
-    background: var(--ok-dim);
-    border: 1px solid var(--ok-dim);
-    color: #22c55e;
-    font-size: 0.6rem; font-weight: 700;
-}
-.audit-user-row {
-    border: 1px solid var(--border);
-    border-radius: var(--r-md);
-    padding: 10px;
-    margin-bottom: 8px;
-    background: var(--bg);
-    transition: border-color 0.2s;
-}
-.audit-user-row.live { border-color: var(--ok-dim); }
-.audit-area-row {
-    display: flex; align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap; gap: 4px;
-    padding: 5px 0;
-    font-size: 0.68rem;
-    border-top: 1px solid var(--border);
-}
 .audit-area-row-label { color: var(--txt-muted); min-width: 68px; }
 .audit-area-row-count { font-family: var(--f-num); font-size: 0.65rem; color: var(--txt-muted); }
 .audit-timestamp { font-size: 0.6rem; color: var(--txt-muted); margin-top: 2px; }
-html[data-theme="light"] .audit-user-row { box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-html[data-theme="light"] .audit-user-row.live { border-color: rgba(22,163,74,0.28); }
 
 /* ── SEMÁFORO DE SINCRONIZACIÓN (Header) ─────────────────── */
 #syncDot {
@@ -2085,60 +2054,11 @@ html[data-theme="light"] .grp-pill--active {
 html[data-theme="light"] .grp-rail-wrap::after {
     background: linear-gradient(to right, transparent, var(--bg));
 }
-
-/* Barra de búsqueda e inputs en inicio */
-
-.inicio-btn-row { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
 /* M3 Button height 40dp, shape Full, Label Large 14sp */
-.inicio-btn {
-    display: flex; align-items: center; gap: 8px;
-    padding: 10px 18px;
-    /* R3: 44 px, la medida táctil del sistema (antes 40) */
-    height: 44px;
-    border-radius: var(--r-full);
-    font-family: var(--f-body);
-    font-size: 0.875rem; font-weight: 500; letter-spacing: 0.005em;
-    cursor: pointer; border: none;
-    transition: box-shadow 0.2s var(--ease-std),
-                transform 0.15s var(--ease-out);
-    min-height: unset !important;
-    position: relative; overflow: hidden;
-    -webkit-tap-highlight-color: transparent;
-}
-.inicio-btn::after {
-    content: '';
-    position: absolute; inset: 0;
-    background: #fff;
-    opacity: 0; border-radius: inherit;
-    transition: opacity 0.15s ease; pointer-events: none;
-}
-.inicio-btn:hover::after  { opacity: 0.08; }
-.inicio-btn:active::after { opacity: 0.16; }
-.inicio-btn:hover  { box-shadow: var(--shadow-elev2); }
-.inicio-btn:active { transform: scale(0.97); box-shadow: none; }
-.inicio-btn svg { width: 18px; height: 18px; flex-shrink: 0; position: relative; z-index: 1; }
-.inicio-btn span, .inicio-btn > *:not(svg) { position: relative; z-index: 1; }
 /* M3 Filled Button */
-.inicio-btn.primary {
-    background: var(--accent);
-    color: var(--accent-on);
-    box-shadow: var(--shadow-card);
-}
 /* En claro, --accent-on ya es blanco: no hace falta un override. */
 /* M3 Tonal Button (Secondary Container tone) */
-.inicio-btn.success {
-    background: var(--ok-dim);
-    color: var(--ok);
-    border: 1px solid var(--ok-dim);
-}
 /* M3 Tonal Button destructive */
-.inicio-btn.danger {
-    background: transparent;
-    color: var(--danger);
-    border: 1px solid var(--danger-dim);
-    width: 100%; justify-content: center;
-}
-.inicio-btn.danger:hover { background: var(--danger-dim); }
 
 /* R3: misma superficie y mismo borde que una tarjeta del kit, sin sombra: en
    una pantalla larga, una sombra por tarjeta acaba siendo ruido. */
@@ -2403,8 +2323,6 @@ html[data-theme="light"] .sb-logout-btn:hover { background: rgba(186,26,26,0.14)
     border-radius:var(--r-sm);font-size:0.58rem;font-weight:700;
     letter-spacing:.07em;text-transform:uppercase;flex-shrink:0;
 }
-.role-badge.admin{background:var(--warn-dim);color:var(--warn);border:1px solid var(--warn);}
-.role-badge.user {background:var(--accent-dim);color:var(--accent);border:1px solid var(--accent-dim2);}
 
 /* ── Toggle sync ==================== */
 .sync-toggle-row{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-radius:var(--r-md);border:1px solid var(--border-mid);background:var(--surface);margin-bottom:4px;}
@@ -2701,10 +2619,11 @@ tbody td { padding: 12px !important; color: var(--txt-primary) !important; }
     letter-spacing: 0.01em;
     border: 1px solid transparent;
 }
+/* v5.58 — administrador = distintivo, no alerta: bronce */
 .role-badge.admin {
-    background: var(--warn-dim);
-    color: var(--warn);
-    border-color: var(--warn);
+    background: var(--bronze-dim);
+    color: var(--bronze);
+    border-color: var(--bronze-dim);
 }
 .role-badge.user  {
     background: var(--accent-dim);
@@ -3210,9 +3129,7 @@ textarea.ui-campo { resize: vertical; min-height: 88px; }
 /* Panel "Conteos por usuario": las acciones de cada área en su propia fila. */
 .if-acc-usuario { flex-basis: 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(88px, 1fr)); gap: 8px; margin: 6px 0 4px; }
 .if-acc-usuario .bt { min-height: 48px; padding: 10px 8px; font-size: .9rem; border-width: 2px; }
-.if-pantalla .audit-area-row { font-size: .88rem; padding: 10px 0; gap: 8px; }
 .if-pantalla .audit-area-row-count { font-size: .82rem; }
-.if-pantalla .audit-user-row { padding: 14px; margin-bottom: 12px; }
 .if-pantalla .audit-timestamp { font-size: .78rem; }
 /* El botón de un área queda agrupado con SU tarjeta, no con la siguiente. */
 .if-area:has(> .bt) { padding: 6px; border-radius: var(--r-lg); background: var(--surface); border: 1px solid var(--border-mid); }
@@ -3416,7 +3333,6 @@ textarea.ui-campo { resize: vertical; min-height: 88px; }
 .bi-btn--primario   { background: var(--brass); color: var(--brass-on); }
 .bi-btn--primario:hover { filter: brightness(1.06); }
 .bi-btn--secundario { background: var(--accent-dim); color: var(--brass); border-color: var(--accent-dim2); }
-.bi-btn--fantasma   { background: transparent; color: var(--txt-secondary); border-color: var(--border-mid); }
 .bi-btn--peligro    { background: transparent; color: var(--danger); border-color: var(--danger-dim); }
 .bi-btn--peligro:hover { background: var(--danger-dim); }
 .bi-btn--book       { background: var(--book); color: var(--book-on); }
@@ -4065,6 +3981,7 @@ html[data-theme] body #themeToggleBtn:hover { background: var(--border-mid) !imp
     --amber: var(--dk-amber); --amber-dim: var(--dk-amber-dim);
     --sky: var(--dk-sky); --sky-dim: var(--dk-sky-dim);
     --book: var(--dk-book); --book-dim: var(--dk-book-dim);
+    --bronze: var(--dk-bronze); --bronze-dim: var(--dk-bronze-dim);
     --ok: var(--green); --ok-dim: var(--green-dim); --warn: var(--amber); --warn-dim: var(--amber-dim);
     --info: var(--sky); --info-dim: var(--sky-dim); --danger: var(--red); --danger-dim: var(--red-dim);
     background: var(--sidebar); color: var(--sidebar-fg);

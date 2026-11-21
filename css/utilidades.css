@@ -689,9 +689,6 @@ table { border-collapse: collapse; }
 
 /* Conteos por usuario: menos relleno; Ver / Habilitar / Reabrir de 48 px. */
 .if-pantalla.if-pantalla--compacta .if-card--usuarios { gap: 8px; }
-.if-pantalla.if-pantalla--compacta .audit-user-row { padding: 10px 12px; margin-bottom: 8px; }
-.if-pantalla.if-pantalla--compacta .audit-user-row:last-child { margin-bottom: 0; }
-.if-pantalla.if-pantalla--compacta .audit-area-row { padding: 6px 0; }
 .if-pantalla.if-pantalla--compacta .if-acc-usuario { gap: 10px; margin: 4px 0 2px; }
 .if-pantalla.if-pantalla--compacta .if-acc-usuario .bt { min-height: 48px; padding: 6px; font-size: .875rem; border-width: 1.5px; border-radius: 12px; }
 

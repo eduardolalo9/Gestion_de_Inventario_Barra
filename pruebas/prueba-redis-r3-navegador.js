@@ -174,7 +174,7 @@ const PUERTO = process.env.PUERTO || '8080';
   // mitad (1.5) → "Advertencia producto bajo", en ámbar. No "Limitado": ese
   // umbral es < 1.5. (La primera versión de esta prueba lo calculó mal.)
   chk('ACEITUNA (1.70 de mínimo 3) sale como "Advertencia producto bajo", en ámbar del tema',
-      badges.texto === 'Advertencia producto bajo' && badges.color === 'rgb(251, 191, 36)',   // v5.38: ámbar #FBBF24
+      badges.texto === 'Advertencia producto bajo' && badges.color === 'rgb(226, 180, 90)',   // v5.38: ámbar #E2B45A
       JSON.stringify(badges));
 
   // ── D · El pedido sugerido conserva su cantidad y su acción ────────────
@@ -216,7 +216,7 @@ const PUERTO = process.env.PUERTO || '8080';
   chk('★ Ni un elemento con fondo blanco en toda la pantalla de Inicio',
       limpio.blancos === 0, 'blancos: ' + limpio.blancos);
   chk('El grupo activo del rail se pinta en esmeralda (texto y borde de la pastilla)',
-      limpio.grpActivo && limpio.grpActivo.texto === 'rgb(16, 185, 129)' && limpio.grpActivo.borde === 'rgb(16, 185, 129)', JSON.stringify(limpio.grpActivo));
+      limpio.grpActivo && limpio.grpActivo.texto === 'rgb(74, 183, 148)' && limpio.grpActivo.borde === 'rgb(74, 183, 148)', JSON.stringify(limpio.grpActivo));
 
   chk('Sin errores de JS en toda la prueba', errs.length === 0, errs.join(' | '));
   await nav.close();

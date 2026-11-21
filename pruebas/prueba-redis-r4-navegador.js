@@ -17,7 +17,7 @@
  * ═══════════════════════════════════════════════════════════════════════════
  */
 'use strict';
-// v5.38 — acento oscuro #10B981 = rgb(16, 185, 129); velo --scrim rgba(0,4,2,.72).
+// v5.38 — acento oscuro #4AB794 = rgb(74, 183, 148); velo --scrim rgba(4,8,11,.74).
 const { chromium } = require('playwright');
 const PUERTO = process.env.PUERTO || '8080';
 
@@ -149,15 +149,15 @@ const GRIS_DE_FABRICA = /rgb\(239, 239, 239\)|buttonface/i;
       !/rgb\(111, 178, 232\)/.test(modal.agregar.bg) && !GRIS_DE_FABRICA.test(modal.agregar.bg),
       'fondo: ' + modal.agregar.bg);
   chk('★ Guardar es el único latón del modal (el latón se gana)',
-      /rgb\(16, 185, 129\)/.test(modal.guardar.bg) &&
-      !/rgb\(16, 185, 129\)/.test(modal.agregar.bg) &&
-      !/rgb\(16, 185, 129\)/.test(modal.cancelar.bg),
+      /rgb\(74, 183, 148\)/.test(modal.guardar.bg) &&
+      !/rgb\(74, 183, 148\)/.test(modal.agregar.bg) &&
+      !/rgb\(74, 183, 148\)/.test(modal.cancelar.bg),
       JSON.stringify({ guardar: modal.guardar.bg, agregar: modal.agregar.bg, cancelar: modal.cancelar.bg }));
   chk('Cancelar y Guardar son táctiles (≥ 44 px)',
       modal.cancelar.h >= 44 && modal.guardar.h >= 44,
       JSON.stringify({ c: modal.cancelar.h, g: modal.guardar.h }));
   chk('El velo del modal usa el token del sistema, no un negro a mano',
-      /rgba?\(0, 4, 2/.test(modal.scrim) || /rgba\(0, 0, 0, 0\.7/.test(modal.scrim), modal.scrim);
+      /rgba?\(4, 8, 11/.test(modal.scrim) || /rgba\(0, 0, 0, 0\.7/.test(modal.scrim), modal.scrim);
 
   const sinGris = await p.evaluate((re) => {
     const rx = new RegExp(re, 'i');

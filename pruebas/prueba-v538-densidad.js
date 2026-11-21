@@ -14,16 +14,17 @@ const L = (h) => { const c = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) 
 const cr = (a, b) => { const x = L(a), y = L(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
 
 // ── Tokens del oscuro (encargo) ──
-const esperado = { bg: '#0A0E0C', card: '#121915', 'card-high': '#19241E', border: '#1E2B24', accent: '#10B981', 'accent-hover': '#34D399', 'txt-primary': '#F1F5F9', 'txt-secondary': '#94A3B8' };
+// v5.58 — grafito y azul marino, esmeralda sobrio (antes #0A0E0C/#10B981 de v5.38)
+const esperado = { bg: '#0D141B', card: '#15212A', 'card-high': '#1D2B34', border: '#22313A', accent: '#4AB794', 'accent-hover': '#62C4A3', 'txt-primary': '#E7EEEB', 'txt-secondary': '#B3C0BB' };
 Object.keys(esperado).forEach(k => chk('Token oscuro --' + k + ' = ' + esperado[k], tok(k) === esperado[k], String(tok(k))));
-chk('★ Estados: crítico rosa, reabastecer ámbar, ok esmeralda', tok('red') === '#FB7185' && tok('amber') === '#FBBF24' && tok('green') === '#34D399');
+chk('★ Estados: crítico rosa, reabastecer ámbar, ok esmeralda', tok('red') === '#EB8A8F' && tok('amber') === '#E2B45A' && tok('green') === '#5FC68C');
 ['txt-primary', 'txt-secondary', 'txt-muted', 'accent', 'red', 'amber', 'green'].forEach(t =>
-    chk('★ Contraste --' + t + ' ≥ 4.5:1 sobre la tarjeta y sobre --card-high', tok(t) && cr(tok(t), '#121915') >= 4.5 && cr(tok(t), '#19241E') >= 4.5, tok(t) + ' ' + (tok(t) ? cr(tok(t), '#19241E').toFixed(2) : '')));
-chk('★ #64748B NO se usa como texto: --txt-muted es #8B97AA y #64748B queda en --txt-disabled', tok('txt-muted') === '#8B97AA' && tok('txt-disabled') === '#64748B');
-chk('Botón primario: texto #04130C sobre esmeralda ≥ 4.5:1', tok('accent-on') === '#04130C' && cr('#04130C', '#10B981') >= 4.5);
+    chk('★ Contraste --' + t + ' ≥ 4.5:1 sobre la tarjeta y sobre --card-high', tok(t) && cr(tok(t), '#15212A') >= 4.5 && cr(tok(t), '#1D2B34') >= 4.5, tok(t) + ' ' + (tok(t) ? cr(tok(t), '#1D2B34').toFixed(2) : '')));
+chk('★ El gris tenue de texto pasa AA y el apagado queda solo en --txt-disabled', tok('txt-muted') === '#8E9D98' && tok('txt-disabled') === '#66756F');
+chk('Botón primario: texto #062A20 sobre esmeralda ≥ 4.5:1', tok('accent-on') === '#062A20' && cr('#062A20', '#4AB794') >= 4.5);
 chk('Sin sombras decorativas en el oscuro (--shadow-card: none)', /--shadow-card:\s*none;/.test(raiz));
 const claroAcc = (/--accent:\s*(#[0-9A-Fa-f]{6})/.exec(mini) || [])[1];
-chk('★ Claro: esmeralda #047857 con ≥ 4.5:1 sobre la superficie y con texto blanco', claroAcc === '#047857' && cr('#047857', '#F1F1EE') >= 4.5 && cr('#FFFFFF', '#047857') >= 4.5);
+chk('★ Claro: esmeralda #1A7058 con ≥ 4.5:1 sobre el fondo y con texto blanco', claroAcc === '#1A7058' && cr('#1A7058', '#F2F5F3') >= 4.5 && cr('#FFFFFF', '#1A7058') >= 4.5);
 
 // ── Tipografía ──
 chk('★ Plus Jakarta Sans (400–800) e IBM Plex Mono (500/600) propias, sin Google Fonts', ['400', '500', '600', '700', '800'].every(w => fs.existsSync(path.join(RAIZ, 'fonts/plus-jakarta-sans-' + w + '.woff2')))

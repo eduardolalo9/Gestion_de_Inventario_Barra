@@ -14,7 +14,7 @@
  * ═══════════════════════════════════════════════════════════════════════════
  */
 'use strict';
-// v5.38 — acento oscuro #10B981 = rgb(16, 185, 129); velo --scrim rgba(0,4,2,.72).
+// v5.38 — acento oscuro #4AB794 = rgb(74, 183, 148); velo --scrim rgba(4,8,11,.74).
 const { chromium } = require('playwright');
 const PUERTO = process.env.PUERTO || '8080';
 
@@ -182,7 +182,7 @@ const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
     return { existe: !!btn, icono: btn ? !!btn.querySelector('.fa-book') : false, bg: cs ? cs.backgroundColor : null };
   });
   chk('★ El botón "Contabilizar" del detalle es bt--primario (el único latón de la pantalla)',
-      contab.existe && contab.icono && /rgb\(16, 185, 129\)/.test(contab.bg || ''), JSON.stringify(contab));
+      contab.existe && contab.icono && /rgb\(74, 183, 148\)/.test(contab.bg || ''), JSON.stringify(contab));
 
   chk('Sin errores de JS en toda la prueba', errs.length === 0, errs.join(' | '));
 
