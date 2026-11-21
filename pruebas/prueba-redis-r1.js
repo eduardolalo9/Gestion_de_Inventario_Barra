@@ -173,21 +173,23 @@ chk('El preflight que la app necesitaba se replicó (márgenes de títulos a cer
     /h1, h2, h3, h4, h5, h6, p[^{]*\{\s*margin: 0/.test(util),
     'sin esto, al quitar Tailwind cada h2 y cada p recupera el margen del navegador');
 
-// ═══ 4 · Tokens de Carbón & Latón ══════════════════════════════════════════
+// ═══ 4 · Tokens de Grafito & Esmeralda (v5.12; antes Carbón & Latón) ════════
 const raiz = (/:root\s*\{([\s\S]*?)\n\}/.exec(esti) || ['', ''])[1];
 const claro = (/html\[data-theme="light"\]\s*\{([\s\S]*?)\n\}/.exec(esti) || ['', ''])[1];
-chk('★ El acento es latón (#E8B55C), no el azul anterior',
-    /--accent:\s*#E8B55C/i.test(raiz) && !/#a8c7fa/i.test(raiz));
-chk('El texto sobre latón es oscuro (contraste), no blanco',
-    /--accent-on:\s*#2A1D05/i.test(raiz));
+chk('★ El acento es esmeralda (#3DAA88), no el azul ni el latón anteriores',
+    /--accent:\s*#3DAA88/i.test(raiz) && !/#a8c7fa/i.test(raiz) && !/#E8B55C/i.test(raiz));
+chk('El texto sobre esmeralda es oscuro (contraste 5.4:1), no blanco',
+    /--accent-on:\s*#062A20/i.test(raiz));
+chk('El bronce existe como token propio de detalle (--bronze), en los dos temas',
+    /--bronze:\s*#C9A66B/i.test(raiz) && /--bronze:\s*#85652F/i.test(claro));
 chk('Existen los alias nuevos (--brass, --ok, --warn, --info, --danger, --book)',
     ['--brass:', '--ok:', '--warn:', '--info:', '--danger:', '--book:'].every(t => raiz.includes(t)));
 chk('★ Los nombres viejos siguen existiendo (--green/--red/--amber/--sky): miles de reglas los usan',
     ['--green:', '--red:', '--amber:', '--sky:'].every(t => raiz.includes(t)));
-chk('El fondo es carbón azulado, no negro plano',
-    /--bg:\s*#0E1013/i.test(raiz));
-chk('★ El tema claro usa bronce, no el mismo amarillo (que no pasaría contraste)',
-    /--accent:\s*#8A5A14/i.test(claro) && /--accent-on:\s*#FFFFFF/i.test(claro));
+chk('El fondo es grafito profundo, no negro plano',
+    /--bg:\s*#0D141B/i.test(raiz));
+chk('★ El tema claro usa esmeralda profundo con texto blanco (5.4:1), no el claro del oscuro',
+    /--accent:\s*#1C785E/i.test(claro) && /--accent-on:\s*#FFFFFF/i.test(claro));
 chk('El tema claro define también --book y --scrim (paridad con el oscuro)',
     /--book:/.test(claro) && /--scrim:/.test(claro));
 

@@ -1,87 +1,68 @@
-
 /* =================================================================
    ENTERPRISE DESIGN SYSTEM — BarInventory
-   Paleta corporativa · IBM Plex Sans · Geometría estructurada
-   Modo oscuro (navy) / Modo claro (slate)
+   Grafito · Azul marino · Esmeralda · Bronce · IBM Plex Sans
    ================================================================= */
 
 :root {
     /* ══════════════════════════════════════════════════════
-       BI DESIGN SYSTEM — "CARBÓN & LATÓN"  (REDISEÑO R1, v5.0)
+       BI DESIGN SYSTEM — "GRAFITO & ESMERALDA"  (v5.12)
        ────────────────────────────────────────────────────
-       Un instrumento de medición, no un panel de administración.
-       Tres reglas que gobiernan todo lo que se dibuje encima:
-         1. El latón se gana: solo lo que se toca o exige una
-            decisión va en --brass. Si todo brilla, nada guía.
-         2. Las cifras van en IBM Plex Mono y alineadas a la
-            derecha: una columna de cantidades se escanea como una
-            hoja de inventario, sin leer palabra por palabra.
-         3. El color nunca va solo: cada estado lleva color Y
-            palabra. En una barra con poca luz —y para quien no
-            distingue tonos— el texto es lo que manda.
-
-       Se conserva la estructura de roles de Material You 3 que ya
-       tenía el archivo (superficies por elevación, on-colors,
-       sombras, motion, shape scale): lo que cambia son los VALORES.
-       Por eso un solo archivo re-tematiza toda la aplicación sin
-       tocar ni una línea de lógica.
-
-       Los nombres viejos (--accent, --green, --red, --amber, --sky)
-       se mantienen como la misma variable de siempre porque los usan
-       miles de reglas y de estilos en línea; los nombres nuevos
-       (--brass, --ok, --warn, --info, --danger, --book) son alias
-       semánticos para el código nuevo. Renombrar en masa habría sido
-       un cambio de riesgo alto sin beneficio visible.
+       Sustituye a "Carbón & Latón" (R1). Las reglas no cambian:
+         1. El acento se gana: solo lo que se toca o exige una
+            decisión va en --accent (esmeralda). El bronce es un
+            detalle de marca (--bronze), nunca una acción.
+         2. Las cifras van en IBM Plex Mono, alineadas a la derecha.
+         3. El color nunca va solo: cada estado lleva color Y palabra.
+       Todos los pares texto/fondo pasan 4.5:1 (WCAG AA) en los dos
+       temas. Los nombres de variable se conservan: --accent, --brass
+       y los alias legacy apuntan ahora al esmeralda, así que las
+       miles de reglas y estilos en línea que los usan se re-tematizan
+       sin tocar una línea de lógica.
        ══════════════════════════════════════════════════════ */
 
-    /* ── Superficies (carbón azulado, nunca negro plano) ── */
-    --bg:             #0E1013;          /* Fondo de la app */
-    --surface:        #15181D;          /* Tarjeta normal */
-    --card:           #1C2027;          /* Tarjeta destacada / activa */
-    --card-high:      #242932;          /* Control elevado */
-    --border:         rgba(180,176,170,0.08);
-    --border-mid:     rgba(180,176,170,0.14);
-    --border-strong:  rgba(180,176,170,0.26);
-    /* Velo de modal: casi negro con tinte frío, no negro puro al 60 % */
-    --scrim:          rgba(5,6,8,0.72);
+    /* ── Superficies: grafito → azul marino ── */
+    --bg:             #0D141B;
+    --surface:        #121C24;          /* barras, sidebar */
+    --card:           #15212A;          /* tarjeta */
+    --card-high:      #1D2B34;          /* control elevado */
+    --border:         rgba(154,175,168,0.10);
+    --border-mid:     rgba(154,175,168,0.17);
+    --border-strong:  rgba(154,175,168,0.30);
+    --scrim:          rgba(4,8,11,0.74);
 
-    /* ── Identidad: latón cálido (NO oro saturado) ── */
-    --accent:         #E8B55C;          /* = --brass */
-    --accent-hover:   #F2C778;
-    --accent-on:      #2A1D05;          /* Texto sobre latón */
-    --accent-container: rgba(232,181,92,0.16);
-    --accent-dim:     rgba(232,181,92,0.10);
-    --accent-dim2:    rgba(232,181,92,0.18);
-    --brass:          var(--accent);
+    /* ── Acción: esmeralda ── */
+    --accent:         #3DAA88;
+    --accent-hover:   #52B998;
+    --accent-on:      #062A20;
+    --accent-container: rgba(61,170,136,0.16);
+    --accent-dim:     rgba(61,170,136,0.10);
+    --accent-dim2:    rgba(61,170,136,0.20);
+    --brass:          var(--accent);    /* alias legacy = acción */
     --brass-hover:    var(--accent-hover);
     --brass-on:       var(--accent-on);
     --brass-dim:      var(--accent-dim);
+    /* ── Distinción: bronce (solo detalles de marca) ── */
+    --bronze:         #C9A66B;
+    --bronze-dim:     rgba(201,166,107,0.14);
 
-    /* ── Semánticos ──
-       Ajustados para pasar 4.5:1 sobre las superficies de arriba Y
-       para diferenciarse entre sí también en LUMINOSIDAD, no solo en
-       tono: así un estado sigue siendo legible para quien no
-       distingue verde de rojo. */
-    --green:          #5FD68A;
-    --green-dim:      rgba(95,214,138,0.13);
-    --green-dark:     #0B2E18;
-    --green-text:     #5FD68A;
-    --red:            #FF8A80;
-    --red-dim:        rgba(255,138,128,0.13);
-    --red-dark:       #5C0A06;
-    --red-text:       #FF8A80;
-    --amber:          #F0B429;
-    --amber-dim:      rgba(240,180,41,0.14);
-    --sky:            #6FB2E8;
-    --sky-dim:        rgba(111,178,232,0.13);
-    /* Lila: contabilizado y corte mensual (FASE 13). Es un estado
-       contable, distinto de "completado" (verde) y de "en proceso"
-       (azul), y merecía su propio color en vez de reusar uno. */
-    --book:           #C9A0E8;
-    --book-dim:       rgba(201,160,232,0.14);
-    --book-on:        #2B1640;
+    /* ── Semánticos ── */
+    --green:          #5FC68C;
+    --green-dim:      rgba(95,198,140,0.13);
+    --green-dark:     #0B2E1B;
+    --green-text:     #5FC68C;
+    --red:            #EB8A8F;
+    --red-dim:        rgba(235,138,143,0.13);
+    --red-dark:       #4A1418;
+    --red-text:       #EB8A8F;
+    --amber:          #E2B45A;
+    --amber-dim:      rgba(226,180,90,0.14);
+    --sky:            #7DB3D8;
+    --sky-dim:        rgba(125,179,216,0.13);
+    /* Lila: contabilizado y corte mensual (FASE 13). */
+    --book:           #B9A3D9;
+    --book-dim:       rgba(185,163,217,0.14);
+    --book-on:        #22163A;
 
-    /* Alias semánticos para el código nuevo */
     --ok:             var(--green);
     --ok-dim:         var(--green-dim);
     --warn:           var(--amber);
@@ -91,31 +72,35 @@
     --danger:         var(--red);
     --danger-dim:     var(--red-dim);
 
-    /* ── Texto ── */
-    --txt-primary:    #E8E6E3;
-    --txt-secondary:  #B4B0AA;
-    --txt-muted:      #8A867F;
+    /* ── Texto: gris acero ── */
+    --txt-primary:    #E7EEEB;
+    --txt-secondary:  #B3C0BB;
+    --txt-muted:      #8E9D98;
 
-    /* ── Sombras M3 (elevation + tonal tint) ── */
-    --shadow-xs:      0 1px 2px rgba(0,0,0,0.45);
-    --shadow-card:    0 1px 3px rgba(0,0,0,0.50), 0 1px 2px rgba(0,0,0,0.35);
-    --shadow-elev2:   0 3px 8px rgba(0,0,0,0.42), 0 1px 3px rgba(0,0,0,0.28);
-    --shadow-elev3:   0 6px 16px rgba(0,0,0,0.40), 0 2px 6px rgba(0,0,0,0.22);
-    --shadow-modal:   0 24px 48px rgba(0,0,0,0.60), 0 8px 20px rgba(0,0,0,0.38);
+    /* ── Sombras ── */
+    --shadow-xs:      0 1px 2px rgba(0,0,0,0.40);
+    --shadow-card:    0 1px 2px rgba(0,0,0,0.30), 0 8px 24px -18px rgba(0,0,0,0.70);
+    --shadow-elev2:   0 3px 8px rgba(0,0,0,0.38), 0 1px 3px rgba(0,0,0,0.24);
+    --shadow-elev3:   0 8px 20px rgba(0,0,0,0.40), 0 2px 6px rgba(0,0,0,0.22);
+    --shadow-modal:   0 28px 80px -24px rgba(0,0,0,0.70), 0 8px 20px rgba(0,0,0,0.34);
 
-    /* ── Motion M3 (Emphasized / Decelerate) ── */
+    /* ── Motion ── */
     --ease-std:       cubic-bezier(0.2, 0, 0, 1.0);
     --ease-out:       cubic-bezier(0.05, 0.7, 0.1, 1.0);
     --ease-spring:    cubic-bezier(0.34, 1.56, 0.64, 1);
     --glow-accent:    none;
 
-    /* ── Shape scale M3 ── */
+    /* ── Forma ── */
     --r-xs:   6px;
     --r-sm:   8px;
     --r-md:   12px;
     --r-lg:   16px;
     --r-xl:   28px;
     --r-full: 9999px;
+
+    /* ── Estructura: barra inferior (móvil) y sidebar (PC) ── */
+    --btab-h: 68px;
+    --sb-w:   256px;
 
     /* ── Aliases legacy ── */
     --ink:         var(--bg);
@@ -124,63 +109,54 @@
     --accent-blue: var(--sky);
     --accent-green:var(--green);
     --shadow-mid:  var(--shadow-card);
-    --modal-bg:    #1d1d27;
+    --modal-bg:    #17242D;
 }
 
-/* ── TEMA CLARO M3 (Light Surface Scheme) ────────────────── */
+/* ── TEMA CLARO: blanco profesional, esmeralda profundo ── */
 html[data-theme="light"] {
-    /* ── Tema claro de "Carbón & Latón" ──
-       El latón claro NO es el mismo amarillo: sobre fondo claro un
-       #E8B55C no alcanza 4.5:1 contra texto oscuro ni sirve de fondo
-       para texto blanco. Se baja a un bronce (#8A5A14) que sí pasa
-       como color de texto y de fondo con blanco encima, y conserva
-       la misma familia cálida para que la identidad se reconozca. */
-    --bg:             #FBF9F6;
-    --surface:        #F4F1EC;
+    --bg:             #F2F5F3;
+    --surface:        #FFFFFF;
     --card:           #FFFFFF;
-    --card-high:      #EBE7E0;
-    --border:         rgba(60,56,50,0.10);
-    --border-mid:     rgba(60,56,50,0.18);
-    --border-strong:  rgba(60,56,50,0.32);
-    --scrim:          rgba(30,27,22,0.46);
+    --card-high:      #EAF0ED;
+    --border:         rgba(22,44,38,0.09);
+    --border-mid:     rgba(22,44,38,0.16);
+    --border-strong:  rgba(22,44,38,0.30);
+    --scrim:          rgba(13,20,27,0.48);
 
-    --accent:         #8A5A14;          /* Bronce: el latón en claro */
-    --accent-hover:   #6E460C;
+    --accent:         #1C785E;
+    --accent-hover:   #155E4A;
     --accent-on:      #FFFFFF;
-    --accent-container: rgba(138,90,20,0.10);
-    --accent-dim:     rgba(138,90,20,0.07);
-    --accent-dim2:    rgba(138,90,20,0.15);
+    --accent-container: rgba(28,120,94,0.10);
+    --accent-dim:     rgba(28,120,94,0.07);
+    --accent-dim2:    rgba(28,120,94,0.15);
+    --bronze:         #85652F;
+    --bronze-dim:     rgba(133,101,47,0.10);
 
-    --green:          #16693A;
-    --green-dim:      rgba(22,105,58,0.09);
-    --green-dark:     #D2F3E0;
-    --green-text:     #16693A;
-    --red:            #B01A14;
-    --red-dim:        rgba(176,26,20,0.09);
-    --red-dark:       #FFDAD6;
-    --red-text:       #B01A14;
-    --amber:          #8A5A00;
-    --amber-dim:      rgba(138,90,0,0.10);
-    --sky:            #0A5E80;
-    --sky-dim:        rgba(10,94,128,0.09);
-    --book:           #6B3FA0;
-    --book-dim:       rgba(107,63,160,0.10);
+    --green:          #17693F;
+    --green-dim:      rgba(23,105,63,0.09);
+    --green-dark:     #D4F0DF;
+    --green-text:     #17693F;
+    --red:            #A8322F;
+    --red-dim:        rgba(168,50,47,0.09);
+    --red-dark:       #FBDCDA;
+    --red-text:       #A8322F;
+    --amber:          #855A00;
+    --amber-dim:      rgba(133,90,0,0.10);
+    --sky:            #1F5F86;
+    --sky-dim:        rgba(31,95,134,0.09);
+    --book:           #5E3F8F;
+    --book-dim:       rgba(94,63,143,0.10);
     --book-on:        #FFFFFF;
 
-    --txt-primary:    #1C1A17;
-    --txt-secondary:  #4A463F;
-    --txt-muted:      #76716A;
+    --txt-primary:    #16211F;
+    --txt-secondary:  #3F4D49;
+    --txt-muted:      #5C6B66;
 
-    --shadow-xs:      0 1px 2px rgba(0,0,0,0.08);
-    --shadow-card:    0 1px 3px rgba(0,0,0,0.10), 0 1px 2px rgba(0,0,0,0.06);
-    --shadow-modal:   0 20px 60px rgba(0,0,0,0.16), 0 6px 20px rgba(0,0,0,0.10);
+    --shadow-xs:      0 1px 2px rgba(16,32,28,0.06);
+    --shadow-card:    0 1px 2px rgba(16,32,28,0.05), 0 10px 28px -22px rgba(16,32,28,0.35);
+    --shadow-modal:   0 28px 70px -24px rgba(16,32,28,0.35), 0 6px 18px rgba(16,32,28,0.08);
 
-    --ink: var(--bg);
-    --accent-2: var(--red);
-    --accent-3: var(--amber);
-    --accent-blue: var(--sky);
-    --accent-green: var(--green);
-    --modal-bg: #ffffff;   /* fondo caja modal en modo claro */
+    --modal-bg: #FFFFFF;
 }
 
 /* ─── Reset & Base ───────────────────────────────────────── */
@@ -188,6 +164,7 @@ html[data-theme="light"] {
 html { scroll-behavior: smooth; }
 
 body {
+    margin: 0;
     font-family: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
     font-size: 13px;
     font-weight: 400;
@@ -256,188 +233,145 @@ body {
 #tabContent { animation: tabContentIn 0.18s var(--ease-out) both; }
 .hidden { display: none !important; }
 
-/* ─── HEADER ─────────────────────────────────────────────── */
-body > .sticky.top-0 {
-    background: #0b1325 !important;
-    border-bottom: 1px solid rgba(148,163,184,0.10) !important;
-    box-shadow: 0 1px 0 rgba(0,0,0,0.50) !important;
-}
-body > .sticky.top-0 h1 {
-    font-family: 'IBM Plex Sans', sans-serif !important;
-    font-weight: 600 !important;
-    font-size: 0.9375rem !important;
-    letter-spacing: 0.01em !important;
-    color: #e2e8f0 !important;
-    background: none !important;
-    -webkit-background-clip: unset !important;
-    -webkit-text-fill-color: #e2e8f0 !important;
-    background-clip: unset !important;
-}
-html[data-theme="light"] body > .sticky.top-0 {
-    background: #0f2040 !important;
-    border-bottom: 1px solid rgba(0,0,0,0.25) !important;
-}
-
-/* ─── Hamburger ──────────────────────────────────────────── */
-#hamburgerBtn {
-    display: flex; align-items: center; justify-content: center;
-    width: 30px; height: 30px;
-    border-radius: var(--r-md);
-    background: rgba(255,255,255,0.07);
-    border: 1px solid rgba(255,255,255,0.10);
-    cursor: pointer; color: #cbd5e1;
-    transition: background 0.12s ease;
-}
-#hamburgerBtn:hover  { background: rgba(255,255,255,0.13); transform: none; }
-#hamburgerBtn:active { transform: none; }
-#themeToggleBtn:hover { background: rgba(255,255,255,0.13) !important; transform: none !important; }
-html[data-theme="light"] #themeToggleBtn { background: rgba(255,255,255,0.15) !important; }
 
 /* Tab bar oculto */
 .bg-white.shadow-sm.sticky { display: none !important; }
 
-/* ─── SIDEBAR ────────────────────────────────────────────── */
+/* ─── MENÚ LATERAL (#sidebar) ────────────────────────────────
+   Móvil: cajón que se abre con "Más" (sbOpen/sbClose, sin cambios).
+   PC (≥1024 px): el mismo nodo queda fijo como sidebar; ver el bloque
+   "ESTRUCTURA DE ESCRITORIO" al final del archivo. Una sola definición
+   para los dos temas: todo sale de los tokens. */
 #sbOverlay {
     position: fixed; inset: 0;
-    background: rgba(0,0,0,0.58);
-    backdrop-filter: blur(3px);
+    background: var(--scrim);
     -webkit-backdrop-filter: blur(3px);
+    backdrop-filter: blur(3px);
     z-index: 300;
     opacity: 0; pointer-events: none;
     transition: opacity 0.20s ease;
 }
 #sbOverlay.sb-open { opacity: 1; pointer-events: auto; }
 
-/* M3 Modal Navigation Drawer — width 360dp max, shape Large right-side 16dp */
 #sidebar {
     position: fixed; top: 0; left: 0; bottom: 0;
-    width: min(300px, 85vw);
+    width: min(300px, 86vw);
     display: flex; flex-direction: column;
-    /* M3 Drawer: Surface Container Low */
     background: var(--surface);
-    border-right: none;
-    box-shadow: 16px 0 48px rgba(0,0,0,0.55), 2px 0 8px rgba(0,0,0,0.28);
-    border-radius: 0 16px 16px 0;          /* M3: right corners only */
+    border-right: 1px solid var(--border);
+    border-radius: 0 var(--r-lg) var(--r-lg) 0;
     z-index: 310;
     transform: translateX(-100%);
     transition: transform 0.30s var(--ease-out);
     overflow: hidden;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
 }
-#sidebar.sb-open { transform: translateX(0); }
-html[data-theme="light"] #sidebar {
-    background: var(--surface);
-    box-shadow: 16px 0 32px rgba(0,0,0,0.18);
-}
+#sidebar.sb-open { transform: translateX(0); box-shadow: 24px 0 60px -20px rgba(0,0,0,0.55); }
+/* Entorno de pruebas: la franja fija de arriba no tapa la marca. */
+body:has(#bannerEntorno) #sidebar { top: 20px; }
 
-/* Drawer header — M3: 72dp height */
 #sbHead {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 20px 16px 14px;
+    padding: 14px 12px 14px 16px;
     border-bottom: 1px solid var(--border);
-    min-height: 72px;
+    min-height: 64px;
 }
+/* Marca: monograma esmeralda + nombre + línea de bronce. Todo en CSS
+   para no tocar el HTML; el icono (copa) es una máscara SVG local. */
 #sbHead .sb-logo {
+    display: grid; grid-template-columns: 34px auto; column-gap: 10px; align-items: center;
     font-family: 'IBM Plex Sans', sans-serif;
-    font-weight: 600; font-size: 1rem;
-    letter-spacing: -0.01em;
+    font-weight: 700; font-size: 1rem; line-height: 1.1;
+    letter-spacing: -0.015em;
     color: var(--txt-primary);
 }
-html[data-theme="light"] #sbHead .sb-logo { color: var(--txt-primary); }
+#sbHead .sb-logo::before {
+    content: ''; grid-row: span 2;
+    width: 34px; height: 34px; border-radius: 10px;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 22h8M12 11v11M19 3l-7 8-7-8z'/%3E%3C/svg%3E") center/18px no-repeat, linear-gradient(135deg, #1C785E, #155E4A);
+    box-shadow: 0 6px 16px -8px rgba(28,120,94,0.7);
+}
+#sbHead .sb-logo::after {
+    content: 'Gestión de barra';
+    font-size: 0.625rem; font-weight: 600;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--bronze);
+}
 
-/* M3 Icon Button — close */
 #sbCloseBtn {
     width: 40px; height: 40px;
-    border-radius: var(--r-full);
-    background: transparent;
-    border: none;
+    border-radius: var(--r-md);
+    background: transparent; border: none;
     display: flex; align-items: center; justify-content: center;
     cursor: pointer; color: var(--txt-secondary);
     transition: background 0.2s var(--ease-std);
     -webkit-tap-highlight-color: transparent;
 }
-#sbCloseBtn:hover  { background: var(--border-mid); }
-#sbCloseBtn:active { background: var(--border-mid); }
-html[data-theme="light"] #sbCloseBtn { color: var(--txt-secondary); }
-html[data-theme="light"] #sbCloseBtn:hover { background: var(--border); }
+#sbCloseBtn:hover, #sbCloseBtn:active { background: var(--border-mid); color: var(--txt-primary); }
 
 #sbNav {
-    flex: 1; overflow-y: auto;
-    padding: 8px 12px;
+    flex: 1; overflow-y: auto; overscroll-behavior: contain;
+    padding: 8px 10px;
     display: flex; flex-direction: column; gap: 2px;
 }
 
-/* M3 Navigation Drawer Item — height 56dp, shape Full indicator */
+/* Destino de navegación: 48 px en móvil (≥44 táctil), activo con
+   fondo esmeralda tenue + filete a la izquierda. */
 .sb-item {
     display: flex; align-items: center; gap: 12px;
-    padding: 0 16px;
-    height: 56px;
-    border-radius: var(--r-full);             /* M3 indicator: Full radius */
+    padding: 0 12px;
+    height: 48px; flex-shrink: 0;
+    border-radius: var(--r-md);
     font-family: 'IBM Plex Sans', sans-serif;
-    font-weight: 500; font-size: 0.875rem;   /* Label Large 14sp */
-    letter-spacing: 0.005em;
+    font-weight: 500; font-size: 0.875rem;
     color: var(--txt-secondary);
     background: transparent; border: none;
     cursor: pointer; text-align: left; width: 100%;
-    transition: background 0.2s var(--ease-std),
-                color 0.2s var(--ease-std);
-    position: relative; overflow: hidden;
-    min-height: unset;
+    transition: background 0.18s var(--ease-std), color 0.18s var(--ease-std);
+    position: relative;
     -webkit-tap-highlight-color: transparent;
 }
-/* State layer */
-.sb-item::after {
-    content: '';
-    position: absolute; inset: 0;
-    background: var(--accent);
-    opacity: 0; border-radius: inherit;
-    transition: opacity 0.15s ease; pointer-events: none;
-}
-.sb-item:hover::after  { opacity: 0.06; }
-.sb-item:active::after { opacity: 0.14; }
-/* M3 active destination: Secondary Container tint */
+.sb-item:hover { background: var(--border); color: var(--txt-primary); }
+.sb-item:active { background: var(--border-mid); }
 .sb-item.sb-active {
-    background: var(--accent-container);
+    background: var(--accent-dim);
     color: var(--accent);
     font-weight: 600;
 }
-html[data-theme="light"] .sb-item.sb-active {
-    background: var(--accent-dim2);
-    color: var(--accent);
+.sb-item.sb-active::before {
+    content: ''; position: absolute; left: 0; top: 12px; bottom: 12px;
+    width: 3px; border-radius: 0 3px 3px 0; background: var(--accent);
 }
-.sb-item.sb-active .sb-ico { color: var(--accent); }
-.sb-item.sb-active::before { display: none; }
-
-/* Icon in Drawer item: 24dp */
 .sb-ico {
     width: 20px; height: 20px;
     color: var(--txt-muted);
-    transition: color 0.2s ease;
+    transition: color 0.18s ease;
     flex-shrink: 0;
 }
+.sb-item:hover .sb-ico { color: var(--txt-secondary); }
+.sb-item.sb-active .sb-ico { color: var(--accent); }
 
-/* M3 Subtitle / section header: Label Medium */
 .sb-sep {
     font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 0.75rem; font-weight: 500;
-    letter-spacing: 0.04em;
-    text-transform: none;
+    font-size: 0.6875rem; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase;
     color: var(--txt-muted);
-    padding: 12px 16px 4px;
+    padding: 14px 12px 6px;
 }
-html[data-theme="light"] .sb-sep { color: var(--txt-muted); }
 
+/* Pie: versión, usuario, nube, tema y salida. Compacto para que el
+   menú siga mostrando sus destinos en un teléfono. */
 #sbFoot {
-    padding: 12px 16px 16px;
+    padding: 10px 12px 12px;
     border-top: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 6px;
 }
+#sbFoot .sb-item { height: 40px; }
 #sbFoot p {
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 0.6875rem; color: var(--txt-muted);
     text-align: center;
 }
-html[data-theme="light"] #sbFoot p { color: var(--txt-muted); }
-html[data-theme="light"] .sb-item { color: var(--txt-secondary); }
-html[data-theme="light"] .sb-item:hover::after { opacity: 0.06; }
 
 /* ─── Layout ─────────────────────────────────────────────── */
 .max-w-7xl.mx-auto.px-3 { padding-top: 0.35rem !important; padding-bottom: 0.35rem !important; }
@@ -737,73 +671,57 @@ html[data-theme="light"] #inventarioModal h2 {
 /* ─── M3 Snackbar ────────────────────────────────────────── */
 #toast { animation: toastPop 0.28s var(--ease-out) both !important; }
 #toast > div {
-    /* M3 Snackbar: Inverse Surface = var(--txt-primary) en oscuro */
-    background: #322f38 !important;
-    border: none !important;
-    box-shadow: 0 3px 6px rgba(0,0,0,0.45), 0 6px 20px rgba(0,0,0,0.28) !important;
+    background: var(--card-high) !important;
+    border: 1px solid var(--border-mid) !important;
+    box-shadow: var(--shadow-modal) !important;
     font-family: 'IBM Plex Sans', sans-serif !important;
-    font-weight: 400 !important;
+    font-weight: 500 !important;
     font-size: 0.875rem !important;
-    padding: 12px 20px !important;
-    color: var(--txt-primary) !important;            /* Inverse On-Surface */
-    border-radius: var(--r-xs) !important;
+    padding: 12px 18px !important;
+    color: var(--txt-primary) !important;
+    border-radius: var(--r-md) !important;
 }
 #toast .w-2.h-2.rounded-full {
     background: var(--accent) !important;
     box-shadow: none !important;
 }
-html[data-theme="light"] #toast > div {
-    background: #322f38 !important;
-    color: var(--txt-primary) !important;
-}
 
-/* ─── M3 Top App Bar ─────────────────────────────────────── */
+/* ─── Barra superior ─────────────────────────────────────────
+   Una sola definición para los dos temas: superficie del tema, filete
+   inferior y altura fija de 56 px. Los !important se quedan solo donde
+   compiten con utilidades del HTML (.shadow-sm, text-white, estilos en
+   línea de los botones de la cabecera). */
 .sticky.top-0 {
-    background: var(--surface) !important;                /* Surface Container */
-    border-bottom: none !important;
+    background: color-mix(in srgb, var(--surface) 94%, transparent) !important;
+    -webkit-backdrop-filter: saturate(140%) blur(10px);
+    backdrop-filter: saturate(140%) blur(10px);
+    border-bottom: 1px solid var(--border) !important;
     box-shadow: none !important;
 }
-html[data-theme="light"] .sticky.top-0 {
-    background: var(--card-high) !important;
-}
-/* Título en Top App Bar */
+.sticky.top-0 > div { min-height: 56px; display: flex; flex-direction: column; justify-content: center; }
 .sticky.top-0 h1 {
     font-family: 'IBM Plex Sans', sans-serif !important;
-    font-size: 1.375rem !important;               /* M3 Title Large: 22sp */
-    font-weight: 400 !important;                  /* Normal — M3 usa Regular en TopAppBar */
-    letter-spacing: 0 !important;
+    font-size: 1.0625rem !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.015em !important;
     color: var(--txt-primary) !important;
+    min-width: 5.5rem;
 }
-html[data-theme="light"] .sticky.top-0 h1 { color: var(--txt-primary) !important; }
-
-/* Botón hamburger → M3 Icon Button */
-#hamburgerBtn {
-    width: 40px; height: 40px;
-    display: flex; align-items: center; justify-content: center;
-    border-radius: var(--r-full) !important;
-    border: none !important;
-    background: transparent !important;
-    color: var(--txt-primary) !important;
-    cursor: pointer;
-    transition: background 0.2s var(--ease-std);
-    -webkit-tap-highlight-color: transparent;
-    position: relative; overflow: hidden;
-}
-#hamburgerBtn:hover  { background: var(--border-mid) !important; }
-#hamburgerBtn:active { background: var(--border-mid) !important; }
-html[data-theme="light"] #hamburgerBtn { color: var(--txt-primary) !important; }
-
-/* Botón theme toggle → M3 Icon Button */
-#themeToggleBtn {
+/* Botones de icono de la cabecera: hamburguesa, lupa y tema */
+#hamburgerBtn, #themeToggleBtn {
     width: 40px !important; height: 40px !important;
-    border-radius: var(--r-full) !important;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: var(--r-md) !important;
     border: none !important;
     background: transparent !important;
-    color: var(--txt-primary) !important;
-    transition: background 0.2s var(--ease-std) !important;
+    color: var(--txt-secondary) !important;
+    cursor: pointer;
+    transition: background 0.2s var(--ease-std), color 0.2s var(--ease-std) !important;
+    -webkit-tap-highlight-color: transparent;
+    position: relative;
 }
-#themeToggleBtn:hover  { background: var(--border-mid) !important; }
-#themeToggleBtn:active { background: var(--border-mid) !important; transform: none !important; }
+#hamburgerBtn:hover, #hamburgerBtn:active,
+#themeToggleBtn:hover, #themeToggleBtn:active { background: var(--border-mid) !important; color: var(--txt-primary) !important; transform: none !important; }
 
 /* ─── M3 Encabezados ─────────────────────────────────────── */
 h3.text-xl.font-bold, h3.text-lg.font-bold, .text-xl.font-bold,
@@ -909,7 +827,6 @@ html[data-theme="light"] .bg-purple-50 { background-color: var(--accent-dim) !im
 html[data-theme="light"] ::selection { background: var(--accent-dim2); color: var(--accent); }
 html[data-theme="light"] ::-webkit-scrollbar-thumb { background: #cbd5e1; }
 html[data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-html[data-theme="light"] body > .sticky.top-0 h1 { -webkit-text-fill-color: #ffffff !important; color: #ffffff !important; }
 html[data-theme="light"] .bg-white.rounded-xl:hover,
 html[data-theme="light"] .bg-white.rounded-2xl:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.10) !important; }
 
@@ -1343,21 +1260,6 @@ html[data-theme="light"] .audit-user-row { box-shadow: 0 1px 3px rgba(0,0,0,0.06
 html[data-theme="light"] .audit-user-row.live { border-color: rgba(22,163,74,0.28); }
 
 /* ── SEMÁFORO DE SINCRONIZACIÓN (Header) ─────────────────── */
-#syncDot {
-    width: 10px; height: 10px;
-    border-radius: 50%;
-    flex-shrink: 0;
-    background: #50516a;          /* gris = sin Firebase */
-    box-shadow: 0 0 0 2px rgba(80,81,106,0.20);
-    transition: background 0.35s ease, box-shadow 0.35s ease;
-    cursor: default;
-    position: relative;
-}
-#syncDot[data-state="ok"]      { background: #22c55e; box-shadow: 0 0 0 3px var(--ok-dim); }
-#syncDot[data-state="syncing"] { background: #4cc9f0; box-shadow: 0 0 0 3px rgba(76,201,240,0.25); animation: syncPulse 1.2s ease-in-out infinite; }
-#syncDot[data-state="pending"] { background: #fbbf24; box-shadow: 0 0 0 3px rgba(251,191,36,0.22); }
-#syncDot[data-state="error"]   { background: #ef4444; box-shadow: 0 0 0 3px var(--danger-dim); }
-#syncDot[data-state="offline"] { background: #9ca3af; box-shadow: 0 0 0 3px rgba(156,163,175,0.18); }
 @keyframes syncPulse {
     0%, 100% { opacity: 1; transform: scale(1); }
     50%       { opacity: 0.55; transform: scale(0.82); }
@@ -1365,16 +1267,16 @@ html[data-theme="light"] .audit-user-row.live { border-color: rgba(22,163,74,0.2
 #syncDot::after {
     content: attr(title);
     position: absolute;
-    bottom: calc(100% + 7px);
-    right: -4px;
-    background: #0b1325;
-    color: #e2e8f0;
+    top: calc(100% + 10px);
+    right: -6px;
+    background: var(--card-high);
+    color: var(--txt-primary);
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 0.6rem; font-weight: 600;
     white-space: nowrap;
     padding: 3px 7px;
     border-radius: 4px;
-    border: 1px solid rgba(148,163,184,0.16);
+    border: 1px solid var(--border-mid);
     pointer-events: none;
     opacity: 0; transition: opacity 0.15s ease;
     z-index: 100;
@@ -1392,109 +1294,66 @@ html[data-theme="light"] .audit-user-row.live { border-color: rgba(22,163,74,0.2
     display: inline-flex; align-items: center;
     margin-top: 4px;
 }
-html[data-theme="light"] #syncDot::after { background: #1e293b; }
 
 /* ══════════════════════════════════════════════════════════
-   M3 NAVIGATION BAR — Material You 3 spec
-   Height: 80dp | Active indicator: pill 64×32dp | Label-below
+   BARRA DE NAVEGACIÓN INFERIOR (móvil)
+   Altura en --btab-h (+ zona segura de la barra de gestos).
+   Activo: píldora esmeralda tras el icono + etiqueta en esmeralda.
+   En PC (≥1024 px) se oculta: la navegación es el sidebar.
    ══════════════════════════════════════════════════════════ */
 #bottomTabBar {
     position: fixed; bottom: 0; left: 0; right: 0;
-    /* Surface Container tinted with primary at elevation 2 */
-    background: var(--surface);
-    border-top: none;
-    display: flex; align-items: center; justify-content: space-around;
-    height: 80px;
+    background: color-mix(in srgb, var(--surface) 96%, transparent);
+    -webkit-backdrop-filter: saturate(140%) blur(10px);
+    backdrop-filter: saturate(140%) blur(10px);
+    border-top: 1px solid var(--border);
+    display: flex; align-items: stretch; justify-content: space-around;
+    height: calc(var(--btab-h) + env(safe-area-inset-bottom, 0px));
+    padding: 0 4px env(safe-area-inset-bottom, 0px);
     z-index: 200;
-    padding-bottom: env(safe-area-inset-bottom, 0);
-    /* M3 elevation: tinted shadow hacia arriba */
-    box-shadow: 0 -1px 0 var(--border),
-                0 -4px 12px rgba(0,0,0,0.28);
-}
-html[data-theme="light"] #bottomTabBar {
-    background: var(--card-high);          /* M3 Light: Surface Container */
-    box-shadow: 0 -1px 0 var(--border-mid),
-                0 -2px 8px rgba(0,0,0,0.08);
+    box-shadow: 0 -10px 30px -24px rgba(0,0,0,0.55);
 }
 
-/* ── Destination item ── */
 .btab-item {
     flex: 1;
     display: flex; flex-direction: column;
-    align-items: center; justify-content: flex-start;
-    padding: 12px 0 0;
+    align-items: center; justify-content: center;
     gap: 4px;
     background: transparent; border: none;
     color: var(--txt-muted);
     font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 0.69rem; font-weight: 500; letter-spacing: 0.01em;
+    font-size: 0.6875rem; font-weight: 500; letter-spacing: 0.01em;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
     min-height: unset !important;
     position: relative;
     transition: color 0.2s var(--ease-std);
-    overflow: hidden;     /* necesario para ripple contenido */
 }
-/* ── Active indicator — pill centrada sobre el ícono ── */
+/* Píldora del destino activo, centrada sobre el icono */
 .btab-item::before {
     content: '';
     position: absolute;
-    top: 8px;
-    left: 50%;
-    transform: translateX(-50%) scaleX(0);
-    width: 64px; height: 32px;
+    top: calc(50% - 26px); left: 50%;
+    width: 56px; height: 30px;
     border-radius: var(--r-full);
-    background: var(--accent-dim);
-    transition: transform 0.25s var(--ease-out),
-                background 0.2s ease,
-                opacity 0.2s ease;
-    opacity: 0;
-}
-.btab-item.btab-active::before {
-    transform: translateX(-50%) scaleX(1);
     background: var(--accent-container);
-    opacity: 1;
-}
-html[data-theme="light"] .btab-item.btab-active::before {
-    background: var(--accent-dim2);
-}
-
-/* ── Ripple state layer ── */
-.btab-item::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: var(--accent);
+    transform: translateX(-50%) scaleX(0.4);
     opacity: 0;
-    border-radius: inherit;
-    transition: opacity 0.18s ease;
-    pointer-events: none;
+    transition: transform 0.25s var(--ease-out), opacity 0.2s ease;
 }
-.btab-item:active::after { opacity: 0.08; }
+.btab-item.btab-active::before { transform: translateX(-50%) scaleX(1); opacity: 1; }
+.btab-item:active::before { opacity: 1; transform: translateX(-50%) scaleX(0.9); }
 
-/* ── Ícono ── */
 .btab-item svg {
-    width: 24px; height: 24px; flex-shrink: 0;
-    position: relative; z-index: 1;  /* sobre el indicator pill */
-    transition: transform 0.2s var(--ease-out), stroke 0.2s ease;
-    stroke-width: 1.75;
-}
-.btab-item.btab-active svg {
-    stroke: var(--accent);
-    transform: scale(1.08);
-}
-html[data-theme="light"] .btab-item.btab-active svg { stroke: var(--accent); }
-
-/* ── Label ── */
-.btab-item span {
+    width: 22px; height: 22px; flex-shrink: 0;
     position: relative; z-index: 1;
-    transition: color 0.2s var(--ease-std), font-weight 0.15s ease;
+    stroke-width: 1.8;
+    transition: stroke 0.2s ease;
 }
-.btab-item.btab-active span {
-    color: var(--accent);
-    font-weight: 700;
-}
-html[data-theme="light"] .btab-item.btab-active span { color: var(--accent); }
+.btab-item span { position: relative; z-index: 1; transition: color 0.2s var(--ease-std); }
+.btab-item.btab-active { color: var(--accent); }
+.btab-item.btab-active svg { stroke: var(--accent); }
+.btab-item.btab-active span { color: var(--accent); font-weight: 700; }
 
 /* ══════════════════════════════════════════════════════════
    MODALES — Centrado universal + botones siempre visibles
@@ -1563,7 +1422,7 @@ html[data-theme="dark"] #inventarioModal .hover\:bg-gray-50:hover { background: 
 
 /* Toast: siempre por encima de la tab bar */
 #toast {
-    bottom: calc(56px + 14px) !important;
+    bottom: calc(var(--btab-h) + 12px + env(safe-area-inset-bottom, 0px)) !important;
 }
 
 /* Bloqueo de scroll del fondo cuando un modal está abierto */
@@ -1873,7 +1732,7 @@ html[data-theme="light"] .sbx--sticky { background: var(--bg); }
    contenido tiene que crecer igual o el ultimo renglon de una lista queda
    tapado. env() vale 0 en navegadores sin muesca, asi que en escritorio
    sigue siendo exactamente 96px. */
-#mainContent { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)) !important; }
+#mainContent { padding-bottom: calc(var(--btab-h) + 28px + env(safe-area-inset-bottom, 0px)) !important; }
 
 /* ══════════════════════════════════════════════════════════
    INICIO TAB — Tarjetas de stats y product cards rediseñadas
@@ -2552,8 +2411,8 @@ html[data-theme="light"] .login-input:focus {
 /* Botón Cerrar Sesión en sidebar */
 .sb-logout-btn {
     display: flex; align-items: center; gap: 10px;
-    width: 100%; padding: 10px 16px; height: 48px;
-    border-radius: var(--r-full);
+    width: 100%; padding: 10px 12px; height: 44px;
+    border-radius: var(--r-md);
     background: var(--danger-dim);
     color: var(--red);
     border: none; cursor: pointer;
@@ -2565,8 +2424,6 @@ html[data-theme="light"] .login-input:focus {
 }
 .sb-logout-btn:hover  { background: var(--danger-dim); box-shadow: var(--shadow-xs); }
 .sb-logout-btn:active { background: var(--danger-dim); }
-html[data-theme="light"] .sb-logout-btn { background: rgba(186,26,26,0.08); color: #ba1a1a; }
-html[data-theme="light"] .sb-logout-btn:hover { background: rgba(186,26,26,0.14); }
 .sb-logout-btn svg { width: 18px; height: 18px; flex-shrink: 0; }
 #sbUserEmail {
     font-size: 0.67rem; color: var(--txt-muted);
@@ -2580,21 +2437,10 @@ html[data-theme="light"] .sb-logout-btn:hover { background: rgba(186,26,26,0.14)
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ── Badges de rol ────────────────────────────────────────── */
-.role-badge {
-    display:inline-flex;align-items:center;gap:3px;padding:2px 7px;
-    border-radius:var(--r-sm);font-size:0.58rem;font-weight:700;
-    letter-spacing:.07em;text-transform:uppercase;flex-shrink:0;
-}
-.role-badge.admin{background:rgba(245,158,11,.15);color:var(--amber);border:1px solid rgba(245,158,11,.30);}
-.role-badge.user {background:var(--accent-dim);color:var(--accent);border:1px solid var(--accent-dim2);}
 
 /* ── Toggle sync ──────────────────────────────────────────── */
 .sync-toggle-row{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-radius:var(--r-md);border:1px solid var(--border-mid);background:var(--surface);margin-bottom:4px;}
 .sync-toggle-label{font-size:.8rem;color:var(--txt-secondary);}
-.sync-pill{position:relative;width:34px;height:18px;border-radius:9px;background:var(--border-strong);border:none;cursor:pointer;transition:background .2s;flex-shrink:0;}
-.sync-pill.on{background:var(--green);}
-.sync-pill::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.25);}
-.sync-pill.on::after{transform:translateX(16px);}
 
 /* ── Panel Admin ──────────────────────────────────────────── */
 .adm-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:14px 16px;margin-bottom:10px;box-shadow:var(--shadow-card);}
@@ -2878,18 +2724,19 @@ tbody td { padding: 12px !important; color: var(--txt-primary) !important; }
 
 /* M3 Role Badge — Assist Chip style */
 .role-badge {
-    display: inline-flex; align-items: center;
-    height: 24px; padding: 0 10px;
+    display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;
+    height: 22px; padding: 0 9px;
     border-radius: var(--r-full);
     font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 0.69rem; font-weight: 500;
-    letter-spacing: 0.01em;
+    font-size: 0.625rem; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase;
     border: 1px solid transparent;
 }
+/* El rol de administrador es un distintivo, no una alerta: bronce. */
 .role-badge.admin {
-    background: rgba(246,195,82,0.14);
-    color: var(--amber);
-    border-color: rgba(246,195,82,0.28);
+    background: var(--bronze-dim);
+    color: var(--bronze);
+    border-color: var(--bronze-dim);
 }
 .role-badge.user  {
     background: var(--accent-dim);
@@ -2903,15 +2750,15 @@ tbody td { padding: 12px !important; color: var(--txt-primary) !important; }
     border-radius: 50%;
     flex-shrink: 0;
     background: var(--txt-muted);
-    box-shadow: 0 0 0 3px rgba(147,143,153,0.18);
+    box-shadow: 0 0 0 3px var(--border-mid);
     transition: background 0.35s ease, box-shadow 0.35s ease;
     cursor: default; position: relative;
 }
 #syncDot[data-state="ok"]      { background: var(--green); box-shadow: 0 0 0 3px var(--ok-dim); }
 #syncDot[data-state="syncing"] { background: var(--sky);   box-shadow: 0 0 0 3px var(--info-dim); animation: syncPulse 1.2s ease-in-out infinite; }
-#syncDot[data-state="pending"] { background: var(--amber); box-shadow: 0 0 0 3px rgba(246,195,82,0.22); }
+#syncDot[data-state="pending"] { background: var(--amber); box-shadow: 0 0 0 3px var(--amber-dim); }
 #syncDot[data-state="error"]   { background: var(--red);   box-shadow: 0 0 0 3px var(--danger-dim); }
-#syncDot[data-state="offline"] { background: var(--txt-muted);      box-shadow: 0 0 0 3px rgba(147,143,153,0.18); }
+#syncDot[data-state="offline"] { background: var(--txt-muted); box-shadow: 0 0 0 3px var(--border-mid); }
 
 /* M3 grp-rail fade */
 .grp-rail-wrap::after {
@@ -3059,7 +2906,7 @@ button.rc-area:hover, button.rc-area:focus-visible { border-color: var(--accent)
    segura). sticky y no fixed: #tabContent conserva un transform de su
    animación de entrada (fill-mode both), y un fixed dentro de un ancestro
    transformado deja de anclarse a la pantalla. */
-#rc-pie { position: sticky; bottom: calc(80px + env(safe-area-inset-bottom, 0px)); z-index: 40; margin-top: 14px; }
+#rc-pie { position: sticky; bottom: calc(var(--btab-h) + env(safe-area-inset-bottom, 0px)); z-index: 40; margin-top: 14px; }
 .rc-pie { border-radius: var(--r-lg); display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; background: var(--modal-bg, var(--card)); border-top: 1px solid var(--border); box-shadow: 0 -4px 16px rgba(0,0,0,.18); }
 .rc-pie__resumen { font-size: 0.78rem; color: var(--txt-secondary); }
 .rc-resumen { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: var(--r-md); background: var(--card); box-shadow: var(--shadow-xs, none); }
@@ -3741,10 +3588,10 @@ html[data-theme="light"] .vt-dia--ok { color: #fff; }
    ══════════════════════════════════════════════════════════════════════ */
 #searchToggleBtn {
     width: 40px !important; height: 40px !important;
-    border-radius: var(--r-full) !important;
+    border-radius: var(--r-md) !important;
     border: none !important;
     background: transparent !important;
-    color: var(--txt-primary) !important;
+    color: var(--txt-secondary) !important;
     position: relative;
     transition: background 0.2s var(--ease-std) !important;
     -webkit-tap-highlight-color: transparent;
@@ -3752,7 +3599,7 @@ html[data-theme="light"] .vt-dia--ok { color: #fff; }
 /* Área táctil de 44×44 sin agrandar el icono ni mover la cabecera. */
 #searchToggleBtn::after { content: ""; position: absolute; inset: -2px; }
 #searchToggleBtn:hover,
-#searchToggleBtn:active { background: var(--border-mid) !important; transform: none !important; }
+#searchToggleBtn:active { background: var(--border-mid) !important; color: var(--txt-primary) !important; transform: none !important; }
 #searchToggleBtn[aria-expanded="true"] { color: var(--accent) !important; background: var(--accent-dim) !important; }
 
 .hdr-search {
@@ -3785,3 +3632,66 @@ html[data-theme="light"] .vt-dia--ok { color: #fff; }
 .hdr-search__cerrar svg { width: 20px; height: 20px; }
 /* Aviso de Inicio cuando hay una búsqueda aplicada pero el panel está cerrado. */
 .hdr-search-aviso { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   INICIO — panel de indicadores (v5.12)
+   Solo distribución y jerarquía: el contenido, las acciones y los ids
+   del panel (js/83-panel.js) no cambian.
+   ══════════════════════════════════════════════════════════════════════ */
+#mainContent > .max-w-7xl { padding-top: 14px !important; }
+.pm-tile { padding: 14px; gap: 3px; }
+.pm-tile__ico { color: var(--txt-muted); font-size: 0.95rem; }
+.pm-tile--critico .pm-tile__ico { color: var(--red); }
+.pm-tile--ok .pm-tile__ico { color: var(--green); }
+.pm-tile__val { font-size: 1.375rem; margin-top: 6px; }
+.pm-tile__etq { font-size: 0.6875rem; letter-spacing: .06em; }
+.pm-inv > div:first-child { flex: 1; min-width: 0; }
+.pm-inv .pm-btn { flex-shrink: 0; }
+.pm-inv__titulo, .pm-card__titulo, .pm-graf__titulo { font-size: 0.875rem; }
+.pm-barra { grid-template-columns: minmax(0, 48%) minmax(0, 1fr) auto; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   ESTRUCTURA DE ESCRITORIO (≥1024 px) — v5.12
+   ──────────────────────────────────────────────────────────────────────
+   El cajón #sidebar se queda fijo como sidebar y la barra inferior
+   desaparece. Solo CSS: sbOpen()/sbClose()/switchTab() no cambian, y
+   los mismos botones .sb-item siguen navegando.
+   ══════════════════════════════════════════════════════════════════════ */
+@media (min-width: 1024px) {
+    :root { --btab-h: 0px; }
+    #appWrapper.auth-visible { padding-left: var(--sb-w); }
+    #sidebar {
+        width: var(--sb-w);
+        transform: none;
+        transition: none;
+        border-radius: 0;
+        box-shadow: none;
+        z-index: 60;
+    }
+    #sbOverlay, #sbCloseBtn, #hamburgerBtn, #bottomTabBar { display: none; }
+    #sbHead { min-height: 57px; padding: 10px 16px; }
+    .sb-item { height: 40px; }
+    /* La marca ya está en el sidebar: el título de la cabecera se oculta
+       a la vista pero sigue presente para lectores de pantalla. */
+    .sticky.top-0 h1 { opacity: 0; pointer-events: none; }
+    .sticky.top-0 > .max-w-7xl,
+    #mainContent > .max-w-7xl { max-width: 1440px; padding-left: 32px !important; padding-right: 32px !important; }
+    #mainContent > .max-w-7xl { padding-top: 24px !important; }
+    .hdr-search { left: var(--sb-w); }
+
+    /* Inicio: franja de 6 indicadores; debajo, operación a la izquierda
+       (inventario, existencia, comparación) y alertas a la derecha. */
+    .pm-panel {
+        display: grid;
+        grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+        grid-template-rows: auto auto auto 1fr;
+        gap: 16px; align-items: start;
+        margin-bottom: 20px;
+    }
+    .pm-panel > .pm-tiles { grid-column: 1 / -1; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+    .pm-panel > .pm-inv,
+    .pm-panel > .pm-card { grid-column: 1; }
+    .pm-panel > .pm-grafs { grid-column: 2; grid-row: 2 / span 3; grid-template-columns: 1fr; gap: 16px; }
+    .pm-tile { padding: 16px; }
+    .pm-inv, .pm-card, .pm-graf { padding: 16px 18px; }
+}

@@ -57,14 +57,14 @@ const PUERTO = process.env.PUERTO || '8080';
              book: v('--book'), scrim: v('--scrim'), ok: v('--ok'),
              onAccent: v('--accent-on') };
   });
-  chk('★ El acento calculado es el latón #E8B55C',
-      tok.accent.toUpperCase() === '#E8B55C', JSON.stringify(tok));
+  chk('★ El acento calculado es el esmeralda #3DAA88 (v5.12)',
+      tok.accent.toUpperCase() === '#3DAA88', JSON.stringify(tok));
   chk('Los alias nuevos resuelven (--brass, --ok, --book, --scrim)',
       !!tok.brass && !!tok.ok && !!tok.book && !!tok.scrim, JSON.stringify(tok));
   chk('El fondo del body usa el token, no un color del navegador',
       await p.evaluate(() => {
         const bg = getComputedStyle(document.body).backgroundColor;
-        return bg === 'rgb(14, 16, 19)';   // #0E1013
+        return bg === 'rgb(13, 20, 27)';   // #0D141B
       }),
       await p.evaluate(() => getComputedStyle(document.body).backgroundColor));
 
@@ -92,17 +92,17 @@ const PUERTO = process.env.PUERTO || '8080';
     };
   });
   chk('★ bg-white YA NO es blanco: es la superficie del tema oscuro',
-      util.bgWhite !== 'rgb(255, 255, 255)' && util.bgWhite === 'rgb(28, 32, 39)',
-      'calculado: ' + util.bgWhite + ' (esperado rgb(28, 32, 39) = #1C2027)');
+      util.bgWhite !== 'rgb(255, 255, 255)' && util.bgWhite === 'rgb(21, 33, 42)',
+      'calculado: ' + util.bgWhite + ' (esperado rgb(21, 33, 42) = #15212A)');
   chk('★ text-gray-900 YA NO es casi negro: es el texto claro del tema',
-      util.txt900 === 'rgb(232, 230, 227)',
+      util.txt900 === 'rgb(231, 238, 235)',
       'calculado: ' + util.txt900);
   chk('text-gray-600 resuelve al texto secundario del tema',
-      util.txt600 === 'rgb(180, 176, 170)', 'calculado: ' + util.txt600);
+      util.txt600 === 'rgb(179, 192, 187)', 'calculado: ' + util.txt600);
   chk('border-gray-200 resuelve al borde del tema (translúcido)',
-      /rgba?\(180, 176, 170/.test(util.borde), 'calculado: ' + util.borde);
+      /rgba?\(154, 175, 168/.test(util.borde), 'calculado: ' + util.borde);
   chk('El velo del modal usa --scrim, no negro al 60 %',
-      /rgba\(5, 6, 8/.test(util.velo), 'calculado: ' + util.velo);
+      /rgba\(4, 8, 11/.test(util.velo), 'calculado: ' + util.velo);
   chk('★ Las utilidades de layout funcionan sin Tailwind (flex, gap, radio, texto, sombra)',
       util.flexDisp === 'flex' && util.gap3 === '12px' &&
       util.redondo !== '0px' && util.textoSm !== '' && util.sombra !== 'none',
@@ -192,7 +192,7 @@ const PUERTO = process.env.PUERTO || '8080';
   chk('★ Una fila accionable es un <button> de verdad (Tab la alcanza)',
       kit.filaEtiqueta === 'BUTTON', 'etiqueta: ' + kit.filaEtiqueta);
   chk('El campo tiene fondo hundido del tema, no blanco',
-      kit.inputFondo === 'rgb(14, 16, 19)', 'fondo: ' + kit.inputFondo);
+      kit.inputFondo === 'rgb(13, 20, 27)', 'fondo: ' + kit.inputFondo);
   chk('La etiqueta del campo está asociada a su input con for/id',
       kit.labelFor && kit.labelFor === kit.inputId, kit.labelFor + ' / ' + kit.inputId);
   chk('El medidor dibuja sus segmentos y enciende la proporción correcta',
