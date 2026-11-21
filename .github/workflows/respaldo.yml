@@ -22,6 +22,12 @@ name: Respaldo semanal de Firestore
 #                                GUÁRDALA EN TU GESTOR DE CONTRASEÑAS: sin
 #                                ella el respaldo es irrecuperable.
 #
+#  COPIA FUERA DE GITHUB (v5.58) — opcional pero RECOMENDADA
+#  Un artefacto de Actions vive 90 días y solo en GitHub: si se pierde la cuenta o el repositorio, se pierde con él. Con el secreto
+#    RCLONE_CONF   → el contenido de tu rclone.conf con un destino llamado «respaldo» (tu Google Drive)
+#  cada respaldo cifrado se copia TAMBIÉN a la carpeta «BarInventory-respaldos» de tu Drive y se VERIFICA (mismo tamaño). Sin el secreto, el
+#  paso avisa en el resumen del trabajo y todo lo demás sigue igual. Pasos para crearlo: herramientas/respaldo-externo.md
+#
 #  PARA RESTAURAR:
 #    gpg --batch --yes --passphrase "TU_PASSPHRASE" \
 #        --decrypt respaldo-AAAA-MM-DD.json.gpg > respaldo.json
@@ -69,6 +75,13 @@ jobs:
           GOOGLE_CLOUD_PROJECT: gestor-de-inventarios-76c19
         run: node herramientas/respaldo-firestore.js --salida respaldos
 
+      - name: Verificar que el respaldo trae datos de verdad (antes de cifrar)
+        run: |
+          set -o pipefail          # si el verificador falla (respaldo vacío), el trabajo falla: no se cifra ni se guarda nada inútil
+          for f in respaldos/*.json; do
+            node herramientas/verificar-respaldo.js "$f" | tee -a "$GITHUB_STEP_SUMMARY"
+          done
+
       - name: Cifrar (AES-256) y borrar el JSON en claro
         env:
           PASSPHRASE: ${{ secrets.RESPALDO_PASSPHRASE }}
@@ -91,6 +104,31 @@ jobs:
           retention-days: 90
           if-no-files-found: error
 
+      - name: Copiar el respaldo CIFRADO a Google Drive (fuera de GitHub) y verificarlo
+        env:
+          RCLONE_CONF: ${{ secrets.RCLONE_CONF }}
+        run: |
+          if [ -z "$RCLONE_CONF" ]; then
+            echo "::warning::Copia fuera de GitHub NO configurada (falta el secreto RCLONE_CONF). El respaldo solo existe en GitHub 90 días."
+            echo "### ⚠️ Copia fuera de GitHub NO configurada" >> "$GITHUB_STEP_SUMMARY"
+            echo "Falta el secreto RCLONE_CONF. Pasos: herramientas/respaldo-externo.md" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          sudo apt-get install -y rclone >/dev/null
+          umask 077
+          printf '%s' "$RCLONE_CONF" > "$RUNNER_TEMP/rclone.conf"
+          DESTINO="respaldo:BarInventory-respaldos"
+          rclone --config "$RUNNER_TEMP/rclone.conf" copy respaldos/ "$DESTINO" --include '*.gpg'
+          for f in respaldos/*.gpg; do
+            n=$(basename "$f")
+            local_size=$(stat -c %s "$f")
+            remoto_size=$(rclone --config "$RUNNER_TEMP/rclone.conf" lsjson "$DESTINO" --files-only --include "$n" 2>/dev/null | tr -d ' \n' | sed -n 's/.*"Size":\([0-9]*\).*/\1/p')
+            if [ -z "$remoto_size" ] || [ "$remoto_size" != "$local_size" ]; then
+              echo "::error::La copia en Drive NO coincide ($n: local $local_size bytes, Drive ${remoto_size:-no existe})"; exit 1
+            fi
+            echo "✅ $n copiado a Drive y verificado ($local_size bytes)" | tee -a "$GITHUB_STEP_SUMMARY"
+          done
+
       - name: Borrar la credencial del runner
         if: always()
-        run: rm -f "$RUNNER_TEMP/cuenta.json"
+        run: rm -f "$RUNNER_TEMP/cuenta.json" "$RUNNER_TEMP/rclone.conf"
