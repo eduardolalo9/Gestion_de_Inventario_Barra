@@ -1369,6 +1369,37 @@ async function main() {
         await assertFails(rutaChunk(admin1, 'inv-cerrado', 'chunk_0').set(chunkDemo(9, 1)));
     });
 
+    // ── v5.56 · ANULAR el inventario ABIERTO (cierre atómico con snapshot + marca de anulado) ──────────────
+    const cierreAnulado = (motivo) => ({
+        estado: 'CERRADO', cierreTipo: 'anulado', fechaCierre: Date.now(), cerradoPorUid: 'admin1', cerradoPorNombre: 'Admin Uno',
+        totalProductos: 3, participantesUids: ['admin1'], semanaId: '2026-W38', semanaIdOrigen: 'fechaRecuento',
+        anulado: true, anuladoEn: Date.now(), anuladoPor: 'admin1', anuladoPorNombre: 'Admin Uno', motivoAnulacion: motivo
+    });
+    await prueba('AN10. ★ El administrador puede ANULAR el inventario ABIERTO: snapshot + cierre + marca en UN batch', async () => {
+        await reiniciarConDatosBase();
+        const batch = admin1.batch();
+        for (let i = 0; i < 2; i++) batch.set(rutaChunk(admin1, 'inv-activo', 'chunk_' + i), chunkDemo(i, 2));
+        batch.update(rutaInventario(admin1, 'inv-activo'), cierreAnulado('Se creó por error'));
+        await assertSucceeds(batch.commit());
+        // queda sellado como cualquier cierre: no se amplía el snapshot ni se borra
+        await assertFails(rutaChunk(admin1, 'inv-activo', 'chunk_2').set(chunkDemo(2, 3)));
+        await assertFails(rutaInventario(admin1, 'inv-activo').delete());
+        await assertFails(rutaInventario(admin1, 'inv-activo').update({ estado: 'SINCRONIZADO' }));
+    });
+    await prueba('AN11. ★ El abierto anulado se puede RESTAURAR (queda CERRADO con su snapshot) y no se puede contabilizar mientras esté anulado', async () => {
+        await reiniciarConDatosBase();
+        const batch = admin1.batch();
+        batch.set(rutaChunk(admin1, 'inv-activo', 'chunk_0'), chunkDemo(0, 1));
+        batch.update(rutaInventario(admin1, 'inv-activo'), cierreAnulado('Se creó por error'));
+        await assertSucceeds(batch.commit());
+        await assertFails(rutaInventario(admin1, 'inv-activo').update({ estado: 'CONTABILIZADO', contabilizadoEn: Date.now(), contabilizadoPor: 'admin1', semanaDestino: '2026-09-14' }));
+        await assertSucceeds(rutaInventario(admin1, 'inv-activo').update({ anulado: false, restauradoEn: Date.now(), restauradoPor: 'admin1' }));
+    });
+    await prueba('AN12. Un usuario que no es administrador no puede anular el inventario abierto', async () => {
+        await reiniciarConDatosBase();
+        await assertFails(rutaInventario(bt1, 'inv-activo').update(Object.assign(cierreAnulado('Intento ajeno'), { cerradoPorUid: 'bartender1', anuladoPor: 'bartender1' })));
+    });
+
     await prueba('F4. El snapshot sigue siendo inmutable tras contabilizar', async () => {
         await sembrarFase2();
         await testEnv.withSecurityRulesDisabled(async (ctx) => {

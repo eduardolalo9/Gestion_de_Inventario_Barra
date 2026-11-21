@@ -38,7 +38,10 @@ chk('★ inventarioAnulable: solo un CERRADO sin anular (no abierto, no contabil
     && an({ estado: 'SINCRONIZADO' }) === false && an({ estado: 'CONTABILIZADO' }) === false && an({ estado: 'CERRADO', anulado: true }) === false && an(null) === false);
 
 // ═══ 3 · Funciones de anular / restaurar ═══
-const fAn = sinComentarios(f75.slice(f75.indexOf('function _anNombreUsuario()'), f75.indexOf('if (typeof window !== \'undefined\') { window.anularInventario')));
+// v5.56: anularInventarioAbierto() (cierre atómico con snapshot) tiene su propia prueba (prueba-v556-anular-abierto.js); aquí solo
+// el anular de un CERRADO y el restaurar, que escriben UNA marca con update().
+const fAn = sinComentarios(f75.slice(f75.indexOf('function _anNombreUsuario()'), f75.indexOf('async function anularInventarioAbierto()'))
+                         + f75.slice(f75.indexOf('function restaurarInventario('), f75.indexOf('if (typeof window !== \'undefined\') { window.anularInventario')));
 chk('★ Anular solo ESCRIBE con ref.update(datos) de 5 campos: anulado, anuladoEn, anuladoPor, anuladoPorNombre, motivoAnulacion', /var datos = \{ anulado: true, anuladoEn: Date\.now\(\), anuladoPor: _anUidAuth\(\), anuladoPorNombre: _anNombreUsuario\(\), motivoAnulacion: motivo \}/.test(fAn) && (fAn.match(/\.update\(/g) || []).length === 2);
 chk('★ Ninguna de las dos funciones borra ni reemplaza documentos (nada de delete/set/batch)', !/\.(delete|set|batch|runTransaction)\s*\(/.test(fAn));
 chk('Antes de escribir relee el inventario del SERVIDOR y exige estado CERRADO y que no esté ya anulado', /get\(\{ source: 'server' \}\)/.test(fAn) && /inventarioAnulable\(inv\)/.test(fAn) && /inv\.anulado === true/.test(fAn));
@@ -52,7 +55,7 @@ chk('El motivo se escapa al pintarlo (escapeHtml) y el texto del número no se i
 // ═══ 4 · Pantalla ═══
 const c85 = sinComentarios(f85);
 chk('★ El paso de contabilizar muestra «Descargar / Compartir» en los tres estados (contabilizado, por contabilizar, cerrado sin poder contabilizar)', (c85.match(/btnExp/g) || []).length >= 6);
-chk('«Anular inventario» solo se arma para administración, con estado CERRADO y sin anular (btnAnular)', /isAdmin\(\) && invId && inventarioAnulable\(inv\)/.test(c85));
+chk('«Anular inventario» (menú ⋮, v5.56) solo se ofrece a administración y, en un cerrado, con inventarioAnulable()', /function _ifMenuAccionDe\(inv\)[\s\S]*?isAdmin\(\)[\s\S]*?inventarioAnulable\(inv\)/.test(c85));
 chk('El Historial oculta los anulados y solo administración puede mostrarlos', /if \(!\(isAdmin\(\) && _historialMostrarAnulados\)\)/.test(c85) && /historialAlternarAnulados/.test(c85));
 chk('El detalle de un contabilizado no ofrece anular (la condición exige estado CERRADO)', /isAdmin\(\) && inventarioAnulable\(meta\)/.test(c85));
 chk('El encabezado de Conteo marca ANULADO y la tarjeta ofrece Restaurar y Crear el siguiente', /ANULADO<\/span>/.test(c85) && /restaurarInventario/.test(c85) && /btnCrear\(true\)/.test(c85));

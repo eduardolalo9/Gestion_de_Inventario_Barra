@@ -63,6 +63,7 @@ const PRUEBAS = [
     'prueba-v552-muestreo-filtros-navegador.js', // v5.52 — Muestreo: desviación, grupo, buscador y revisados
     'prueba-v554-exportar-conteo-navegador.js', // v5.54 — exportar / compartir el conteo: hoja, PDF y Excel reales, compartir, permisos
     'prueba-v555-inventario-navegador.js', // v5.55 — contabilizar: descargar/compartir; anular, restaurar y «Mostrar anulados»
+    'prueba-v556-menu-usuarios-navegador.js', // v5.56 — menú ⋮, anular el inventario abierto (batch real) y panel de usuarios compacto
     'prueba-v553-csp-estricto-navegador.js', // v5.53 — política estricta en Chromium real (servidor propio): hashes, despachador e inyección
     'prueba-v546-muestreo-compartido-navegador.js', // v5.46 — muestreo compartido (inventario en la nube), lista de reconteo del equipo, insignia sobre el buscador, autoguardado al volver
     'prueba-v545-fvs-navegador.js', // v5.45 — Físico vs Sistema: KPIs, insignias, selección múltiple, edición rápida, grupos plegables y muestreo
