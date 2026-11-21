@@ -158,12 +158,12 @@ chk('La hoja Información explica el cálculo y trae los totales por área', inf
 // ═══ 5 · Guardas estáticas ═══
 const fuente = leer('js/97-exportar-conteo.js');
 const limpio = fuente.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
-chk('★ El módulo SOLO LEE: no escribe en Firestore, localStorage, products ni conteos', !/\.(set|update|delete|add|commit)\s*\(|localStorage|sessionStorage|_db\b|firebase\.firestore|products\s*(=(?!=)|\.push|\.splice)|auditoriaConteo\s*=/.test(limpio));
+chk('★ El módulo SOLO LEE: no escribe en Firestore, localStorage, products ni conteos (v5.55: lee el snapshot de un inventario cerrado, con .get())', !/\.(set|update|delete|add|commit|batch|runTransaction)\s*\(|localStorage|sessionStorage|firebase\.firestore|products\s*(=(?!=)|\.push|\.splice)|auditoriaConteo\s*=/.test(limpio) && (limpio.match(/_db\./g) || []).length === 1 && /_db\.collection\('inventarioApp'\)\.doc\(FIRESTORE_DOC_ID\)\.collection\('inventories'\)\.doc\(origen\.inventoryId\)/.test(limpio));
 chk('★ No usa eval, new Function, innerHTML con datos del usuario ni document.write', !/\beval\s*\(|new\s+Function|document\.write/.test(limpio) && (limpio.match(/\.innerHTML\s*=/g) || []).length === 1);
 chk('El único innerHTML es el de la hoja, y todo texto de datos pasa por escapeHtml / jsArg', /ov\.innerHTML = _cxHojaHtml\(\)/.test(limpio) && /escapeHtml\(a\.nombre\)/.test(limpio) && /jsArg\(a\.clave\)/.test(limpio) && /escapeHtml\(String\(num\)\)/.test(limpio));
 chk('★ No usa partes peligrosas de jsPDF: html(), addImage, addSvg, loadFile, addJS, output(save)', !/\.(html|addImage|addSvgAsImage|svg|loadFile|addJS|addFileToVFS)\s*\(|output\(\s*['"](save|dataurlnewwindow|pdfobjectnewwindow)/.test(limpio));
 chk('Exige inventory.export Y inventory.viewAll (el conteo es ciego) y un inventario abierto', /hasPermission\('inventory\.export'\)/.test(limpio) && /puedeVerConteosAjenos/.test(limpio) && /inventarioAbierto\(_inventarioActivo\)/.test(limpio));
-chk('Usa la conversión de la app (fvsConteoPorArea), no una propia', /fvsConteoPorArea\(p\.id\)/.test(limpio) && !/convertirOzAPuntos/.test(limpio));
+chk('Usa la conversión de la app: fvsConteoPorArea en el conteo activo y convertirOzAPuntos (la misma función) solo al leer un inventario cerrado', /fvsConteoPorArea\(p\.id\)/.test(limpio) && (limpio.match(/convertirOzAPuntos/g) || []).length === 1 && /_cxInstantaneaCerrada[\s\S]*convertirOzAPuntos/.test(limpio));
 chk('Compartir usa navigator.canShare/share con archivo y cae a descarga; cerrar el menú (AbortError) no es un error', /navigator\.canShare\(\{ files: \[archivo\] \}\)/.test(limpio) && /AbortError/.test(limpio) && /descargar\(\)/.test(limpio));
 const html = leer('index.html'), sw = leer('sw.js');
 const ver = /APP_VERSION = '([^']+)'/.exec(sw)[1];

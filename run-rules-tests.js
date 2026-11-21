@@ -1313,6 +1313,62 @@ async function main() {
         await assertFails(rutaInventario(admin1, 'inv-cerrado').update({ estado: 'SINCRONIZADO' }));
     });
 
+    // ── v5.55 · ANULAR / RESTAURAR un inventario CERRADO (nunca borrarlo) ─────────────────
+    const anula = (motivo) => ({ anulado: true, anuladoEn: Date.now(), anuladoPor: 'admin1', anuladoPorNombre: 'Admin Uno', motivoAnulacion: motivo });
+    await prueba('AN1. ★ El administrador puede ANULAR un inventario CERRADO con motivo', async () => {
+        await sembrarFase2();
+        await assertSucceeds(rutaInventario(admin1, 'inv-cerrado').update(anula('Se creó por error durante una prueba')));
+    });
+    await prueba('AN2. Anular exige motivo de 5 a 300 caracteres (4 no, 5 sí, 300 sí)', async () => {
+        await sembrarFase2();
+        await assertFails(rutaInventario(admin1, 'inv-cerrado').update(anula('')));
+        await assertFails(rutaInventario(admin1, 'inv-cerrado').update(anula('1234')));
+        await assertSucceeds(rutaInventario(admin1, 'inv-cerrado').update(anula('12345')));
+        await sembrarFase2();
+        await assertSucceeds(rutaInventario(admin1, 'inv-cerrado').update(anula('x'.repeat(300))));
+    });
+    await prueba('AN3. Un motivo de más de 300 caracteres, un anuladoPor ajeno o la ausencia de motivo se rechazan', async () => {
+        await sembrarFase2();
+        await assertFails(rutaInventario(admin1, 'inv-cerrado').update(anula('x'.repeat(301))));
+        await assertFails(rutaInventario(admin1, 'inv-cerrado').update(Object.assign(anula('Motivo válido'), { anuladoPor: 'otro-uid' })));
+        await assertFails(rutaInventario(admin1, 'inv-cerrado').update({ anulado: true, anuladoPor: 'admin1' }));   // sin motivo
+    });
+    await prueba('AN4. ★ Un inventario CONTABILIZADO NO se puede anular (es el stock inicial)', async () => {
+        await sembrarFase2();
+        await assertSucceeds(rutaInventario(admin1, 'inv-cerrado').update({ estado: 'CONTABILIZADO', contabilizadoEn: Date.now(), contabilizadoPor: 'admin1', semanaDestino: '2026-09-14' }));
+        await assertFails(rutaInventario(admin1, 'inv-cerrado').update(anula('Intento de anular uno contabilizado')));
+    });
+    await prueba('AN5. Anular no puede tocar nada más: ni estado, ni fechas, ni contenido', async () => {
+        await sembrarFase2();
+        await assertFails(rutaInventario(admin1, 'inv-cerrado').update(Object.assign(anula('Motivo válido'), { totalProductos: 1 })));
+        await assertFails(rutaInventario(admin1, 'inv-cerrado').update(Object.assign(anula('Motivo válido'), { fechaCierre: 1 })));
+        await assertFails(rutaInventario(admin1, 'inv-cerrado').update(Object.assign(anula('Motivo válido'), { estado: 'SINCRONIZADO' })));
+        await assertFails(rutaInventario(admin1, 'inv-cerrado').update(Object.assign(anula('Motivo válido'), { estado: 'CONTABILIZADO' })));
+    });
+    await prueba('AN6. Un usuario que no es administrador no puede anular', async () => {
+        await sembrarFase2();
+        await assertFails(rutaInventario(bt1, 'inv-cerrado').update(Object.assign(anula('Motivo válido'), { anuladoPor: 'bartender1' })));
+    });
+    await prueba('AN7. ★ Un anulado se puede RESTAURAR (anulado=false) y sigue siendo CERRADO', async () => {
+        await sembrarFase2();
+        await assertSucceeds(rutaInventario(admin1, 'inv-cerrado').update(anula('Se creó por error durante una prueba')));
+        await assertSucceeds(rutaInventario(admin1, 'inv-cerrado').update({ anulado: false, restauradoEn: Date.now(), restauradoPor: 'admin1' }));
+        await assertFails(rutaInventario(admin1, 'inv-cerrado').update({ anulado: false, estado: 'SINCRONIZADO' }));
+    });
+    await prueba('AN8. ★ Un inventario ANULADO no se puede contabilizar (lo impide el servidor)', async () => {
+        await sembrarFase2();
+        await assertSucceeds(rutaInventario(admin1, 'inv-cerrado').update(anula('Se creó por error durante una prueba')));
+        await assertFails(rutaInventario(admin1, 'inv-cerrado').update({ estado: 'CONTABILIZADO', contabilizadoEn: Date.now(), contabilizadoPor: 'admin1', semanaDestino: '2026-09-14' }));
+    });
+    await prueba('AN9. ★ Borrar un inventario sigue prohibido (anulado o no) y su snapshot sigue inmutable', async () => {
+        await sembrarFase2();
+        await testEnv.withSecurityRulesDisabled(async (ctx) => { await rutaChunk(ctx.firestore(), 'inv-cerrado', 'chunk_0').set(chunkDemo(0, 1)); });
+        await assertSucceeds(rutaInventario(admin1, 'inv-cerrado').update(anula('Se creó por error durante una prueba')));
+        await assertFails(rutaInventario(admin1, 'inv-cerrado').delete());
+        await assertFails(rutaChunk(admin1, 'inv-cerrado', 'chunk_0').delete());
+        await assertFails(rutaChunk(admin1, 'inv-cerrado', 'chunk_0').set(chunkDemo(9, 1)));
+    });
+
     await prueba('F4. El snapshot sigue siendo inmutable tras contabilizar', async () => {
         await sembrarFase2();
         await testEnv.withSecurityRulesDisabled(async (ctx) => {

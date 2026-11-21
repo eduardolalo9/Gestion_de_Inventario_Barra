@@ -113,7 +113,8 @@ const js = fs.readdirSync(path.join(RAIZ, 'js')).filter(f => f.endsWith('.js'));
 const sobrantes = [];
 js.forEach(function(f) {
     const src = leer('js/' + f);
-    const permitidos = [extraer(src, 'contabilizarInventario'), extraer(src, 'evaluarContabilizable')].filter(Boolean);
+    // v5.55: «¿se puede ANULAR?» es otra decisión (no la de contar) y vive en UN solo helper, inventarioAnulable().
+    const permitidos = [extraer(src, 'contabilizarInventario'), extraer(src, 'evaluarContabilizable'), extraer(src, 'inventarioAnulable')].filter(Boolean);
     let limpio = src;
     permitidos.forEach(function(b) { limpio = limpio.replace(b, ''); });
     const m = limpio.match(/_inventarioActivo\.estado\s*[!=]==\s*'CERRADO'|inv\.estado\s*[!=]==\s*'CERRADO'/g);
