@@ -58,6 +58,7 @@
 
         function _dineroMX(n) {
             var v = (typeof n === 'number' && isFinite(n)) ? n : 0;
+            if (typeof biDinero === 'function') return biDinero(v);   // D6: formateador común
             return '$' + v.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
 
@@ -2256,13 +2257,11 @@
 
             // ── Lista ─────────────────────────────────────────────────────────
             if (!_comprasMostrandoLista()) {
-                html += '<div style="text-align:center;padding:42px 18px;'
-                      + 'background:var(--surface);border:1px solid var(--border-mid);'
-                      + 'border-radius:12px">'
-                      + '<div style="font-size:2.2rem;margin-bottom:10px;color:var(--txt-muted);opacity:.55"><i class="fa-solid fa-receipt" aria-hidden="true"></i></div>'
-                      + '<div style="font-weight:600;margin-bottom:6px">Todavía no hay compras registradas</div>'
-                      + '<div style="color:var(--txt-secondary);font-size:.88rem;max-width:420px;'
-                      + 'margin:0 auto;line-height:1.55">'
+                // O6 (rediseño 2026-11) — el estado vacío común (mismas clases que el buscador); mismos textos que antes.
+                html += '<div class="sbx-vacio cp-vacio" role="note">'
+                      + '<div class="sbx-vacio__icono"><i class="fa-solid fa-receipt" aria-hidden="true"></i></div>'
+                      + '<div class="sbx-vacio__titulo">Todavía no hay compras registradas</div>'
+                      + '<div class="sbx-vacio__texto">'
                       + 'Usa Captura manual para registrar una entrada, o Importar archivo para cargar el Excel de entrada de mercancía de SAP. '
                       + 'Antes de guardar nada verás un resumen por proveedor y fecha para revisarlo. '
                       + 'Para ver entradas más antiguas, elige un rango de fechas.'

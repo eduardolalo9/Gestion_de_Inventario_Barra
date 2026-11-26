@@ -1,4 +1,4 @@
-// v5.36 — Físico vs Sistema: «Diferencias ↓» (de mayor a menor), junto a «Diferencias ↑».
+// v5.36 — Físico vs Sistema: orden «de mayor a menor», junto a «de menor a mayor» (D7: opciones de «Ordenar»).
 //   node pruebas/prueba-v536-diferencias-desc.js
 // Capa pura (js/49) + garantías estáticas de la pantalla (js/85) y del Excel (js/97).
 // La prueba en navegador real del mismo botón vive en prueba-v536-diferencias-navegador.js.
@@ -52,10 +52,15 @@ const c85 = sinCom(funcion(src85, 'fvsAlternarDifDesc') + funcion(src85, 'fvsAlt
 chk('★ ↑ y ↓ son excluyentes y solo cambian la vista (sin guardar ni sincronizar)',
     /difAsc\) _fvsVista\.difDesc = false/.test(c85) && /difDesc\) _fvsVista\.difAsc = false/.test(c85) && !/saveToLocalStorage|syncToCloud|localStorage|Firestore|\.set\(|\.update\(/.test(c85));
 chk('Volver reinicia también ↓', /fvsReiniciarVista\(\)[^}]*difDesc = false/.test(src85.replace(/\n/g, ' ')));
-chk('Botón «Diferencias ↓» con id, aria-pressed y objetivo táctil de 44 px (misma clase que ↑)',
-    /id="fvsDifDescBtn"/.test(src85) && /fvsAlternarDifDesc\(\)/.test(src85) && /Diferencias ↓/.test(src85) && /aria-pressed="' \+ \(_fvsVista\.difDesc/.test(src85));
+chk('D7 · «Ordenar» (#fvsOrdenSel) ofrece «mayor → menor» y la API fvsAlternarDifDesc/fvsAlternarDifAsc se conserva',
+    /id="fvsOrdenSel"/.test(src85) && /onchange="fvsElegirOrden\(this\.value\)"/.test(src85) && /v: 'plano_desc'/.test(src85) && /v: 'plano_asc'/.test(src85)
+    && /function fvsAlternarDifDesc\(\)/.test(src85) && /function fvsAlternarDifAsc\(\)/.test(src85) && /class="fvs-ctl__btn fvs-ctl__orden/.test(src85));
+const cEleg = sinCom(funcion(src85, 'fvsElegirOrden'));
+chk('★ D7 · elegir un orden fija UNO solo (difAsc, difDesc u orden por grupo) y solo cambia la vista',
+    /_fvsVista\.difAsc = \(valor === 'plano_asc'\)/.test(cEleg) && /_fvsVista\.difDesc = \(valor === 'plano_desc'\)/.test(cEleg) && /_fvsVista\.ordenDesc = \(valor === 'grupo_desc'\)/.test(cEleg)
+    && !/saveToLocalStorage|syncToCloud|localStorage|Firestore|\.set\(|\.update\(/.test(cEleg));
 chk('Las opciones de la vista (pantalla y Excel) incluyen difDesc', /difDesc: _fvsVista\.difDesc/.test(src85) && /difDesc: false/.test(src97));
-chk('Con ↑ o ↓ se oculta el chip de invertir el orden por grupo', /_fvsVista\.difAsc \|\| _fvsVista\.difDesc\) && c\.id === 'orden_desc'/.test(src85));
+chk('D7 · el chip de invertir el orden por grupo ya no se muestra (lo sustituye «Ordenar»), pero sigue en _chipsFvs', /_chipsFvs\(\)\.filter\(function\(c\) \{ return c\.id !== 'orden_desc'; \}\)/.test(src85) && /id: 'orden_desc'/.test(funcion(src85, '_chipsFvs')));
 chk('El Excel conserva el mismo orden visible y rotula «mayor a menor»', /Diferencias de mayor a menor \(sin agrupar\)/.test(src97) && /fisicoVsSistemaOrdenVisible\(datos\.filas, op\)/.test(src97));
 chk('Las 9 columnas del Excel no cambian', /FVS_EXPORT_COLUMNAS = \['Grupo', 'ID', 'Descripción', 'Unidad', 'Cantidad en sistema',\s*'Cantidad contada', 'Diferencia', 'Precio', 'Precio total de diferencia'\]/.test(src97));
 

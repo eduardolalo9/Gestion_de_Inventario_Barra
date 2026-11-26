@@ -876,6 +876,7 @@
 
         function _impDinero(n) {
             if (typeof n !== 'number' || !isFinite(n)) return '—';
+            if (typeof biDinero === 'function') return biDinero(n);   // D6: formateador común
             var s = Math.abs(n).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             return (n < 0 ? '-$' : '$') + s;
         }
@@ -1012,10 +1013,14 @@
                 }
                 h += '<div class="imp-sec__acc">'
                    + '<button type="button" class="bt bt--primario" data-imp-subir="' + s.id + '" onclick="importarElegirArchivo(\'' + jsArg(s.id) + '\')">'
-                   + '<i class="fa-solid fa-file-arrow-up" aria-hidden="true"></i> Subir archivo</button>';
-                s.formatos.forEach(function(f) {
-                    h += '<button type="button" class="bt bt--secundario" data-imp-plantilla="' + s.id + ':' + f + '" onclick="importarDescargarPlantilla(\'' + jsArg(s.id) + '\', \'' + jsArg(f) + '\')">'
-                       + '<i class="fa-solid fa-download" aria-hidden="true"></i> Plantilla .' + f + '</button>';
+                   + '<i class="fa-solid fa-file-arrow-up" aria-hidden="true"></i> Subir archivo</button></div>';
+                // B14 (rediseño 2026-11) — plantillas como enlace compacto «Plantilla: .xlsx · .csv» (antes dos botones
+                // grandes). Mismos data-imp-plantilla y onclick; objetivo táctil de 44 px.
+                h += '<div class="imp-sec__plantillas"><span class="imp-sec__plant-et"><i class="fa-solid fa-download" aria-hidden="true"></i> Plantilla:</span>';
+                s.formatos.forEach(function(f, i) {
+                    if (i) h += '<span class="imp-sec__plant-sep" aria-hidden="true">·</span>';
+                    h += '<button type="button" class="imp-plant" data-imp-plantilla="' + s.id + ':' + f + '" onclick="importarDescargarPlantilla(\'' + jsArg(s.id) + '\', \'' + jsArg(f) + '\')"'
+                       + ' aria-label="Descargar plantilla .' + f + ' de ' + escapeHtml(s.titulo) + '">.' + f + '</button>';
                 });
                 h += '</div></section>';
             });

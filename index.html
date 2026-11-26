@@ -318,7 +318,7 @@
     <!-- FIX #10: defer en SheetJS — solo se necesita al exportar/importar (acción del usuario),
          nunca durante el arranque. Firebase SDK no puede diferirse porque initFirebase()
          está en un bloque inline inmediato que depende de window.firebase. -->
-    <script src="js/xlsx.full.min.js?v=5.58" defer></script><!-- v5.49 — SheetJS 0.20.3 propio (auditoría C-3): sin CDN de terceros -->
+    <script src="js/xlsx.full.min.js?v=5.59" defer></script><!-- v5.49 — SheetJS 0.20.3 propio (auditoría C-3): sin CDN de terceros -->
 
     <!-- ══════════════════════════════════════════════════════════
          FIREBASE SDK  —  compat v10 (módulos globales window.firebase)
@@ -788,10 +788,10 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
     <!-- Utilidades locales (sustituyen a Tailwind CDN) + iconos locales
          (sustituyen a Font Awesome CDN). Va ANTES de estilos.css para que
          las reglas propias de la app sigan teniendo la última palabra. -->
-    <link rel="stylesheet" href="css/utilidades.css?v=5.58">
-    <link rel="stylesheet" href="css/estilos.css?v=5.58">
-    <link rel="stylesheet" href="css/tema-minimal.css?v=5.58"><!-- v5.31 — tema minimalista claro (+ oscuro sobrio v5.25); solo presentación; va DESPUÉS de estilos.css -->
-    <link rel="stylesheet" href="css/densidad.css?v=5.58"><!-- v5.38 — "Ultra Pro Emerald": capa de densidad operativa; solo presentación; va la ÚLTIMA -->
+    <link rel="stylesheet" href="css/utilidades.css?v=5.59">
+    <link rel="stylesheet" href="css/estilos.css?v=5.59">
+    <link rel="stylesheet" href="css/tema-minimal.css?v=5.59"><!-- v5.31 — tema minimalista claro (+ oscuro sobrio v5.25); solo presentación; va DESPUÉS de estilos.css -->
+    <link rel="stylesheet" href="css/densidad.css?v=5.59"><!-- v5.38 — "Ultra Pro Emerald": capa de densidad operativa; solo presentación; va la ÚLTIMA -->
 </head>
 <body class="min-h-screen">
 
@@ -893,10 +893,15 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
             </button>
         </div>
         <div id="sbNav">
-            <p class="sb-sep">Navegación</p>
+            <!-- D9 (rediseño 2026-11): los mismos accesos, agrupados por tarea. Ningún id, data-sb-tab ni onclick cambia. -->
+            <p class="sb-sep">Operación</p>
             <button type="button" class="sb-item sb-active" data-sb-tab="inicio" onclick="switchTab('inicio'); sbClose()">
                 <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
                 Inicio
+            </button>
+            <button type="button" class="sb-item" data-sb-tab="inventario" onclick="switchTab('inventario'); sbClose()">
+                <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+                Inventario
             </button>
             <button type="button" class="sb-item" data-sb-tab="productos" onclick="switchTab('productos'); sbClose()">
                 <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
@@ -906,14 +911,11 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
                 <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                 Pedidos
             </button>
-            <button type="button" class="sb-item" data-sb-tab="inventario" onclick="switchTab('inventario'); sbClose()">
-                <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
-                Inventario
-            </button>
             <button type="button" class="sb-item" data-sb-tab="compras" onclick="switchTab('compras'); sbClose()">
                 <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
                 Compras
             </button>
+            <p class="sb-sep">Análisis</p>
             <!-- RECETARIO-1 (2026-09-27) -->
             <button type="button" class="sb-item" data-sb-tab="recetario" onclick="switchTab('recetario'); sbClose()">
                 <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
@@ -923,14 +925,15 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
                 <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 17l6-6 4 4 8-8m0 0h-5m5 0v5"/></svg>
                 Ventas
             </button>
+            <button type="button" class="sb-item" data-sb-tab="historia" onclick="switchTab('historia'); sbClose()">
+                <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                Historia
+            </button>
+            <p class="sb-sep">Gestión</p>
             <!-- v5.18 — todas las importaciones de Excel viven en este módulo -->
             <button type="button" class="sb-item" data-sb-tab="importar" onclick="irAImportarDesdeMenu()">
                 <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
                 Importar desde Excel
-            </button>
-            <button type="button" class="sb-item" data-sb-tab="historia" onclick="switchTab('historia'); sbClose()">
-                <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                Historia
             </button>
             <button type="button" class="sb-item" data-sb-tab="ajustes" onclick="switchTab('ajustes'); sbClose()">
                 <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
@@ -953,12 +956,6 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
                 Papelera
             </button>
 
-            <p class="sb-sep">Cuenta</p>
-            <button type="button" class="sb-item" id="sbPerfilBtn" onclick="sbClose(); abrirMiPerfil()">
-                <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-                Mi perfil
-            </button>
-
             <p class="sb-sep">Respaldo</p>
             <button type="button" class="sb-item" onclick="exportFullData(); sbClose()">
                 <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
@@ -977,25 +974,37 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
                 <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"/></svg>
                 Sincronizar ahora
             </button>
+            <p class="sb-sep">Cuenta</p>
+            <button type="button" class="sb-item" id="sbPerfilBtn" onclick="sbClose(); abrirMiPerfil()">
+                <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                Mi perfil
+            </button>
+
         </div>
         <div id="sbFoot">
             <div id="sbVersion" class="sb-version" aria-label="Versión instalada"></div>
-            <div class="sb-act">
-                <button type="button" class="sb-act__btn" onclick="buscarActualizacion()"><i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i> Buscar actualización</button>
-                <button type="button" class="sb-act__btn sb-act__btn--tenue" onclick="repararAplicacion()">Reparar</button>
-            </div>
+            <!-- D9 — pie compacto: actualización, reparación y tema en un solo menú «Sistema» (mismos botones e ids) -->
+            <details class="sb-sis">
+                <summary class="sb-sis__btn"><i class="fa-solid fa-sliders" aria-hidden="true"></i> Sistema</summary>
+                <div class="sb-sis__menu">
+                <div class="sb-act">
+                    <button type="button" class="sb-act__btn" onclick="buscarActualizacion()"><i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i> Buscar actualización</button>
+                    <button type="button" class="sb-act__btn sb-act__btn--tenue" onclick="repararAplicacion()">Reparar</button>
+                </div>
+                <button type="button" onclick="toggleTheme(); sbClose();" class="sb-item" style="width:100%;margin-bottom:6px;" id="sbThemeBtn">
+                    <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+                    </svg>
+                    <span id="sbThemeLabel">Modo claro</span>
+                </button>
+                </div>
+            </details>
             <div style="display:flex;align-items:center;gap:5px;padding:0 10px 5px;overflow:hidden;">
-                <span id="sbUserEmail" style="font-size:.66rem;color:var(--txt-muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+                <span id="sbUserEmail" style="font-size:.75rem;color:var(--txt-muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
                 <span id="sbRoleBadge" class="role-badge"></span>
             </div>
             <!-- Badge de estado de sincronización con la nube -->
             <div id="cloudSyncBadge" class="sy-insignia" role="status" data-sync="none"><i class="fa-solid fa-circle-info" aria-hidden="true"></i><span>Sin Firebase</span></div>
-            <button type="button" onclick="toggleTheme(); sbClose();" class="sb-item" style="width:100%;margin-bottom:6px;" id="sbThemeBtn">
-                <svg class="sb-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
-                </svg>
-                <span id="sbThemeLabel">Modo claro</span>
-            </button>
             <!-- Cerrar sesión -->
             <button type="button" class="sb-logout-btn" onclick="signOutUser()" aria-label="Cerrar sesión">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1099,7 +1108,7 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
     <div id="perfilOverlay" class="pf-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="perfilTitulo" onclick="cerrarMiPerfilSiFondo(this, event)">
         <div class="pf-hoja">
             <div class="pf-cab">
-                <h2 class="pf-cab__tit" id="perfilTitulo">Mi perfil</h2>
+                <h2 class="pf-cab__tit" id="perfilTitulo">Mi perfil <span class="pf-etq">Solo lectura</span></h2>
                 <button type="button" id="perfilCerrarBtn" class="pf-cerrar" onclick="cerrarMiPerfil()" aria-label="Cerrar">
                     <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
@@ -1148,7 +1157,7 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
                 <div style="background:var(--card-high);border:1px solid var(--border-mid);border-radius:14px;padding:14px 16px 10px;">
                     <!-- FIX #5: 'Syne' no está en el <link> de Google Fonts → el navegador cae a
                          sans-serif del sistema rompiendo la tipografía. Sustituido por la tipografía del tema (DM Sans). -->
-                    <p style="font-family:var(--f-body);font-size:0.72rem;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:var(--accent);margin-bottom:10px;"><i class="fa-solid fa-bottle" aria-hidden="true"></i> Conteo de botella en oz</p>
+                    <p style="font-family:var(--f-body);font-size:0.75rem;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;color:var(--accent);margin-bottom:10px;"><i class="fa-solid fa-bottle" aria-hidden="true"></i> Conteo de botella en oz</p>
 
                     <!-- R1 (regla 14) — La casilla decide COMO se cuenta el producto.
                          Marcada:    botellas enteras + botella abierta pesada en oz.
@@ -1537,58 +1546,58 @@ const firebaseConfig  = (ENTORNO === 'pruebas') ? FIREBASE_PRUEBAS : FIREBASE_PR
         </div>
     </div>
 
-        <script src="js/00-nucleo.js?v=5.58"></script>
-    <script src="js/02-despachador-eventos.js?v=5.58"></script><!-- v5.53 — despachador de eventos (preparación para quitar unsafe-inline) -->
-    <script src="js/03-ui-kit.js?v=5.58"></script><!-- BI UI KIT (rediseño R1) -->
-    <script src="js/05-busqueda-motor.js?v=5.58"></script>
-    <script src="js/06-busqueda-ui.js?v=5.58"></script>
-    <script src="js/10-multiusuario.js?v=5.58"></script>
-    <script src="js/15-ciclo-semanal.js?v=5.58"></script>
-    <script src="js/18-areas-config.js?v=5.58"></script>
-    <script src="js/20-persistencia.js?v=5.58"></script>
-    <script src="js/30-indexeddb.js?v=5.58"></script>
-    <script src="js/40-firestore.js?v=5.58"></script>
-    <script src="js/45-inventario-datos.js?v=5.58"></script>
-    <script src="js/46-arrastre.js?v=5.58"></script>
-    <script src="js/47-existencia.js?v=5.58"></script>
-    <script src="js/48-consumo-teorico.js?v=5.58"></script>
-    <script src="js/49-fisico-vs-sistema.js?v=5.58"></script>
-    <script src="js/50-roles-permisos.js?v=5.58"></script>
-    <script src="js/51-total-publicado.js?v=5.58"></script><!-- v5.19 -->
-    <script src="js/53-papelera.js?v=5.58"></script><!-- v5.19 -->
-    <script src="js/54-sync-vivo.js?v=5.58"></script><!-- v5.22 -->
-    <script src="js/56-mi-perfil.js?v=5.58"></script><!-- v5.34 — Mi perfil (overlay de solo lectura) -->
-    <script src="js/60-arranque.js?v=5.58"></script>
-    <script src="js/70-conversion-render.js?v=5.58"></script>
-    <script src="js/71-posicion-conteo.js?v=5.58"></script>
-    <script src="js/72-inicio-tablero.js?v=5.58"></script><!-- v5.23 -->
-    <script src="js/73-pedido-sugerido.js?v=5.58"></script><!-- v5.28 -->
-    <script src="js/75-auditoria-flujo.js?v=5.58"></script>
-    <script src="js/80-buscador.js?v=5.58"></script>
-    <script src="js/83-panel.js?v=5.58"></script>
-    <script src="js/85-ui-inventario-fisico.js?v=5.58"></script>
-    <script src="js/87-reconteo.js?v=5.58"></script>
-    <script src="js/88-compras.js?v=5.58"></script>
-    <script src="js/89-compras-detalle.js?v=5.58"></script>
-    <script src="js/90-ciclo-admin.js?v=5.58"></script>
-    <script src="js/91-recetario.js?v=5.58"></script>
-    <script src="js/92-recetario-importar.js?v=5.58"></script>
-    <script src="js/93-ventas.js?v=5.58"></script>
-    <script src="js/94-control-negativos.js?v=5.58"></script><!-- v5.40 — Control de negativos (Ventas): solo lee -->
-    <script src="js/94-venta-turno.js?v=5.58"></script>
-    <script src="js/95-exportacion.js?v=5.58"></script>
-    <script src="js/96-importar.js?v=5.58"></script>
-    <script src="js/97-exportar-conteo.js?v=5.58"></script><!-- v5.54 — exportar / compartir el conteo activo (PDF y Excel). jsPDF se carga bajo demanda (js/jspdf.umd.min.js) -->
-    <script src="js/97-exportar-diferencias.js?v=5.58"></script><!-- v5.35 — exportar diferencias de Físico vs Sistema a Excel (reutiliza la fila fija y la descarga de js/97-exportar-existencias) -->
-    <script src="js/97-exportar-existencias.js?v=5.58"></script><!-- v5.32 — exportar existencias a Excel -->
-    <script src="js/98-navegacion-atras.js?v=5.58"></script><!-- v5.31 — botón Atrás de Android -->
-    <script src="js/99-window-arranque.js?v=5.58"></script>
+        <script src="js/00-nucleo.js?v=5.59"></script>
+    <script src="js/02-despachador-eventos.js?v=5.59"></script><!-- v5.53 — despachador de eventos (preparación para quitar unsafe-inline) -->
+    <script src="js/03-ui-kit.js?v=5.59"></script><!-- BI UI KIT (rediseño R1) -->
+    <script src="js/05-busqueda-motor.js?v=5.59"></script>
+    <script src="js/06-busqueda-ui.js?v=5.59"></script>
+    <script src="js/10-multiusuario.js?v=5.59"></script>
+    <script src="js/15-ciclo-semanal.js?v=5.59"></script>
+    <script src="js/18-areas-config.js?v=5.59"></script>
+    <script src="js/20-persistencia.js?v=5.59"></script>
+    <script src="js/30-indexeddb.js?v=5.59"></script>
+    <script src="js/40-firestore.js?v=5.59"></script>
+    <script src="js/45-inventario-datos.js?v=5.59"></script>
+    <script src="js/46-arrastre.js?v=5.59"></script>
+    <script src="js/47-existencia.js?v=5.59"></script>
+    <script src="js/48-consumo-teorico.js?v=5.59"></script>
+    <script src="js/49-fisico-vs-sistema.js?v=5.59"></script>
+    <script src="js/50-roles-permisos.js?v=5.59"></script>
+    <script src="js/51-total-publicado.js?v=5.59"></script><!-- v5.19 -->
+    <script src="js/53-papelera.js?v=5.59"></script><!-- v5.19 -->
+    <script src="js/54-sync-vivo.js?v=5.59"></script><!-- v5.22 -->
+    <script src="js/56-mi-perfil.js?v=5.59"></script><!-- v5.34 — Mi perfil (overlay de solo lectura) -->
+    <script src="js/60-arranque.js?v=5.59"></script>
+    <script src="js/70-conversion-render.js?v=5.59"></script>
+    <script src="js/71-posicion-conteo.js?v=5.59"></script>
+    <script src="js/72-inicio-tablero.js?v=5.59"></script><!-- v5.23 -->
+    <script src="js/73-pedido-sugerido.js?v=5.59"></script><!-- v5.28 -->
+    <script src="js/75-auditoria-flujo.js?v=5.59"></script>
+    <script src="js/80-buscador.js?v=5.59"></script>
+    <script src="js/83-panel.js?v=5.59"></script>
+    <script src="js/85-ui-inventario-fisico.js?v=5.59"></script>
+    <script src="js/87-reconteo.js?v=5.59"></script>
+    <script src="js/88-compras.js?v=5.59"></script>
+    <script src="js/89-compras-detalle.js?v=5.59"></script>
+    <script src="js/90-ciclo-admin.js?v=5.59"></script>
+    <script src="js/91-recetario.js?v=5.59"></script>
+    <script src="js/92-recetario-importar.js?v=5.59"></script>
+    <script src="js/93-ventas.js?v=5.59"></script>
+    <script src="js/94-control-negativos.js?v=5.59"></script><!-- v5.40 — Control de negativos (Ventas): solo lee -->
+    <script src="js/94-venta-turno.js?v=5.59"></script>
+    <script src="js/95-exportacion.js?v=5.59"></script>
+    <script src="js/96-importar.js?v=5.59"></script>
+    <script src="js/97-exportar-conteo.js?v=5.59"></script><!-- v5.54 — exportar / compartir el conteo activo (PDF y Excel). jsPDF se carga bajo demanda (js/jspdf.umd.min.js) -->
+    <script src="js/97-exportar-diferencias.js?v=5.59"></script><!-- v5.35 — exportar diferencias de Físico vs Sistema a Excel (reutiliza la fila fija y la descarga de js/97-exportar-existencias) -->
+    <script src="js/97-exportar-existencias.js?v=5.59"></script><!-- v5.32 — exportar existencias a Excel -->
+    <script src="js/98-navegacion-atras.js?v=5.59"></script><!-- v5.31 — botón Atrás de Android -->
+    <script src="js/99-window-arranque.js?v=5.59"></script>
 
     </div><!-- /#appWrapper -->
 
     <!-- ══════════════════════════════════════════════════════
          AUTH — Lógica de autenticación Firebase
          ══════════════════════════════════════════════════════ -->
-        <script src="js/auth.js?v=5.58"></script>
+        <script src="js/auth.js?v=5.59"></script>
 </body>
 </html>

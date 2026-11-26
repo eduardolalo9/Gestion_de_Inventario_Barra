@@ -1,10 +1,10 @@
 // v5.35 — Físico vs Sistema: capa pura (Grupo, «Diferencias ↑», orden visible),
 // exportación a Excel (filas, fórmulas, vacíos, libro real) y garantías estáticas.
 //   node pruebas/prueba-v535-fvs-tabla.js
-// El libro .xlsx se arma y se relee con SheetJS 0.18.5 (la misma versión que
-// carga la app desde cdnjs) si está instalado: `npm i --no-save xlsx@0.18.5`
-// o NODE_PATH apuntando a una copia. Si no está, esas comprobaciones salen
-// como NO VERIFICADAS (no como aprobadas). La descarga real la cubre
+// El libro .xlsx se arma y se relee con el MISMO archivo de SheetJS que carga
+// la app: js/xlsx.full.min.js (desde v5.49: SheetJS 0.20.3 alojado en el
+// proyecto; antes 0.18.5 desde cdnjs). Si faltara, esas
+// comprobaciones salen como NO VERIFICADAS (no como aprobadas). La descarga real la cubre
 // prueba-v535-fvs-navegador.js.
 'use strict';
 const fs = require('fs'), path = require('path'), vm = require('vm');
@@ -126,11 +126,13 @@ chk('Negativos conservan su signo (faltante en dinero negativo)', e('A').total <
 chk('★ El Excel sale en el mismo orden visible', JSON.stringify(ex.map(f => f.id)) === JSON.stringify(['C', 'A', 'E', 'D', '0012', 'B']));
 chk('★ Calcular/exportar NO modificó products ni el conteo', JSON.stringify(ctx.products) === antesProductos && JSON.stringify(ctx.auditoriaConteo) === antesConteo);
 
-// ═══ 6 · Libro .xlsx real (SheetJS 0.18.5) ════════════════════════════════
+// ═══ 6 · Libro .xlsx real (el SheetJS que carga la app) ══════════════════
+const cargaApp = /<script src="js\/xlsx\.full\.min\.js\?v=[^"]+" defer>/.test(idx);
 let X = null;
-try { X = require('xlsx'); } catch (_) { X = null; }
+try { X = cargaApp ? require(path.join(RAIZ, 'js', 'xlsx.full.min.js')) : null; } catch (_) { X = null; }
+const vApp = X ? X.version : null;
 if (!X) {
-    NOVERIF.push('Libro .xlsx (SheetJS no instalado en este equipo: npm i --no-save xlsx@0.18.5)');
+    NOVERIF.push('Libro .xlsx (index.html no carga js/xlsx.full.min.js o el archivo no se pudo leer)');
 } else {
     const wb = vm.runInContext('fvsExportLibro', ctx)(X, ex, { generado: 'hoy', usuario: 'prueba', version: '5.35', inventario: '#7', alcance: 'Todos los grupos', orden: 'Diferencias de menor a mayor (sin agrupar)', sinInicial: 0 });
     const bytes = X.write(wb, { bookType: 'xlsx', type: 'array', compression: true });
@@ -139,7 +141,7 @@ if (!X) {
     const wb2 = X.read(fijo || bytes, { type: 'array', cellNF: true, cellStyles: true });
     const ws = wb2.Sheets['Diferencias'];
     const aoa = X.utils.sheet_to_json(ws, { header: 1, defval: null });
-    chk('Versión de SheetJS para la prueba = la de la app (0.18.5)', X.version === '0.18.5', X.version);
+    chk('Versión de SheetJS para la prueba = la que carga la app (index.html → js/xlsx.full.min.js, 0.20.3)', vApp === '0.20.3' && cargaApp, X.version);
     chk('★ Archivo .xlsx válido (zip OOXML) que se vuelve a leer', !!wb2 && wb2.SheetNames[0] === 'Diferencias' && wb2.SheetNames.indexOf('Información') !== -1);
     chk('★ Encabezados: las 9 columnas, en el orden pedido', JSON.stringify(aoa[0]) === JSON.stringify(vm.runInContext('FVS_EXPORT_COLUMNAS', ctx)), JSON.stringify(aoa[0]));
     chk('Una fila por producto (6) y nada más', aoa.length === 7);
@@ -173,13 +175,15 @@ chk('★ Exportar exige ver la comparación Y el permiso de exportar', /hasPermi
     && /function fvsExportBotonHtml[\s\S]*?if \(!_fvsPuedeExportar\(\) \|\| !datos\) return '';/.test(src86));
 chk('Reutiliza la fila fija y la descarga de js/97 (sin duplicar el truco del zip)', /existenciasExportCongelar\(XLSX, bytes, 1\)/.test(src86) && /_exDescargar\(bytes, nombre\)/.test(src86));
 chk('★ El exportador usa el MISMO orden visible que la pantalla', /fisicoVsSistemaOrdenVisible\(datos\.filas, op\)/.test(src86) && /fisicoVsSistemaOrdenVisible\(r\.items, _fvsOpcionesVista\(\)\)/.test(src85));
-const c85v = sinCom(funcion(src85, 'fvsElegirGrupo') + funcion(src85, 'fvsAlternarDifAsc') + funcion(src85, 'fvsReiniciarVista'));
-chk('★ Grupo y «Diferencias ↑» solo cambian la vista (sin guardar ni sincronizar)', c85v.length > 50 && !/saveToLocalStorage|syncToCloud|localStorage|_db/.test(c85v));
 chk('Volver reinicia la vista (grupo y orden) junto con la búsqueda', /function fvsVolverAConteo\(\) \{ auditoriaView = 'selection'; _fvsSearchTerm = ''; fvsReiniciarVista\(\); renderTab\(\); \}/.test(src85) && /volver: 'fvsVolverAConteo\(\)'/.test(src85));   // v5.53: antes eran sentencias dentro del onclick
-chk('Con «Diferencias ↑» se oculta el chip de invertir el orden (un solo orden a la vez)', /_chipsFvs\(\)\.filter\(function\(c\) \{ return !\(\(_fvsVista\.difAsc \|\| _fvsVista\.difDesc\) && c\.id === 'orden_desc'\); \}\)/.test(src85));
+const c85v = sinCom(funcion(src85, 'fvsElegirGrupo') + funcion(src85, 'fvsAlternarDifAsc') + funcion(src85, 'fvsElegirOrden') + funcion(src85, 'fvsReiniciarVista'));
+chk('★ Grupo y «Ordenar» solo cambian la vista (sin guardar ni sincronizar)', c85v.length > 50 && !/saveToLocalStorage|syncToCloud|localStorage|_db/.test(c85v));
+chk('D7 · un solo orden a la vez: el chip de invertir el orden no se muestra y «Ordenar» fija un único orden', /_chipsFvs\(\)\.filter\(function\(c\) \{ return c\.id !== 'orden_desc'; \}\)/.test(src85)
+    && /delete BusquedaUI\.filtros\('fvs'\)\.orden_desc/.test(funcion(src85, 'fvsElegirOrden')));
 chk('La pantalla sigue negando el acceso sin inventory.viewAll', /function renderFisicoVsSistema\(\) \{\s*if \(!hasPermission\('inventory\.viewAll'\)\)/.test(src85));
 chk('La corrección por área se conserva (data-fvs-accion="editar", solo si se puede editar)', /if \(editable && p\)[\s\S]{0,120}data-fvs-accion="editar"/.test(funcion(src85, '_fvsFilaHtml')));
-chk('Botones «Grupo», «Diferencias ↑» y «Exportar diferencias a Excel» presentes', />Grupo<span/.test(src85) && /Diferencias ↑/.test(src85) && /Exportar diferencias a Excel/.test(src86));
+chk('Controles «Grupo», «Ordenar» (4 órdenes) y «Exportar diferencias a Excel» presentes', />Grupo<span/.test(src85) && />Ordenar<\/span><span class="fvs-ctl__val">/.test(src85)
+    && ['grupo_asc', 'grupo_desc', 'plano_asc', 'plano_desc'].every(v => src85.indexOf("v: '" + v + "'") !== -1) && /Exportar diferencias a Excel/.test(src86));
 const pos = (s) => idx.indexOf(s);
 chk('index.html carga js/97-exportar-diferencias en su orden numérico (antes de 97-exportar-existencias y del arranque)', pos('<script src="js/97-exportar-diferencias.js') > pos('<script src="js/96-importar.js') && pos('<script src="js/97-exportar-diferencias.js') < pos('<script src="js/97-exportar-existencias.js') && pos('<script src="js/97-exportar-existencias.js') < pos('<script src="js/99-window-arranque.js'));
 chk('sw.js lo calienta (WARM_URLS), no en PRECACHE', /'\.\/js\/97-exportar-diferencias\.js\?v=' \+ APP_VERSION/.test(sw) && !/PRECACHE_URLS\s*=\s*\[[^\]]*97-exportar-dif/.test(sw));

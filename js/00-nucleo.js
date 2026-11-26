@@ -106,6 +106,23 @@
                 .replace(/'/g, '&#039;');
         }
 
+        // ==================== DINERO (D6 · rediseño 2026-11) ====================
+        // Un solo formato de pesos para toda la pantalla (no para Excel ni
+        // WhatsApp, que no lo usan). Reglas por contexto:
+        //   · por omisión (precio, costo, total, diferencia): 2 decimales
+        //     siempre, separador de miles y el signo ANTES del símbolo
+        //     (-$250.00, nunca $-250.00).
+        //   · 'kpi' (cifra agregada de tablero): sin decimales ($69,468,383).
+        // Solo presentación: devuelve texto, nunca cambia el número. Los
+        // formateadores de cada módulo (_psMoneda, _fvsMoneda…) lo usan.
+        function biDinero(n, contexto) {
+            if (typeof n !== 'number' || !isFinite(n)) return '—';
+            var dec = contexto === 'kpi' ? 0 : 2;
+            var v = dec === 0 ? Math.round(n) : n;
+            var s = Math.abs(v).toLocaleString('es-MX', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+            return (v < 0 && s !== (0).toFixed(dec) ? '-$' : '$') + s;
+        }
+
         // ==================== ESTADO GLOBAL ENCAPSULADO ====================
         // Toda la mutación de estado ocurre a través de estas variables.
         // Para futuras refactorizaciones, centralizar aquí facilita migrar a un patrón store.

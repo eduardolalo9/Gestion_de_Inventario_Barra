@@ -121,7 +121,7 @@
             h += '<section class="pf-sec" aria-labelledby="pfSecAreas"><h3 class="pf-sec__tit" id="pfSecAreas">Áreas de conteo</h3>';
             if (areas.length) {
                 h += '<ul class="pf-lista">' + areas.map(function(a) {
-                    return '<li><span aria-hidden="true">' + _pfT(a.icono || '📍') + '</span> ' + _pfT(a.nombre || a.id) + '</li>';
+                    return '<li><span class="pf-area__ico" aria-hidden="true">' + _pfT(a.icono || '📍') + '</span> ' + _pfT(a.nombre || a.id) + '</li>';   // O5: emoji (dato) en 32 px
                 }).join('') + '</ul>';
             } else {
                 h += '<p class="pf-nota">No hay áreas definidas.</p>';

@@ -1933,6 +1933,24 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
         function _notifTextoLimpio(texto) {
             return String(texto == null ? '' : texto).replace(/^[\s\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B50}\uFE0F\u200D]+/u, '');
         }
+        // B14 (rediseño 2026-11) — Notificaciones agrupadas por día con hora relativa (la fecha exacta queda en el
+        // title). Solo presentación: misma lista, mismo orden, mismos botones.
+        function _notifDia(ms) {
+            const d = new Date(ms); if (isNaN(d.getTime())) return 'Sin fecha';
+            const hoy = new Date(); const base = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()).getTime();
+            const dia = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+            if (dia === base) return 'Hoy';
+            if (dia === base - 86400000) return 'Ayer';
+            return d.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+        }
+        function _notifRelativa(ms) {
+            const d = new Date(ms); if (isNaN(d.getTime())) return '';
+            const min = Math.floor((Date.now() - d.getTime()) / 60000);
+            if (min < 1 && min > -1) return 'ahora';
+            if (min > 0 && min < 60) return 'hace ' + min + ' min';
+            if (min >= 60 && min < 24 * 60) return 'hace ' + Math.floor(min / 60) + ' h';
+            return d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+        }
         function renderNotificacionesTab() {
             let html = '<div class="max-w-2xl mx-auto">';
             // v5.43 — encabezado común (UI.cabecera); «Marcar todas leídas» como
@@ -1946,8 +1964,11 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
                 html += '<div class="ui-vacio ui-vacio--caja"><i class="fa-solid fa-bell" aria-hidden="true"></i>Sin notificaciones nuevas</div>';
             } else {
                 html += '<div class="notif-wrap">';
+                let diaPrevio = null;
                 _notificaciones.forEach(function(n) {
-                    const ts = n.creadoEn ? new Date(n.creadoEn).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : '';
+                    const ts = n.creadoEn ? new Date(n.creadoEn).toLocaleString('es-MX', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+                    const dia = n.creadoEn ? _notifDia(n.creadoEn) : 'Sin fecha';
+                    if (dia !== diaPrevio) { html += '<h3 class="notif-dia">' + escapeHtml(dia) + '</h3>'; diaPrevio = dia; }
                     // v5.26 (hallazgo #4, Cero Pérdida de Datos / XSS) — el id iba
                     // crudo dentro de un onclick: un documento con un id elegido a
                     // mano (p.ej. desde la consola del navegador, saltándose
@@ -1959,7 +1980,7 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
                     html += '<div class="notif-item' + (n.leido ? '' : ' unread') + '">';
                     html += '<span class="notif-dot' + (n.leido ? ' read' : '') + '" aria-hidden="true"></span>';
                     html += '<span class="nt-icono">' + _notifIcono(n.tipo) + '</span>';
-                    html += '<div class="notif-body"><div class="notif-text">' + escapeHtml(_notifTextoLimpio(n.texto)) + '</div><div class="notif-time ui-mono">' + ts + '</div></div>';
+                    html += '<div class="notif-body"><div class="notif-text">' + escapeHtml(_notifTextoLimpio(n.texto)) + '</div><div class="notif-time ui-mono" title="' + escapeHtml(ts) + '">' + escapeHtml(n.creadoEn ? _notifRelativa(n.creadoEn) : '') + '</div></div>';
                     if (!n.leido && idSeg) html += '<button type="button" class="ui-link" onclick="marcarNotifLeida(\'' + jsArg(idSeg) + '\')">Leído</button>';
                     html += '</div>';
                 });
@@ -2018,7 +2039,7 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
                 html += '<div class="ui-vacio"><i class="fa-solid fa-circle-check" aria-hidden="true"></i>Sin ajustes pendientes</div>';
             } else {
                 lista.forEach(function(a) {
-                    const ts = a.creadoEn ? new Date(a.creadoEn).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : '';
+                    const ts = a.creadoEn ? new Date(a.creadoEn).toLocaleString('es-MX', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
                     // FASE 7 (S2) — todo lo que viene del documento se escapa o
                     // se normaliza. Antes estado y cantidadSugerida se pintaban
                     // crudos (XSS almacenado que ejecutaba quien abría la
@@ -2694,45 +2715,48 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
             if (!isAdmin()) return '<p class="ui-nota">Acceso restringido</p>';
             if (_adminSubvista === 'permisos') return renderUsuariosPermisosTab();
             const pendAjustes = _ajustes.filter(function(a) { return a.estado === 'pendiente'; }).length;
-            let html = '<div class="max-w-2xl mx-auto">';
-            html += UI.cabecera('Administración', 'Usuarios, permisos y publicación de datos.');
-            html += '<div class="adm-card">';
+            // B14 (rediseño 2026-11) — tres bloques: Resumen, Rutina y Mantenimiento avanzado (plegado). Mismo
+            // contenido y mismas acciones que antes, solo reordenados; el panel sigue siendo solo para administración.
+            const cand = (typeof estadoCandadoLocal === 'function') ? estadoCandadoLocal() : null;
+            let html = '<div class="max-w-2xl mx-auto adm-panel">';
+            html += UI.cabecera('Administración', 'Resumen, tareas de rutina y mantenimiento avanzado.');
+
+            // ── Resumen ──
+            html += '<div class="adm-card adm-resumen">';
             html += '<h3><i class="fa-solid fa-user-shield" aria-hidden="true"></i> Panel de Administración</h3>';
+            html += '<div class="adm-resumen__cifras">';
             html += '<div class="adm-stat"><span>Productos en catálogo</span><b>' + products.length + '</b></div>';
             html += '<div class="adm-stat"><span>Ajustes pendientes</span><b class="' + (pendAjustes > 0 ? 'ui-aviso-estado' : '') + '">' + pendAjustes + '</b></div>';
             html += '<div class="adm-stat"><span>Conteos multi-dispositivo</span><b>' + (Object.keys(auditoriaConteo).length) + ' productos</b></div>';
+            html += '</div></div>';
+
+            // ── Rutina (antes «Acciones») ──
+            html += '<div class="adm-card adm-rutina">';
+            html += '<h3><i class="fa-solid fa-bolt" aria-hidden="true"></i> Rutina</h3>';
+            html += '<button type="button" class="adm-btn success" onclick="publicarCatalogoFirestore()"><i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i> Publicar catálogo a usuarios</button>';
+            html += '<button type="button" class="adm-btn primary" onclick="generarYPublicarReporte()"><i class="fa-solid fa-file-chart-column" aria-hidden="true"></i> Generar y publicar reporte global</button>';
+            html += '<button type="button" class="adm-btn" onclick="switchTab(\'ajustes\')"><i class="fa-solid fa-list-check" aria-hidden="true"></i> Revisar ajustes (' + pendAjustes + ' pendientes)</button>';
             html += '</div>';
 
-            // ETAPA 14.1: panel MÍNIMO de Roles y Permisos — solo lo
-            // necesario para comprobar que el sistema funciona; la UI
-            // completa de Configuración (Usuarios/Roles/Sucursales/
-            // Almacenes) es una etapa posterior, fuera de este alcance.
-            html += '<div class="adm-card">';
-            html += '<h3><i class="fa-solid fa-user-shield" aria-hidden="true"></i> Roles y Permisos</h3>';
+            // ── Mantenimiento avanzado (plegado; abierto si el candado está cerrado) ──
+            // ETAPA 14.1: panel MÍNIMO de Roles y Permisos (Usuarios/Roles/Sucursales/Almacenes es otra etapa).
+            html += '<details class="adm-card adm-mant"' + (cand && cand.bloqueado ? ' open' : '') + '>';
+            html += '<summary class="adm-mant__sum"><span class="adm-mant__tit"><i class="fa-solid fa-user-shield" aria-hidden="true"></i> Mantenimiento avanzado</span><i class="fa-solid fa-chevron-down adm-mant__flecha" aria-hidden="true"></i>'
+                  + '<span class="adm-mant__aviso">Roles, permisos y candado local. Cambian cómo funciona la app: úsalo con cuidado.</span></summary>';
+            html += '<div class="adm-mant__cuerpo">';
+            html += '<h4 class="adm-mant__sec">Roles y Permisos</h4>';
             html += '<div class="adm-stat"><span>Tu rol resuelto</span><b>' + escapeHtml(_authzState.roleId || '—') + '</b></div>';
             html += '<div class="adm-stat"><span>Rol legacy en Firestore</span><b>' + escapeHtml(_authzState.legacyRole || '—') + '</b></div>';
             html += '<div class="adm-stat"><span>Permisos activos</span><b>' + (_authzState.permissions ? (_authzState.permissions.has('*') ? 'Todos (*)' : _authzState.permissions.size) : 0) + '</b></div>';
             html += '<button type="button" class="adm-btn" onclick="abrirUsuariosPermisos()"><i class="fa-solid fa-user-shield" aria-hidden="true"></i> Usuarios y permisos</button>';
             html += '<button type="button" class="adm-btn warn" onclick="migrarRolesExistentes()"><i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i> Migrar roles legacy a nuevo modelo</button>';
             html += '<button type="button" class="adm-btn" onclick="sincronizarRolesSistema()"><i class="fa-solid fa-code-branch" aria-hidden="true"></i> Actualizar roles de sistema</button>';
-            html += '</div>';
 
-            // Acciones admin
-            html += '<div class="adm-card">';
-            html += '<h3><i class="fa-solid fa-bolt" aria-hidden="true"></i> Acciones</h3>';
-            html += '<button type="button" class="adm-btn success" onclick="publicarCatalogoFirestore()"><i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i> Publicar catálogo a usuarios</button>';
-            html += '<button type="button" class="adm-btn primary" onclick="generarYPublicarReporte()"><i class="fa-solid fa-file-chart-column" aria-hidden="true"></i> Generar y publicar reporte global</button>';
-            html += '<button type="button" class="adm-btn" onclick="switchTab(\'ajustes\')"><i class="fa-solid fa-list-check" aria-hidden="true"></i> Revisar ajustes (' + pendAjustes + ' pendientes)</button>';
-            html += '</div>';
-
-            // ── D6 · CANDADO LOCAL DE CAPTURA ───────────────────────────
-            // Hasta ahora este estado no se mostraba en ninguna parte y no
-            // había forma de moverlo desde la aplicación. Un dispositivo
-            // bloqueado no podía guardar conteos y nadie sabía por qué.
-            if (typeof estadoCandadoLocal === 'function') {
-                const cand = estadoCandadoLocal();
-                html += '<div class="adm-card">';
-                html += '<h3><i class="fa-solid fa-lock" aria-hidden="true"></i> Candado local de captura</h3>';
+            // ── D6 · CANDADO LOCAL DE CAPTURA ──
+            // Hasta ahora este estado no se mostraba en ninguna parte y no había forma de moverlo desde la
+            // aplicación. Un dispositivo bloqueado no podía guardar conteos y nadie sabía por qué.
+            if (cand) {
+                html += '<h4 class="adm-mant__sec"><i class="fa-solid fa-lock" aria-hidden="true"></i> Candado local de captura</h4>';
                 html += '<p class="ui-nota ui-nota--chica">'
                       + 'Candado propio de ESTE dispositivo. No es el estado del Inventario '
                       + 'Físico ni afecta al histórico ni a otros aparatos.</p>';
@@ -2748,11 +2772,11 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
                     html += '<button type="button" class="adm-btn warn" onclick="desbloquearCandadoLocal()">'
                           + '<i class="fa-solid fa-unlock" aria-hidden="true"></i> Desbloquear captura en este dispositivo</button>';
                 }
-                html += '</div>';
             }
+            html += '</div></details>';
 
             // Reportes publicados
-            html += '<div class="adm-card">';
+            html += '<div class="adm-card adm-reportes">';
             html += '<h3><i class="fa-solid fa-file-chart-column" aria-hidden="true"></i> Reportes publicados</h3>';
             html += '<div id="adminReportesList"><p class="ui-nota"><i class="fa-solid fa-hourglass" aria-hidden="true"></i> Cargando reportes…</p></div>';
             html += '</div>';
@@ -2767,7 +2791,7 @@ function exportToExcelConDatos(modo, conteoData, productsList, fileName, areasOv
                     .then(function(snap) {
                         const el = document.getElementById('adminReportesList');
                         if (!el) return;
-                        if (snap.empty) { el.innerHTML = '<p class="ui-nota">Sin reportes aún</p>'; return; }
+                        if (snap.empty) { el.innerHTML = '<div class="ui-vacio"><i class="fa-solid fa-file-chart-column" aria-hidden="true"></i>Sin reportes aún</div>'; return; }
                         let rhtml = '';
                         snap.docs.forEach(function(d) {
                             const r = d.data();

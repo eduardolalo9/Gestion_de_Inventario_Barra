@@ -18,7 +18,7 @@ const http = require('http');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 
 const RAIZ = path.resolve(__dirname, '..');
 const COMMIT_V532 = 'b9378d4';
@@ -41,10 +41,15 @@ function servir(dir) {
         }).listen(0, '127.0.0.1', () => res({ s, base: 'http://127.0.0.1:' + s.address().port }));
     });
 }
+// Sin shell (ni cmd.exe ni /bin/bash): en Windows, cmd.exe se comía el «^» de «^{commit}», /bin/bash no
+// existe para Node y el tar de Git for Windows (GNU) confunde «C:» con un host remoto. Se usa el tar
+// nativo de Windows (%SystemRoot%\System32\tar.exe) y, en Linux/macOS, el tar del sistema.
 function extraerV532() {
-    execSync('git cat-file -e ' + COMMIT_V532 + '^{commit}', { cwd: RAIZ, stdio: 'ignore' });
+    execFileSync('git', ['cat-file', '-e', COMMIT_V532 + '^{commit}'], { cwd: RAIZ, stdio: 'ignore' });
     const dir = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), 'bi-v532-'));
-    execSync('git archive ' + COMMIT_V532 + ' | tar -x -C "' + dir + '"', { cwd: RAIZ, shell: '/bin/bash', stdio: 'ignore' });
+    const tarBin = process.platform === 'win32' ? path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe') : 'tar';
+    const archivo = execFileSync('git', ['archive', COMMIT_V532], { cwd: RAIZ, maxBuffer: 1 << 28 });
+    execFileSync(tarBin, ['-x', '-f', '-', '-C', dir], { input: archivo, stdio: ['pipe', 'ignore', 'ignore'] });
     return dir;
 }
 

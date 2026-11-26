@@ -1,5 +1,5 @@
 // v5.36 — Chromium contra la app REAL:
-//   (1) Físico vs Sistema: botón «Diferencias ↓» (mayor a menor), excluyente con ↑, respeta Grupo, Atrás lo reinicia.
+//   (1) Físico vs Sistema: «Ordenar» = Sin agrupar · mayor → menor (antes «Diferencias ↓»), excluyente con ↑, respeta Grupo.
 //   (2) Importar → «Último corte importado»: panel, eliminar con confirmación (batch papelera + borrado),
 //       cancelar no borra, sin permiso no aparece, error del servidor no borra nada.
 //   npm run test:v536nav   (servidor local en PUERTO; lo levanta todas-navegador.js)
@@ -86,24 +86,26 @@ const num = (t) => { const m = /^([+-]?)([\d,]+\.\d+)/.exec(t.replace(/\s/g, '')
   // ═══ 1 · Diferencias ↓ ═══
   let { ctx, p, errs } = await abrir(nav, { width: 390, height: 844 }, 'admin');
   const antes = await p.evaluate(() => JSON.stringify({ products, auditoriaConteo, myAuditoriaConteo }));
-  chk('El botón «Diferencias ↓» existe, junto a ↑, ≥ 44 px', await p.evaluate(() => { const b = document.getElementById('fvsDifDescBtn'); const r = b && b.getBoundingClientRect(); return !!b && r.height >= 44 && r.right <= innerWidth + 1 && !!document.getElementById('fvsDifAscBtn'); }));
-  await p.click('#fvsDifDescBtn'); await p.waitForTimeout(250);
+  chk('«Ordenar» existe con «Sin agrupar · mayor → menor» junto a «menor → mayor», ≥ 44 px y dentro de la pantalla', await p.evaluate(() => { const s = document.getElementById('fvsOrdenSel'); const l = document.querySelector('.fvs-ctl__orden'); const r = l && l.getBoundingClientRect();
+    const v = s ? Array.from(s.options).map(o => o.value) : []; return !!s && r.height >= 44 && r.right <= innerWidth + 1 && v.includes('plano_desc') && v.includes('plano_asc'); }));
+  await p.selectOption('#fvsOrdenSel', 'plano_desc'); await p.waitForTimeout(250);
   let f = await filasTabla(p);
   let difs = f.map(x => num(x.celdas[5]));
   // v5.40 — regla de ceros: el sin contar cuenta 0 → diferencia −5, ordena como las demás.
-  chk('★ «Diferencias ↓»: +3, +2, 0, −2, −4, −5 (sin contar = 0)', JSON.stringify(difs) === JSON.stringify([3, 2, 0, -2, -4, -5]), JSON.stringify(difs));
-  chk('Los 6 productos siguen ahí y el botón queda marcado', f.length === 6 && await p.evaluate(() => document.getElementById('fvsDifDescBtn').getAttribute('aria-pressed') === 'true'));
-  await p.click('#fvsDifAscBtn'); await p.waitForTimeout(250);
+  chk('★ «Sin agrupar · mayor → menor»: +3, +2, 0, −2, −4, −5 (sin contar = 0)', JSON.stringify(difs) === JSON.stringify([3, 2, 0, -2, -4, -5]), JSON.stringify(difs));
+  chk('Los 6 productos siguen ahí y el selector queda marcado con ese orden', f.length === 6 && await p.evaluate(() => document.getElementById('fvsOrdenSel').value === 'plano_desc' && document.querySelector('.fvs-ctl__orden').classList.contains('fvs-ctl__btn--on')
+      && /Sin agrupar ↓/.test(document.querySelector('.fvs-ctl__orden .fvs-ctl__val').textContent)));
+  await p.selectOption('#fvsOrdenSel', 'plano_asc'); await p.waitForTimeout(250);
   difs = (await filasTabla(p)).map(x => num(x.celdas[5]));
-  chk('★ Tocar ↑ apaga ↓ (excluyentes) y ordena de menor a mayor', JSON.stringify(difs) === JSON.stringify([-5, -4, -2, 0, 2, 3]) && await p.evaluate(() => document.getElementById('fvsDifDescBtn').getAttribute('aria-pressed') === 'false'), JSON.stringify(difs));
-  await p.click('#fvsDifDescBtn'); await p.waitForTimeout(250);
-  chk('★ Tocar ↓ apaga ↑', await p.evaluate(() => document.getElementById('fvsDifAscBtn').getAttribute('aria-pressed') === 'false' && document.getElementById('fvsDifDescBtn').getAttribute('aria-pressed') === 'true'));
+  chk('★ Elegir «menor → mayor» sustituye a «mayor → menor» (excluyentes) y ordena de menor a mayor', JSON.stringify(difs) === JSON.stringify([-5, -4, -2, 0, 2, 3]) && await p.evaluate(() => document.getElementById('fvsOrdenSel').value === 'plano_asc' && _fvsVista.difAsc === true && _fvsVista.difDesc === false), JSON.stringify(difs));
+  await p.selectOption('#fvsOrdenSel', 'plano_desc'); await p.waitForTimeout(250);
+  chk('★ Elegir «mayor → menor» apaga «menor → mayor»', await p.evaluate(() => document.getElementById('fvsOrdenSel').value === 'plano_desc' && _fvsVista.difAsc === false && _fvsVista.difDesc === true));
   await p.selectOption('#fvsGrupoSel', 'TEQUILA'); await p.waitForTimeout(250);
   f = await filasTabla(p);
   chk('★ ↓ respeta el grupo (TEQUILA: +2 y luego −4)', JSON.stringify(f.map(x => num(x.celdas[5]))) === JSON.stringify([2, -4]), JSON.stringify(f.map(x => x.nombre)));
   await p.selectOption('#fvsGrupoSel', ''); await p.waitForTimeout(150);
-  await p.click('#fvsDifDescBtn'); await p.waitForTimeout(250);
-  chk('Otro toque vuelve al orden por grupo', await p.evaluate(() => document.querySelectorAll('tr.fvs-t__grupo').length === 4));
+  await p.selectOption('#fvsOrdenSel', 'grupo_asc'); await p.waitForTimeout(250);
+  chk('«Por grupo · menor → mayor» vuelve al orden por grupo', await p.evaluate(() => document.querySelectorAll('tr.fvs-t__grupo').length === 4 && _fvsVista.difDesc === false));
   chk('★ Ordenar no modifica conteos ni catálogo', (await p.evaluate(() => JSON.stringify({ products, auditoriaConteo, myAuditoriaConteo }))) === antes);
   chk('Sin errores de JavaScript (Físico vs Sistema)', errs.length === 0, errs.join(' | '));
   await ctx.close();
@@ -148,7 +150,7 @@ const num = (t) => { const m = /^([+-]?)([\d,]+\.\d+)/.exec(t.replace(/\s/g, '')
   await ctx.close();
 
   await nav.close();
-  console.log('\n  ── v5.36 · Diferencias ↓ y Eliminar último corte importado (navegador) ──\n');
+  console.log('\n  ── v5.36 · Ordenar «mayor → menor» (D7) y Eliminar último corte importado (navegador) ──\n');
   C.forEach(c => console.log('  ' + (c.ok ? '✅' : '❌') + '  ' + c.n + (c.ok ? '' : '   ← ' + (c.d || ''))));
   const fl = C.filter(c => !c.ok).length;
   console.log('\n  ' + C.length + ' comprobaciones · ' + (C.length - fl) + ' pasaron · ' + fl + ' fallaron\n');

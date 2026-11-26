@@ -145,7 +145,8 @@ async function abrir(nav, rol, ancho) {
   chk('El valor en existencia del panel usa el precio vigente', Math.abs(val.ind - val.esperado) < 0.01 && val.sin === 2, JSON.stringify(val));
   await p.evaluate(() => abrirFichaProducto('DJ7')); await p.waitForTimeout(250);
   const fi = await p.evaluate(() => ((document.getElementById('pm-ficha-wrap') || {}).textContent || '').replace(/\s+/g, ' '));
-  chk('La ficha del producto dice «Precio · última compra» y el último costo con su fecha', /Precio · última compra\$1,480/.test(fi) && /Último costo\$1,480 \(2026-11-10\)/.test(fi), fi.slice(0, 300));
+  // D6 (rediseño 2026-11): precio y costo unitario con 2 decimales siempre ($1,480.00).
+  chk('La ficha del producto dice «Precio · última compra» y el último costo con su fecha', /Precio · última compra\$1,480/.test(fi) && /Último costo\$1,480\.00 \(2026-11-10\)/.test(fi), fi.slice(0, 300));
   await p.evaluate(() => cerrarFichaProducto());
   await p.evaluate(() => openProductModal('DJ7')); await p.waitForTimeout(200);
   const form = await p.evaluate(() => ({ campo: document.getElementById('productPrecio').value, hint: document.getElementById('productPrecioHint').hidden ? '' : document.getElementById('productPrecioHint').textContent }));
