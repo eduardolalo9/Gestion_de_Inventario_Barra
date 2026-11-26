@@ -26,8 +26,15 @@
         }
 
         function _panelMoneda(n) {
+            // D6: cifra agregada de tablero, sin decimales ($69,468,383).
+            if (typeof biDinero === 'function' && typeof n === 'number') return biDinero(n, 'kpi');
             try { return n.toLocaleString('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }); }
             catch (_) { return '$' + Math.round(n); }
+        }
+        /** D6: precio y costo unitario, 2 decimales siempre ($80.00). */
+        function _panelPrecio(n) {
+            if (typeof biDinero === 'function' && typeof n === 'number') return biDinero(n);
+            return _panelMoneda(n);
         }
 
         function _panelNum(n) {
@@ -139,7 +146,11 @@
          */
         function _panelTile(icono, valor, etiqueta, extra) {
             extra = extra || {};
-            var tag = extra.accion ? 'button type="button" onclick="' + extra.accion + '"' : 'div';
+            // Rediseño 2026-11 (D12): un mosaico con acción puede ir deshabilitado
+            // (sin onclick) y explicar por qué en su subtítulo, visible.
+            var tag = extra.accion
+                ? 'button type="button" ' + (extra.deshabilitado ? 'disabled aria-disabled="true"' : 'onclick="' + extra.accion + '"')
+                : 'div';
             var cierre = extra.accion ? 'button' : 'div';
             return '<' + tag + ' class="pm-tile' + (extra.clase ? ' ' + extra.clase : '') + '">'
                  + '<span class="pm-tile__ico" aria-hidden="true"><i class="fa-solid ' + icono + '"></i></span>'
@@ -256,7 +267,11 @@
                     { clase: 'pm-tile--dinero', sub: k.conPrecio < k.productos ? (k.productos - k.conPrecio) + ' sin precio' : null });
             h += _panelTile('fa-receipt', k.comprasN ? _panelMoneda(k.comprasImp) : '0', 'Compras esta semana',
                     { clase: 'pm-tile--dinero', sub: k.comprasN + ' documento' + (k.comprasN === 1 ? '' : 's'), accion: "switchTab('compras')" });
-            h += _panelTile('fa-cart-shopping', k.carrito, 'En carrito', { accion: 'openOrderModal()' });
+            // D12 — con el carrito vacío el mosaico no abre el pedido: queda
+            // deshabilitado con el motivo a la vista. openOrderModal() conserva
+            // su propia validación ("Agrega productos al carrito primero").
+            h += _panelTile('fa-cart-shopping', k.carrito, 'En carrito', { accion: 'openOrderModal()',
+                    deshabilitado: !k.carrito, sub: k.carrito ? null : 'Agrega productos para pedir' });
             h += _panelTile('fa-clipboard-list', k.pedidos, 'Pedidos', { accion: "abrirHistorialPedidos()" });   // v5.47: los generados viven en Historia → Pedidos
             h += '</div>';
 
@@ -312,8 +327,8 @@
             h += '<div class="pm-card__fila"><span>Total</span><b>' + _panelNum(st) + (bajo ? ' <span class="pm-estado pm-estado--critico">bajo mínimo</span>' : '') + '</b></div>';
             if (typeof p.stockMinimo === 'number') h += '<div class="pm-card__fila"><span>Mínimo</span><b>' + _panelNum(p.stockMinimo) + '</b></div>';
             var pvF = precioProducto(p), orF = precioProductoOrigen(p);
-            if (typeof pvF === 'number') h += '<div class="pm-card__fila"><span>Precio' + (orF.origen === 'compra' ? ' · última compra' : '') + '</span><b>' + _panelMoneda(pvF) + '</b></div>';
-            if (costo) h += '<div class="pm-card__fila"><span>Último costo</span><b>' + _panelMoneda(Number(costo.costo) || 0) + ' <small>(' + escapeHtml(costo.fecha || '') + ')</small></b></div>';
+            if (typeof pvF === 'number') h += '<div class="pm-card__fila"><span>Precio' + (orF.origen === 'compra' ? ' · última compra' : '') + '</span><b>' + _panelPrecio(pvF) + '</b></div>';
+            if (costo) h += '<div class="pm-card__fila"><span>Último costo</span><b>' + _panelPrecio(Number(costo.costo) || 0) + ' <small>(' + escapeHtml(costo.fecha || '') + ')</small></b></div>';
 
             // FASE 14 — el desglose desde el ancla: de qué corte sale, qué se
             // sumó y qué se restó. Es la respuesta a "¿por qué este Total?".
@@ -366,7 +381,7 @@
                 h += '<div class="pm-ficha__compras">';
                 lineas.slice(0, 12).forEach(function(l) {
                     h += '<div class="pm-card__fila"><span>' + escapeHtml(l.fecha) + ' · ' + escapeHtml(l.prov) + '</span><b>+' + _panelNum(l.cant)
-                       + (typeof l.costo === 'number' ? ' · ' + _panelMoneda(l.costo) : '') + '</b></div>';
+                       + (typeof l.costo === 'number' ? ' · ' + _panelPrecio(l.costo) : '') + '</b></div>';
                 });
                 h += '</div>';
             }

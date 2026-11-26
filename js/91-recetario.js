@@ -547,11 +547,34 @@
                 return '<div style="padding:4px 0 8px">' + renderIncidenciasImportacionRecetario(_recetarioImportResultado) + '</div>';
             }
             if (recetarioView === 'ficha' && recetarioFichaId) {
-                return _renderRecetaFicha(recetarioFichaId);
+                // D8-B (rediseño 2026-11) — en escritorio (≥ 1280 px) la ficha se abre en un panel junto a la
+                // lista. Mismo estado (recetarioView / recetarioFichaId), mismas funciones, mismo «Volver» y mismo
+                // Atrás; en teléfono y tableta no cambia nada (solo la ficha, como siempre).
+                var ficha = _renderRecetaFicha(recetarioFichaId);
+                if (recetarioView === 'ficha' && _recetarioPanelLateral()) {   // si la receta ya no existe, ficha ya es la lista
+                    return '<div class="rc-panel"><div class="rc-panel__lista">' + UI.cabecera('Recetario', 'Recetas con sus insumos y su costo.') + _renderRecetarioLista() + '</div>'
+                         + '<div class="rc-panel__ficha" role="region" aria-label="Ficha de la receta">' + ficha + '</div></div>';
+                }
+                return ficha;
             }
             return UI.cabecera('Recetario', 'Recetas con sus insumos y su costo.') + _renderRecetarioLista();
         }
         window.renderRecetarioTab = renderRecetarioTab;
+
+        /** D8-B — ¿se muestra la ficha como panel junto a la lista? Solo en pantallas de escritorio (≥ 1280 px). */
+        function _recetarioPanelLateral() {
+            return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(min-width: 1280px)').matches;
+        }
+        // Si la ventana cruza los 1280 px con una ficha abierta, se vuelve a pintar (panel ↔ ficha sola). Solo presentación.
+        if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+            (function() {
+                var mq = window.matchMedia('(min-width: 1280px)');
+                var alCambiar = function() {
+                    if (typeof activeTab !== 'undefined' && activeTab === 'recetario' && recetarioView === 'ficha' && typeof renderTab === 'function') renderTab();
+                };
+                if (mq.addEventListener) mq.addEventListener('change', alCambiar); else if (mq.addListener) mq.addListener(alCambiar);
+            })();
+        }
 
         // ══════════════════════════════════════════════════════════════════
         //  v5.40 — MENÚ DE TRES PUNTOS (Editar · Desactivar/Activar · Eliminar)
@@ -750,7 +773,7 @@
 
             html += '<div style="margin-top:18px;">';
             html += '<p style="font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--txt-secondary);margin-bottom:8px;">Ingredientes</p>';
-            html += '<table style="width:100%;border-collapse:collapse;font-size:.85rem;">';
+            html += '<table class="rc-ingr" style="width:100%;border-collapse:collapse;font-size:.85rem;">';   // rc-ingr: nombres largos sin espacios envuelven (css/densidad.css)
             r.ingredientes.forEach(function(ing) {
                 var producto = products.find(function(p) { return p.id === ing.productoId; });
                 var costoLinea = producto ? costoLineaReceta(ing, producto) : null;

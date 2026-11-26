@@ -1,20 +1,23 @@
 // v5.35 — Físico vs Sistema en Chromium contra la app REAL: tabla compacta
-// (Android 390 px y escritorio 1280 px), «Grupo», «Diferencias ↑», cero
+// (Android 390 px y escritorio 1280 px), «Grupo», «Ordenar» (D7: 4 órdenes), cero
 // escrituras, corrección por área intacta, Atrás de Android y descarga REAL
-// del .xlsx (se relee con SheetJS 0.18.5).
+// del .xlsx (se relee con el mismo SheetJS que usa la app).
 //   npm run test:v535nav    (servidor local en PUERTO, 8080; lo levanta todas-navegador.js)
 // Nada toca Firebase: _db no existe en la prueba.
-// SheetJS: la app la pide a cdnjs. Si este equipo no llega a cdnjs y hay una
-// copia local de xlsx@0.18.5 (require('xlsx')), se sirve esa MISMA versión en
-// lugar de la de cdnjs; si no hay ninguna, la parte del archivo sale NO VERIFICADA.
+// SheetJS: desde 2026-11 la app lo carga de su propio origen
+// (vendor/sheetjs/0.20.3/xlsx.full.min.js, con SRI); el servidor local lo sirve
+// tal cual, sin sustituirlo. La prueba relee el archivo con ese MISMO archivo.
 const { chromium } = require('playwright');
 const fs = require('fs'), os = require('os'), path = require('path');
 const C = []; const chk = (n, ok, d) => C.push({ n, ok: !!ok, d: d || '' });
 const NOVERIF = [];
 const PUERTO = process.env.PUERTO || '8080';
 const URL_APP = 'http://127.0.0.1:' + PUERTO + '/index.html';
+// El SheetJS que declara index.html (vendor/sheetjs/<versión>/). XLSX_LOCAL queda en null: ya no hace
+// falta sustituir nada, la app pide el archivo a su propio origen.
+const V_APP = (/<script src="vendor\/sheetjs\/([\d.]+)\/xlsx\.full\.min\.js"/.exec(fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8')) || [])[1] || null;
 let X = null, XLSX_LOCAL = null;
-try { X = require('xlsx'); XLSX_LOCAL = path.join(path.dirname(require.resolve('xlsx')), 'dist', 'xlsx.full.min.js'); if (!fs.existsSync(XLSX_LOCAL)) XLSX_LOCAL = null; } catch (_) { X = null; }
+try { X = V_APP ? require(path.join(__dirname, '..', 'vendor', 'sheetjs', V_APP, 'xlsx.full.min.js')) : null; } catch (_) { X = null; }
 
 const MONTAJE = (rol) => {
   document.getElementById('authLoadingScreen').classList.add('auth-hidden');
@@ -115,8 +118,8 @@ const num = (t) => { const m = /^([+-]?)([\d,]+\.\d+)/.exec(t.replace(/\s/g, '')
   chk('Una descripción larga se lee completa (envuelve, no se corta)', med.largoCompleto, JSON.stringify(med));
   await p.evaluate(() => { document.querySelector('.fvs-t-wrap').scrollLeft = 0; });
 
-  const ctl = await p.evaluate(() => ['.fvs-ctl__grupo', '#fvsDifAscBtn', '#fvsExportBtn'].map(s => { const r = document.querySelector(s).getBoundingClientRect(); return { s, w: r.width, h: r.height, dentro: r.right <= innerWidth + 1 }; }));
-  chk('Botones Grupo / Diferencias ↑ / Exportar visibles, ≥ 44 px y dentro de la pantalla', ctl.every(c => c.h >= 44 && c.w >= 44 && c.dentro), JSON.stringify(ctl));
+  const ctl = await p.evaluate(() => ['.fvs-ctl__grupo', '.fvs-ctl__orden', '#fvsExportBtn'].map(s => { const r = document.querySelector(s).getBoundingClientRect(); return { s, w: r.width, h: r.height, dentro: r.right <= innerWidth + 1 }; }));
+  chk('Controles Grupo / Ordenar / Exportar visibles, ≥ 44 px y dentro de la pantalla', ctl.every(c => c.h >= 44 && c.w >= 44 && c.dentro), JSON.stringify(ctl));
 
   // ── «Grupo» ──
   await p.selectOption('#fvsGrupoSel', 'RON'); await p.waitForTimeout(250);
@@ -127,24 +130,37 @@ const num = (t) => { const m = /^([+-]?)([\d,]+\.\d+)/.exec(t.replace(/\s/g, '')
   await p.selectOption('#fvsGrupoSel', ''); await p.waitForTimeout(250);
   chk('★ «Todos los grupos» regresa los 6', (await filasTabla(p)).length === 6);
 
-  // ── «Diferencias ↑» ──
-  await p.click('#fvsDifAscBtn'); await p.waitForTimeout(250);
+  // ── «Ordenar» = Sin agrupar · menor → mayor (antes «Diferencias ↑») ──
+  chk('D7 · «Ordenar» ofrece los 4 órdenes y arranca en «Por grupo · menor → mayor» (sin marca)', await p.evaluate(() => {
+    const s = document.getElementById('fvsOrdenSel'), l = document.querySelector('.fvs-ctl__orden');
+    return !!s && JSON.stringify(Array.from(s.options).map(o => o.value)) === JSON.stringify(['grupo_asc', 'grupo_desc', 'plano_asc', 'plano_desc'])
+      && s.value === 'grupo_asc' && !l.classList.contains('fvs-ctl__btn--on') && s.getAttribute('aria-label') === 'Ordenar'; }));
+  await p.selectOption('#fvsOrdenSel', 'plano_asc'); await p.waitForTimeout(250);
   f = await filasTabla(p);
   const difs = f.map(x => num(x.celdas[5]));
   const contadas = difs.filter(d => d !== null);
   // v5.40 — el sin contar ya tiene diferencia (−5): ordena como cualquier otra.
-  chk('★ «Diferencias ↑»: −5 (sin contar), −4, −2, 0, +2, +3 (orden numérico)', JSON.stringify(difs) === JSON.stringify([-5, -4, -2, 0, 2, 3]), JSON.stringify(difs));
+  chk('★ «Sin agrupar · menor → mayor»: −5 (sin contar), −4, −2, 0, +2, +3 (orden numérico)', JSON.stringify(difs) === JSON.stringify([-5, -4, -2, 0, 2, 3]), JSON.stringify(difs));
   chk('Las 6 filas siguen ahí, ahora sin cabeceras de grupo (el grupo va en cada fila)', f.length === 6 && contadas.length === 6
       && (await p.evaluate(() => document.querySelectorAll('tr.fvs-t__grupo').length)) === 0 && f[1].sub === 'A · Botellas · TEQUILA', JSON.stringify(f.map(x => x.sub)));
-  chk('El botón queda marcado (aria-pressed) y el chip de invertir orden se oculta', await p.evaluate(() => document.getElementById('fvsDifAscBtn').getAttribute('aria-pressed') === 'true'
+  chk('El selector queda marcado con el orden elegido y no hay chip de invertir orden (un solo control)', await p.evaluate(() => document.getElementById('fvsOrdenSel').value === 'plano_asc'
+      && document.querySelector('.fvs-ctl__orden').classList.contains('fvs-ctl__btn--on') && /Sin agrupar ↑/.test(document.querySelector('.fvs-ctl__orden .fvs-ctl__val').textContent)
       && !document.querySelector('[data-sbx-filtro="orden_desc"]') && !!document.querySelector('[data-sbx-filtro="solo_dif"]')));
   await p.selectOption('#fvsGrupoSel', 'TEQUILA'); await p.waitForTimeout(250);
   f = await filasTabla(p);
   chk('★ El orden respeta el filtro de grupo (TEQUILA: −4 y luego +2)', JSON.stringify(f.map(x => x.nombre)) === JSON.stringify(['TEQUILA FALTANTE', 'MEZCAL CÓDIGO CON CEROS']), f.map(x => x.nombre).join(','));
   await p.selectOption('#fvsGrupoSel', ''); await p.waitForTimeout(150);
-  await p.click('#fvsDifAscBtn'); await p.waitForTimeout(250);
-  chk('★ Otro toque vuelve al orden original por grupo', await p.evaluate(() => document.querySelectorAll('tr.fvs-t__grupo').length === 4
-      && document.getElementById('fvsDifAscBtn').getAttribute('aria-pressed') === 'false' && !!document.querySelector('[data-sbx-filtro="orden_desc"]')));
+  // ── «Ordenar» = Por grupo · mayor → menor (antes el chip «Mayor diferencia primero») ──
+  await p.selectOption('#fvsOrdenSel', 'grupo_desc'); await p.waitForTimeout(250);
+  f = await filasTabla(p);
+  chk('★ «Por grupo · mayor → menor»: vuelven las 4 cabeceras de grupo y dentro de TEQUILA va +2 antes que −4', await p.evaluate(() => document.querySelectorAll('tr.fvs-t__grupo').length === 4
+      && document.getElementById('fvsOrdenSel').value === 'grupo_desc' && document.querySelector('.fvs-ctl__orden').classList.contains('fvs-ctl__btn--on'))
+      && JSON.stringify(f.filter(x => / · TEQUILA$/.test(x.sub) || ['TEQUILA FALTANTE', 'MEZCAL CÓDIGO CON CEROS'].includes(x.nombre)).map(x => x.nombre)) === JSON.stringify(['MEZCAL CÓDIGO CON CEROS', 'TEQUILA FALTANTE']), f.map(x => x.nombre).join(','));
+  await p.selectOption('#fvsOrdenSel', 'grupo_asc'); await p.waitForTimeout(250);
+  f = await filasTabla(p);
+  chk('★ «Por grupo · menor → mayor» vuelve al orden original por grupo (sin marca)', await p.evaluate(() => document.querySelectorAll('tr.fvs-t__grupo').length === 4
+      && document.getElementById('fvsOrdenSel').value === 'grupo_asc' && !document.querySelector('.fvs-ctl__orden').classList.contains('fvs-ctl__btn--on') && !document.querySelector('[data-sbx-filtro="orden_desc"]'))
+      && JSON.stringify(f.filter(x => ['TEQUILA FALTANTE', 'MEZCAL CÓDIGO CON CEROS'].includes(x.nombre)).map(x => x.nombre)) === JSON.stringify(['TEQUILA FALTANTE', 'MEZCAL CÓDIGO CON CEROS']), f.map(x => x.nombre).join(','));
 
   // ── Búsqueda y chips siguen funcionando ──
   await p.click('[data-sbx-filtro="solo_dif"]'); await p.waitForTimeout(200);
@@ -174,21 +190,21 @@ const num = (t) => { const m = /^([+-]?)([\d,]+\.\d+)/.exec(t.replace(/\s/g, '')
   // ── Exportar (descarga real) ──
   const hayXlsx = await p.evaluate(async () => { for (let i = 0; i < 30 && typeof XLSX === 'undefined'; i++) await new Promise(r => setTimeout(r, 200)); return typeof XLSX !== 'undefined' ? XLSX.version : null; });
   if (!hayXlsx || !X) {
-    NOVERIF.push('Descarga del .xlsx en el navegador (SheetJS no disponible: sin cdnjs ni copia local)');
+    NOVERIF.push('Descarga del .xlsx en el navegador (SheetJS no disponible: no cargó vendor/sheetjs/)');
   } else {
-    await p.selectOption('#fvsGrupoSel', ''); await p.click('#fvsDifAscBtn'); await p.waitForTimeout(250);
+    await p.selectOption('#fvsGrupoSel', ''); await p.selectOption('#fvsOrdenSel', 'plano_asc'); await p.waitForTimeout(250);
     const visibles = (await filasTabla(p)).map(x => x.sub.split(' · ')[0]);
     const [dl] = await Promise.all([p.waitForEvent('download', { timeout: 10000 }), p.click('#fvsExportBtn')]);
     const dir = path.join(os.tmpdir(), 'bi-v535'); fs.mkdirSync(dir, { recursive: true });
     const ruta = path.join(dir, dl.suggestedFilename()); await dl.saveAs(ruta);
     const buf = fs.readFileSync(ruta);
     chk('★ Descarga un .xlsx real (zip OOXML) con el nombre pedido', /^Diferencias_Fisico_y_Sistema_\d{4}-\d{2}-\d{2}\.xlsx$/.test(dl.suggestedFilename()) && buf[0] === 0x50 && buf[1] === 0x4b, dl.suggestedFilename());
-    chk('SheetJS de la app = 0.18.5', hayXlsx === '0.18.5', hayXlsx);
+    chk('SheetJS de la app = 0.20.3 (vendor/, mismo origen) y la prueba relee con ese mismo archivo', hayXlsx === '0.20.3' && V_APP === '0.20.3' && X.version === hayXlsx, hayXlsx + ' / ' + V_APP + ' / ' + X.version);
     const wb = X.read(buf, { type: 'buffer', cellNF: true });
     const ws = wb.Sheets['Diferencias'];
     const aoa = X.utils.sheet_to_json(ws, { header: 1, defval: null });
     chk('★ Las 9 columnas, en el orden exacto', JSON.stringify(aoa[0]) === JSON.stringify(['Grupo', 'ID', 'Descripción', 'Unidad', 'Cantidad en sistema', 'Cantidad contada', 'Diferencia', 'Precio', 'Precio total de diferencia']), JSON.stringify(aoa[0]));
-    chk('★ Mismo orden que la tabla visible («Diferencias ↑»)', JSON.stringify(aoa.slice(1).map(r => r[1])) === JSON.stringify(visibles), aoa.slice(1).map(r => r[1]).join(',') + ' vs ' + visibles.join(','));
+    chk('★ Mismo orden que la tabla visible («Sin agrupar · menor → mayor»)', JSON.stringify(aoa.slice(1).map(r => r[1])) === JSON.stringify(visibles), aoa.slice(1).map(r => r[1]).join(',') + ' vs ' + visibles.join(','));
     const r = (id) => aoa.find(x => x[1] === id);
     chk('★ Faltante: sistema 10, contada 6, diferencia −4, precio 100, total −400', JSON.stringify(r('A')) === JSON.stringify(['TEQUILA', 'A', 'TEQUILA FALTANTE', 'Botellas', 10, 6, -4, 100, -400]), JSON.stringify(r('A')));
     chk('★ Sobrante en dos áreas: contada 5 (3 + 2), +3 × 50 = 150', JSON.stringify(r('B').slice(4)) === JSON.stringify([2, 5, 3, 50, 150]), JSON.stringify(r('B')));
@@ -204,7 +220,7 @@ const num = (t) => { const m = /^([+-]?)([\d,]+\.\d+)/.exec(t.replace(/\s/g, '')
     const xml = Buffer.from(X.CFB.find(zip, '/xl/worksheets/sheet1.xml').content).toString('utf8');
     chk('Encabezado congelado y filtros de Excel', /state="frozen"/.test(xml) && /<autoFilter ref="A1:I7"/.test(xml));
     // Con un grupo elegido, el archivo es ese grupo
-    await p.click('#fvsDifAscBtn'); await p.selectOption('#fvsGrupoSel', 'RON'); await p.waitForTimeout(250);
+    await p.selectOption('#fvsOrdenSel', 'grupo_asc'); await p.selectOption('#fvsGrupoSel', 'RON'); await p.waitForTimeout(250);
     const [dl2] = await Promise.all([p.waitForEvent('download', { timeout: 10000 }), p.click('#fvsExportBtn')]);
     const ruta2 = path.join(dir, 'grupo-' + dl2.suggestedFilename()); await dl2.saveAs(ruta2);
     const aoa2 = X.utils.sheet_to_json(X.read(fs.readFileSync(ruta2), { type: 'buffer' }).Sheets['Diferencias'], { header: 1, defval: null });
@@ -217,7 +233,7 @@ const num = (t) => { const m = /^([+-]?)([\d,]+\.\d+)/.exec(t.replace(/\s/g, '')
   // ── Atrás de Android: Volver, y la vista se reinicia ──
   await p.mouse.click(200, 120); await p.waitForTimeout(150);
   await p.goBack({ waitUntil: 'commit', timeout: 3000 }).catch(() => null); await p.waitForTimeout(300);
-  const tras = await p.evaluate(() => ({ vista: auditoriaView, tab: activeTab, grupo: _fvsVista.grupo, dif: _fvsVista.difAsc, url: location.pathname }));
+  const tras = await p.evaluate(() => ({ vista: auditoriaView, tab: activeTab, grupo: _fvsVista.grupo, dif: _fvsVista.difAsc || _fvsVista.difDesc || _fvsVista.ordenDesc, url: location.pathname }));
   chk('★ Atrás de Android sale de Físico vs Sistema a la selección (sin salir de la app) y reinicia Grupo/orden', tras.vista === 'selection' && tras.tab === 'inventario' && tras.grupo === null && tras.dif === false && /index\.html/.test(tras.url), JSON.stringify(tras));
   chk('Sin errores de JavaScript (Android)', errs.length === 0, errs.join(' | '));
   await ctx.close();
@@ -237,7 +253,7 @@ const num = (t) => { const m = /^([+-]?)([\d,]+\.\d+)/.exec(t.replace(/\s/g, '')
 
   // ═══ 3 · Permisos ════════════════════════════════════════════════════════
   ({ ctx, p, errs } = await abrir(nav, { width: 390, height: 844 }, 'ver'));
-  const sinExp = await p.evaluate(() => ({ exp: !!document.getElementById('fvsExportBtn'), grupo: !!document.getElementById('fvsGrupoSel'), dif: !!document.getElementById('fvsDifAscBtn'),
+  const sinExp = await p.evaluate(() => ({ exp: !!document.getElementById('fvsExportBtn'), grupo: !!document.getElementById('fvsGrupoSel'), dif: !!document.getElementById('fvsOrdenSel'),
     editar: document.querySelectorAll('button[data-fvs-accion="editar"]').length, r: exportarDiferenciasExcel().motivo }));
   chk('★ Sin permiso de exportar: no hay botón y la función se niega (Grupo y orden sí están)', !sinExp.exp && sinExp.grupo && sinExp.dif && sinExp.r === 'sin_permiso', JSON.stringify(sinExp));
   chk('Sin ser administración no hay botones de corrección (solo lectura, como antes)', sinExp.editar === 0);
@@ -248,7 +264,7 @@ const num = (t) => { const m = /^([+-]?)([\d,]+\.\d+)/.exec(t.replace(/\s/g, '')
   await ctx.close();
 
   await nav.close();
-  console.log('\n  ── v5.35 · Físico vs Sistema: tabla, Grupo, Diferencias ↑ y Excel (navegador) ──\n');
+  console.log('\n  ── v5.35 · Físico vs Sistema: tabla, Grupo, Ordenar (D7) y Excel (navegador) ──\n');
   C.forEach(c => console.log('  ' + (c.ok ? '✅' : '❌') + '  ' + c.n + (c.ok ? '' : '   ← ' + (c.d || ''))));
   NOVERIF.forEach(n => console.log('  ⚪  NO VERIFICADO: ' + n));
   const fl = C.filter(c => !c.ok).length;

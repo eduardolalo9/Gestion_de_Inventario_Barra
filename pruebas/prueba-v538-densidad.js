@@ -40,7 +40,12 @@ chk('Tokens de densidad: tarjeta 10 px de padding, gaps 6 px, cuerpo 13 px, barr
 chk('★ Lo que se pegaba sobre la barra de 80 px baja con ella (pie del pedido, avisos)', /\.ps-pie\s*\{ bottom: calc\(var\(--alto-barra\)/.test(dens) && /\.net-aviso\s*\{ bottom: calc\(var\(--alto-barra\)/.test(dens) && /#mainContent \{ padding-bottom: calc\(var\(--alto-barra\)/.test(dens));
 chk('★ Los chips se DIBUJAN de 30 px pero conservan 44 px de objetivo (::after; estilos.css apaga button::before)', /\.sbx-chip::after[^{]*\{[^}]*height: 30px/.test(dens) && /\.ps-orden__btn \{ min-height: 44px; \}/.test(dens) && /\.mc-pill \{ min-height: 44px;/.test(dens));
 chk('★ Botones: piso de 44 px en toda la capa (ninguna regla de .bt baja de 44)', /\.bt \{ min-height: 44px;/.test(dens) && !/\.bt[^{]*\{[^}]*min-height:\s*(3\d|4[0-3])px/.test(dens));
-chk('Insignias de estado de 9 px', /\.bi-badge, \.it-pill[^{]*\{[^}]*font-size: 9px !important/.test(dens));
+// Rediseño 2026-11 (D3-A, aprobado por Eduardo): las insignias pasan de 9 a 12 px. Se comprueba la regla
+// de las insignias, el valor real del token y que en la capa ya no quede ningún tamaño fijo de 9 o 10 px.
+// (La medición en Chromium está en prueba-v538-densidad-navegador.js.)
+chk('Insignias de estado de 12 px (D3-A): la regla usa --d-fs-badge, el token vale 12 px y no queda ningún 9 o 10 px fijo',
+    /\.bi-badge, \.it-pill[^{]*\{[^}]*font-size: var\(--d-fs-badge\) !important/.test(dens) && /--d-fs-badge:\s*12px/.test(dens)
+    && !/font-size:\s*(9|10)px/.test(sinCom(dens)));
 
 // ── Pedido Sugerido (tarjeta densa) ──
 const s73 = leer('js/73-pedido-sugerido.js');

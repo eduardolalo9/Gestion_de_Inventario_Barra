@@ -543,6 +543,7 @@
             if (typeof n !== 'number') return '—';
             // El signo va ANTES del símbolo ($-250.00 se lee como un precio
             // raro; -$250.00 se lee como lo que es: un faltante en dinero).
+            if (typeof biDinero === 'function') return biDinero(n);   // D6: misma regla, formateador común
             var neg = n < 0;
             return (neg ? '-' : '') + '$' + Math.abs(n).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
@@ -554,9 +555,9 @@
             ];
         }
 
-        /** 'menor_mayor' (predeterminado) | 'mayor_menor' (chip activo). */
+        /** 'menor_mayor' (predeterminado) | 'mayor_menor' («Ordenar» = por grupo mayor → menor, o el chip antiguo). */
         function _fvsOrden() {
-            return BusquedaUI.filtroActivo('fvs', 'orden_desc') ? 'mayor_menor' : 'menor_mayor';
+            return (_fvsVista.ordenDesc || BusquedaUI.filtroActivo('fvs', 'orden_desc')) ? 'mayor_menor' : 'menor_mayor';
         }
 
         /** Aplica el chip "solo con diferencias" sobre las filas ya calculadas. */
@@ -623,10 +624,11 @@
         // v5.45 — también: pestaña (comparativo | muestreo), grupos plegados y
         // selección múltiple. Todo en memoria, como el resto de la vista.
         var _fvsVista = { grupo: null, difAsc: false, difDesc: false, tab: 'comparativo', colapsados: {}, sel: {},
-                          muDesv: 'todas', muGrupo: null, muRev: 'todos' };   // v5.52 — filtros de la pestaña Muestreo (solo memoria)
+                          muDesv: 'todas', muGrupo: null, muRev: 'todos',   // v5.52 — filtros de la pestaña Muestreo (solo memoria)
+                          ordenDesc: false };   // D7 — «Ordenar ▾»: grupo de mayor a menor (solo memoria)
         var _fvsMuTerm = '';   // v5.52 — texto del buscador de Muestreo (propio: no pisa el del Comparativo)
 
-        function fvsReiniciarVista() { _fvsVista.grupo = null; _fvsVista.difAsc = false; _fvsVista.difDesc = false; _fvsVista.tab = 'comparativo'; _fvsVista.colapsados = {}; _fvsVista.sel = {}; _fvsVista.muDesv = 'todas'; _fvsVista.muGrupo = null; _fvsVista.muRev = 'todos'; _fvsMuTerm = ''; }
+        function fvsReiniciarVista() { _fvsVista.grupo = null; _fvsVista.ordenDesc = false; _fvsVista.difAsc = false; _fvsVista.difDesc = false; _fvsVista.tab = 'comparativo'; _fvsVista.colapsados = {}; _fvsVista.sel = {}; _fvsVista.muDesv = 'todas'; _fvsVista.muGrupo = null; _fvsVista.muRev = 'todos'; _fvsMuTerm = ''; }
 
         /** «Grupo»: '' = todos los grupos. Solo cambia lo que se ve. */
         function fvsElegirGrupo(valor) {
@@ -645,6 +647,37 @@
         function fvsAlternarDifDesc() {
             _fvsVista.difDesc = !_fvsVista.difDesc;
             if (_fvsVista.difDesc) _fvsVista.difAsc = false;   // un solo orden a la vez
+            renderTab();
+        }
+
+        /**
+         * D7 (rediseño 2026-11) — «Ordenar ▾»: un solo selector con los cuatro
+         * órdenes que antes estaban repartidos entre el chip «Mayor diferencia
+         * primero» y los botones «Diferencias ↑/↓». Solo cambia la vista: fija
+         * el mismo estado que lee la capa pura (difAsc, difDesc y el orden por
+         * grupo), así que pantalla y Excel ordenan exactamente igual que antes.
+         */
+        var FVS_ORDENES = [
+            { v: 'grupo_asc',  corto: 'Por grupo ↑',   t: 'Por grupo · menor → mayor' },
+            { v: 'grupo_desc', corto: 'Por grupo ↓',   t: 'Por grupo · mayor → menor' },
+            { v: 'plano_asc',  corto: 'Sin agrupar ↑', t: 'Sin agrupar · menor → mayor' },
+            { v: 'plano_desc', corto: 'Sin agrupar ↓', t: 'Sin agrupar · mayor → menor' }
+        ];
+
+        /** Orden visible actual: 'grupo_asc' (predeterminado) | 'grupo_desc' | 'plano_asc' | 'plano_desc'. */
+        function fvsOrdenActual() {
+            if (_fvsVista.difAsc) return 'plano_asc';
+            if (_fvsVista.difDesc) return 'plano_desc';
+            return _fvsOrden() === 'mayor_menor' ? 'grupo_desc' : 'grupo_asc';
+        }
+
+        /** «Ordenar»: elige uno de los cuatro órdenes. Un valor desconocido no cambia nada. */
+        function fvsElegirOrden(valor) {
+            if (!FVS_ORDENES.some(function(o) { return o.v === valor; })) return;
+            _fvsVista.difAsc = (valor === 'plano_asc');
+            _fvsVista.difDesc = (valor === 'plano_desc');
+            _fvsVista.ordenDesc = (valor === 'grupo_desc');
+            delete BusquedaUI.filtros('fvs').orden_desc;   // un solo orden a la vez: el selector manda
             renderTab();
         }
 
@@ -782,7 +815,7 @@
         }
 
         /**
-         * Controles de la vista: «Grupo», «Diferencias ↑» y «Exportar
+         * Controles de la vista: «Grupo», «Ordenar ▾» (D7) y «Exportar
          * diferencias a Excel». Van FUERA de la región de resultados para que
          * el buscador no los reescriba en cada tecla.
          */
@@ -802,14 +835,18 @@
                 h += '<option value="' + escapeHtml(g.grupo) + '"' + (g.grupo === sel ? ' selected' : '') + '>' + escapeHtml(g.grupo) + ' (' + g.n + ')</option>';
             });
             h += '</select></label>';
-            h += '<button type="button" id="fvsDifAscBtn" class="fvs-ctl__btn' + (_fvsVista.difAsc ? ' fvs-ctl__btn--on' : '') + '"'
-               + ' aria-pressed="' + (_fvsVista.difAsc ? 'true' : 'false') + '" onclick="fvsAlternarDifAsc()"'
-               + ' title="' + (_fvsVista.difAsc ? 'Volver al orden por grupo' : 'Ordenar todas las diferencias de menor a mayor') + '">'
-               + '<i class="fa-solid fa-sort" aria-hidden="true"></i><span>Diferencias ↑</span></button>';
-            h += '<button type="button" id="fvsDifDescBtn" class="fvs-ctl__btn' + (_fvsVista.difDesc ? ' fvs-ctl__btn--on' : '') + '"'
-               + ' aria-pressed="' + (_fvsVista.difDesc ? 'true' : 'false') + '" onclick="fvsAlternarDifDesc()"'
-               + ' title="' + (_fvsVista.difDesc ? 'Volver al orden por grupo' : 'Ordenar todas las diferencias de mayor a menor') + '">'
-               + '<i class="fa-solid fa-sort" aria-hidden="true"></i><span>Diferencias ↓</span></button>';
+            // D7 — «Ordenar ▾» sustituye a «Diferencias ↑», «Diferencias ↓» y al chip «Mayor diferencia primero».
+            var ord = fvsOrdenActual();
+            var ordOpc = FVS_ORDENES.filter(function(o) { return o.v === ord; })[0] || FVS_ORDENES[0];
+            h += '<label class="fvs-ctl__btn fvs-ctl__orden' + (ord !== 'grupo_asc' ? ' fvs-ctl__btn--on' : '') + '" title="' + escapeHtml(ordOpc.t) + '">'
+               + '<i class="fa-solid fa-sort" aria-hidden="true"></i>'
+               + '<span class="fvs-ctl__txt"><span class="fvs-ctl__etq">Ordenar</span><span class="fvs-ctl__val">' + escapeHtml(ordOpc.corto) + '</span></span>'
+               + '<i class="fa-solid fa-chevron-down fvs-ctl__flecha" aria-hidden="true"></i>'
+               + '<select id="fvsOrdenSel" class="fvs-ctl__sel" aria-label="Ordenar" onchange="fvsElegirOrden(this.value)">';
+            FVS_ORDENES.forEach(function(o) {
+                h += '<option value="' + o.v + '"' + (o.v === ord ? ' selected' : '') + '>' + escapeHtml(o.t) + '</option>';
+            });
+            h += '</select></label>';
             if (typeof fvsExportBotonHtml === 'function') h += fvsExportBotonHtml(datos, _fvsOpcionesVista());
             return h + '</div>';
         }
@@ -1512,9 +1549,9 @@
                 etiqueta: 'Buscar en Físico vs Sistema',
                 sticky: true
             });
-            // v5.35 — con «Diferencias ↑» el orden lo decide ese botón: el chip de
-            // invertir el orden por grupo se oculta para no dar dos órdenes a la vez.
-            html += BusquedaUI.chips('fvs', _chipsFvs().filter(function(c) { return !((_fvsVista.difAsc || _fvsVista.difDesc) && c.id === 'orden_desc'); }));
+            // D7 — el orden lo decide SIEMPRE «Ordenar ▾»: el chip de invertir el orden
+            // por grupo ya no se muestra (sigue en _chipsFvs por compatibilidad).
+            html += BusquedaUI.chips('fvs', _chipsFvs().filter(function(c) { return c.id !== 'orden_desc'; }));
             html += _fvsControlesHtml(datosFvs);
             html += BusquedaUI.region('fvs', _renderFvsResultados().html);
             if (datosFvs) html += '</div>';
@@ -2267,7 +2304,7 @@
                 html += '<i class="fa-solid fa-circle-check" style="font-size:1.1rem;"></i>';
                 html += (estaCompleta && isAdmin() ? 'GUARDAR CORRECCIÓN — ' : 'FINALIZAR ÁREA — ') + nombreArea.toUpperCase();
                 html += '</button>';
-                html += '<p style="text-align:center;font-size:0.68rem;color:var(--txt-muted);margin-top:8px;margin-bottom:16px;">Guarda el conteo de este área y regresa al panel de áreas</p>';
+                html += '<p style="text-align:center;font-size:0.75rem;color:var(--txt-muted);margin-top:8px;margin-bottom:16px;">Guarda el conteo de este área y regresa al panel de áreas</p>';
             }
 
             html += '</div>'; // audit-screen
@@ -2284,31 +2321,32 @@
                 return { html: BusquedaUI.vacio('historia', 'conteos'), coincidencias: 0, total: r.total };
             }
             html += BusquedaUI.resumen('historia', r.coincidencias, r.total, 'conteo', 'conteos');
-            html += '<div class="space-y-4">';
+            html += '<div class="space-y-4 hi-lista">';
             filteredInventories.slice(0, lim).forEach((inv, idx) => {
                 const isExpanded = expandedInventories.has(inv.id);
                 const delay = Math.min(idx * 50, 400);
-                html += '<div class="bg-white rounded-2xl shadow-md overflow-hidden" data-sbx-item style="animation: tabContentIn 0.3s ease-out both; animation-delay:' + delay + 'ms">';
-                html += '<div class="p-4 sm:p-6 cursor-pointer hover:bg-gray-50 transition-colors" data-sbx-principal onclick="toggleInventory(\'' + jsArg(inv.id) + '\')">';
-                html += '<div class="flex items-center justify-between gap-4">';
-                html += '<div class="flex-1">';
-                html += '<div class="flex items-center gap-3 mb-1">';
-                html += '<h3 class="text-lg font-bold text-gray-900">' + resaltarBusqueda(inv.id, _historiaSearchTerm) + '</h3>';
-                html += '<span class="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded-full font-medium">' + escapeHtml(areas[inv.area] || inv.area || 'General') + '</span>';
+                const idEsc = escapeHtml(inv.id);
+                // B14 (rediseño 2026-11) — tarjeta con clases del tema (antes gradientes fijos y SVG a mano). Mismas
+                // funciones, mismos datos y mismo detalle; los botones de icono llevan aria-label.
+                html += '<div class="hi-inv' + (isExpanded ? ' hi-inv--abierto' : '') + '" data-sbx-item style="animation: tabContentIn 0.3s ease-out both; animation-delay:' + delay + 'ms">';
+                html += '<div class="hi-inv__cab" data-sbx-principal aria-expanded="' + (isExpanded ? 'true' : 'false') + '" onclick="toggleInventory(\'' + jsArg(inv.id) + '\')">';
+                html += '<div class="hi-inv__txt"><div class="hi-inv__fila">';
+                html += '<h3 class="hi-inv__folio">' + resaltarBusqueda(inv.id, _historiaSearchTerm) + '</h3>';
+                html += '<span class="hi-inv__area">' + escapeHtml(areas[inv.area] || inv.area || 'General') + '</span>';
                 html += '</div>';
-                html += '<p class="text-sm text-gray-600">' + escapeHtml(inv.date) + ' • ' + inv.products.length + ' productos • Total: ' + (inv.totalProducts || 0).toFixed(2) + '</p>';
+                html += '<p class="hi-inv__meta">' + escapeHtml(inv.date) + ' · ' + inv.products.length + ' productos · Total: <span class="num">' + (inv.totalProducts || 0).toFixed(2) + '</span></p>';
                 html += '</div>';
-                html += '<div class="flex items-center gap-2">';
-                html += '<button onclick="event.stopPropagation(); downloadInventory(\'' + jsArg(inv.id) + '\')" class="p-2.5 bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl hover:shadow-lg transition-all transform active:scale-95" title="Descargar"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg></button>';
-                html += '<button onclick="event.stopPropagation(); shareInventoryWhatsApp(\'' + jsArg(inv.id) + '\')" class="p-2.5 bg-gradient-to-br from-green-500 to-emerald-500 text-white rounded-xl hover:shadow-lg transition-all transform active:scale-95" title="Compartir"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"></path></svg></button>';
-                html += '<svg class="w-5 h-5 text-gray-600 transition-transform ' + (isExpanded ? 'rotate-180' : '') + '" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>';
-                html += '</div></div></div>';
+                html += '<div class="hi-inv__acc">';
+                html += '<button type="button" class="ui-icono-btn" onclick="event.stopPropagation(); downloadInventory(\'' + jsArg(inv.id) + '\')" title="Descargar" aria-label="Descargar el conteo ' + idEsc + '"><i class="fa-solid fa-download" aria-hidden="true"></i></button>';
+                html += '<button type="button" class="ui-icono-btn" onclick="event.stopPropagation(); shareInventoryWhatsApp(\'' + jsArg(inv.id) + '\')" title="Compartir" aria-label="Compartir el conteo ' + idEsc + ' por WhatsApp"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i></button>';
+                html += '<i class="fa-solid fa-chevron-down hi-inv__flecha" aria-hidden="true"></i>';
+                html += '</div></div>';
                 if (isExpanded) {
-                    html += '<div class="border-t border-gray-200 p-4 sm:p-6 bg-gray-50 animate-fadeIn"><div class="overflow-x-auto">';
-                    html += '<table class="w-full"><thead class="bg-gradient-to-r from-purple-600 to-blue-600"><tr><th class="px-4 py-3 text-left text-sm font-semibold text-white">Producto</th><th class="px-4 py-3 text-center text-sm font-semibold text-white">Stock (Enteras)</th><th class="px-4 py-3 text-center text-sm font-semibold text-white">Abiertas</th><th class="px-4 py-3 text-center text-sm font-semibold text-white">Grupo</th></tr></thead><tbody class="divide-y divide-gray-200 bg-white">';
+                    html += '<div class="hi-inv__det"><div class="hi-tabla-wrap">';
+                    html += '<table class="hi-tabla"><thead><tr><th>Producto</th><th class="num">Stock (Enteras)</th><th class="num">Abiertas</th><th>Grupo</th></tr></thead><tbody>';
                     inv.products.forEach(p => {
                         const abiertasStr = p.abiertas ? p.abiertas.map(a => (a || 0).toFixed(2)).join(' + ') : '';
-                        html += '<tr><td class="px-4 py-3 text-gray-900">' + escapeHtml(p.name) + '</td><td class="px-4 py-3 text-center text-gray-600">' + p.stock + ' ' + escapeHtml(p.unit) + '</td><td class="px-4 py-3 text-center text-orange-600">' + escapeHtml(abiertasStr) + '</td><td class="px-4 py-3 text-center font-semibold text-gray-900">' + escapeHtml(p.group || 'General') + '</td></tr>';
+                        html += '<tr><td>' + escapeHtml(p.name) + '</td><td class="num">' + p.stock + ' ' + escapeHtml(p.unit) + '</td><td class="num hi-tabla__abiertas">' + escapeHtml(abiertasStr) + '</td><td>' + escapeHtml(p.group || 'General') + '</td></tr>';
                     });
                     html += '</tbody></table></div></div>';
                 }
@@ -2340,21 +2378,39 @@
                  + '</div>';
         }
 
+        // B14 (rediseño 2026-11) — filtro por tipo de Historia: solo decide qué sección se ve (estado de vista en
+        // memoria; no lee ni escribe datos). 'todo' | 'reportes' | 'conteos'.
+        var _historiaTipo = 'todo';
+        function historiaVerTipo(tipo) {
+            _historiaTipo = (tipo === 'reportes' || tipo === 'conteos') ? tipo : 'todo';
+            renderTab();
+        }
+
+
         function renderHistoriaTab() {
             let html = UI.cabecera('Historial', 'Inventarios y pedidos generados.');
             html += _historiaSegmentadoHtml();
             if (_historiaVista === 'pedidos') return html + renderHistorialPedidos();
-
-            // ── Sección: Reportes publicados por admin (visible para todos) ──
-            html += '<div id="historiaReportesWrap" class="hs-seccion">';
-            html += '<h3 class="ui-titulo ui-titulo--seccion"><i class="fa-solid fa-file-chart-column" aria-hidden="true"></i> Reportes globales publicados</h3>';
-            html += '<div id="historiaReportesList" class="ui-nota">Cargando…</div>';
+            // B14 (rediseño 2026-11) — dentro de Inventario, filtro por tipo: Todo | Reportes | Conteos (solo vista).
+            html += '<div class="hi-tipos" role="group" aria-label="Mostrar en Historia">';
+            [['todo', 'Todo'], ['reportes', 'Reportes'], ['conteos', 'Conteos']].forEach(function(t) {
+                var on = _historiaTipo === t[0];
+                html += '<button type="button" class="sbx-chip' + (on ? ' sbx-chip--on' : '') + '" aria-pressed="' + (on ? 'true' : 'false') + '" onclick="historiaVerTipo(\'' + jsArg(t[0]) + '\')">' + t[1] + '</button>';
+            });
             html += '</div>';
 
+            // ── Sección: Reportes publicados por admin (visible para todos) ──
+            if (_historiaTipo !== 'conteos') {
+                html += '<div id="historiaReportesWrap" class="hs-seccion">';
+                html += '<h3 class="ui-titulo ui-titulo--seccion"><i class="fa-solid fa-file-chart-column" aria-hidden="true"></i> Reportes globales publicados</h3>';
+                html += '<div id="historiaReportesList" class="hi-reportes"><p class="ui-nota">Cargando…</p></div>';
+                html += '</div>';
+            }
+
             // ── Sección: Historial de inventarios locales ────────────────────
-            if (inventories.length === 0) {
+            if (_historiaTipo !== 'reportes' && inventories.length === 0) {
                 html += '<div class="ui-vacio ui-vacio--caja"><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>No hay inventarios guardados</div>';
-            } else {
+            } else if (_historiaTipo !== 'reportes') {   // con el filtro «Reportes» la sección de conteos no se pinta
                 html += '<div class="hs-cab">';
                 html += '<h3 class="ui-titulo ui-titulo--seccion"><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i> Historial de conteos</h3>';
                 if (isAdmin()) {
@@ -2376,11 +2432,12 @@
             setTimeout(function() {
                 const el = document.getElementById('historiaReportesList');
                 if (!el) return;
-                if (!_db) { el.innerHTML = '<p class="ui-nota">Firebase no configurado</p>'; return; }
+                // B14 — vacío y error con el estado común (mismos textos).
+                if (!_db) { el.innerHTML = '<div class="ui-vacio"><i class="fa-solid fa-circle-info" aria-hidden="true"></i>Firebase no configurado</div>'; return; }
                 _db.collection('reportes').orderBy('fechaTs', 'desc').limit(10).get()
                     .then(function(snap) {
                         if (!el) return;
-                        if (snap.empty) { el.innerHTML = '<p class="ui-nota">Sin reportes publicados aún</p>'; return; }
+                        if (snap.empty) { el.innerHTML = '<div class="ui-vacio"><i class="fa-solid fa-file-chart-column" aria-hidden="true"></i>Sin reportes publicados aún</div>'; return; }
                         let rhtml = '';
                         snap.docs.forEach(function(d) {
                             const r = d.data();
@@ -2398,7 +2455,7 @@
                         });
                         el.innerHTML = rhtml;
                     }).catch(function(e) {
-                        if (el) el.innerHTML = '<p class="ui-nota">Error cargando reportes</p>';
+                        if (el) el.innerHTML = '<p class="ui-nota ui-nota--error">Error cargando reportes</p>';
                     });
             }, 80);
 

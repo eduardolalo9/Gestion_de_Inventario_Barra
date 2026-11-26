@@ -1,6 +1,6 @@
         /** v5.53 — tocar la fila abre la ficha, salvo que el toque sea en un botón de la fila (antes era un if dentro del onclick). */
         function abrirFichaDesdeFila(ev, id) {
-            if (ev && ev.target && ev.target.closest && ev.target.closest('button')) return;
+            if (ev && ev.target && ev.target.closest && ev.target.closest('button,details')) return;   // D5-B: «Más datos» (details) no abre la ficha
             if (typeof abrirFichaProducto === 'function') abrirFichaProducto(id);
         }
 
@@ -313,23 +313,58 @@
                 + 'Sigue guardado en el dispositivo y se reintentar\u00e1.');
         }
 
-        function showNotification(message) {
+        function showNotification(message, opciones) {
             // Bug #9 fix: alertas críticas siempre pasan, independiente del throttle
             const isCritical = message.startsWith('⚠️') || message.startsWith('❌');
             if (notificationTimeout && !isCritical) return;
             const toast = document.getElementById('toast');
             const toastMessage = document.getElementById('toastMessage');
             if (!toast || !toastMessage) return;
+            // D4-C (rediseño 2026-11) — un error (❌) ya no desaparece a los 3 s:
+            // queda a la vista hasta que se cierra o lo sustituye otro aviso, y
+            // se anuncia como alerta. «Reintentar» solo aparece si quien avisa
+            // pasa un manejador real (opciones.reintentar); nunca se inventa.
+            // El texto sigue en #toastMessage, igual que antes.
+            const esError = message.startsWith('❌');
+            const reintentar = (opciones && typeof opciones.reintentar === 'function') ? opciones.reintentar : null;
+            toast.setAttribute('role', esError ? 'alert' : 'status');
+            toast.setAttribute('aria-live', esError ? 'assertive' : 'polite');
+            toast.classList.toggle('toast--error', esError);
+            _toastAcciones(toast, esError, reintentar);
             toastMessage.textContent = message;
             toast.classList.remove('hidden');
             toast.style.animation = 'none';
             void toast.offsetWidth;
             toast.style.animation = '';
             clearTimeout(toastHideTimer);
-            toastHideTimer = setTimeout(() => {
-                toast.classList.add('hidden');
-            }, 3000);
+            if (!esError) {
+                toastHideTimer = setTimeout(() => {
+                    toast.classList.add('hidden');
+                }, 3000);
+            }
             notificationTimeout = setTimeout(() => { notificationTimeout = null; }, 1000);
+        }
+
+        /** D4-C — botones del aviso persistente: «Reintentar» (solo con manejador real) y «Cerrar». */
+        function _toastAcciones(toast, esError, reintentar) {
+            const caja = toast.firstElementChild;
+            let acc = document.getElementById('toastAcciones');
+            if (!esError) { if (acc) acc.remove(); return; }
+            if (!caja) return;
+            if (!acc) { acc = document.createElement('span'); acc.id = 'toastAcciones'; acc.className = 'toast-acc'; caja.appendChild(acc); }
+            acc.innerHTML = '';
+            const boton = (txt, etq, fn) => {
+                const b = document.createElement('button');
+                b.type = 'button'; b.className = 'toast-acc__btn'; b.textContent = txt;
+                if (etq) b.setAttribute('aria-label', etq);
+                b.addEventListener('click', fn);
+                acc.appendChild(b);
+            };
+            const cerrar = () => { clearTimeout(toastHideTimer); toast.classList.add('hidden'); };
+            // Un solo uso: un doble toque (o un toque tardío sobre el botón ya usado) no repite la acción.
+            let usado = false;
+            if (reintentar) boton('Reintentar', null, () => { if (usado) return; usado = true; cerrar(); try { reintentar(); } catch (e) { console.error('[Aviso] Reintentar falló:', e); } });
+            boton('✕', 'Cerrar aviso', cerrar);
         }
 
         // FASE 6 — El buscador del catálogo (Inicio y Productos) lo maneja
@@ -899,6 +934,31 @@
         // FASE 6 — región de resultados del catálogo. Queda entre
         // renderProductosTab y renderPedidosTab a propósito: es parte de la
         // misma pantalla y así la aísla pruebas/prueba-r5.js.
+        /**
+         * D5-B (rediseño 2026-11) — «Más datos» del catálogo en el teléfono.
+         * Por debajo de 768 px la tabla oculta Grupo, Unidad, Precio, Mínimo,
+         * PV y Proveedor (.cat-col-sec); este desplegable los deja consultables
+         * en la misma fila, sin desplazamiento horizontal. En escritorio no se
+         * muestra (las columnas están visibles). Solo presentación: lee el
+         * producto y no cambia nada. <details> no es un <button>: no agranda
+         * la fila cerrada ni compite con Editar/Eliminar.
+         */
+        function _catMasDatos(product) {
+            var vacio = '<span class="cat-mas__nd">—</span>';
+            var dato = function(etq, val) { return '<div><dt>' + etq + '</dt><dd>' + val + '</dd></div>'; };
+            var pv = precioProducto(product);   // v5.47 — precio vigente: última compra o, si no hay, el del catálogo
+            var precio = typeof pv === 'number'
+                ? escapeHtml(typeof biDinero === 'function' ? biDinero(pv) : '$' + pv.toFixed(2)) : vacio;
+            return '<details class="cat-mas"><summary>Más<span class="cat-mas__mas"> datos</span></summary><dl class="cat-mas__dl">'
+                 + dato('Grupo', escapeHtml(product.group || 'General'))
+                 + dato('Unidad', escapeHtml(product.unit || '—'))
+                 + dato('Precio', precio)
+                 + dato('Mínimo', _celdaNum(product.stockMinimo))
+                 + dato('PV', product.pv ? '<span class="num">' + escapeHtml(product.pv) + '</span>' : vacio)
+                 + dato('Proveedor', product.proveedor ? escapeHtml(product.proveedor) : vacio)
+                 + '</dl></details>';
+        }
+
         function _renderProductosResultados(admin) {
             if (typeof admin === 'undefined') admin = isAdmin();
             const r   = _buscarCatalogo();
@@ -981,6 +1041,7 @@
                      + '<span class="cat-prod__nom">' + (product.name ? resaltarBusqueda(product.name, searchTerm) : '(sin nombre)') + '</span>'
                      + (product.unit ? '<span class="cat-prod__uom">' + escapeHtml(product.unit) + '</span>' : '')
                      + (usaOz ? ' · <span style="color:var(--accent)">oz</span>' : '')
+                     + _catMasDatos(product)
                      + '</div></td>';
 
                 html += '<td style="' + td + ';color:var(--txt-secondary)" class="cat-col-sec">'

@@ -27,7 +27,8 @@
     --d-radio-sm:  8px;       /* botones, campos */
     --d-fs:        13px;      /* cuerpo */
     --d-fs-sm:     12px;
-    --d-fs-etq:    10px;      /* etiquetas en mayúsculas */
+    --d-fs-etq:    12px;      /* etiquetas en mayúsculas (rediseño 2026-11, D3-A: antes 10 px) */
+    --d-fs-badge:  12px;      /* insignias y chips (rediseño 2026-11, D3-A: antes 9 px) */
     --d-fs-tit:    15px;
     --alto-cab:    48px;      /* encabezado */
     --alto-barra:  56px;      /* barra inferior (antes 80 px) */
@@ -134,7 +135,7 @@ html[data-theme="light"] .bt { border-radius: var(--d-radio-sm); }
 /* ── Insignias de estado: lo más chicas posible ─────────────────────────── */
 .bi-badge, .it-pill, .pm-estado {
     min-height: 0 !important; padding: 1px 6px !important; border-radius: 4px !important;
-    font-size: 9px !important; font-weight: 800 !important; letter-spacing: .06em !important; line-height: 14px !important; gap: 4px;
+    font-size: var(--d-fs-badge) !important; font-weight: 800 !important; letter-spacing: .06em !important; line-height: 16px !important; gap: 4px;
 }
 .bi-badge__punto { width: 5px; height: 5px; }
 
@@ -171,8 +172,8 @@ html[data-theme] :is(.it-alerta, .it-pedido, .pm-tile, .prd-card, .if-card, .adm
 }
 .ps-card__meta { gap: 6px; margin-top: 2px; flex-wrap: nowrap; }
 .ps-card__cod { font-size: var(--d-fs-etq); color: var(--txt-muted); }
-.ps-uom { font-size: 9px; font-weight: 700; padding: 0 4px; border-radius: 3px; line-height: 14px; background: var(--card-high); color: var(--txt-secondary); }
-.ps-estado { font-size: 9px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; line-height: 14px; flex-shrink: 0; }
+.ps-uom { font-size: var(--d-fs-badge); font-weight: 700; padding: 0 4px; border-radius: 3px; line-height: 16px; background: var(--card-high); color: var(--txt-secondary); }
+.ps-estado { font-size: var(--d-fs-badge); font-weight: 800; letter-spacing: .06em; text-transform: uppercase; line-height: 16px; flex-shrink: 0; }
 .ps-estado--critico { color: var(--danger); }
 .ps-estado--bajo    { color: var(--warn); }
 .ps-card__prov { font-size: var(--d-fs-etq); color: var(--txt-muted); }
@@ -181,7 +182,7 @@ html[data-theme] :is(.it-alerta, .it-pedido, .pm-tile, .prd-card, .if-card, .adm
 .ps-card__num b, .ps-card__num .num { font-family: var(--f-num); font-size: 14px; font-weight: 600; color: var(--txt-primary); line-height: 1.15; }
 .ps-card__num--muted .num { color: var(--txt-secondary); font-weight: 500; }
 .ps-card__num b.ps-bajo { color: var(--danger); }
-.ps-card__etq { font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--txt-muted); }
+.ps-card__etq { font-size: var(--d-fs-badge); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--txt-muted); }
 .ps-card__cant { gap: 1px; }
 .ps-card__cant .ps-card__etq { line-height: 10px; }
 .ps-input { width: 56px; min-height: 40px; border-radius: var(--d-radio-sm); border: 1px solid var(--border-mid); background: var(--bg); font-family: var(--f-num); font-size: 16px; font-weight: 600; }
@@ -206,12 +207,12 @@ html[data-theme] :is(.it-alerta, .it-pedido, .pm-tile, .prd-card, .if-card, .adm
 
 /* ═══ INVENTARIO FÍSICO / CONTEO ════════════════════════════════════════════ */
 .inv-card__header { padding: 8px 10px 4px; gap: 8px; }
-.inv-card__header .bi-mono { width: 28px; height: 28px; border-radius: 6px; font-size: 9px; }
+.inv-card__header .bi-mono { width: 28px; height: 28px; border-radius: 6px; font-size: 11px; }
 .inv-card__name { font-size: var(--d-fs); font-weight: 700; }
 .inv-card__total-n { font-size: 16px; font-weight: 600; }
 .inv-card__chips { padding: 0 10px 8px; gap: 4px; }
 .inv-chip { padding: 2px 8px; min-width: 48px; border-radius: 6px; }
-.inv-chip__label { font-size: 9px; }
+.inv-chip__label { font-size: var(--d-fs-badge); }
 .inv-chip__val { font-size: 14px; }
 
 /* ═══ INICIO: tarjeta de inventario y KPIs ══════════════════════════════════ */
@@ -234,7 +235,7 @@ html[data-theme] :is(.it-alerta, .it-pedido, .pm-tile, .prd-card, .if-card, .adm
 .it-area { min-height: 32px; gap: 8px; }
 .it-area__nombre { font-size: var(--d-fs); }
 .it-area__n { font-family: var(--f-num); font-size: var(--d-fs); }
-.it-inv .it-area__estado--ok, .it-inv .it-area__estado--info { padding: 1px 6px; border-radius: 4px; font-size: 9px; }
+.it-inv .it-area__estado--ok, .it-inv .it-area__estado--info { padding: 1px 6px; border-radius: 4px; font-size: var(--d-fs-badge); }
 .it-seccion { margin-bottom: 4px; }
 .it-alertas { gap: 6px; }
 .it-alerta { padding: 8px 10px; gap: 2px; }
@@ -272,7 +273,7 @@ input:not([type="checkbox"]):not([type="radio"]):not(.sbx__input):not(.ps-input)
 .cat-prod__cod { font-family: var(--f-num); font-size: var(--d-fs-etq); }
 .cat-prod__nom { font-family: var(--f-body); font-size: var(--d-fs); font-weight: 700; line-height: 1.25; white-space: normal;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.cat-prod__uom { font-size: 9px; font-weight: 700; padding: 0 4px; border-radius: 3px; line-height: 14px; background: var(--card-high); color: var(--txt-secondary); }
+.cat-prod__uom { font-size: var(--d-fs-badge); font-weight: 700; padding: 0 4px; border-radius: 3px; line-height: 16px; background: var(--card-high); color: var(--txt-secondary); }
 .cat-tabla td > div > button { border-radius: var(--d-radio-sm) !important; background: transparent !important; }
 .cat-tabla tbody tr:hover { background: var(--card); }
 
@@ -280,9 +281,9 @@ input:not([type="checkbox"]):not([type="radio"]):not(.sbx__input):not(.ps-input)
 .inv-card { border-radius: var(--d-radio); border: 1px solid var(--border); }
 .inv-card.has-data { border-left: 3px solid var(--accent); }
 .inv-card__header { padding: 6px 10px 2px; align-items: center; }
-.inv-card__group-badge { font-size: 9px; padding: 0 4px; line-height: 14px; border-radius: 3px; margin-top: 1px; }
+.inv-card__group-badge { font-size: var(--d-fs-badge); padding: 0 4px; line-height: 16px; border-radius: 3px; margin-top: 1px; }
 .inv-card__valor { gap: 0; }
-.inv-card__estado { font-size: 9px !important; letter-spacing: .06em; }
+.inv-card__estado { font-size: var(--d-fs-badge) !important; letter-spacing: .06em; }
 .inv-card__chips { padding: 0 10px 6px 46px; }
 .inv-chip { flex-direction: row; align-items: baseline; gap: 4px; padding: 1px 6px; min-width: 0; }
 .inv-chip__val { font-size: 13px; font-weight: 600; }
@@ -333,7 +334,7 @@ input:not([type="checkbox"]):not([type="radio"]):not(.sbx__input):not(.ps-input)
 .kpi-fila--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .kpi { min-width: 0; padding: 6px 8px; background: var(--card); border: 1px solid var(--border); border-radius: var(--d-radio); }
 .kpi__n { font-family: var(--f-num); font-variant-numeric: tabular-nums; font-size: 15px; font-weight: 600; color: var(--txt-primary); line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.kpi__t { font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--txt-muted); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpi__t { font-size: var(--d-fs-badge); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--txt-muted); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* Títulos que otras capas inflaron */
 html body .if-card__titulo { font-size: var(--d-fs-tit) !important; line-height: 1.25; }
@@ -344,7 +345,7 @@ html body .if-card__titulo { font-size: var(--d-fs-tit) !important; line-height:
 .if-pantalla.if-pantalla--compacta { gap: 8px; }
 .if-pantalla.if-pantalla--compacta .if-card { padding: 10px; gap: 8px; }
 .if-pantalla.if-pantalla--compacta > .if-card:first-of-type > .if-card__titulo { font-size: var(--d-fs-tit); }
-.if-pantalla.if-pantalla--compacta > .if-card:first-of-type > .pm-estado--cab { font-size: 9px; padding: 1px 6px; }
+.if-pantalla.if-pantalla--compacta > .if-card:first-of-type > .pm-estado--cab { font-size: var(--d-fs-badge); padding: 1px 6px; }
 .if-pantalla.if-pantalla--compacta .if-avance .pm-progreso, .if-pantalla.if-pantalla--compacta .if-avance .audit-progress-bar { height: 4px; }
 .if-pantalla.if-pantalla--compacta .if-datos { gap: 4px 10px; padding: 6px 8px; border-radius: var(--d-radio-sm); }
 .if-pantalla.if-pantalla--compacta .if-dato dd { font-size: var(--d-fs); }
@@ -402,7 +403,7 @@ html body .if-card__titulo { font-size: var(--d-fs-tit) !important; line-height:
 .vs-kpis { gap: 6px; margin-bottom: 6px; }
 .vs-kpi { padding: 6px 8px; border-radius: var(--d-radio); border-color: var(--border); }
 .vs-kpi__val { font-size: 15px; font-weight: 600; }
-.vs-kpi__lbl { font-size: 9px; letter-spacing: .06em; text-transform: uppercase; }
+.vs-kpi__lbl { font-size: var(--d-fs-badge); letter-spacing: .06em; text-transform: uppercase; }
 .vs-kpi__ico { display: none; }
 .vs-fila { padding: 4px 0; gap: 8px; border-top-color: var(--border); }
 .vs-fila__nom { font-size: var(--d-fs); }
@@ -429,7 +430,7 @@ html body .if-card__titulo { font-size: var(--d-fs-tit) !important; line-height:
 .rec-card:hover { border-color: var(--border-strong); }
 .rec-card__cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; }
 .rec-card__nom { margin: 0; font-size: var(--d-fs); font-weight: 700; color: var(--txt-primary); line-height: 1.25; }
-.rec-card__cab > span { font-size: 9px !important; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; padding: 0 5px !important; border-radius: 3px !important; line-height: 14px; }
+.rec-card__cab > span { font-size: var(--d-fs-badge) !important; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; padding: 0 5px !important; border-radius: 3px !important; line-height: 16px; }
 .rec-card__meta { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-top: 2px; }
 .rec-card__det { font-size: var(--d-fs-sm); color: var(--txt-secondary); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rec-card__costo { font-family: var(--f-num); font-size: var(--d-fs); font-weight: 600; white-space: nowrap; }
@@ -473,7 +474,7 @@ html body .if-card__titulo { font-size: var(--d-fs-tit) !important; line-height:
 /* Títulos de tarjeta de Ajustes/Admin (estilos.css: .adm-card h3 a 15 px) y de sección del kit */
 .adm-card h3 { font-size: var(--d-fs); margin-bottom: 6px; gap: 6px; }
 .ui-titulo.ui-titulo--seccion, .adm-card h3.ui-titulo--seccion { font-size: var(--d-fs-etq); letter-spacing: .08em; color: var(--txt-secondary); }
-.vs-vacio__ico { width: 32px !important; height: 32px !important; margin-bottom: 4px !important; }
+.vs-vacio__ico { width: 40px !important; height: 40px !important; margin-bottom: 8px !important; }   /* O6: mismo círculo de 40 px que los demás estados vacíos */
 
 /* ── Pedidos (tarjeta en clases, v5.39) ────────────────────────────────── */
 .ped-card { margin-bottom: 6px; }
@@ -525,12 +526,12 @@ th.ped-tabla__n, th.ped-tabla__c { color: var(--txt-muted); }
 .cn-fila__meta { font-size: var(--d-fs-etq); color: var(--txt-muted); margin-top: 1px; }
 .cn-fila__det { font-size: var(--d-fs-etq); color: var(--txt-secondary); margin-top: 1px; }
 .cn-fila__det b { color: var(--txt-primary); font-weight: 600; }
-.cn-estado { font-size: 9px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.cn-estado { font-size: var(--d-fs-badge); font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
 .cn-estado--neg { color: var(--danger); }
 .cn-estado--warn { color: var(--warn); }
 .cn-estado--ok { color: var(--ok); }
 .cn-fila__cifra { display: flex; flex-direction: column; align-items: flex-end; min-width: 64px; }
-.cn-fila__etq { font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--txt-muted); }
+.cn-fila__etq { font-size: var(--d-fs-badge); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--txt-muted); }
 .cn-fila__cifra b { font-family: var(--f-num); font-size: 15px; font-weight: 600; color: var(--txt-primary); }
 .cn-total--neg { color: var(--danger) !important; }
 .cn-total--warn { color: var(--warn) !important; }
@@ -571,7 +572,7 @@ html[data-theme="light"] .cp-rango__fecha { color-scheme: light; }
 #sidebar #sbHead .sb-logo { display: flex; flex-direction: column; line-height: 1.1; }
 #sidebar #sbHead .sb-logo::after {
     content: "Gestión de barra";
-    margin-top: 3px; font-size: 10px; font-weight: 700;
+    margin-top: 3px; font-size: 11px; font-weight: 700;   /* D3-A: sin 9–10 px fijos; marca = excepción de metadato (11 px) */
     letter-spacing: .12em; text-transform: uppercase; color: var(--bronze);
 }
 
@@ -603,3 +604,221 @@ html[data-theme="light"] .bt--secundario { border-width: 1px; border-color: var(
     .if-pantalla--compacta > .if-card:not(:has(.bt--primario)) > .bt-pila--rejilla { grid-column: 1 / -1; }
     .if-areas--compacto { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: start; }
 }
+/* ═══ REDISEÑO 2026-11 · bloque de evaluación (Fase 6, sin publicar) ═══════
+   Decisiones aprobadas por Eduardo en la Fase 4. Solo presentación: no toca
+   ids, funciones ni lógica. Solo tokens, sin colores a mano.            */
+/* D3-A / H4 — textos que no pasaban por los tokens */
+.sbx__modo, .cnt-cab__u, .inv-modal__etq, .inv-modal__pista, .inv-modal__ayuda, #productModal label { font-size: var(--d-fs-badge); }
+.sb-version { font-size: 11px; } /* metadato (versión): única excepción de 11 px */
+/* H8 — «123» conserva su dibujo y gana un objetivo táctil de 44 px */
+.sbx__modo::after { content: ""; position: absolute; top: -9px; bottom: -9px; left: -6px; right: -6px; }
+/* H2 — un nombre sin espacios ya no ensancha la tabla ni esconde Editar/Eliminar */
+.cat-prod__nom { overflow-wrap: anywhere; word-break: break-word; }
+@media (min-width: 768px) { .cat-prod__linea { max-width: 420px; } }
+/* H13 — escritorio: botones de ancho natural; el borrado queda aparte, a la derecha */
+@media (min-width: 768px) { .pa-barra .pa-btn { flex: 0 0 auto; padding: 0 18px; } .pa-divisor { margin-left: auto; } }
+/* H17 — sin el hueco de 20 px bajo el pie fijo del modal de producto */
+#productModal .modal-box { padding-bottom: 0; }
+/* D12 — «En carrito» vacío: deshabilitado y con su motivo a la vista */
+.pm-tile[disabled] { opacity: .6; cursor: not-allowed; }
+/* H3 (D4) — con un modal abierto el aviso sube al borde superior y no tapa el pie del modal */
+body.modal-open #toast { top: calc(env(safe-area-inset-top, 0px) + 8px); bottom: auto !important; }
+/* D3-A (2.ª pasada) — textos operativos que venían de reglas en rem de estilos.css / utilidades.css */
+html body :is(.pm-tile__sub, .prd-card__pedido-txt, .prd-card__pedido-btn, .prd-area-chip__label, .sync-status-sub, .sync-pause-btn, .sync-card h3, .if-dato dt, .if-seccion, .audit-area-status, .inv-card__total-u, .inv-total__etq, .inv-total__u, .fvs-orden, .fvs-t th, .fvs-t abbr, .fvs-grupo__dat, .fvs-t__sub, .fvs-t__det, .fvs-t__etq) { font-size: var(--d-fs-badge); }
+html body #productModal :is(.text-xs, p) { font-size: var(--d-fs-badge); }
+html body :is(.prd-card__top, .inv-card__header, .inv-modal__mono) .bi-mono { font-size: 11px; } /* monograma decorativo: excepción de 11 px */
+/* D3-A (3.ª pasada) — mismos selectores que fijaban < 12 px en utilidades.css; ganan por orden de carga */
+.if-pantalla.if-pantalla--compacta :is(.if-dato dt, .if-seccion), .fvs-t__grupo .fvs-grupo__dat, .if-area .audit-area-status, html body .it-area__estado { font-size: var(--d-fs-badge); }
+/* !important solo para vencer «thead th { font-size: .65rem !important }» (estilos.css): cabeceras de tabla a 12 px */
+html body thead th { font-size: var(--d-fs-badge) !important; }
+html body .sbx-resumen__kbd { font-size: var(--d-fs-badge); } /* ayuda de teclado del buscador (escritorio) */
+/* H2 (móvil) — el nombre ocupa todo el ancho de su celda (2 renglones) y el código + la unidad
+   van debajo, juntos: así no se parten palabras normales al dejar visibles Stock y acciones. */
+@media (max-width: 767px) { .cat-prod__linea { flex-wrap: wrap; row-gap: 0; } .cat-prod__nom { flex: 1 1 100%; order: -1; line-height: 1.2; } }
+/* H1 — aviso legible en claro: texto claro sobre el fondo inverso #322F38 de estilos.css (antes 1.21:1).
+   Vive aquí y no en tema-minimal.css porque esa hoja no usa ids de la app. */
+html[data-theme="light"] #toast > div { color: var(--card); }
+/* Compras (v5.41) — con etiquetas de 12 px, el resumen va en 2 × 2 en el teléfono (diseño aprobado en la Fase 4) */
+@media (max-width: 480px) { .kpi-fila--4.kpi-fila--compras { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* Pedidos — cabeceras de 12 px con menos espaciado para no restarle ancho al nombre (.ped-c: Historia → Pedidos, v5.47) */
+:is(.ped-card, .ped-c) .ped-tabla th { letter-spacing: .02em; }
+/* Pedidos — Unidad y Cant. se ciñen a su contenido (!important solo porque la regla de relleno de .ped-card lo tiene) */
+:is(.ped-card, .ped-c) .ped-tabla :is(th, td):is(.ped-tabla__c, .ped-tabla__n) { width: 1%; white-space: nowrap; padding-left: 4px !important; padding-right: 4px !important; }
+/* D5-B — «Más datos» del catálogo en el teléfono: Grupo, Unidad, Precio, Mínimo, PV y Proveedor
+   (las columnas que .cat-col-sec oculta por debajo de 768 px) se despliegan en la misma fila.
+   Cerrado no agranda la fila; el objetivo táctil de 44 px lo da ::after, sin cambiar el dibujo. */
+.cat-mas { display: inline-block; margin-left: auto; }
+.cat-mas > summary { position: relative; list-style: none; cursor: pointer; font-size: var(--d-fs-badge); font-weight: 700; line-height: 16px; color: var(--accent); }
+.cat-mas > summary::-webkit-details-marker { display: none; }
+.cat-mas > summary::before { content: "▾ "; }
+.cat-mas[open] > summary::before { content: "▴ "; }
+.cat-mas > summary::after { content: ""; position: absolute; top: -14px; bottom: -14px; left: -8px; right: -8px; }
+.cat-mas[open] { flex: 1 1 100%; margin-left: 0; }
+.cat-mas__dl { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px 12px; margin: 6px 0 2px; padding: 8px; border-radius: var(--d-radio-sm); background: var(--card-high); }
+.cat-mas__dl dt { font-size: var(--d-fs-badge); color: var(--txt-secondary); }
+.cat-mas__dl dd { margin: 0; font-size: var(--d-fs); color: var(--txt-primary); overflow-wrap: break-word; }
+.cat-mas__nd { color: var(--txt-muted); }
+@media (min-width: 600px) { .cat-mas__dl { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* A 400 px o menos se lee «▾ Más» (cabe junto al código y la unidad); el lector de pantalla sigue diciendo «Más datos» */
+@media (max-width: 400px) { .cat-mas__mas { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } }
+@media (min-width: 768px) { .cat-mas { display: none; } }
+/* D3-A (ficha de producto, js/83) — subtítulos, secciones y etiquetas de área a 12 px (venían de 0.66–0.72 rem en estilos.css) */
+.pm-ficha :is(.pm-ficha__sub, .pm-ficha__sec, .pm-ficha__area), .pm-card__sub { font-size: var(--d-fs-badge); }
+/* D4-C — aviso: no bloquea los toques de lo que tiene debajo (solo sus botones los reciben).
+   Un error (❌) queda fijo con «Cerrar» y, si quien avisa tiene un manejador real, «Reintentar». */
+#toast { pointer-events: none; }
+#toast.toast--error { width: min(560px, calc(100vw - 24px)); }
+#toast.toast--error > div { border-left: 4px solid var(--danger); flex-wrap: wrap; row-gap: 0; }
+#toast.toast--error #toastMessage { flex: 1 1 180px; min-width: 0; }
+.toast-acc { display: inline-flex; flex-shrink: 0; gap: 2px; margin: -10px -14px -10px auto; }
+.toast-acc__btn { pointer-events: auto; min-width: 44px; min-height: 44px; padding: 0 10px; border: 0; border-radius: var(--d-radio-sm); background: transparent; color: inherit; font: inherit; font-weight: 700; cursor: pointer; }
+.toast-acc__btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* D9 — menú lateral agrupado (Operación, Análisis, Gestión, Administración, Respaldo, Nube, Cuenta) y pie compacto:
+   «Sistema» reúne Buscar actualización, Reparar y Tema (mismos botones). Un renglón de 44 px en lugar de dos. */
+#sidebar .sb-sis { margin: 0 2px; }
+#sidebar .sb-sis__btn { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 10px; border-radius: var(--d-radio-sm); cursor: pointer; list-style: none; font-size: var(--d-fs); font-weight: 600; color: var(--sidebar-fg); }
+#sidebar .sb-sis__btn::-webkit-details-marker { display: none; }
+#sidebar .sb-sis__btn::after { content: "▾"; margin-left: auto; }
+#sidebar .sb-sis[open] .sb-sis__btn::after { content: "▴"; }
+#sidebar .sb-sis__btn:hover { background: var(--sidebar-line); }
+#sidebar .sb-sis__btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+#sidebar .sb-sis__menu { padding: 4px 0 2px; }
+#sidebar .sb-sis__menu .sb-act { padding: 0 0 6px; }
+/* D8-B — escritorio (≥ 1280 px): Inicio en dos columnas. Inventario físico a la izquierda; alertas, pedido sugerido
+   y accesos a la derecha; los 6 indicadores en una fila. Mismo contenido y orden de lectura; solo cambia la rejilla. */
+@media (min-width: 1280px) {
+    .it-tablero { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); column-gap: 12px; align-items: start; }
+    .it-tablero > .it-saludo { grid-column: 1 / -1; }
+    .it-tablero > .it-inv { grid-column: 1; grid-row: 2 / span 3; }
+    .it-tablero > :not(.it-saludo):not(.it-inv) { grid-column: 2; }
+    .pm-tiles { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+/* D7 — «Ordenar ▾» en Físico vs Sistema: mismo control que «Grupo» (select nativo invisible sobre la píldora),
+   con su anillo de foco; el texto del orden elegido se recorta con «…» antes que empujar los demás controles. */
+.fvs-ctl__orden:focus-within { outline: 3px solid var(--accent); outline-offset: 2px; }
+.fvs-ctl__orden .fvs-ctl__val { max-width: 34vw; }
+/* D7 — la píldora elegida se marca igual que los chips activos (antes solo [aria-pressed]; «Grupo» y «Ordenar» son <label>).
+   En teléfonos estrechos la palabra «Ordenar» queda solo para lectores de pantalla (el icono, el title y el aria-label la conservan)
+   para que «Grupo» y «Ordenar» quepan en una fila. */
+.fvs-ctl__btn.fvs-ctl__btn--on { color: var(--accent) !important; font-weight: 700; }
+.fvs-ctl__btn.fvs-ctl__btn--on::after { background: var(--accent-dim2); border-color: var(--accent); }
+@media (max-width: 400px) { .fvs-ctl__orden .fvs-ctl__etq { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } }
+/* D8-B — escritorio (≥ 1280 px) en Compras, Pedidos y Administración. Solo rejilla y posición: mismo contenido, mismos
+   controles, mismo orden de lectura; en teléfono y tableta nada cambia. */
+@media (min-width: 1280px) {
+    /* Detalle de compra y ficha de producto: panel lateral derecho (sigue siendo diálogo modal: Esc, Atrás y foco igual). */
+    #cd-wrap > .pm-ficha, #pm-ficha-wrap > .pm-ficha { justify-content: flex-end; align-items: stretch; background: var(--scrim); }
+    #cd-wrap .pm-ficha__caja, #pm-ficha-wrap .pm-ficha__caja { max-width: 520px; max-height: none; height: 100%; border-radius: 0; border-left: 1px solid var(--border); }
+    /* Pedidos: tarjetas en dos columnas. */
+    #sbx-res-pedidos > .space-y-4 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+    #sbx-res-pedidos > .space-y-4 > * { margin-top: 0; }
+    /* Administración: tarjetas en dos columnas con más ancho útil (antes 672 px fijos). */
+    #tabContent > .max-w-2xl:has(> .adm-card) { max-width: 1180px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; align-items: start; }
+}
+/* D8-B — Recetario en escritorio (≥ 1280 px): lista y ficha lado a lado (js/91 solo pinta este contenedor en esa
+   anchura). La ficha queda a la vista al desplazar la lista y tiene su propio desplazamiento. */
+@media (min-width: 1280px) {
+    .rc-panel { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 16px; align-items: start; }
+    .rc-panel__ficha { position: sticky; top: calc(var(--alto-cab) + 8px); max-height: calc(100dvh - var(--alto-cab) - 24px); overflow-y: auto; overscroll-behavior: contain; }
+}
+/* B14 — el encabezado común es UI.cabecera (v5.43, estilos en estilos.css); aquí solo se le pide ocupar todo el ancho
+   cuando la pantalla es una rejilla (Ajustes en escritorio). */
+.pg-cab { grid-column: 1 / -1; }
+/* O6 — un solo estado vacío (Compras, Pedidos, Historia, Papelera, Notificaciones, Ajustes, Control de negativos, Ventas,
+   Importar y búsquedas sin resultado): bloque con borde, icono de línea apagado en un círculo, título y frase. Solo
+   presentación: mismas clases, mismos textos y mismos botones de cada pantalla. */
+html[data-theme] :is(.sbx-vacio, .ui-vacio, .vs-vacio, .vt-vacio, .imp-vacio, .pap-vacio, .inicio-vacio) {
+    text-align: center; padding: 18px 14px !important; background: var(--card); border: 1px solid var(--border); border-radius: var(--d-radio);
+    color: var(--txt-secondary); font-size: var(--d-fs); line-height: 1.45; box-shadow: none;
+}
+html[data-theme] :is(.ui-vacio > i:first-child, .imp-vacio > i:first-child, .pap-vacio > i:first-child, .vt-vacio > i:first-child, .sbx-vacio__icono, .vs-vacio__ico, .inicio-vacio__ico) {
+    display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; margin: 0 auto 8px; border-radius: 50%;
+    background: var(--card-high); color: var(--txt-muted); font-size: 1.05rem !important; line-height: 1; opacity: 1;
+}
+html[data-theme] :is(.sbx-vacio__titulo, .vt-vacio__tit, .vs-vacio__t) { font-family: inherit; font-size: var(--d-fs); font-weight: 700; color: var(--txt-primary); margin: 0 0 2px; }
+html[data-theme] :is(.sbx-vacio__texto, .vt-vacio__txt, .vs-vacio__s, .inicio-vacio__txt) { font-size: var(--d-fs-sm); color: var(--txt-secondary); margin: 0; }
+/* O5 — el icono de área es un dato del usuario (emoji): se conserva tal cual, dentro de un contenedor de 32 px como los
+   iconos de línea del resto de la app. */
+.aj-area__icono { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; min-width: 32px; flex: none;
+    border-radius: var(--d-radio-sm); background: var(--card); border: 1px solid var(--border); font-size: 1rem; line-height: 1; }
+/* O6 — el texto largo del vacío de Compras no se estira más de ~70 caracteres en escritorio. */
+.cp-vacio .sbx-vacio__texto { max-width: 420px; margin: 0 auto; line-height: 1.5; }
+/* Recetario — un nombre de insumo sin espacios ensanchaba la tabla de ingredientes y se salía de la ficha (también en
+   teléfono, antes del rediseño). Causa: celda sin punto de corte en una tabla automática. Se permite cortar el nombre. */
+.rc-ingr td:first-child { overflow-wrap: anywhere; word-break: break-word; }
+/* B14 · Historia — filtro por tipo, tarjeta de conteo con clases del tema (antes gradientes fijos y SVG a mano),
+   tabla de detalle compacta y, en escritorio, conteos y reportes en dos columnas (la tarjeta abierta ocupa el ancho). */
+.hi-tipos { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 10px; }
+.hi-inv { background: var(--card); border: 1px solid var(--border); border-radius: var(--d-radio); overflow: hidden; }
+.hi-inv__cab { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px var(--d-pad); cursor: pointer; min-height: 56px; }
+.hi-inv__cab:hover { background: var(--card-high); }
+.hi-inv__txt { flex: 1; min-width: 0; }
+.hi-inv__fila { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; }
+.hi-inv__folio { margin: 0; font-family: var(--f-num); font-size: var(--d-fs); font-weight: 700; color: var(--txt-primary); overflow-wrap: anywhere; }
+.hi-inv__area { font-size: var(--d-fs-badge); font-weight: 700; padding: 1px 8px; border-radius: 999px; background: var(--accent-dim); color: var(--accent); }
+.hi-inv__meta { margin: 2px 0 0; font-size: var(--d-fs-sm); color: var(--txt-secondary); }
+.hi-inv__meta .num { font-family: var(--f-num); color: var(--txt-primary); }
+.hi-inv__acc { display: flex; align-items: center; gap: 4px; flex: none; }
+.hi-inv__flecha { width: 20px; text-align: center; color: var(--txt-muted); transition: transform .15s; }
+.hi-inv--abierto .hi-inv__flecha { transform: rotate(180deg); }
+.hi-inv__det { border-top: 1px solid var(--border); background: var(--surface); padding: 6px var(--d-pad) 8px; }
+.hi-tabla-wrap { overflow-x: auto; }
+.hi-tabla { width: 100%; border-collapse: collapse; font-size: var(--d-fs-sm); }
+.hi-tabla th { text-align: left; font-size: var(--d-fs-etq); letter-spacing: .04em; text-transform: uppercase; color: var(--txt-secondary); padding: 6px 6px; border-bottom: 1px solid var(--border-mid); }
+.hi-tabla td { padding: 6px; color: var(--txt-primary); border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.hi-tabla .num { text-align: right; font-family: var(--f-num); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hi-tabla__abiertas { color: var(--warn); }
+@media (prefers-reduced-motion: reduce) { .hi-inv__flecha { transition: none; } }
+@media (min-width: 1280px) {
+    .hi-lista { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-items: start; }
+    .hi-lista > * { margin-top: 0; }   /* gana a .space-y-4 > * + * por orden de carga */
+    .hi-lista > .hi-inv--abierto { grid-column: 1 / -1; }
+    .hi-reportes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .hi-reportes > .rep-card { margin: 0; }
+    .hi-reportes > :not(.rep-card) { grid-column: 1 / -1; }
+}
+/* B14 · Administración en tres bloques: Resumen (cifras en fila en escritorio), Rutina y Mantenimiento avanzado
+   plegado (<details> nativo; se abre solo si el candado local está cerrado). Mismos botones y acciones. */
+.adm-resumen__cifras { display: grid; gap: 0 12px; }
+.adm-mant > .adm-mant__sum { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; min-height: 44px; padding: 6px 0; cursor: pointer; }
+.adm-mant__tit { flex: 1; font-size: var(--d-fs); font-weight: 700; color: var(--txt-primary); }
+.adm-mant > .adm-mant__sum { list-style: none; }
+.adm-mant > .adm-mant__sum::-webkit-details-marker { display: none; }
+.adm-mant__flecha { color: var(--txt-muted); transition: transform .15s; }
+.adm-mant[open] .adm-mant__flecha { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .adm-mant__flecha { transition: none; } }
+.adm-mant__aviso { flex-basis: 100%; font-size: var(--d-fs-sm); color: var(--warn); line-height: 1.4; }
+.adm-mant > .adm-mant__sum:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.adm-mant__cuerpo { padding-top: 4px; }
+.adm-mant__sec { margin: 10px 0 4px; font-size: var(--d-fs-etq); letter-spacing: .06em; text-transform: uppercase; color: var(--txt-secondary); }
+@media (min-width: 1280px) {
+    .adm-panel > .adm-resumen, .adm-panel > .adm-reportes { grid-column: 1 / -1; }
+    .adm-resumen__cifras { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+/* B14 · Notificaciones: encabezado de cada día («Hoy», «Ayer» o la fecha); la hora relativa lleva la exacta en title. */
+.notif-dia { margin: 10px 0 2px; padding: 0 var(--d-pad); font-size: var(--d-fs-etq); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--txt-secondary); }
+.notif-dia:first-child { margin-top: 8px; }
+.notif-dia::first-letter { text-transform: uppercase; }
+/* B14 · Importar: plantillas como enlace compacto (P «Subir archivo» + «Plantilla: .xlsx · .csv»); en escritorio las
+   tarjetas van en tres columnas. Los enlaces conservan 44 px de objetivo táctil. */
+.imp-sec__plantillas { display: flex; flex-wrap: wrap; align-items: center; gap: 0 2px; font-size: var(--d-fs-sm); color: var(--txt-secondary); }
+.imp-sec__plant-et { margin-right: 4px; }
+.imp-sec__plant-sep { color: var(--txt-muted); }
+.imp-plant { min-height: 44px; min-width: 44px; padding: 0 8px; background: none; border: 0; color: var(--accent); font: inherit; font-weight: 700;
+    text-decoration: underline; text-underline-offset: 3px; cursor: pointer; white-space: nowrap; border-radius: var(--d-radio-sm); }
+.imp-plant:hover { background: var(--accent-dim); }
+.imp-plant:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+@media (min-width: 1280px) { .imp-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+/* B14 · Mi perfil (propuesta 3.22): etiqueta «Solo lectura» junto al título, emoji de área (dato) en 32 px como en Ajustes,
+   y el aviso de «aún no se cargan los datos» como bloque de aviso. La hoja, los campos y los botones no cambian. */
+.pf-etq { display: inline-block; margin-left: 6px; padding: 1px 8px; vertical-align: middle; font-size: var(--d-fs-badge); font-weight: 700;
+    letter-spacing: .02em; border-radius: 999px; border: 1px solid var(--border); background: var(--card-high); color: var(--txt-secondary); }
+.pf-lista:not(.pf-lista--uni) li { display: flex; align-items: center; gap: 8px; }
+.pf-area__ico { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; flex: none;
+    border-radius: var(--d-radio-sm); background: var(--card-high); border: 1px solid var(--border); font-size: 1rem; line-height: 1; }
+.pf-aviso { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--warn); border-radius: var(--d-radio-sm); background: var(--warn-dim); color: var(--txt-primary); }
+/* B14 — metadatos de los reportes publicados (Historia y Administración): 11.52 px → piso de 12 px, en mono como antes. */
+.rep-card-meta { font-size: var(--d-fs-sm); }
+/* D3-A (v5.59) — piso de 12 px en lo que llegó con v5.34/v5.47: títulos y ayudas de Mi perfil y el contador de las
+   pestañas (Historia Inventario | Pedidos, Físico vs Sistema). La versión y la línea de marca del menú quedan en 11 px (metadato). */
+.pf-sec__tit, .pf-campo__ayuda, .fvs-tab__n { font-size: var(--d-fs-badge); }

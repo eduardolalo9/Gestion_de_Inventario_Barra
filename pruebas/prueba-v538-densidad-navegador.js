@@ -47,10 +47,13 @@ const CONTRASTE = (sel) => {
     const marco = await p.evaluate(() => {
       const hd = document.querySelector('.sticky.top-0').getBoundingClientRect(), bb = document.getElementById('bottomTabBar').getBoundingClientRect();
       return { hd: Math.round(hd.height), barra: Math.round(bb.height), items: [...document.querySelectorAll('#bottomTabBar .btab-item')].map(b => Math.round(b.getBoundingClientRect().height)),
-               etq: parseFloat(getComputedStyle(document.querySelector('#bottomTabBar .btab-item span')).fontSize) };
+               etq: parseFloat(getComputedStyle(document.querySelector('#bottomTabBar .btab-item span')).fontSize),
+               // D3-A: con 12 px, ninguna etiqueta de la barra puede quedar recortada
+               etqCompletas: [...document.querySelectorAll('#bottomTabBar .btab-item span')].every(s => s.scrollWidth <= s.clientWidth + 1) };
     });
     chk(T + '★ Encabezado de 48 px y barra inferior de 56 px (antes 80)', marco.hd <= 48 && marco.barra === 56, JSON.stringify(marco));
-    chk(T + 'Cada destino de la barra sigue siendo un objetivo ≥ 44 px, con etiqueta de 10 px', marco.items.every(h => h >= 44) && marco.etq === 10, JSON.stringify(marco));
+    // Rediseño 2026-11 (D3-A, aprobado por Eduardo): etiquetas de 10 → 12 px, medidas en Chromium y sin recorte.
+    chk(T + 'Cada destino de la barra sigue siendo un objetivo ≥ 44 px, con etiqueta de 12 px (D3-A) completa', marco.items.every(h => h >= 44) && marco.etq === 12 && marco.etqCompletas, JSON.stringify(marco));
     // Pedido sugerido
     const ps = await p.evaluate(() => {
       const cards = [...document.querySelectorAll('.ps-card')], r = (e) => e.getBoundingClientRect();
@@ -68,7 +71,8 @@ const CONTRASTE = (sel) => {
     chk(T + '★ Tarjeta del pedido ≤ 68 px de alto (antes 76, y ahora con el nombre completo) con padding vertical ≤ 12 px', ps.alturas.every(h => h <= 68) && ps.pad <= 12, JSON.stringify(ps.alturas) + ' pad ' + ps.pad);
     chk(T + '★ El nombre largo se lee completo en 2 renglones (ya no se corta a los 12 caracteres)', ps.nomCompleto && ps.nomLineas <= 2, JSON.stringify(ps));
     chk(T + '★ Stock y Mín en IBM Plex Mono de 14 px; casilla y campo con objetivo ≥ 40/44 px; campo a 16 px (sin zoom en iOS)', /IBM Plex Mono/.test(ps.cifraFuente) && ps.cifraTam === 14 && ps.check >= 44 && ps.input >= 40 && ps.inputFs === 16, JSON.stringify(ps));
-    chk(T + 'Estado discreto: «Crítico» (3 de mínimo 20) en 9 px', ps.estado && ps.estado[0] === 'Crítico' && ps.estado[1] === 9, JSON.stringify(ps.estado));
+    // Rediseño 2026-11 (D3-A, aprobado por Eduardo): las insignias de estado pasan de 9 a 12 px (medido en Chromium).
+    chk(T + 'Estado discreto: «Crítico» (3 de mínimo 20) en 12 px (D3-A)', ps.estado && ps.estado[0] === 'Crítico' && ps.estado[1] === 12, JSON.stringify(ps.estado));
     chk(T + 'Separación entre tarjetas de 4 px', Math.round(ps.gap) === 4, String(ps.gap));
     chk(T + '★ La barra de resumen queda por encima de la barra inferior', ps.pieSobreBarra);
     chk(T + '★ Chip: se dibuja de 30 px y su objetivo táctil es de 44 px', ps.chipDibujo === 30 && ps.chipObjetivo >= 44, JSON.stringify([ps.chipDibujo, ps.chipObjetivo]));
