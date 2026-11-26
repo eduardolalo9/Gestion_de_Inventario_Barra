@@ -4,20 +4,21 @@
 // del .xlsx (se relee con el mismo SheetJS que usa la app).
 //   npm run test:v535nav    (servidor local en PUERTO, 8080; lo levanta todas-navegador.js)
 // Nada toca Firebase: _db no existe en la prueba.
-// SheetJS: desde 2026-11 la app lo carga de su propio origen
-// (vendor/sheetjs/0.20.3/xlsx.full.min.js, con SRI); el servidor local lo sirve
-// tal cual, sin sustituirlo. La prueba relee el archivo con ese MISMO archivo.
+// SheetJS: desde v5.49 la app lo carga de su propio origen
+// (js/xlsx.full.min.js, 0.20.3); el servidor local lo sirve tal cual, sin
+// sustituirlo. La prueba relee el archivo con ese MISMO archivo.
 const { chromium } = require('playwright');
 const fs = require('fs'), os = require('os'), path = require('path');
 const C = []; const chk = (n, ok, d) => C.push({ n, ok: !!ok, d: d || '' });
 const NOVERIF = [];
 const PUERTO = process.env.PUERTO || '8080';
 const URL_APP = 'http://127.0.0.1:' + PUERTO + '/index.html';
-// El SheetJS que declara index.html (vendor/sheetjs/<versión>/). XLSX_LOCAL queda en null: ya no hace
+// El SheetJS que declara index.html (js/xlsx.full.min.js). XLSX_LOCAL queda en null: ya no hace
 // falta sustituir nada, la app pide el archivo a su propio origen.
-const V_APP = (/<script src="vendor\/sheetjs\/([\d.]+)\/xlsx\.full\.min\.js"/.exec(fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8')) || [])[1] || null;
+const CARGA_APP = /<script src="js\/xlsx\.full\.min\.js\?v=[^"]+" defer>/.test(fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8'));
 let X = null, XLSX_LOCAL = null;
-try { X = V_APP ? require(path.join(__dirname, '..', 'vendor', 'sheetjs', V_APP, 'xlsx.full.min.js')) : null; } catch (_) { X = null; }
+try { X = CARGA_APP ? require(path.join(__dirname, '..', 'js', 'xlsx.full.min.js')) : null; } catch (_) { X = null; }
+const V_APP = X ? X.version : null;
 
 const MONTAJE = (rol) => {
   document.getElementById('authLoadingScreen').classList.add('auth-hidden');
@@ -190,7 +191,7 @@ const num = (t) => { const m = /^([+-]?)([\d,]+\.\d+)/.exec(t.replace(/\s/g, '')
   // ── Exportar (descarga real) ──
   const hayXlsx = await p.evaluate(async () => { for (let i = 0; i < 30 && typeof XLSX === 'undefined'; i++) await new Promise(r => setTimeout(r, 200)); return typeof XLSX !== 'undefined' ? XLSX.version : null; });
   if (!hayXlsx || !X) {
-    NOVERIF.push('Descarga del .xlsx en el navegador (SheetJS no disponible: no cargó vendor/sheetjs/)');
+    NOVERIF.push('Descarga del .xlsx en el navegador (SheetJS no disponible: no cargó js/xlsx.full.min.js)');
   } else {
     await p.selectOption('#fvsGrupoSel', ''); await p.selectOption('#fvsOrdenSel', 'plano_asc'); await p.waitForTimeout(250);
     const visibles = (await filasTabla(p)).map(x => x.sub.split(' · ')[0]);
@@ -199,7 +200,7 @@ const num = (t) => { const m = /^([+-]?)([\d,]+\.\d+)/.exec(t.replace(/\s/g, '')
     const ruta = path.join(dir, dl.suggestedFilename()); await dl.saveAs(ruta);
     const buf = fs.readFileSync(ruta);
     chk('★ Descarga un .xlsx real (zip OOXML) con el nombre pedido', /^Diferencias_Fisico_y_Sistema_\d{4}-\d{2}-\d{2}\.xlsx$/.test(dl.suggestedFilename()) && buf[0] === 0x50 && buf[1] === 0x4b, dl.suggestedFilename());
-    chk('SheetJS de la app = 0.20.3 (vendor/, mismo origen) y la prueba relee con ese mismo archivo', hayXlsx === '0.20.3' && V_APP === '0.20.3' && X.version === hayXlsx, hayXlsx + ' / ' + V_APP + ' / ' + X.version);
+    chk('SheetJS de la app = 0.20.3 (js/xlsx.full.min.js, mismo origen) y la prueba relee con ese mismo archivo', hayXlsx === '0.20.3' && V_APP === '0.20.3' && X.version === hayXlsx, hayXlsx + ' / ' + V_APP + ' / ' + X.version);
     const wb = X.read(buf, { type: 'buffer', cellNF: true });
     const ws = wb.Sheets['Diferencias'];
     const aoa = X.utils.sheet_to_json(ws, { header: 1, defval: null });

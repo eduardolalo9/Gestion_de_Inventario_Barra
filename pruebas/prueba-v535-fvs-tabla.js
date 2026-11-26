@@ -2,8 +2,8 @@
 // exportación a Excel (filas, fórmulas, vacíos, libro real) y garantías estáticas.
 //   node pruebas/prueba-v535-fvs-tabla.js
 // El libro .xlsx se arma y se relee con el MISMO archivo de SheetJS que carga
-// la app: vendor/sheetjs/<versión>/xlsx.full.min.js (desde 2026-11: 0.20.3,
-// alojado en el proyecto; antes 0.18.5 desde cdnjs). Si faltara, esas
+// la app: js/xlsx.full.min.js (desde v5.49: SheetJS 0.20.3 alojado en el
+// proyecto; antes 0.18.5 desde cdnjs). Si faltara, esas
 // comprobaciones salen como NO VERIFICADAS (no como aprobadas). La descarga real la cubre
 // prueba-v535-fvs-navegador.js.
 'use strict';
@@ -127,11 +127,12 @@ chk('★ El Excel sale en el mismo orden visible', JSON.stringify(ex.map(f => f.
 chk('★ Calcular/exportar NO modificó products ni el conteo', JSON.stringify(ctx.products) === antesProductos && JSON.stringify(ctx.auditoriaConteo) === antesConteo);
 
 // ═══ 6 · Libro .xlsx real (el SheetJS que carga la app) ══════════════════
-const vApp = (/<script src="vendor\/sheetjs\/([\d.]+)\/xlsx\.full\.min\.js"/.exec(idx) || [])[1] || null;
+const cargaApp = /<script src="js\/xlsx\.full\.min\.js\?v=[^"]+" defer>/.test(idx);
 let X = null;
-try { X = vApp ? require(path.join(RAIZ, 'vendor', 'sheetjs', vApp, 'xlsx.full.min.js')) : null; } catch (_) { X = null; }
+try { X = cargaApp ? require(path.join(RAIZ, 'js', 'xlsx.full.min.js')) : null; } catch (_) { X = null; }
+const vApp = X ? X.version : null;
 if (!X) {
-    NOVERIF.push('Libro .xlsx (no se encontró el SheetJS que carga index.html en vendor/sheetjs/)');
+    NOVERIF.push('Libro .xlsx (index.html no carga js/xlsx.full.min.js o el archivo no se pudo leer)');
 } else {
     const wb = vm.runInContext('fvsExportLibro', ctx)(X, ex, { generado: 'hoy', usuario: 'prueba', version: '5.35', inventario: '#7', alcance: 'Todos los grupos', orden: 'Diferencias de menor a mayor (sin agrupar)', sinInicial: 0 });
     const bytes = X.write(wb, { bookType: 'xlsx', type: 'array', compression: true });
@@ -140,7 +141,7 @@ if (!X) {
     const wb2 = X.read(fijo || bytes, { type: 'array', cellNF: true, cellStyles: true });
     const ws = wb2.Sheets['Diferencias'];
     const aoa = X.utils.sheet_to_json(ws, { header: 1, defval: null });
-    chk('Versión de SheetJS para la prueba = la que carga la app (index.html → vendor/sheetjs/0.20.3)', vApp === '0.20.3' && X.version === vApp, X.version + ' / index.html: ' + vApp);
+    chk('Versión de SheetJS para la prueba = la que carga la app (index.html → js/xlsx.full.min.js, 0.20.3)', vApp === '0.20.3' && cargaApp, X.version);
     chk('★ Archivo .xlsx válido (zip OOXML) que se vuelve a leer', !!wb2 && wb2.SheetNames[0] === 'Diferencias' && wb2.SheetNames.indexOf('Información') !== -1);
     chk('★ Encabezados: las 9 columnas, en el orden pedido', JSON.stringify(aoa[0]) === JSON.stringify(vm.runInContext('FVS_EXPORT_COLUMNAS', ctx)), JSON.stringify(aoa[0]));
     chk('Una fila por producto (6) y nada más', aoa.length === 7);
