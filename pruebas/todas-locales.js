@@ -124,6 +124,7 @@ const PRUEBAS = [
     'prueba-tema-esmeralda.js',        // v5.25 — Verde Esmeralda: fuentes propias, paleta, barra lateral, tablet
     'prueba-conteo-compacto.js',       // v5.11 — vista compacta de las tarjetas de área del Conteo
     'prueba-actualizaciones.js',       // v5.12 — las actualizaciones sí llegan y se ven (SW + aviso + herramientas)
+    'prueba-sheetjs-0203.js',          // v5.59 — SheetJS 0.20.3 propio: SHA-256, CSP, SW, NaN/Infinity/nulos, fechas CSV, XLS, Existencias, plantillas
 ];
 
 let fallaron = [];

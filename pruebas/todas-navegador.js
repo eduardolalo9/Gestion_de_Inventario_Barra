@@ -98,6 +98,7 @@ const PRUEBAS = [
     'prueba-conteo-compacto-navegador.js', // v5.11 — vista compacta del Conteo, en pantalla
     'prueba-tema-esmeralda-navegador.js', // v5.25 — Verde Esmeralda: barra oscura, fuentes, pasteles, tablet, migración de tema
     'prueba-actualizaciones-navegador.js', // v5.12 — despliegue simulado: detecta, avisa, actualiza con un toque, conserva datos
+    'prueba-sheetjs-0203-navegador.js', // v5.59 — SheetJS 0.20.3 del propio origen: sin CDN, CSP estricta, Excel sin red (Service Worker)
 ];
 
 function esperarServidor(intentos) {
