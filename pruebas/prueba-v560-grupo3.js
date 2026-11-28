@@ -20,7 +20,11 @@ const js85 = leer('js/85-ui-inventario-fisico.js'), util = leer('css/utilidades.
 
 // ── Versión ──
 const ver = (/const APP_VERSION = '([\d.]+)'/.exec(sw) || [])[1];
-chk('★ APP_VERSION 5.60 y todos los ?v= de index.html iguales', ver === '5.60' && (idx.match(/\?v=5\.60\b/g) || []).length >= 50 && !/\?v=(?!5\.60\b)[\d.]+/.test(idx), ver);
+// v5.61 — la versión sigue subiendo: se pide la 5.60 o una posterior y que TODOS los ?v= coincidan con APP_VERSION.
+const _vNum = (v) => String(v || '0').split('.').map(Number).reduce((a, n) => a * 1000 + n, 0);
+const _vEsc = String(ver).replace(/\./g, '\\.');
+chk('★ APP_VERSION 5.60 o posterior y todos los ?v= de index.html iguales a ella',
+    _vNum(ver) >= _vNum('5.60') && (idx.match(new RegExp('\\?v=' + _vEsc + '\\b', 'g')) || []).length >= 50 && !new RegExp('\\?v=(?!' + _vEsc + '\\b)[\\d.]+').test(idx), ver);
 
 // ── H10 ──
 const fn = (/function _fechaCierreTexto\(v\) \{[\s\S]*?\n        \}/.exec(js85) || [''])[0];

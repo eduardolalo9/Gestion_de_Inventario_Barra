@@ -60,7 +60,7 @@
          * pulsa Atrás de Android, js/98). El punto de sincronización se conserva
          * a la derecha, con su texto accesible.
          */
-        function moduloCabecera(titulo, onVolver, estado, descripcion) {
+        function moduloCabecera(titulo, onVolver, estado, descripcion, extra) {
             var tono = estado === 'pendiente' ? 'warn' : 'ok';
             return '<header class="pg-cab">'
                  + '<button type="button" class="mc-cab__volver" onclick="' + onVolver + '" aria-label="Volver">'
@@ -70,6 +70,8 @@
                  + '<span class="mc-cab__punto mc-cab__punto--' + tono + '" role="img" aria-label="'
                  + (tono === 'ok' ? 'Sincronizado' : 'Sincronización pendiente') + '" title="'
                  + (tono === 'ok' ? 'Sincronizado' : 'Sincronización pendiente') + '"></span>'
+                 // v5.61 — patrón 3.0: el menú ⋮ de la pantalla va al final del encabezado (HTML ya armado por el módulo).
+                 + (extra || '')
                  + '</header>';
         }
 
@@ -163,8 +165,46 @@
             return pedidoSugeridoOrdenar(base, _ps.orden.campo, _ps.orden.dir);
         }
 
+        // D6 (v5.61) — total de documento y precios con 2 decimales siempre ($24,467.50), con el formateador
+        // común de js/00. Solo presentación: el Excel y el pedido llevan los mismos números de antes.
         function _psMoneda(n) {
-            return '$' + (Number(n) || 0).toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+            var v = Number(n) || 0;
+            return (typeof biDinero === 'function') ? biDinero(v) : '$' + v.toFixed(2);
+        }
+
+        // v5.61 — propuesta 3.8: un solo «Ordenar por ▾» con los 4 campos × 2 sentidos, en lugar de 4 chips
+        // que se cortaban a 360 px (H11). Misma función de orden (pedidoSugeridoOrdenar) y mismo estado (_ps.orden).
+        var PS_ORDENES = [
+            ['nombre', 1, 'Producto (A–Z)'], ['nombre', -1, 'Producto (Z–A)'],
+            ['sugerido', -1, 'Sugerido (mayor primero)'], ['sugerido', 1, 'Sugerido (menor primero)'],
+            ['enStock', 1, 'En stock (menor primero)'], ['enStock', -1, 'En stock (mayor primero)'],
+            ['proveedor', 1, 'Proveedor (A–Z)'], ['proveedor', -1, 'Proveedor (Z–A)']
+        ];
+        function _psOrdenValor() { return _ps.orden.campo + ':' + (_ps.orden.dir === -1 ? -1 : 1); }
+        function _psOrdenarHtml() {
+            var v = _psOrdenValor();
+            return '<label class="mc-pill mc-pill--select ps-ordenar">'
+                 + '<i class="fa-solid fa-sort ps-ordenar__ico" aria-hidden="true"></i><span class="ps-ordenar__etq" aria-hidden="true">Ordenar por</span>'
+                 + '<select id="psOrdenSel" onchange="pedidoSugeridoOrden(this.value)" aria-label="Ordenar por">'
+                 + PS_ORDENES.map(function(o) {
+                       var val = o[0] + ':' + o[1];
+                       return '<option value="' + val + '"' + (val === v ? ' selected' : '') + '>' + o[2] + '</option>';
+                   }).join('')
+                 + '</select><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></label>';
+        }
+        /** «Ordenar por ▾»: 'campo:dir' (p. ej. 'sugerido:-1'). Un valor desconocido no cambia nada. */
+        function pedidoSugeridoOrden(valor) {
+            var m = /^(nombre|enStock|sugerido|proveedor):(-?1)$/.exec(String(valor || ''));
+            if (!m) return false;
+            _ps.orden = { campo: m[1], dir: Number(m[2]) };
+            _psRepintar();
+            return true;
+        }
+
+        // v5.61 — en escritorio (≥ 1280 px) la lista es una TABLA con selección por fila; en teléfono y
+        // tableta, tarjetas compactas. Misma decisión y mismo ancho que el panel de Recetario (D8-B).
+        function _psEsTabla() {
+            return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(min-width: 1280px)').matches;
         }
 
         function _psNum(n) {
@@ -187,56 +227,118 @@
             return null;
         }
 
+        function _psCheckHtml(f, sel) {
+            return '<button type="button" class="ps-check' + (sel ? ' ps-check--on' : '') + '" role="checkbox" aria-checked="' + sel + '"'
+                 + ' data-ps-accion="marcar" data-ps-pid="' + escapeHtml(String(f.id)) + '" aria-label="Incluir ' + escapeHtml(f.nombre) + ' en el pedido">'
+                 + '<span class="ps-check__c" aria-hidden="true">' + (sel ? '<i class="fa-solid fa-check"></i>' : '') + '</span></button>';
+        }
+        function _psInputHtml(f, q) {
+            return '<input type="text" inputmode="decimal" class="ps-input" value="' + (q > 0 ? q : 0) + '"'
+                 + ' data-ps-pid="' + escapeHtml(String(f.id)) + '" aria-label="Cantidad a pedir de ' + escapeHtml(f.nombre) + '">';
+        }
+        function _psNombreHtml(f) {
+            return (typeof resaltarBusqueda === 'function' ? resaltarBusqueda(f.nombre, _ps.busqueda) : escapeHtml(f.nombre));
+        }
+        function _psMetaHtml(f, est, conSugerido) {
+            return '<div class="ps-card__meta"><span class="ps-card__cod">' + escapeHtml(String(f.id)) + '</span>'
+                 + (f.unidad ? '<span class="ps-uom">' + escapeHtml(f.unidad) + '</span>' : '')
+                 + (est ? '<span class="ps-estado ps-estado--' + est.clase + '">' + est.txt + '</span>' : '')
+                 + (conSugerido ? '<span class="ps-card__sug">Sug. <span class="num">' + _psNum(f.sugerido) + '</span></span>' : '') + '</div>';
+        }
+        /** Importe de la fila (cantidad × precio) o null si el producto no tiene precio válido. */
+        function _psImporte(f, q) { return (typeof f.precio === 'number') ? Math.round(q * f.precio * 100) / 100 : null; }
+
+        /**
+         * v5.61 — tarjeta del TELÉFONO en tres líneas (propuesta 3.8, H12):
+         *   1 · casilla · nombre (2 renglones)          · Pedir
+         *   2 · código · unidad · estado · sugerido      ·
+         *   3 · proveedor en SU línea (antes se cortaba a 1 carácter) · Stock y Mín
+         * Mismos datos, mismos data-ps-* y la misma casilla de selección.
+         */
         function _psTarjeta(f) {
             var sel = !!(_ps.seleccion && _ps.seleccion[f.id]);
             var q = _psCantidad(f);
             var id = escapeHtml(String(f.id));
             var est = _psEstado(f);
-            var h = '<div class="ps-card' + (sel ? ' ps-card--sel' : '') + (est ? ' ps-card--' + est.clase : '') + '" data-sbx-item>';
-            h += '<button type="button" class="ps-check' + (sel ? ' ps-check--on' : '') + '" role="checkbox" aria-checked="' + sel + '"'
-               + ' data-ps-accion="marcar" data-ps-pid="' + id + '" aria-label="Incluir ' + escapeHtml(f.nombre) + ' en el pedido">'
-               + '<span class="ps-check__c" aria-hidden="true">' + (sel ? '<i class="fa-solid fa-check"></i>' : '') + '</span></button>';
-            h += '<div class="ps-card__info">';
-            h += '<div class="ps-card__nom">' + (typeof resaltarBusqueda === 'function' ? resaltarBusqueda(f.nombre, _ps.busqueda) : escapeHtml(f.nombre)) + '</div>';
-            h += '<div class="ps-card__meta"><span class="ps-card__cod">' + id + '</span>'
-               + (f.unidad ? '<span class="ps-uom">' + escapeHtml(f.unidad) + '</span>' : '')
-               + (est ? '<span class="ps-estado ps-estado--' + est.clase + '">' + est.txt + '</span>' : '')
-               + (f.proveedor ? '<span class="ps-card__prov">' + escapeHtml(f.proveedor) + '</span>' : '') + '</div>';
-            h += '</div>';
-            h += '<div class="ps-card__cifras">'
-               + '<div class="ps-card__num"><span class="ps-card__etq">' + (_ps.fuente === 'conteo' ? 'Conteo' : 'Stock') + '</span><b class="num' + (typeof f.enStock === 'number' && f.enStock < f.minimo ? ' ps-bajo' : '') + '">' + _psNum(f.enStock) + '</b></div>'
-               + '<div class="ps-card__num ps-card__num--muted"><span class="ps-card__etq">Mín</span><span class="num">' + _psNum(f.minimo) + '</span></div>'
-               + '</div>';
-            h += '<label class="ps-card__cant"><span class="ps-card__etq">Pedir</span>'
-               + '<input type="text" inputmode="decimal" class="ps-input" value="' + (q > 0 ? q : 0) + '"'
-               + ' data-ps-pid="' + id + '" aria-label="Cantidad a pedir de ' + escapeHtml(f.nombre) + '"></label>';
+            var h = '<div class="ps-card' + (sel ? ' ps-card--sel' : '') + (est ? ' ps-card--' + est.clase : '') + '" data-sbx-item data-ps-card="' + id + '">';
+            h += _psCheckHtml(f, sel);
+            h += '<div class="ps-card__info"><div class="ps-card__nom">' + _psNombreHtml(f) + '</div>' + _psMetaHtml(f, est, true) + '</div>';
+            h += '<label class="ps-card__cant"><span class="ps-card__etq">Pedir</span>' + _psInputHtml(f, q) + '</label>';
+            h += '<div class="ps-card__pie">'
+               + '<span class="ps-card__prov' + (f.proveedor ? '' : ' ps-card__prov--sin') + '"' + (f.proveedor ? ' title="' + escapeHtml(f.proveedor) + '"' : '') + '>'
+               + '<i class="fa-solid fa-truck" aria-hidden="true"></i><span>' + (f.proveedor ? escapeHtml(f.proveedor) : 'Sin proveedor') + '</span></span>'
+               + '<span class="ps-card__cifras">'
+               + '<span class="ps-card__num"><span class="ps-card__etq">' + (_ps.fuente === 'conteo' ? 'Conteo' : 'Stock') + '</span><b class="num' + (typeof f.enStock === 'number' && f.enStock < f.minimo ? ' ps-bajo' : '') + '">' + _psNum(f.enStock) + '</b></span>'
+               + '<span class="ps-card__num ps-card__num--muted"><span class="ps-card__etq">Mín</span><span class="num">' + _psNum(f.minimo) + '</span></span>'
+               + '</span></div>';
             h += '</div>';
             return h;
         }
 
-        function _psFlecha(campo) {
-            if (_ps.orden.campo !== campo) return '<i class="fa-solid fa-sort" aria-hidden="true"></i>';
-            return _ps.orden.dir === 1 ? '↑' : '↓';
+        /** Encabezado ordenable de la tabla: el mismo data-ps-orden de siempre (mismo campo invierte el sentido). */
+        function _psTh(campo, texto, clase) {
+            var on = _ps.orden.campo === campo;
+            var sentido = on ? (_ps.orden.dir === 1 ? 'ascending' : 'descending') : 'none';
+            return '<th scope="col" class="' + (clase || '') + '" aria-sort="' + sentido + '">'
+                 + '<button type="button" class="ps-tabla__orden' + (on ? ' ps-tabla__orden--on' : '') + '" data-ps-orden="' + campo + '">' + texto
+                 + (on ? ' <span aria-hidden="true">' + (_ps.orden.dir === 1 ? '↑' : '↓') + '</span>' : ' <i class="fa-solid fa-sort" aria-hidden="true"></i>') + '</button></th>';
+        }
+
+        /**
+         * v5.61 — ESCRITORIO: tabla con selección por fila (propuesta 3.8). Tocar cualquier parte de la
+         * fila (que no sea el campo Pedir) la marca o desmarca; la casilla sigue siendo el control
+         * accesible con teclado. Importe = Pedir × Precio, igual que el total de la barra.
+         */
+        function _psTablaHtml(filas, todas) {
+            var nSel = todas.filter(function(f) { return _ps.seleccion && _ps.seleccion[f.id]; }).length;
+            var todo = todas.length && nSel === todas.length, alguno = nSel > 0 && !todo;
+            var h = '<div class="ps-tabla-wrap"><table class="ps-tabla"><caption class="sbx-sr">Pedido sugerido: marca los productos y ajusta la cantidad a pedir</caption><thead><tr>'
+                  + '<th scope="col" class="ps-tabla__sel"><button type="button" class="ps-check' + (todo ? ' ps-check--on' : '') + '" role="checkbox"'
+                  + ' aria-checked="' + (todo ? 'true' : (alguno ? 'mixed' : 'false')) + '" data-ps-accion="todos" aria-label="Marcar o quitar todos">'
+                  + '<span class="ps-check__c" aria-hidden="true">' + (todo ? '<i class="fa-solid fa-check"></i>' : (alguno ? '<span class="ps-check__medio"></span>' : '')) + '</span></button></th>'
+                  + _psTh('nombre', 'Producto', 'ps-tabla__prod') + _psTh('proveedor', 'Proveedor', 'ps-tabla__prov')
+                  + _psTh('enStock', _ps.fuente === 'conteo' ? 'Conteo' : 'Stock', 'ps-tabla__n')
+                  + '<th scope="col" class="ps-tabla__n">Mín</th>'
+                  + _psTh('sugerido', 'Sugerido', 'ps-tabla__n')
+                  + '<th scope="col" class="ps-tabla__n">Pedir</th><th scope="col" class="ps-tabla__n">Precio</th><th scope="col" class="ps-tabla__n">Importe</th>'
+                  + '</tr></thead><tbody>';
+            filas.forEach(function(f) {
+                var sel = !!(_ps.seleccion && _ps.seleccion[f.id]);
+                var q = _psCantidad(f), est = _psEstado(f), imp = _psImporte(f, q);
+                var id = escapeHtml(String(f.id));
+                h += '<tr class="ps-fila' + (sel ? ' ps-fila--sel' : '') + (est ? ' ps-fila--' + est.clase : '') + '" data-sbx-item data-ps-fila="' + id + '">'
+                   + '<td class="ps-tabla__sel">' + _psCheckHtml(f, sel) + '</td>'
+                   + '<td class="ps-tabla__prod"><div class="ps-card__nom">' + _psNombreHtml(f) + '</div>' + _psMetaHtml(f, est) + '</td>'
+                   + '<td class="ps-tabla__prov">' + (f.proveedor ? escapeHtml(f.proveedor) : '<span class="ps-tabla__vacio">Sin proveedor</span>') + '</td>'
+                   + '<td class="ps-tabla__n num' + (typeof f.enStock === 'number' && f.enStock < f.minimo ? ' ps-bajo' : '') + '">' + _psNum(f.enStock) + '</td>'
+                   + '<td class="ps-tabla__n num">' + _psNum(f.minimo) + '</td>'
+                   + '<td class="ps-tabla__n num">' + _psNum(f.sugerido) + '</td>'
+                   + '<td class="ps-tabla__n ps-tabla__cant">' + _psInputHtml(f, q) + '</td>'
+                   + '<td class="ps-tabla__n num">' + (typeof f.precio === 'number' ? _psMoneda(f.precio) : '<span class="ps-tabla__vacio">sin precio</span>') + '</td>'
+                   + '<td class="ps-tabla__n num" data-ps-importe="' + id + '">' + (imp === null ? '—' : _psMoneda(imp)) + '</td>'
+                   + '</tr>';
+            });
+            return h + '</tbody></table></div>';
         }
 
         function _renderPedidoSugeridoResultados() {
             var filas = _psFiltradas();
             var todas = _psFilasBase();
+            var tabla = _psEsTabla();
             var nSel = todas.filter(function(f) { return _ps.seleccion && _ps.seleccion[f.id]; }).length;
+            var cuenta = nSel + ' seleccionado' + (nSel === 1 ? '' : 's');
             var h = '<div class="ps-micro"><span>' + filas.length + ' producto' + (filas.length === 1 ? '' : 's') + ' sugerido' + (filas.length === 1 ? '' : 's') + '</span>'
-                  + '<button type="button" class="ps-micro__sel" data-ps-accion="todos">' + nSel + ' seleccionado' + (nSel === 1 ? '' : 's')
-                  + ' · ' + (nSel === todas.length && todas.length ? 'quitar todos' : 'marcar todos') + '</button></div>';
-            h += '<div class="ps-orden" role="group" aria-label="Ordenar">'
-               + '<button type="button" class="ps-orden__btn' + (_ps.orden.campo === 'nombre' ? ' ps-orden__btn--on' : '') + '" data-ps-orden="nombre">Producto ' + _psFlecha('nombre') + '</button>'
-               + '<button type="button" class="ps-orden__btn' + (_ps.orden.campo === 'enStock' ? ' ps-orden__btn--on' : '') + '" data-ps-orden="enStock">En stock ' + _psFlecha('enStock') + '</button>'
-               + '<button type="button" class="ps-orden__btn' + (_ps.orden.campo === 'sugerido' ? ' ps-orden__btn--on' : '') + '" data-ps-orden="sugerido">Sugerido ' + _psFlecha('sugerido') + '</button>'
-               + '<button type="button" class="ps-orden__btn' + (_ps.orden.campo === 'proveedor' ? ' ps-orden__btn--on' : '') + '" data-ps-orden="proveedor">Proveedor ' + _psFlecha('proveedor') + '</button>'
-               + '</div>';
+                  // En la tabla, «marcar todos» es la casilla del encabezado: aquí solo se cuenta.
+                  + (tabla ? '<span class="ps-micro__n">' + cuenta + '</span>'
+                           : '<button type="button" class="ps-micro__sel" data-ps-accion="todos">' + cuenta
+                             + ' · ' + (nSel === todas.length && todas.length ? 'quitar todos' : 'marcar todos') + '</button>') + '</div>';
             if (!filas.length) {
                 h += '<div class="ps-vacio"><i class="fa-solid fa-circle-check" aria-hidden="true"></i>'
                    + '<div class="ps-vacio__t">' + (_ps.busqueda ? 'Sin coincidencias' : (_ps.soloBajo ? 'Nada que pedir' : 'Sin productos con mínimo')) + '</div>'
                    + '<div class="ps-vacio__s">' + (_ps.busqueda ? 'Prueba con otra palabra o quita el filtro de grupo.'
                         : (_ps.soloBajo ? 'Ningún producto está por debajo de su stock mínimo.' : 'Define el stock mínimo en el catálogo para que aparezcan aquí.')) + '</div></div>';
+            } else if (tabla) {
+                h += _psTablaHtml(filas, todas);
             } else {
                 h += '<div class="ps-lista">' + filas.map(_psTarjeta).join('') + '</div>';
             }
@@ -247,7 +349,7 @@
             var r = pedidoSugeridoResumen(_psFilasBase(), _ps.seleccion, _psCantidad);
             return '<div class="ps-pie" id="ps-pie">'
                  + '<div class="ps-pie__txt"><b>' + r.productos + ' producto' + (r.productos === 1 ? '' : 's') + '</b>'
-                 + ' • Total est. <b class="num">' + _psMoneda(r.total) + '</b>'
+                 + ' · Total est. <b class="num">' + _psMoneda(r.total) + '</b>'
                  + (r.sinPrecio ? '<span class="ps-pie__nota">' + r.sinPrecio + ' sin precio</span>' : '') + '</div>'
                  + '<button type="button" class="ps-pie__btn" data-ps-accion="generar"' + (r.productos ? '' : ' disabled') + '>'
                  + 'Generar pedido <i class="fa-solid fa-cart-shopping" aria-hidden="true"></i></button>'
@@ -291,6 +393,7 @@
                + '<option value="">Grupos</option>'
                + grupos.map(function(g) { return '<option value="' + escapeHtml(g) + '"' + (g === _ps.grupo ? ' selected' : '') + '>' + escapeHtml(g) + '</option>'; }).join('')
                + '</select><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></label>'
+               + _psOrdenarHtml()
                + (_psPuedeExportar() ? '<button type="button" class="mc-pill" id="psExportBtn" onclick="exportarPedidoSugeridoExcel()"'
                     + ' title="Descargar en Excel todos los productos con pedido sugerido">'
                     + '<i class="fa-solid fa-file-excel" aria-hidden="true"></i> Exportar Excel</button>' : '')
@@ -306,6 +409,21 @@
             if (typeof BusquedaUI !== 'undefined') BusquedaUI.refrescar('pedsug', { sinAnimacion: false });
             var pie = document.getElementById('ps-pie');
             if (pie) pie.outerHTML = _psBarraInferior();
+            // El selector vive fuera de la región: si se ordenó desde la tabla, se pone al día.
+            var sel = document.getElementById('psOrdenSel');
+            if (sel && sel.value !== _psOrdenValor()) sel.value = _psOrdenValor();
+        }
+
+        /** v5.61 — refleja en pantalla, sin repintar la lista, que un producto quedó marcado (al escribir su cantidad). */
+        function _psMarcarEnPantalla(pid, on) {
+            var q = (typeof CSS !== 'undefined' && CSS.escape) ? CSS.escape(pid) : String(pid).replace(/["\\]/g, '\\$&');
+            Array.prototype.forEach.call(document.querySelectorAll('.ps-check[data-ps-pid="' + q + '"]'), function(b) {
+                b.classList.toggle('ps-check--on', on);
+                b.setAttribute('aria-checked', on ? 'true' : 'false');
+                var c = b.querySelector('.ps-check__c'); if (c) c.innerHTML = on ? '<i class="fa-solid fa-check"></i>' : '';
+                var cont = b.closest('[data-ps-card],[data-ps-fila]');
+                if (cont) cont.classList.toggle(cont.hasAttribute('data-ps-fila') ? 'ps-fila--sel' : 'ps-card--sel', on);
+            });
         }
 
         function pedidoSugeridoGrupo(g) { _ps.grupo = String(g || ''); renderTab(); }
@@ -450,6 +568,18 @@
         if (typeof document !== 'undefined' && document.addEventListener) {
             document.addEventListener('click', function(e) {
                 var el = e.target && e.target.closest ? e.target.closest('[data-ps-accion],[data-ps-orden]') : null;
+                // v5.61 — tabla de escritorio: tocar la fila (fuera de la casilla, el campo Pedir u otro
+                // control) la marca o desmarca, igual que la casilla.
+                if (!el && e.target && e.target.closest) {
+                    var fila = e.target.closest('[data-ps-fila]');
+                    if (fila && !e.target.closest('input,button,select,label,a')) {
+                        var fid = fila.getAttribute('data-ps-fila');
+                        _psInicializarSeleccion();
+                        if (_ps.seleccion[fid]) delete _ps.seleccion[fid]; else _ps.seleccion[fid] = true;
+                        _psRepintar();
+                        return;
+                    }
+                }
                 if (!el || el.disabled) return;
                 var orden = el.getAttribute('data-ps-orden');
                 if (orden) {
@@ -499,15 +629,33 @@
                 }
                 _ps.cantidades[pid] = Math.round(v * 1000) / 1000;
                 _psInicializarSeleccion();
-                if (v > 0) _ps.seleccion[pid] = true;
+                if (v > 0) { _ps.seleccion[pid] = true; _psMarcarEnPantalla(pid, true); }
+                // v5.61 — el importe de la fila (tabla) se pone al día con la cantidad escrita.
+                var fImp = _psFilasBase().find(function(x) { return x.id === pid; });
+                var celda = fImp ? document.querySelector('[data-ps-importe="' + ((typeof CSS !== 'undefined' && CSS.escape) ? CSS.escape(pid) : pid) + '"]') : null;
+                if (celda) { var imp = _psImporte(fImp, _psCantidad(fImp)); celda.textContent = imp === null ? '—' : _psMoneda(imp); }
                 var pie = document.getElementById('ps-pie');
                 if (pie) pie.outerHTML = _psBarraInferior();
             });
         }
 
+        // v5.61 — si la ventana cruza los 1280 px con Pedidos abierto, se vuelve a pintar (tarjetas ↔ tabla).
+        // Solo presentación; la selección y las cantidades viven en _ps y se conservan.
+        if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+            try {
+                var _psMq = window.matchMedia('(min-width: 1280px)');
+                var _psAlCruzar = function() {
+                    if (typeof activeTab !== 'undefined' && (activeTab === 'pedidos' || activeTab === 'pedido_sugerido') && typeof renderTab === 'function') renderTab();
+                };
+                if (_psMq.addEventListener) _psMq.addEventListener('change', _psAlCruzar);
+                else if (_psMq.addListener) _psMq.addListener(_psAlCruzar);
+            } catch (_) { /* sin matchMedia: tarjetas */ }
+        }
+
         window.renderPedidoSugeridoTab = renderPedidoSugeridoTab;
         window.abrirPedidoSugerido = abrirPedidoSugerido;
         window.pedidoSugeridoGrupo = pedidoSugeridoGrupo;
+        window.pedidoSugeridoOrden = pedidoSugeridoOrden;
         window.moduloCabecera = moduloCabecera;
         window.exportarPedidoSugeridoExcel = exportarPedidoSugeridoExcel;
         window.pedidoSugeridoConteoTotal = pedidoSugeridoConteoTotal;

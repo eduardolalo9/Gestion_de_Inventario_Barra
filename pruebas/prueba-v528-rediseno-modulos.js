@@ -169,6 +169,9 @@ chk('Equipo: el editor sigue guardando con las mismas funciones (sin cambios de 
         ventas: [], ventasPeriodos: [], ventasSemanaId: null, ventasImportView: 'lista', products: []
     };
     vm.createContext(ctx);
+    // v5.61 — el selector «Semana | Mes» de Ventas pinta su onclick con jsArg() (regla C-1 de v5.48): se carga
+    // el jsArg REAL de js/00-nucleo.js con el helper común, como en las pruebas de 88, 92 y 96.
+    vm.runInContext(require('./_precio-producto'), ctx);
     vm.runInContext(ciclo, ctx);
     vm.runInContext(ven.replace(/^\s*(let|const) /gm, 'var '), ctx);
     ctx._renderConsumoTeorico = () => '<div id="consumo"></div>';

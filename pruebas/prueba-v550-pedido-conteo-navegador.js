@@ -45,7 +45,7 @@ const ids = (p) => p.evaluate(() => Array.from(document.querySelectorAll('.ps-ca
   chk('★ Por defecto está activa la existencia del sistema (aria-pressed)', await pill('sistema').getAttribute('aria-pressed') === 'true' && await pill('conteo').getAttribute('aria-pressed') === 'false');
   chk('Con la base del sistema se pide B (2), C (20→no) y D (3): tarjetas B y D', await ids(p) === 'B,D', await ids(p));
   chk('La nota explica la base en uso (sistema)', /existencia del sistema/i.test(await p.locator('#psFuenteNota').innerText()));
-  chk('La etiqueta de la cifra dice «Stock»', (await p.locator('.ps-card__etq').first().textContent()).trim() === 'Stock');
+  chk('La etiqueta de la cifra dice «Stock»', (await p.locator('.ps-card__cifras .ps-card__etq').first().textContent()).trim() === 'Stock');   // v5.61: la primera etiqueta de la tarjeta ahora es «Pedir»
 
   // Se escribe una cantidad y se cambia de base: debe descartarse
   await p.evaluate(() => { const i = document.querySelector('.ps-input'); i.value = '99'; i.dispatchEvent(new Event('change', { bubbles: true })); });
@@ -55,7 +55,7 @@ const ids = (p) => p.evaluate(() => Array.from(document.querySelectorAll('.ps-ca
   await pill('conteo').click(); await p.waitForTimeout(300);
   chk('★ Con el conteo de todas las áreas se pide A (4→6) y D (3→7); B (15) ya no y C (sin conteo) tampoco', await ids(p) === 'A,D', await ids(p));
   chk('El botón de conteo queda activo y el del sistema apagado', await pill('conteo').getAttribute('aria-pressed') === 'true' && await pill('sistema').getAttribute('aria-pressed') === 'false');
-  chk('La etiqueta de la cifra cambia a «Conteo»', (await p.locator('.ps-card__etq').first().textContent()).trim() === 'Conteo');
+  chk('La etiqueta de la cifra cambia a «Conteo»', (await p.locator('.ps-card__cifras .ps-card__etq').first().textContent()).trim() === 'Conteo');
   const nota = await p.locator('#psFuenteNota').innerText();
   chk('★ La nota avisa del producto sin conteo (no se sugiere) y de la base usada', /conteo físico del inventario en curso/i.test(nota) && /1 producto con mínimo sin conteo/.test(nota), nota);
   chk('★ Al cambiar de base se descartó la cantidad escrita (99) y los sugeridos son los del conteo',

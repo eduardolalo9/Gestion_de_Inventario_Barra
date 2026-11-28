@@ -273,6 +273,10 @@
         window.ventaTurnoSimular = ventaTurnoSimular;
 
         function _vtMoneda(n) {
+            // D6 (v5.61) — el formateador común de js/00, con la misma salida que ya tenía ($1,480.00, -$250.00).
+            // Solo presentación; un valor que no es número sigue por el camino de siempre.
+            var v = Number(n);
+            if (typeof biDinero === 'function' && isFinite(v)) return biDinero(v);
             try { return Number(n).toLocaleString('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: 2 }); }
             catch (_) { return '$' + _vtRed(n, 2).toFixed(2); }
         }

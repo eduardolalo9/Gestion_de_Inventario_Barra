@@ -58,24 +58,26 @@ const CONTRASTE = (sel) => {
     const ps = await p.evaluate(() => {
       const cards = [...document.querySelectorAll('.ps-card')], r = (e) => e.getBoundingClientRect();
       const nom = cards[0].querySelector('.ps-card__nom'), pie = document.querySelector('.ps-pie'), barra = document.getElementById('bottomTabBar');
-      const chip = document.querySelector('.ps-orden__btn'), chipCaja = getComputedStyle(chip, '::after');
+      const orden = document.querySelector('.ps-ordenar');   // v5.61: «Ordenar por ▾» sustituye a los 4 chips de orden
       return { alturas: cards.map(c => Math.round(r(c).height)), pad: parseFloat(getComputedStyle(cards[0]).paddingTop),
                nomCompleto: nom.scrollHeight <= nom.clientHeight + 1, nomLineas: Math.round(r(nom).height / parseFloat(getComputedStyle(nom).lineHeight)),
                cifraFuente: getComputedStyle(cards[0].querySelector('.ps-card__num b')).fontFamily, cifraTam: parseFloat(getComputedStyle(cards[0].querySelector('.ps-card__num b')).fontSize),
                check: Math.round(r(cards[0].querySelector('.ps-check')).height), input: Math.round(r(cards[0].querySelector('.ps-input')).height), inputFs: parseFloat(getComputedStyle(cards[0].querySelector('.ps-input')).fontSize),
                estado: (() => { const t = cards.find(c => /TOPO CHICO/.test(c.textContent)); const e = t && t.querySelector('.ps-estado'); return e ? [e.textContent, parseFloat(getComputedStyle(e).fontSize)] : null; })(),
                gap: r(cards[1]).top - r(cards[0]).bottom, pieSobreBarra: r(pie).bottom <= r(barra).top + 1 && r(pie).height > 0,
-               chipObjetivo: Math.round(r(chip).height), chipDibujo: parseFloat(chipCaja.height), sinTitulo: !/Reaprovisionamiento/.test(document.getElementById('tabContent').innerText),
+               ordenObjetivo: Math.round(r(orden).height), ordenDentro: r(orden).right <= innerWidth + 1, sinTitulo: !/Reaprovisionamiento/.test(document.getElementById('tabContent').innerText),
                desborde: document.scrollingElement.scrollWidth > innerWidth + 1 };
     });
-    chk(T + '★ Tarjeta del pedido ≤ 68 px de alto (antes 76, y ahora con el nombre completo) con padding vertical ≤ 12 px', ps.alturas.every(h => h <= 68) && ps.pad <= 12, JSON.stringify(ps.alturas) + ' pad ' + ps.pad);
+    // v5.61 (propuesta 3.8, autorizada): la tarjeta pasa de una fila a TRES líneas para que el proveedor tenga la suya
+    // (antes se cortaba a 1 carácter, H12). Se sigue exigiendo que sea compacta.
+    chk(T + '★ Tarjeta del pedido compacta: ≤ 96 px en tres líneas (v5.61, proveedor en su línea; antes 68 px en una fila) con padding vertical ≤ 12 px', ps.alturas.every(h => h <= 96) && ps.pad <= 12, JSON.stringify(ps.alturas) + ' pad ' + ps.pad);
     chk(T + '★ El nombre largo se lee completo en 2 renglones (ya no se corta a los 12 caracteres)', ps.nomCompleto && ps.nomLineas <= 2, JSON.stringify(ps));
     chk(T + '★ Stock y Mín en IBM Plex Mono de 14 px; casilla y campo con objetivo ≥ 40/44 px; campo a 16 px (sin zoom en iOS)', /IBM Plex Mono/.test(ps.cifraFuente) && ps.cifraTam === 14 && ps.check >= 44 && ps.input >= 40 && ps.inputFs === 16, JSON.stringify(ps));
     // Rediseño 2026-11 (D3-A, aprobado por Eduardo): las insignias de estado pasan de 9 a 12 px (medido en Chromium).
     chk(T + 'Estado discreto: «Crítico» (3 de mínimo 20) en 12 px (D3-A)', ps.estado && ps.estado[0] === 'Crítico' && ps.estado[1] === 12, JSON.stringify(ps.estado));
     chk(T + 'Separación entre tarjetas de 4 px', Math.round(ps.gap) === 4, String(ps.gap));
     chk(T + '★ La barra de resumen queda por encima de la barra inferior', ps.pieSobreBarra);
-    chk(T + '★ Chip: se dibuja de 30 px y su objetivo táctil es de 44 px', ps.chipDibujo === 30 && ps.chipObjetivo >= 44, JSON.stringify([ps.chipDibujo, ps.chipObjetivo]));
+    chk(T + '★ «Ordenar por ▾» (v5.61, sustituye a los chips de orden): objetivo táctil ≥ 44 px y dentro de la pantalla', ps.ordenObjetivo >= 44 && ps.ordenDentro, JSON.stringify([ps.ordenObjetivo, ps.ordenDentro]));
     chk(T + 'Sin subtítulos descriptivos ni desborde horizontal', ps.sinTitulo && !ps.desborde);
     const cps = await p.evaluate(CONTRASTE, '.ps-card__nom, .ps-card__cod, .ps-card__etq, .ps-card__num b, .ps-card__num .num, .ps-estado, .ps-pie__txt, .ps-micro');
     chk(T + '★ Contraste ≥ 4.5:1 en toda la tarjeta y el resumen del pedido', cps.length > 8 && cps.every(c => c >= 4.5), JSON.stringify(cps));

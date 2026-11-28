@@ -1105,6 +1105,15 @@
             _vs.mes = String(_vsSemanaVista()).slice(0, 7);
             _vs.verTodo = false; renderTab();
         }
+        /**
+         * v5.61 — selector «Semana | Mes» (propuesta 3.7). Elegir el segmento que ya está activo no hace
+         * nada. Mes abre el mes de la semana que se mira. Semana vuelve a la semana activa, que es la
+         * que usan el Total y el consumo teórico. Misma lógica de siempre: ventasVerMes y ventasVerSemanaActiva.
+         */
+        function ventasVerVista(v) {
+            if (v === 'mes') { if (_vs.vista !== 'mes') ventasVerMes(); return; }
+            if (v === 'semana' && _vs.vista === 'mes') ventasVerSemanaActiva();
+        }
         function ventasRecargarVista() { delete _vs.datos[_vsClave()]; renderTab(); }
         function ventasToggleVerTodo() { _vs.verTodo = !_vs.verTodo; if (typeof BusquedaUI !== 'undefined') BusquedaUI.refrescar('ventas', { sinAnimacion: true }); }
         function ventasToggleAyuda() { _vs.ayuda = !_vs.ayuda; renderTab(); }
@@ -1149,22 +1158,35 @@
             showNotification('✅ Ventas exportadas: ' + nombre);
         }
 
+        // D6 (v5.61) — importes con 2 decimales siempre ($1,500.00), con el formateador común de js/00.
+        // Solo cambia cómo se ven: los valores guardados, los cálculos y el Excel no cambian.
         function _vsMoneda(n) {
-            return '$' + (Number(n) || 0).toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+            var v = Number(n) || 0;
+            return (typeof biDinero === 'function') ? biDinero(v) : '$' + v.toFixed(2);
         }
         function _vsNum(n) { return (Math.round((Number(n) || 0) * 1000) / 1000).toLocaleString('es-MX'); }
 
-        function _vsFila(l) {
+        /** v5.61 — «18.2 %» de la venta neta del periodo (null si no hay importe con qué comparar). */
+        function _vsParte(ventaNeta, total) {
+            if (typeof ventaNeta !== 'number' || !(total > 0)) return null;
+            var p = Math.round(ventaNeta / total * 1000) / 10;
+            return p.toLocaleString('es-MX', { maximumFractionDigits: 1 }) + ' %';
+        }
+
+        function _vsFila(l, pos, totalVenta) {
             var n = Number(l.cantidad) || 0;
             var p = ventaPartesLinea(l);
             var cobr = Math.max(0, n - p.cortesia - p.promo);
             var tieneImp = typeof l.ventaNeta === 'number';
             var prom = (tieneImp && cobr > 0) ? (l.ventaNeta / cobr) : null;
+            var parte = tieneImp ? _vsParte(l.ventaNeta, totalVenta) : null;
             return '<li class="vs-fila">'
+                 + (pos ? '<span class="vs-fila__pos num" aria-hidden="true">' + pos + '</span>' : '')
                  + '<div class="vs-fila__izq">'
                  + (l.tipo ? '<span class="vs-pill">' + escapeHtml(l.tipo) + '</span>' : '')
                  + '<span class="vs-fila__nom">' + escapeHtml(l.nombre || l.sku) + '</span>'
-                 + '<span class="vs-fila__sku">' + escapeHtml(l.sku) + _ventasEtiquetaRegalo(l) + '</span>'
+                 + '<span class="vs-fila__sku">' + escapeHtml(l.sku) + _ventasEtiquetaRegalo(l)
+                 + (parte ? ' · <span class="vs-fila__parte">' + parte + ' de la venta</span>' : '') + '</span>'
                  + '</div>'
                  + '<div class="vs-fila__der">'
                  + '<span class="vs-fila__imp num">' + (tieneImp ? _vsMoneda(l.ventaNeta) : '—') + '</span>'
@@ -1177,11 +1199,14 @@
             var d = _vsDatos();
             var base = (d && d.estado === 'ok') ? d.lineas : [];
             var lista = ventasTopProductos(base);
+            // v5.61 — lugar en el top (por venta neta) y parte de la venta del periodo completo:
+            // al buscar, cada producto conserva su lugar real, no el de la lista filtrada.
+            var orden = {};
+            lista.forEach(function(l, i) { orden[l.sku] = i; });
+            var totalVenta = ventasResumen(base).ventaNeta;
             var filtrando = !!(_vs.busqueda && _vs.busqueda.trim());
             if (filtrando && typeof _motorVentas !== 'undefined') {
                 var hallados = _motorVentas.buscar(base, _vs.busqueda).items;
-                var orden = {};
-                lista.forEach(function(l, i) { orden[l.sku] = i; });
                 lista = hallados.slice().sort(function(a, b) { return orden[a.sku] - orden[b.sku]; });
             }
             var r = ventasResumen(lista);
@@ -1200,42 +1225,60 @@
                + ((!filtrando && lista.length > VENTAS_TOP_N)
                     ? '<button type="button" class="vs-link" onclick="ventasToggleVerTodo()" aria-expanded="' + _vs.verTodo + '">'
                       + (_vs.verTodo ? 'Ver menos' : 'Ver todo (' + lista.length + ')') + '</button>' : '')
-               + '</div><ol class="vs-lista">' + mostrar.map(_vsFila).join('') + '</ol></section>';
+               + '</div><ol class="vs-lista">' + mostrar.map(function(l) { return _vsFila(l, orden[l.sku] + 1, totalVenta); }).join('') + '</ol></section>';
             return { html: h, coincidencias: lista.length, total: base.length };
         }
         window._renderVentasResultados = _renderVentasResultados;
 
+        /**
+         * v5.61 — selector de periodo ÚNICO (propuesta 3.7, auditoría O-3.7):
+         *   «Semana | Mes»  (segmentado, mismo componente que Historia)
+         *   ‹  16–22 nov 2026  ›   y debajo qué es: Semana activa · Solo consulta · Mes
+         * Antes competían tres controles: flechas, una pill central que regresaba a la semana activa
+         * y los atajos «Semana anterior» y «Mes». La flecha ‹ ya lleva a la semana anterior y el
+         * segmento Mes cambia de vista, así que esos atajos se quitaron. Volver a la semana activa
+         * sigue en el aviso «Solo consulta» y en el segmento Semana. La navegación es la de siempre
+         * (ventasMoverPeriodo, _vs): no cambia qué periodo se lee ni cómo se calcula.
+         */
         function _vsPeriodoPills() {
             var esMes = _vs.vista === 'mes';
             var activa = _vsEsActiva();
-            var anterior = !esMes && !activa && _vs.semana === semanaAnterior(ventasSemanaId || semanaId(new Date()));
             var etiqueta = esMes ? _vsEtiquetaMes(_vs.mes) : ventasEtiquetaCorta(_vsSemanaVista());
+            var completa = esMes ? _vsEtiquetaMes(_vs.mes) : etiquetaSemana(_vsSemanaVista());
             var tope = esMes ? (_vs.mes >= fechaISOLocal(new Date()).slice(0, 7)) : (_vsSemanaVista() >= semanaId(new Date()));
-            return '<div class="vs-periodo" role="group" aria-label="Periodo">'
+            var nota = esMes ? 'Periodos que inician en el mes' : (activa ? 'Semana activa' : 'Solo consulta');
+            var seg = function(v, txt, on) {
+                return '<button type="button" class="fvs-tab' + (on ? ' fvs-tab--on' : '') + '" aria-pressed="' + on + '"'
+                     + ' onclick="ventasVerVista(\'' + jsArg(v) + '\')">' + txt + '</button>';
+            };
+            return '<div class="vs-sel">'
+                 + '<div class="fvs-tabs vs-seg" role="group" aria-label="Ver las ventas por">'
+                 + seg('semana', 'Semana', !esMes) + seg('mes', 'Mes', esMes) + '</div>'
+                 + '<div class="vs-periodo" role="group" aria-label="' + (esMes ? 'Cambiar de mes' : 'Cambiar de semana') + '">'
                  + '<button type="button" class="vs-flecha" onclick="ventasMoverPeriodo(-1)" aria-label="' + (esMes ? 'Mes anterior' : 'Semana anterior a la mostrada') + '">'
                  + '<i class="fa-solid fa-chevron-left" aria-hidden="true"></i></button>'
-                 + '<button type="button" class="mc-pill mc-pill--on vs-periodo__actual" onclick="ventasVerSemanaActiva()" aria-label="' + escapeHtml(esMes ? _vsEtiquetaMes(_vs.mes) : etiquetaSemana(_vsSemanaVista())) + (activa ? ' (semana activa)' : '. Volver a la semana activa') + '">'
-                 + '<i class="fa-solid fa-calendar-days" aria-hidden="true"></i> ' + escapeHtml(etiqueta) + '</button>'
+                 + '<p class="vs-periodo__actual" role="status" aria-live="polite" aria-label="' + escapeHtml(completa) + (activa ? ' (semana activa)' : (esMes ? '' : ' (solo consulta)')) + '">'
+                 + '<b class="vs-periodo__txt">' + escapeHtml(etiqueta) + '</b>'
+                 + '<span class="vs-periodo__nota' + (activa ? ' vs-periodo__nota--activa' : '') + '">' + nota + '</span></p>'
                  + '<button type="button" class="vs-flecha" onclick="ventasMoverPeriodo(1)" aria-label="' + (esMes ? 'Mes siguiente' : 'Semana siguiente') + '"' + (tope ? ' disabled' : '') + '>'
                  + '<i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button>'
-                 + '</div>'
-                 + '<div class="vs-pills" role="group" aria-label="Atajos de periodo">'
-                 + '<button type="button" class="mc-pill' + (anterior ? ' mc-pill--on' : '') + '" aria-pressed="' + anterior + '" onclick="ventasVerSemanaAnterior()">Semana anterior</button>'
-                 + '<button type="button" class="mc-pill' + (esMes ? ' mc-pill--on' : '') + '" aria-pressed="' + esMes + '" onclick="ventasVerMes()">Mes</button>'
-                 + '</div>';
+                 + '</div></div>';
         }
 
         function _vsKpis(d) {
             var r = ventasResumen(d.lineas);
+            // v5.61 — un «—» siempre dice por qué (propuesta 3.7: «KPI con guion sin explicar»).
+            var porQuePromedio = !r.conImporte ? 'el reporte no trae importe' : (r.cobrados > 0 ? 'por artículo cobrado' : 'sin artículos cobrados');
             return '<div class="vs-kpis">'
                  + '<div class="vs-kpi"><span class="vs-kpi__ico"><i class="fa-solid fa-chart-line" aria-hidden="true"></i></span>'
-                 + '<span class="vs-kpi__lbl">Venta neta</span><span class="vs-kpi__val num">' + (r.conImporte ? _vsMoneda(r.ventaNeta) : '—') + '</span></div>'
+                 + '<span class="vs-kpi__lbl">Venta neta</span><span class="vs-kpi__val num">' + (r.conImporte ? _vsMoneda(r.ventaNeta) : '—') + '</span>'
+                 + (r.conImporte ? '' : '<span class="vs-kpi__sub">el reporte no trae importe</span>') + '</div>'
                  + '<div class="vs-kpi"><span class="vs-kpi__ico"><i class="fa-solid fa-ticket" aria-hidden="true"></i></span>'
                  + '<span class="vs-kpi__lbl">Artículos vendidos</span><span class="vs-kpi__val num">' + _vsNum(r.articulos) + '</span>'
                  + (r.regalos > 0 ? '<span class="vs-kpi__sub">' + _vsNum(r.regalos) + ' de regalo</span>' : '') + '</div>'
                  + '<div class="vs-kpi"><span class="vs-kpi__ico"><i class="fa-solid fa-receipt" aria-hidden="true"></i></span>'
                  + '<span class="vs-kpi__lbl">Precio promedio</span><span class="vs-kpi__val num">' + (r.precioPromedio === null ? '—' : _vsMoneda(r.precioPromedio)) + '</span>'
-                 + '<span class="vs-kpi__sub">por artículo cobrado</span></div>'
+                 + '<span class="vs-kpi__sub">' + (r.precioPromedio === null ? porQuePromedio : 'por artículo cobrado') + '</span></div>'
                  + '</div>';
         }
 
@@ -1312,7 +1355,7 @@
                       + (puedeImportar ? 'Impórtalas desde el reporte del POS (Parrot, hoja "Detalle") con <b>Importar Ventas</b>.'
                                        : 'El administrador todavía no las importa.') + '</div>'
                       + '</div>'
-                      + '<div class="vs-total"><span>Venta neta <b class="num">$0</b></span>'
+                      + '<div class="vs-total"><span>Venta neta <b class="num">' + _vsMoneda(0) + '</b></span>'
                       + (puedeImportar ? '<button type="button" class="mc-pill" onclick="ventasToggleAyuda()" aria-expanded="' + _vs.ayuda + '">Cómo importar</button>' : '')
                       + '</div>';
                 if (_vs.ayuda && puedeImportar) {
@@ -1366,6 +1409,7 @@
         window.ventasVerSemanaActiva = ventasVerSemanaActiva;
         window.ventasVerSemanaAnterior = ventasVerSemanaAnterior;
         window.ventasVerMes = ventasVerMes;
+        window.ventasVerVista = ventasVerVista;
         window.ventasRecargarVista = ventasRecargarVista;
         window.ventasToggleVerTodo = ventasToggleVerTodo;
         window.ventasToggleAyuda = ventasToggleAyuda;

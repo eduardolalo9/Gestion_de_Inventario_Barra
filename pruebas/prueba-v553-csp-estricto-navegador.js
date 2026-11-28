@@ -115,7 +115,9 @@ const MONTAR = () => {
   const sombra = await p.evaluate(() => CspDespachador.modo());
   chk('★ Con la política de hoy el despachador queda en «sombra»', sombra === 'sombra', sombra);
   await p.evaluate(MONTAR); await p.waitForTimeout(250);
-  await p.evaluate(() => { window.__n = []; document.body.insertAdjacentHTML('beforeend', '<button id="b1" onclick="accionPrueba(\'uno\')">1</button><div id="tk" role="button" tabindex="0" data-activar-teclado onclick="accionPrueba(\'tec\')" style="position:fixed;top:0;left:0;width:50px;height:50px">t</div>'); });
+  // v5.61 — #b1 con posición fija (como #tk): al final del documento quedaba bajo la barra inferior fija
+  // cuando la pantalla de Pedidos es más alta que la ventana; la prueba no depende del alto de la pantalla.
+  await p.evaluate(() => { window.__n = []; document.body.insertAdjacentHTML('beforeend', '<button id="b1" onclick="accionPrueba(\'uno\')" style="position:fixed;top:60px;left:60px;width:50px;height:50px">1</button><div id="tk" role="button" tabindex="0" data-activar-teclado onclick="accionPrueba(\'tec\')" style="position:fixed;top:0;left:0;width:50px;height:50px">t</div>'); });
   await p.click('#b1'); await p.focus('#tk'); await p.keyboard.press('Enter');
   chk('★ En «sombra» cada manejador se ejecuta UNA sola vez (lo hace el navegador; el despachador no duplica) — también por teclado', JSON.stringify(await p.evaluate(() => window.__n)) === JSON.stringify([['uno'], ['tec']]), JSON.stringify(await p.evaluate(() => window.__n)));
   const tel = await p.evaluate(() => CspDespachador.resumen());

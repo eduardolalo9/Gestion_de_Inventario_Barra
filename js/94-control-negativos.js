@@ -29,7 +29,7 @@
         //  arranca en 0 (nunca vacío), igual que el Total oficial.
         // ══════════════════════════════════════════════════════════════════════
 
-        var _cn = { activo: false, filtro: 'negativos', enCurso: false };
+        var _cn = { activo: false, filtro: 'negativos', enCurso: false, menu: false };   // v5.61: menu = ⋮ abierto
         var CN_DIAS_ALERTA = 7;   // «Alcanza n días» por debajo de una semana
 
         function _cnRed(n) { var x = Number(n); return isFinite(x) ? Math.round(x * 1000) / 1000 : 0; }
@@ -175,9 +175,79 @@
         // ── Pantalla ─────────────────────────────────────────────────────────
 
         function controlNegativosActivo() { return !!_cn.activo; }
-        function controlNegativosAbrir() { _cn.activo = true; _cn.filtro = 'negativos'; renderTab(); if (typeof window !== 'undefined' && window.scrollTo) window.scrollTo(0, 0); }
-        function controlNegativosCerrar() { _cn.activo = false; renderTab(); }
-        function controlNegativosFiltro(f) { _cn.filtro = f; renderTab(); }
+        function controlNegativosAbrir() { _cn.activo = true; _cn.filtro = 'negativos'; _cn.menu = false; renderTab(); if (typeof window !== 'undefined' && window.scrollTo) window.scrollTo(0, 0); }
+        function controlNegativosCerrar() { _cn.activo = false; _cn.menu = false; renderTab(); }
+        function controlNegativosFiltro(f) { _cn.filtro = f; _cn.menu = false; renderTab(); }
+        /** v5.61 — sin corte vigente: lleva a Inventario, donde se contabiliza (solo con inventory.post). */
+        function controlNegativosIrAInventario() {
+            _cn.activo = false; _cn.menu = false;
+            if (typeof auditoriaView !== 'undefined') auditoriaView = 'selection';
+            switchTab('inventario');
+        }
+
+        // ── v5.61 · Menú ⋮ (propuesta 3.23) ─────────────────────────────────
+        // Exportar sale de la fila de filtros (era un chip más, «Excel») y pasa al menú ⋮ del encabezado,
+        // junto con «Reglas del cálculo». Mismo componente que el ⋮ de Recetario e Inventario (rec-menu):
+        // se abre y cierra con el botón, con Esc o tocando fuera; las flechas recorren las opciones.
+        // Exportar sigue pidiendo inventory.export: sin ese permiso la opción no existe.
+        function _cnPuedeExportar() { return typeof hasPermission === 'function' && hasPermission('inventory.export'); }
+        function _cnMenuHtml(d) {
+            var items = '';
+            if (_cnPuedeExportar() && d && d.filas.length) {
+                items += '<button type="button" role="menuitem" class="rec-menu__item" id="cnExportBtn" data-cn-accion="exportar">'
+                       + '<i class="fa-solid fa-file-excel" aria-hidden="true"></i> Exportar a Excel</button>';
+            }
+            items += '<button type="button" role="menuitem" class="rec-menu__item" data-cn-accion="reglas">'
+                   + '<i class="fa-solid fa-circle-info" aria-hidden="true"></i> Reglas del cálculo</button>';
+            return '<div class="rec-menu cn-menu" data-cn-menu-wrap>'
+                 + '<button type="button" class="rec-menu__btn" id="cnMenuBtn" data-cn-menu aria-haspopup="menu" aria-controls="cnMenuLista"'
+                 + ' aria-expanded="' + (_cn.menu ? 'true' : 'false') + '" aria-label="Más opciones de Control de negativos" title="Más opciones">'
+                 + '<i class="fa-solid fa-ellipsis-vertical" aria-hidden="true"></i></button>'
+                 + '<div class="rec-menu__lista" id="cnMenuLista" role="menu" aria-label="Control de negativos"' + (_cn.menu ? '' : ' hidden') + '>' + items + '</div></div>';
+        }
+        function _cnMenuPintar(enfocar) {
+            var w = document.querySelector('[data-cn-menu-wrap]');
+            if (!w) return;
+            var l = w.querySelector('.rec-menu__lista'), b = w.querySelector('[data-cn-menu]');
+            if (l) l.hidden = !_cn.menu;
+            if (b) b.setAttribute('aria-expanded', _cn.menu ? 'true' : 'false');
+            if (_cn.menu && l) { var it = l.querySelector('[role="menuitem"]'); if (it && it.focus) it.focus(); }
+            else if (enfocar && b && b.focus) b.focus();
+        }
+        function _cnAbrirReglas() {
+            var r = document.querySelector('.cn-reglas');
+            if (!r) return;
+            r.open = true;
+            if (r.scrollIntoView) r.scrollIntoView({ block: 'nearest' });
+            var s = r.querySelector('summary'); if (s && s.focus) s.focus();
+        }
+        if (typeof document !== 'undefined' && document.addEventListener) {
+            document.addEventListener('click', function(e) {
+                var t = e.target && e.target.closest ? e.target : null;
+                if (!t) return;
+                if (t.closest('[data-cn-menu]')) { _cn.menu = !_cn.menu; _cnMenuPintar(false); return; }
+                var item = t.closest('[data-cn-accion]');
+                if (item) {
+                    var acc = item.getAttribute('data-cn-accion');
+                    _cn.menu = false; _cnMenuPintar(false);
+                    if (acc === 'exportar') controlNegativosExportarExcel();
+                    else if (acc === 'reglas') _cnAbrirReglas();
+                    return;
+                }
+                if (_cn.menu && !t.closest('[data-cn-menu-wrap]')) { _cn.menu = false; _cnMenuPintar(false); }
+            });
+            document.addEventListener('keydown', function(e) {
+                if (!_cn.menu) return;
+                if (e.key === 'Escape') { _cn.menu = false; _cnMenuPintar(true); return; }
+                if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                    var items = Array.prototype.slice.call(document.querySelectorAll('#cnMenuLista [role="menuitem"]'));
+                    if (!items.length) return;
+                    var i = items.indexOf(document.activeElement);
+                    var j = e.key === 'ArrowDown' ? (i + 1) % items.length : (i <= 0 ? items.length - 1 : i - 1);
+                    items[j].focus(); e.preventDefault();
+                }
+            });
+        }
 
         /** Insignia para el botón de acceso en Ventas: cuántos negativos hay (o null si no se puede saber). */
         function controlNegativosConteo() {
@@ -186,7 +256,11 @@
         }
 
         function _cnNum(n) { return (Math.round((Number(n) || 0) * 100) / 100).toLocaleString('es-MX', { maximumFractionDigits: 2 }); }
-        function _cnMoneda(n) { return '$' + (Number(n) || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+        // D6 (v5.61) — formateador común de js/00: 2 decimales y el signo antes del símbolo (-$250.00). Solo presentación.
+        function _cnMoneda(n) {
+            var v = Number(n) || 0;
+            return (typeof biDinero === 'function') ? biDinero(v) : '$' + v.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
 
         function _cnFilaHtml(f) {
             var id = escapeHtml(String(f.id));
@@ -209,16 +283,21 @@
 
         function renderControlNegativos() {
             var estadoSync = (typeof _syncEnabled !== 'undefined' && !_syncEnabled) ? 'pendiente' : 'ok';
-            var h = '<div class="vt-wrap cn-pantalla">' + moduloCabecera('Control de negativos', 'controlNegativosCerrar()', estadoSync,
-                'Insumos cuya existencia teórica quedó por debajo de cero.');
+            var desc = 'Insumos cuya existencia teórica quedó por debajo de cero.';
+            var cab = function(menu) { return '<div class="vt-wrap cn-pantalla">' + moduloCabecera('Control de negativos', 'controlNegativosCerrar()', estadoSync, desc, menu); };
             if (!_cnPuede()) {
-                return h + '<div class="vs-vacio"><div class="vs-vacio__t">Sin permiso</div><div class="vs-vacio__s">Hace falta ver compras y ventas para calcular los negativos.</div></div></div>';
+                return cab('') + '<div class="vs-vacio"><div class="vs-vacio__t">Sin permiso</div><div class="vs-vacio__s">Hace falta ver compras y ventas para calcular los negativos.</div></div></div>';
             }
             var d = _cnDatos();
             if (!d) {
-                return h + '<div class="vs-vacio"><div class="vs-vacio__t">Sin corte vigente</div>'
-                     + '<div class="vs-vacio__s">Los negativos se calculan desde el último conteo contabilizado o corte importado. Contabiliza un inventario para empezar.</div></div></div>';
+                // v5.61 — vacío con su siguiente paso (propuesta 3.23): ir a Inventario si se puede contabilizar.
+                return cab('') + '<div class="vs-vacio"><div class="vs-vacio__t">Sin corte vigente</div>'
+                     + '<div class="vs-vacio__s">Los negativos se calculan desde el último conteo contabilizado o corte importado. Contabiliza un inventario para empezar.</div>'
+                     + ((typeof hasPermission === 'function' && hasPermission('inventory.post'))
+                          ? '<button type="button" class="vs-link cn-ir" onclick="controlNegativosIrAInventario()">Ir a Inventario <i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button>' : '')
+                     + '</div></div>';
             }
+            var h = cab(_cnMenuHtml(d));
             var r = d.resumen;
             h += '<div class="cn-corte"><i class="fa-solid fa-flag" aria-hidden="true"></i> Desde <b>' + escapeHtml(typeof anclaEtiqueta === 'function' ? anclaEtiqueta(d.ancla) : d.ancla.fecha) + '</b>'
                + ' · ventas cargadas <b class="num">' + d.diasCubiertos + ' de ' + d.diasEsperados + '</b> días. Lo anterior al corte quedó <b>absorbido</b> por ese conteo.</div>';
@@ -239,10 +318,7 @@
                 return '<button type="button" class="sbx-chip' + (on ? ' sbx-chip--on' : '') + '" aria-pressed="' + on + '" onclick="controlNegativosFiltro(\'' + jsArg(x[0]) + '\')">'
                      + x[1] + ' <span class="sbx-chip__n">' + x[2] + '</span></button>';
             }).join('');
-            if (typeof hasPermission === 'function' && hasPermission('inventory.export')) {
-                h += '<button type="button" class="sbx-chip" id="cnExportBtn" onclick="controlNegativosExportarExcel()"><i class="fa-solid fa-file-excel" aria-hidden="true"></i> Excel</button>';
-            }
-            h += '</div>';
+            h += '</div>';   // v5.61 — Exportar ya no va aquí: está en el menú ⋮ del encabezado.
             var lista = d.filas.filter(function(f) {
                 if (_cn.filtro === 'negativos') return f.estado === 'negativo';
                 if (_cn.filtro === 'riesgo') return f.estado === 'no_alcanza' || f.estado === 'alcanza_n';
@@ -338,5 +414,6 @@
             window.controlNegativosVerRecetas = controlNegativosVerRecetas;
             window.controlNegativosCapturarCompra = controlNegativosCapturarCompra;
             window.controlNegativosExportarExcel = controlNegativosExportarExcel;
+            window.controlNegativosIrAInventario = controlNegativosIrAInventario;
             window.renderControlNegativos = renderControlNegativos;
         }

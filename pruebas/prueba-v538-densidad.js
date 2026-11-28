@@ -38,7 +38,9 @@ chk('★ densidad.css usa solo tokens (cero hex, rgb() u oklch() a mano)', !/#[0
 chk('Sin cristal ni brillo: ni backdrop-filter ni degradados', !/backdrop-filter|gradient\(/.test(sinCom(dens)));
 chk('Tokens de densidad: tarjeta 10 px de padding, gaps 6 px, cuerpo 13 px, barra 56 px', /--d-pad:\s*10px/.test(dens) && /--d-gap:\s*6px/.test(dens) && /--d-fs:\s*13px/.test(dens) && /--alto-barra:\s*56px/.test(dens));
 chk('★ Lo que se pegaba sobre la barra de 80 px baja con ella (pie del pedido, avisos)', /\.ps-pie\s*\{ bottom: calc\(var\(--alto-barra\)/.test(dens) && /\.net-aviso\s*\{ bottom: calc\(var\(--alto-barra\)/.test(dens) && /#mainContent \{ padding-bottom: calc\(var\(--alto-barra\)/.test(dens));
-chk('★ Los chips se DIBUJAN de 30 px pero conservan 44 px de objetivo (::after; estilos.css apaga button::before)', /\.sbx-chip::after[^{]*\{[^}]*height: 30px/.test(dens) && /\.ps-orden__btn \{ min-height: 44px; \}/.test(dens) && /\.mc-pill \{ min-height: 44px;/.test(dens));
+chk('★ Los chips se DIBUJAN de 30 px pero conservan 44 px de objetivo (::after; estilos.css apaga button::before)', /\.sbx-chip::after[^{]*\{[^}]*height: 30px/.test(dens) && /\.mc-pill \{ min-height: 44px;/.test(dens)
+    // v5.61: los chips de orden de Pedido sugerido (.ps-orden__btn) se quitaron; su lugar es «Ordenar por ▾», un .mc-pill de 44 px.
+    && !/ps-orden__btn/.test(dens) && /class="mc-pill mc-pill--select ps-ordenar"/.test(leer('js/73-pedido-sugerido.js')));
 chk('★ Botones: piso de 44 px en toda la capa (ninguna regla de .bt baja de 44)', /\.bt \{ min-height: 44px;/.test(dens) && !/\.bt[^{]*\{[^}]*min-height:\s*(3\d|4[0-3])px/.test(dens));
 // Rediseño 2026-11 (D3-A, aprobado por Eduardo): las insignias pasan de 9 a 12 px. Se comprueba la regla
 // de las insignias, el valor real del token y que en la capa ya no quede ningún tamaño fijo de 9 o 10 px.
