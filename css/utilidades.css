@@ -1118,3 +1118,27 @@ button.fvs-t__celda:hover, button.fvs-t__celda:focus-visible { border-color: var
 .uc-acc__area { display: block; margin-bottom: 6px; font-size: .72rem; font-weight: 700; color: var(--txt-secondary); }
 .uc-pil__ico { font-size: .7rem; line-height: 1; }
 .uc-pil__nom { white-space: nowrap; }
+
+/* v5.60 — H11 (auditoría): las filas de filtros del buscador común se desplazan de lado sin avisar
+   («G…», «Prove…» cortados en el borde a 360–412 px). El borde se desvanece SOLO donde hay más
+   filtros: a la derecha mientras falten por ver, a la izquierda cuando ya se desplazó. Sin JS:
+   la línea de tiempo del propio desplazamiento mueve el desvanecido. Si la fila cabe completa, la
+   línea de tiempo queda inactiva y no se desvanece nada; un navegador sin esta función la ve igual
+   que antes. Es una máscara (transparencia), no un color: «black» solo marca lo visible.
+   Solo [data-sbx-chips] (BusquedaUI.chips): las filas propias de otros módulos no cambian. */
+@property --sbx-borde-izq { syntax: '<length>'; inherits: false; initial-value: 0px; }
+@property --sbx-borde-der { syntax: '<length>'; inherits: false; initial-value: 0px; }
+@keyframes sbx-borde {
+    0%        { --sbx-borde-izq: 0px;  --sbx-borde-der: 28px; }
+    8%, 92%   { --sbx-borde-izq: 28px; --sbx-borde-der: 28px; }
+    100%      { --sbx-borde-izq: 28px; --sbx-borde-der: 0px; }
+}
+@supports (animation-timeline: scroll()) {
+    .sbx-chips[data-sbx-chips] {
+        -webkit-mask-image: linear-gradient(to right, transparent, black var(--sbx-borde-izq), black calc(100% - var(--sbx-borde-der)), transparent);
+                mask-image: linear-gradient(to right, transparent, black var(--sbx-borde-izq), black calc(100% - var(--sbx-borde-der)), transparent);
+        animation: sbx-borde linear both;
+        animation-timeline: scroll(self inline);
+        scroll-padding-inline: 28px;   /* con teclado, el filtro enfocado no queda bajo el desvanecido */
+    }
+}

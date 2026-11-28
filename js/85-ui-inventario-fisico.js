@@ -68,6 +68,20 @@
         function auditoriaIrAMuestreoConteo() { auditoriaView = 'muestreo_conteo'; renderTab(); }
         function auditoriaVerDetalleCerrado(id) { _detalleInventarioCerradoId = String(id); _detalleInventarioCerradoData = null; auditoriaView = 'detalle_cerrado'; renderTab(); }
         function auditoriaVolverASeleccion() { auditoriaView = 'selection'; renderTab(); }
+        // v5.60 — H10 (auditoría): un inventario cerrado sin fechaCierre válida se pintaba
+        // «31/12/1969» (campo en null) o «Invalid Date» (campo ausente o ilegible).
+        // Ahora dice «Fecha no registrada». Una fecha válida se pinta igual que antes
+        // (y un Timestamp de Firestore se lee como fecha, en vez de dar «Invalid Date»).
+        var FECHA_NO_REGISTRADA = 'Fecha no registrada';
+        function _fechaCierreTexto(v) {
+            if (v && typeof v.toMillis === 'function') v = v.toMillis();
+            var d = (v === null || v === undefined || v === '' || v === 0) ? null : new Date(v);
+            return (d && !isNaN(d.getTime())) ? d.toLocaleDateString('es-MX') : FECHA_NO_REGISTRADA;
+        }
+        function _cerradoTexto(fechaCierre, nombre) {
+            var f = _fechaCierreTexto(fechaCierre);
+            return escapeHtml(f) + (f === FECHA_NO_REGISTRADA ? ' · por ' : ' por ') + escapeHtml(nombre || '—');
+        }
         function auditoriaVolverAHistorial() { auditoriaView = 'historial'; renderTab(); }
         function fvsVolverAConteo() { auditoriaView = 'selection'; _fvsSearchTerm = ''; fvsReiniciarVista(); renderTab(); }
         function cerrarInventarioHuerfanoActivo() { cerrarInventarioHuerfano(_inventarioActivoId); }
@@ -238,7 +252,7 @@
             html += dato('Creado', escapeHtml(new Date(inv.fechaCreacion).toLocaleDateString('es-MX')) + ' · '
                          + escapeHtml(inv.creadoPorNombre || '—') + (inv.creadoPorRol ? ' (' + escapeHtml(inv.creadoPorRol) + ')' : ''));
             if (esCerrado) {
-                html += dato('Cerrado', escapeHtml(new Date(inv.fechaCierre).toLocaleDateString('es-MX')) + ' por ' + escapeHtml(inv.cerradoPorNombre || '—'));
+                html += dato('Cerrado', _cerradoTexto(inv.fechaCierre, inv.cerradoPorNombre));
             }
             if (Array.isArray(inv.warehousesSnapshot) && inv.warehousesSnapshot.length) {
                 html += dato('Áreas', escapeHtml(inv.warehousesSnapshot.map(function(a) {
@@ -1595,7 +1609,7 @@
             html += '<dl class="if-datos">';
             html += '<div class="if-dato"><dt>Inventario</dt><dd>#' + meta.numero + ' · Inventario Barra</dd></div>';
             html += '<div class="if-dato"><dt>Creado</dt><dd>' + new Date(meta.fechaCreacion).toLocaleDateString('es-MX') + ' por ' + escapeHtml(meta.creadoPorNombre || '—') + '</dd></div>';
-            html += '<div class="if-dato"><dt>Cerrado</dt><dd>' + new Date(meta.fechaCierre).toLocaleDateString('es-MX') + ' por ' + escapeHtml(meta.cerradoPorNombre || '—') + '</dd></div>';
+            html += '<div class="if-dato"><dt>Cerrado</dt><dd>' + _cerradoTexto(meta.fechaCierre, meta.cerradoPorNombre) + '</dd></div>';
             html += '<div class="if-dato"><dt>Productos / participantes</dt><dd>' + (meta.totalProductos || productosSnap.length) + ' &nbsp;·&nbsp; ' + usuarios.length + '</dd></div>';
             html += '</dl>';
 
