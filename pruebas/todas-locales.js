@@ -124,6 +124,7 @@ const PRUEBAS = [
     'prueba-tema-esmeralda.js',        // v5.25 — Verde Esmeralda: fuentes propias, paleta, barra lateral, tablet
     'prueba-conteo-compacto.js',       // v5.11 — vista compacta de las tarjetas de área del Conteo
     'prueba-actualizaciones.js',       // v5.12 — las actualizaciones sí llegan y se ven (SW + aviso + herramientas)
+    'prueba-v560-grupo3.js',           // v5.60 — Grupo 3: «Fecha no registrada» (H10), filtros con orilla desvanecida (H11), H7 descartado
     'prueba-sheetjs-0203.js',          // v5.59 — SheetJS 0.20.3 propio: SHA-256, CSP, SW, NaN/Infinity/nulos, fechas CSV, XLS, Existencias, plantillas
 ];
 
