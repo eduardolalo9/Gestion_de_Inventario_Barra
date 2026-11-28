@@ -12,8 +12,13 @@ const C = []; const chk = (n, ok, d) => C.push({ n, ok: !!ok, d: d || '' });
 const NOVERIF = [];
 const PUERTO = process.env.PUERTO || '8080';
 const URL_APP = 'http://127.0.0.1:' + PUERTO + '/index.html';
+// v5.61 — el .xlsx descargado se relee con el MISMO SheetJS que carga la app (js/xlsx.full.min.js,
+// 0.20.3 desde v5.49), como v535. Antes se pedía require('xlsx'): en la CI ese paquete no está
+// instalado y la descarga quedaba «NO VERIFICADO» (en local el ejecutor aislado sí lo daba).
+// XLSX_LOCAL queda en null: la app pide su propio archivo al servidor de pruebas, sin sustituirlo.
+const CARGA_APP = /<script src="js\/xlsx\.full\.min\.js\?v=[^"]+" defer>/.test(fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8'));
 let X = null, XLSX_LOCAL = null;
-try { X = require('xlsx'); XLSX_LOCAL = path.join(path.dirname(require.resolve('xlsx')), 'dist', 'xlsx.full.min.js'); if (!fs.existsSync(XLSX_LOCAL)) XLSX_LOCAL = null; } catch (_) { X = null; }
+try { X = CARGA_APP ? require(path.join(__dirname, '..', 'js', 'xlsx.full.min.js')) : null; } catch (_) { X = null; }
 
 const MONTAJE = () => {
   document.getElementById('authLoadingScreen').classList.add('auth-hidden');

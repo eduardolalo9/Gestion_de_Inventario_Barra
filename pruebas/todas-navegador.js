@@ -99,6 +99,7 @@ const PRUEBAS = [
     'prueba-tema-esmeralda-navegador.js', // v5.25 — Verde Esmeralda: barra oscura, fuentes, pasteles, tablet, migración de tema
     'prueba-actualizaciones-navegador.js', // v5.12 — despliegue simulado: detecta, avisa, actualiza con un toque, conserva datos
     'prueba-v560-grupo3-navegador.js', // v5.60 — Grupo 3: «Fecha no registrada», orilla de filtros, Inicio no se mueve al volver a pintar
+    'prueba-v561-modulos-navegador.js', // v5.61 — Semana|Mes, Ordenar por ▾, tabla con selección por fila, ⋮ de Control de negativos, 3 Excel reales
     'prueba-sheetjs-0203-navegador.js', // v5.59 — SheetJS 0.20.3 del propio origen: sin CDN, CSP estricta, Excel sin red (Service Worker)
 ];
 
